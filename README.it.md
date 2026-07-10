@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="docs/mockxy_screenshot.png" alt="Logo di Mockxy" width="110">
+<img src="docs/mockxy_screenshot.png" alt="Logo di Mockxy">
 
 # Mockxy
 
