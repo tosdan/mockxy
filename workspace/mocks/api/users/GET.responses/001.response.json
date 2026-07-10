@@ -1,0 +1,17 @@
+{
+  "type": "mock",
+  "title": "Eight users",
+  "status": 200,
+  "headers": {},
+  "delayMs": 0,
+  "body": [
+    { "id": 1, "name": "Ada Lovelace", "role": "admin", "active": true },
+    { "id": 2, "name": "Alan Turing", "role": "editor", "active": true },
+    { "id": 3, "name": "Grace Hopper", "role": "admin", "active": true },
+    { "id": 4, "name": "Katherine Johnson", "role": "viewer", "active": false },
+    { "id": 5, "name": "Enrico Fermi", "role": "editor", "active": true },
+    { "id": 6, "name": "Rita Levi-Montalcini", "role": "admin", "active": true },
+    { "id": 7, "name": "Claude Shannon", "role": "viewer", "active": true },
+    { "id": 8, "name": "Barbara Liskov", "role": "editor", "active": false }
+  ]
+}

@@ -1,0 +1,8 @@
+{
+  "method": "GET",
+  "path": "/api/hello",
+  "description": "The quickstart welcome mock: if this responds, Mockxy is up.",
+  "enabled": true,
+  "responseFiles": ["001.response.json"],
+  "selectedResponseFile": "001.response.json"
+}

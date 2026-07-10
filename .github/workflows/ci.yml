@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  # Rilancio manuale (es. dopo un fix di configurazione del repo, senza aspettare un push).
+  workflow_dispatch:
+
+jobs:
+  engine:
+    name: Engine + Electron-module tests
+    # Windows in matrice: la classe di bug specifica di Windows esiste davvero (assert
+    # libuv del watcher sui percorsi corti 8.3, luglio 2026) e su un runner solo-Linux
+    # resterebbe invisibile per costruzione.
+    strategy:
+      # Un rosso su un OS non deve cancellare l'altro leg: il segnale Windows
+      # serve proprio quando Linux fallisce (e viceversa).
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm test
+        if: matrix.os == 'ubuntu-latest'
+      # Il leg Windows esiste per la classe di bug del backend (watcher/libuv): le suite
+      # electron girano una volta sola, su ubuntu, senza raddoppiare i minuti Windows.
+      - run: npm run test:backend
+        if: matrix.os == 'windows-latest'
+
+  ui:
+    name: UI tests + build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: mockxy-ui/package-lock.json
+      - run: npm --prefix mockxy-ui ci
+      - run: npm --prefix mockxy-ui test -- --watch=false
+      - run: npm --prefix mockxy-ui run build

@@ -1,0 +1,334 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Mockxy</title>
+    <style>
+      :root {
+        --bg: #0e1117;
+        --panel: #141922;
+        --panel-hover: #1a2130;
+        --border: #222a38;
+        --border-strong: #2a3340;
+        --text: #e6e9ef;
+        --muted: #6b7480;
+        --muted-soft: #8a93a6;
+        --brand-a: #7c83ff;
+        --brand-b: #5b6bf0;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        height: 100%;
+      }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+        display: grid;
+        place-items: center;
+        padding: 32px;
+        -webkit-user-select: none;
+        user-select: none;
+      }
+
+      /* Selettore lingua: in alto a destra */
+      .lang {
+        position: fixed;
+        top: 18px;
+        right: 20px;
+        display: flex;
+        gap: 4px;
+      }
+      .lang-btn {
+        min-width: 36px;
+        padding: 5px 9px;
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        color: var(--muted-soft);
+        background: var(--panel);
+        border: 1px solid var(--border-strong);
+        border-radius: 6px;
+        cursor: pointer;
+        transition: color 0.12s, border-color 0.12s, background 0.12s;
+      }
+      .lang-btn:hover {
+        color: var(--text);
+        background: var(--panel-hover);
+      }
+      .lang-btn.active {
+        color: #fff;
+        border-color: transparent;
+        background: linear-gradient(135deg, var(--brand-a), var(--brand-b));
+      }
+
+      .shell {
+        width: 100%;
+        max-width: 560px;
+      }
+
+      .brand {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 12px;
+      }
+      .brand-mark {
+        width: 34px;
+        height: 34px;
+        border-radius: 9px;
+        background: linear-gradient(135deg, var(--brand-a), var(--brand-b));
+        display: grid;
+        place-items: center;
+        color: #fff;
+        font-weight: 800;
+        font-size: 18px;
+        box-shadow: 0 6px 18px -6px var(--brand-b);
+      }
+      .brand-name {
+        font-size: 24px;
+        font-weight: 800;
+        letter-spacing: -0.01em;
+      }
+
+      .subtitle {
+        margin: 18px 0 4px;
+        text-align: center;
+        font-size: 15px;
+        font-weight: 600;
+        color: var(--text);
+      }
+      .intro {
+        margin: 0 0 22px;
+        text-align: center;
+        font-size: 13px;
+        line-height: 1.5;
+        color: var(--muted);
+      }
+
+      .open {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        width: 100%;
+        padding: 11px 16px;
+        font-size: 13.5px;
+        font-weight: 600;
+        color: #fff;
+        background: linear-gradient(135deg, var(--brand-a), var(--brand-b));
+        border: none;
+        border-radius: 9px;
+        cursor: pointer;
+        transition: filter 0.12s, transform 0.04s;
+      }
+      .open:hover {
+        filter: brightness(1.07);
+      }
+      .open:active {
+        transform: translateY(1px);
+      }
+      .open svg {
+        width: 16px;
+        height: 16px;
+      }
+
+      .recent {
+        margin-top: 26px;
+      }
+      .recent h2 {
+        margin: 0 0 10px;
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: var(--muted);
+      }
+      .recent-list {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        max-height: 46vh;
+        overflow: auto;
+      }
+      .item {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        width: 100%;
+        text-align: left;
+        padding: 9px 12px;
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        cursor: pointer;
+        transition: background 0.12s, border-color 0.12s;
+      }
+      .item:hover {
+        background: var(--panel-hover);
+        border-color: var(--border-strong);
+      }
+      .item-name {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--text);
+      }
+      .item-path {
+        font-size: 11px;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        color: var(--muted);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .empty {
+        margin: 0;
+        font-size: 12.5px;
+        color: var(--muted);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="lang" id="lang"></div>
+    <main class="shell">
+      <div class="brand">
+        <span class="brand-mark">M</span>
+        <span class="brand-name">Mockxy</span>
+      </div>
+      <p class="subtitle" id="subtitle"></p>
+      <p class="intro" id="intro"></p>
+      <button class="open" id="open">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z" />
+        </svg>
+        <span id="open-label"></span>
+      </button>
+      <section class="recent">
+        <h2 id="recent-heading"></h2>
+        <div class="recent-list" id="recent-list"></div>
+      </section>
+    </main>
+
+    <script>
+      // Pagina di benvenuto (nessun workspace aperto). Non è servita dal motore: usa il ponte
+      // window.desktop (preload) per elencare/aprire workspace e leggere/cambiare la lingua, che è
+      // condivisa con l'app tramite le preferenze globali.
+      const d = window.desktop;
+
+      const STRINGS = {
+        it: {
+          subtitle: 'Nessun workspace aperto',
+          intro: 'Apri una cartella come workspace oppure riprendi un workspace recente.',
+          open: 'Apri una cartella…',
+          recent: 'Recenti',
+          noRecent: 'Nessun workspace recente.',
+          language: 'Lingua',
+        },
+        en: {
+          subtitle: 'No workspace open',
+          intro: 'Open a folder as a workspace, or resume a recent one.',
+          open: 'Open a folder…',
+          recent: 'Recent',
+          noRecent: 'No recent workspaces.',
+          language: 'Language',
+        },
+      };
+
+      let lang = d && (d.language === 'it' || d.language === 'en') ? d.language : 'en';
+      const t = (key) => (STRINGS[lang] || STRINGS.en)[key];
+
+      function renderStrings() {
+        document.documentElement.lang = lang;
+        document.getElementById('subtitle').textContent = t('subtitle');
+        document.getElementById('intro').textContent = t('intro');
+        document.getElementById('open-label').textContent = t('open');
+        document.getElementById('recent-heading').textContent = t('recent');
+        renderLangButtons();
+      }
+
+      function renderLangButtons() {
+        const host = document.getElementById('lang');
+        host.setAttribute('aria-label', t('language'));
+        host.innerHTML = '';
+        for (const code of ['it', 'en']) {
+          const button = document.createElement('button');
+          button.type = 'button';
+          button.textContent = code.toUpperCase();
+          button.className = 'lang-btn' + (code === lang ? ' active' : '');
+          button.addEventListener('click', () => setLang(code));
+          host.appendChild(button);
+        }
+      }
+
+      async function setLang(code) {
+        if (code === lang) return;
+        lang = code;
+        if (d && d.setLanguage) {
+          try {
+            await d.setLanguage(code);
+          } catch {
+            /* resta comunque applicata nella pagina */
+          }
+        }
+        renderStrings();
+        renderRecents();
+      }
+
+      async function renderRecents() {
+        const list = document.getElementById('recent-list');
+        list.innerHTML = '';
+        let recents = [];
+        try {
+          recents = d && d.listRecent ? await d.listRecent() : [];
+        } catch {
+          recents = [];
+        }
+        if (!recents || recents.length === 0) {
+          const empty = document.createElement('p');
+          empty.className = 'empty';
+          empty.textContent = t('noRecent');
+          list.appendChild(empty);
+          return;
+        }
+        for (const ws of recents) {
+          const item = document.createElement('button');
+          item.type = 'button';
+          item.className = 'item';
+          const name = document.createElement('span');
+          name.className = 'item-name';
+          name.textContent = ws.name || ws.root;
+          const root = document.createElement('span');
+          root.className = 'item-path';
+          root.textContent = ws.root;
+          root.title = ws.root;
+          item.append(name, root);
+          item.addEventListener('click', () => openRecent(ws.root));
+          list.appendChild(item);
+        }
+      }
+
+      async function openRecent(root) {
+        if (!d || !d.switchWorkspace) return;
+        try {
+          const result = await d.switchWorkspace(root);
+          // Se il workspace non esiste più il motore lo toglie dai recenti: rinfresca l'elenco.
+          if (result && result.ok === false) renderRecents();
+        } catch {
+          renderRecents();
+        }
+      }
+
+      document.getElementById('open').addEventListener('click', () => {
+        if (d && d.openWorkspace) d.openWorkspace();
+      });
+
+      renderStrings();
+      renderRecents();
+    </script>
+  </body>
+</html>

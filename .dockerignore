@@ -1,0 +1,21 @@
+node_modules
+npm-debug.log*
+coverage
+.git
+.github
+.claude
+.agents
+.env
+mockxy-ui
+electron
+test
+# Il workspace non entra MAI nelle immagini: si distribuisce l'applicazione, non i dati.
+# Mock e file dati si montano a runtime (vedi docker-compose*.yml).
+workspace
+workspace-vu-ish
+workspace-test
+docs
+archived
+Dockerfile*
+docker-compose*.yml
+.dockerignore

@@ -1,0 +1,17 @@
+node_modules/
+.env
+coverage/
+electron/dist/
+npm-debug.log*
+monitor-dump/
+
+/.playwright-mcp
+
+# e2e Playwright: run dir usa-e-getta (copia delle fixture) e output
+workspace-test/.run/
+/test-results/
+/playwright-report/
+/e2e/.auth/
+
+# workspace scratch del giro di collaudo (scripts/dogfood-server.js)
+/.dogfood/

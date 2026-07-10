@@ -1,0 +1,8 @@
+{
+  "method": "GET",
+  "path": "/api/users/:id",
+  "description": "Dynamic handler: reads the \"users\" data file (Data page) with data() and answers based on the path parameter. Try /api/users/3 and /api/users/99.",
+  "enabled": true,
+  "responseFiles": ["001.response.json"],
+  "selectedResponseFile": "001.response.json"
+}

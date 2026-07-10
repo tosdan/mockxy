@@ -1,0 +1,11 @@
+{
+  "type": "mock",
+  "title": "Welcome",
+  "status": 200,
+  "headers": {},
+  "delayMs": 0,
+  "body": {
+    "hello": "world",
+    "hint": "Open the web UI and find this endpoint in the Catalog: every mock is a plain file like this one."
+  }
+}

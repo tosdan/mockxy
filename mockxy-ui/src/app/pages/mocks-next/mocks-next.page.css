@@ -1,0 +1,12 @@
+:host {
+  display: contents;
+}
+
+/* Sfondo della schermata. Gli altri effetti sono globali (.mx-*). */
+.mx-root {
+  color-scheme: dark;
+  background-color: var(--background);
+  background-image: linear-gradient(178deg, var(--background-elevated) 0%, var(--background) 46%, var(--code) 100%);
+  color: var(--foreground);
+  font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+}

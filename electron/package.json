@@ -1,0 +1,54 @@
+{
+  "name": "mockxy-desktop",
+  "version": "1.0.0",
+  "private": true,
+  "license": "GPL-3.0-or-later",
+  "description": "Guscio Electron dell'app desktop di Mockxy Mock Server",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder"
+  },
+  "dependencies": {
+    "@scalar/openapi-parser": "^0.28.7",
+    "ajv": "^8.17.1",
+    "chokidar": "^4.0.3",
+    "dotenv": "^17.2.3",
+    "express": "^5.1.0",
+    "js-yaml": "^3.14.1",
+    "openapi-sampler": "^1.7.4",
+    "path-to-regexp": "^8.3.0"
+  },
+  "devDependencies": {
+    "electron": "^42.4.1",
+    "electron-builder": "^26.15.3"
+  },
+  "build": {
+    "appId": "com.mockxy.desktop",
+    "productName": "Mockxy",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "**/*",
+      "!scripts/**/*",
+      {
+        "from": "../src",
+        "to": "src"
+      }
+    ],
+    "extraResources": [
+      {
+        "from": "../mockxy-ui/dist/mockxy-ui/browser",
+        "to": "ui"
+      }
+    ],
+    "win": {
+      "target": "portable",
+      "icon": "build/icon.ico"
+    },
+    "portable": {
+      "artifactName": "Mockxy-${version}-portable.exe"
+    }
+  }
+}

@@ -1,0 +1,7 @@
+/* La shell occupa l'intera viewport come colonna: barra runtime (shrink-0) + pagina instradata (flex-1). */
+:host {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  overflow: hidden;
+}

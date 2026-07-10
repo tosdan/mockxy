@@ -1,0 +1,13 @@
+# Server standalone "mock-only" (admin/monitor/storico spenti): l'immagine contiene solo il
+# motore, il workspace resta sul filesystem dell'host e viene montato in sola lettura. Per
+# servire un altro workspace basta cambiare i due bind mount — nessun rebuild dell'immagine.
+services:
+  mockxy:
+    build:
+      context: .
+      dockerfile: Dockerfile.standalone
+    ports:
+      - "${MOCKXY_HOST_PORT:-3000}:3000"
+    volumes:
+      - ./workspace/mocks:/workspace/mocks:ro
+      - ./workspace/files:/workspace/files:ro

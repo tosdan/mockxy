@@ -1,0 +1,708 @@
+<div class="absolute inset-0 flex overflow-clip bg-background text-foreground"
+     style="color-scheme: dark; font-family: ui-sans-serif, system-ui, 'Segoe UI', sans-serif">
+
+  <!-- ============================ SIDEBAR ============================ -->
+  <aside class="hidden w-60 shrink-0 flex-col border-r border-border bg-card lg:flex">
+    <div class="flex h-14 shrink-0 items-center gap-2.5 border-b border-border px-5">
+      <span class="grid h-8 w-8 place-items-center rounded-lg bg-gradient-to-br from-brand to-[var(--brand-strong)] text-white ring-1 ring-white/10">
+        <ng-icon name="lucideSwatchBook" size="1rem" />
+      </span>
+      <div class="leading-tight">
+        <div class="text-sm font-bold tracking-tight text-foreground">Mockxy</div>
+        <div class="text-[10px] font-bold uppercase tracking-[0.16em] text-brand">Design System</div>
+      </div>
+    </div>
+
+    <nav class="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto p-3">
+      @for (item of nav; track item.id) {
+      <button type="button"
+              (click)="scrollTo(item.id)"
+              class="rounded-md px-3 py-1.5 text-left text-[13px] font-medium text-muted-foreground transition hover:bg-accent hover:text-foreground">
+        {{ item.label }}
+      </button>
+      }
+    </nav>
+
+    <div class="shrink-0 border-t border-border px-3 py-3">
+      <a routerLink="/mocks"
+         class="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-[13px] font-medium text-muted-foreground transition hover:bg-accent hover:text-foreground">
+        <ng-icon name="lucideArrowLeft" size="0.95rem" />
+        Torna ai mock
+      </a>
+    </div>
+  </aside>
+
+  <!-- ============================ CONTENUTO ============================ -->
+  <main class="min-h-0 flex-1 overflow-y-auto scroll-smooth">
+    <div class="mx-auto flex max-w-4xl flex-col gap-16 px-6 py-10 sm:px-10">
+
+      <!-- INTRO -->
+      <header id="intro" class="flex scroll-mt-8 flex-col gap-3">
+        <span class="text-[11px] font-bold uppercase tracking-[0.18em] text-brand">Riferimento UI</span>
+        <h1 class="text-3xl font-semibold tracking-tight sm:text-4xl">Design System</h1>
+        <p class="max-w-2xl text-pretty leading-relaxed text-muted-foreground">
+          Il punto di riferimento per costruire l'app in modo coerente: una sola fonte per colori, tipografia e
+          componenti, tutti basati sui design token del tema definitivo (aurora-2). Stack: design token (Tailwind
+          <code class="rounded bg-muted px-1 py-0.5 font-mono text-[12px]">&#64;theme</code>) + class-variance-authority +
+          tailwind-merge + &#64;ng-icons/lucide, con spartan-ng (brain) per i componenti con comportamento.
+        </p>
+        <div class="mt-1 flex flex-wrap gap-2 text-[12px]">
+          <span class="rounded-md border border-border bg-card px-2.5 py-1 text-muted-foreground">token in <code class="font-mono">src/styles.css</code></span>
+          <span class="rounded-md border border-border bg-card px-2.5 py-1 text-muted-foreground">primitivi in <code class="font-mono">src/app/ui/</code></span>
+        </div>
+      </header>
+
+      <!-- COLORI & TOKEN -->
+      <section id="colori" class="flex scroll-mt-8 flex-col gap-6">
+        <div class="flex items-center gap-2.5">
+          <span class="grid h-7 w-7 place-items-center rounded-md bg-muted text-brand ring-1 ring-border">
+            <ng-icon name="lucidePalette" size="1rem" />
+          </span>
+          <h2 class="text-xl font-semibold tracking-tight">Colori &amp; token</h2>
+        </div>
+        <p class="max-w-2xl text-sm leading-relaxed text-muted-foreground">
+          Ogni colore e' un token semantico (custom property) esposto come utility Tailwind. Usa sempre i token,
+          mai valori grezzi: cambiando un token, cambia in modo coerente tutta l'app. I valori qui sotto sono letti a
+          runtime dal CSS, quindi restano sempre allineati.
+        </p>
+
+        @for (group of colorGroups; track group.id) {
+        <div [id]="group.id" class="flex scroll-mt-8 flex-col gap-3">
+          <div class="flex flex-col gap-1">
+            <h3 class="text-sm font-semibold tracking-tight text-foreground">{{ group.title }}</h3>
+            <p class="text-[13px] leading-relaxed text-muted-foreground">{{ group.desc }}</p>
+          </div>
+          <div class="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3">
+            @for (s of group.swatches; track s.name) {
+            <div class="flex items-center gap-3 rounded-lg border border-border bg-card p-2.5">
+              <span class="h-10 w-10 shrink-0 rounded-md ring-1 ring-inset ring-white/10"
+                    [style.backgroundColor]="'var(' + s.name + ')'"></span>
+              <div class="flex min-w-0 flex-col">
+                <span class="truncate font-mono text-[12px] text-foreground">{{ s.name }}</span>
+                <span class="truncate font-mono text-[11px] text-muted-foreground">{{ tokenValues()[s.name] || '…' }}</span>
+                <span class="truncate font-mono text-[10px] text-[var(--foreground-faint)]">{{ s.util }}</span>
+              </div>
+            </div>
+            }
+          </div>
+        </div>
+        }
+      </section>
+
+      <!-- TIPOGRAFIA -->
+      <section id="tipografia" class="flex scroll-mt-8 flex-col gap-5">
+        <div class="flex items-center gap-2.5">
+          <span class="grid h-7 w-7 place-items-center rounded-md bg-muted text-brand ring-1 ring-border">
+            <ng-icon name="lucideType" size="1rem" />
+          </span>
+          <h2 class="text-xl font-semibold tracking-tight">Tipografia</h2>
+        </div>
+        <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
+          <div class="rounded-xl border border-border bg-card p-5">
+            <div class="mb-3 text-[11px] font-bold uppercase tracking-[0.14em] text-muted-foreground">Sans · UI</div>
+            <p class="text-2xl font-semibold tracking-tight">Aa Bb Cc 123</p>
+            <p class="mt-1 text-sm text-muted-foreground">ui-sans-serif, system-ui, 'Segoe UI'</p>
+          </div>
+          <div class="rounded-xl border border-border bg-card p-5">
+            <div class="mb-3 text-[11px] font-bold uppercase tracking-[0.14em] text-muted-foreground">Mono · codice / path</div>
+            <p class="font-mono text-2xl font-semibold tracking-tight">/soggetti/:id</p>
+            <p class="mt-1 font-mono text-sm text-muted-foreground">ui-monospace, SFMono-Regular, 'Cascadia Code'</p>
+          </div>
+        </div>
+        <div class="flex flex-col gap-2 rounded-xl border border-border bg-card p-5">
+          <div class="flex items-baseline justify-between gap-4 border-b border-border-soft pb-2">
+            <span class="text-2xl font-semibold tracking-tight">Titolo pagina</span>
+            <span class="font-mono text-[11px] text-muted-foreground">text-2xl / font-semibold</span>
+          </div>
+          <div class="flex items-baseline justify-between gap-4 border-b border-border-soft pb-2">
+            <span class="text-base">Testo del corpo</span>
+            <span class="font-mono text-[11px] text-muted-foreground">text-base</span>
+          </div>
+          <div class="flex items-baseline justify-between gap-4">
+            <span class="text-[11px] font-bold uppercase tracking-[0.16em] text-muted-foreground">Micro-label sezione</span>
+            <span class="font-mono text-[11px] text-muted-foreground">text-[11px] / uppercase / tracking</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- RAGGI & SUPERFICI -->
+      <section id="radius" class="flex scroll-mt-8 flex-col gap-5">
+        <div class="flex items-center gap-2.5">
+          <span class="grid h-7 w-7 place-items-center rounded-md bg-muted text-brand ring-1 ring-border">
+            <ng-icon name="lucideSwatchBook" size="1rem" />
+          </span>
+          <h2 class="text-xl font-semibold tracking-tight">Raggi &amp; superfici</h2>
+        </div>
+        <p class="max-w-2xl text-sm leading-relaxed text-muted-foreground">
+          Raggio base <code class="rounded bg-muted px-1 py-0.5 font-mono text-[12px]">--radius: 0.5rem</code> (rounded-lg).
+          Le superfici si impilano per dare profondita senza ombre forti.
+        </p>
+        <div class="flex flex-wrap items-end gap-4 rounded-xl border border-border bg-card p-5">
+          @for (r of ['rounded-md','rounded-lg','rounded-xl','rounded-2xl','rounded-full']; track r) {
+          <div class="flex flex-col items-center gap-2">
+            <span class="h-12 w-12 bg-muted ring-1 ring-border" [class]="r"></span>
+            <span class="font-mono text-[10px] text-muted-foreground">{{ r }}</span>
+          </div>
+          }
+        </div>
+        <div class="flex flex-wrap items-center gap-3">
+          <div class="rounded-lg bg-background px-4 py-6 ring-1 ring-border">background</div>
+          <div class="rounded-lg bg-card px-4 py-6 ring-1 ring-border">card</div>
+          <div class="rounded-lg bg-muted px-4 py-6 ring-1 ring-border">muted</div>
+          <div class="rounded-lg bg-accent px-4 py-6 ring-1 ring-border">accent (hover)</div>
+        </div>
+      </section>
+
+      <!-- BUTTON -->
+      <section id="button" class="flex scroll-mt-8 flex-col gap-4">
+        <div class="flex flex-col gap-1.5">
+          <h2 class="text-xl font-semibold tracking-tight">Button</h2>
+          <p class="max-w-2xl text-sm leading-relaxed text-muted-foreground">
+            Componente ad attributo <code class="font-mono text-[12px]">&lt;button ui-button&gt;</code> (cva + token).
+            Il primario usa il gradiente brand; le altre varianti sono superfici/bordi dai token.
+          </p>
+        </div>
+        <div class="flex flex-col gap-4 rounded-xl border border-border bg-card p-5">
+          <div class="flex flex-wrap items-center gap-2.5">
+            <button ui-button><ng-icon name="lucidePlus" size="1rem" /> Nuovo</button>
+            <button ui-button variant="secondary">Secondary</button>
+            <button ui-button variant="outline">Outline</button>
+            <button ui-button variant="ghost">Ghost</button>
+            <button ui-button variant="destructive"><ng-icon name="lucideTrash2" size="1rem" /> Elimina</button>
+          </div>
+          <div class="h-px bg-border-soft"></div>
+          <div class="flex flex-wrap items-center gap-2.5">
+            <button ui-button size="sm">Small</button>
+            <button ui-button>Default</button>
+            <button ui-button variant="outline" size="icon" aria-label="Modifica"><ng-icon name="lucidePencil" size="1rem" /></button>
+            <button ui-button disabled>Disabled</button>
+          </div>
+        </div>
+        <pre class="overflow-x-auto rounded-lg bg-[var(--code)] p-3 font-mono text-[12px] text-muted-foreground ring-1 ring-border">&lt;button ui-button variant="secondary" size="sm"&gt;Salva&lt;/button&gt;</pre>
+      </section>
+
+      <!-- SWITCH -->
+      <section id="switch" class="flex scroll-mt-8 flex-col gap-4">
+        <div class="flex items-center gap-2.5">
+          <span class="grid h-7 w-7 place-items-center rounded-md bg-muted text-brand ring-1 ring-border">
+            <ng-icon name="lucideToggleRight" size="1rem" />
+          </span>
+          <h2 class="text-xl font-semibold tracking-tight">Switch</h2>
+        </div>
+        <p class="max-w-2xl text-sm leading-relaxed text-muted-foreground">
+          Costruito sul primitivo headless di spartan-ng (comportamento + accessibilita); lo stile arriva dai token.
+          ON = <code class="font-mono text-[12px]">--positive</code>, OFF = grigio neutro, disabilitato = sbiadito.
+          Taglie via input <code class="font-mono text-[12px]">size</code>: <code class="font-mono text-[12px]">default</code>
+          e <code class="font-mono text-[12px]">sm</code> (liste/righe dense).
+        </p>
+        <div class="flex flex-col gap-4 rounded-xl border border-border bg-card p-5">
+          <div class="flex flex-wrap items-center gap-7">
+            <label class="flex items-center gap-2 text-sm"><ui-switch [checked]="true" ariaLabel="Acceso" /> Acceso</label>
+            <label class="flex items-center gap-2 text-sm"><ui-switch ariaLabel="Spento" /> Spento</label>
+            <label class="flex items-center gap-2 text-sm text-muted-foreground"><ui-switch [disabled]="true" ariaLabel="Disabilitato" /> Disabilitato</label>
+          </div>
+          <div class="flex flex-wrap items-center gap-7 border-t border-border pt-4">
+            <label class="flex items-center gap-2 text-sm"><ui-switch [checked]="true" size="default" ariaLabel="Default" /> <code class="font-mono text-[12px]">size="default"</code></label>
+            <label class="flex items-center gap-2 text-sm"><ui-switch [checked]="true" size="sm" ariaLabel="Small" /> <code class="font-mono text-[12px]">size="sm"</code></label>
+          </div>
+        </div>
+        <pre class="overflow-x-auto rounded-lg bg-[var(--code)] p-3 font-mono text-[12px] text-muted-foreground ring-1 ring-border">&lt;ui-switch [(checked)]="enabled" size="sm" ariaLabel="Abilita endpoint" /&gt;</pre>
+      </section>
+
+      <!-- BADGE -->
+      <section id="badge" class="flex scroll-mt-8 flex-col gap-4">
+        <div class="flex items-center gap-2.5">
+          <span class="grid h-7 w-7 place-items-center rounded-md bg-muted text-brand ring-1 ring-border">
+            <ng-icon name="lucideTag" size="1rem" />
+          </span>
+          <h2 class="text-xl font-semibold tracking-tight">Badge</h2>
+        </div>
+        <p class="max-w-2xl text-sm leading-relaxed text-muted-foreground">
+          Chip neutro + testo a tinta dal token. Un'unica resa per metodi HTTP, classi di status e tinte generiche
+          tramite l'input <code class="font-mono text-[12px]">tone</code>. Due taglie via
+          <code class="font-mono text-[12px]">size</code>: <code class="font-mono text-[12px]">sm</code> (default) e
+          <code class="font-mono text-[12px]">md</code> (pill grande, es. metodo nell'header).
+        </p>
+        <div class="flex flex-col gap-4 rounded-xl border border-border bg-card p-5">
+          <div class="flex flex-col gap-2">
+            <span class="text-[11px] font-bold uppercase tracking-[0.14em] text-muted-foreground">Metodi</span>
+            <div class="flex flex-wrap items-center gap-2">
+              <ui-badge tone="get">GET</ui-badge>
+              <ui-badge tone="post">POST</ui-badge>
+              <ui-badge tone="put">PUT</ui-badge>
+              <ui-badge tone="delete">DELETE</ui-badge>
+              <ui-badge tone="patch">PATCH</ui-badge>
+            </div>
+          </div>
+          <div class="flex flex-col gap-2">
+            <span class="text-[11px] font-bold uppercase tracking-[0.14em] text-muted-foreground">Status</span>
+            <div class="flex flex-wrap items-center gap-2">
+              <ui-badge tone="2xx">200</ui-badge>
+              <ui-badge tone="3xx">301</ui-badge>
+              <ui-badge tone="4xx">404</ui-badge>
+              <ui-badge tone="5xx">503</ui-badge>
+            </div>
+          </div>
+          <div class="flex flex-col gap-2">
+            <span class="text-[11px] font-bold uppercase tracking-[0.14em] text-muted-foreground">Generici</span>
+            <div class="flex flex-wrap items-center gap-2">
+              <ui-badge tone="neutral">mock</ui-badge>
+              <ui-badge tone="brand">handler</ui-badge>
+              <ui-badge tone="positive">attivo</ui-badge>
+            </div>
+          </div>
+          <div class="flex flex-col gap-2 border-t border-border pt-4">
+            <span class="text-[11px] font-bold uppercase tracking-[0.14em] text-muted-foreground">Taglie</span>
+            <div class="flex flex-wrap items-center gap-3">
+              <ui-badge tone="get" size="sm">GET · sm</ui-badge>
+              <ui-badge tone="get" size="md">GET · md</ui-badge>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- INPUT -->
+      <section id="input" class="flex scroll-mt-8 flex-col gap-4">
+        <h2 class="text-xl font-semibold tracking-tight">Input</h2>
+        <p class="max-w-2xl text-sm leading-relaxed text-muted-foreground">
+          Campo testo su token, con focus ring brand. Direttiva <code class="font-mono text-[12px]">ui-input</code> su
+          <code class="font-mono text-[12px]">&lt;input&gt;</code>/<code class="font-mono text-[12px]">&lt;textarea&gt;</code>.
+        </p>
+        <div class="flex flex-col gap-3 rounded-xl border border-border bg-card p-5 sm:max-w-md">
+          <input ui-input placeholder="Titolo della response…" />
+          <label class="relative block">
+            <ng-icon name="lucideSearch" size="0.95rem"
+                     class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <input ui-input class="pl-9" placeholder="Cerca endpoint, path…" />
+          </label>
+          <input ui-input disabled value="Disabilitato" />
+        </div>
+      </section>
+
+      <!-- SELECT -->
+      <section id="select" class="flex scroll-mt-8 flex-col gap-4">
+        <h2 class="text-xl font-semibold tracking-tight">Select</h2>
+        <p class="max-w-2xl text-sm leading-relaxed text-muted-foreground">
+          Select su <code class="font-mono text-[12px]">&#64;angular/cdk</code> overlay (pattern combobox + listbox,
+          ARIA + tastiera), coerente con Dialog e Dropdown menu. A differenza della select nativa, la tendina aperta
+          e' completamente tematizzata coi token. API data-driven:
+          <code class="font-mono text-[12px]">[options]</code> + <code class="font-mono text-[12px]">[(value)]</code>.
+          Input <code class="font-mono text-[12px]">tone</code> (<code class="font-mono text-[12px]">2xx/3xx/4xx/5xx</code>)
+          per la pill colorata con pallino (es. status code).
+        </p>
+        <div class="flex flex-col gap-4 sm:max-w-md">
+          <div class="rounded-xl border border-border bg-card p-5">
+            <ui-select
+              [options]="responseOptions"
+              [value]="selectValue()"
+              (valueChange)="selectValue.set($any($event))"
+              placeholder="Scegli una response"
+            />
+            <p class="mt-3 text-[13px] text-muted-foreground">
+              Selezionato: <code class="font-mono text-foreground">{{ selectValue() ?? '—' }}</code>
+            </p>
+          </div>
+          <div class="flex flex-col gap-2 rounded-xl border border-border bg-card p-5">
+            <span class="text-[11px] font-bold uppercase tracking-[0.14em] text-muted-foreground">Tono status (pill colorata)</span>
+            <ui-select
+              class="w-60"
+              [options]="statusOptions"
+              [value]="statusValue()"
+              (valueChange)="statusValue.set($any($event))"
+              [tone]="statusTone()"
+            />
+          </div>
+        </div>
+      </section>
+
+      <!-- TOOLTIP -->
+      <section id="tooltip" class="flex scroll-mt-8 flex-col gap-4">
+        <div class="flex items-center gap-2.5">
+          <span class="grid h-7 w-7 place-items-center rounded-md bg-muted text-brand ring-1 ring-border">
+            <ng-icon name="lucideInfo" size="1rem" />
+          </span>
+          <h2 class="text-xl font-semibold tracking-tight">Tooltip</h2>
+        </div>
+        <p class="max-w-2xl text-sm leading-relaxed text-muted-foreground">
+          Su <code class="font-mono text-[12px]">&#64;angular/cdk</code> overlay (coerente con Dialog/Menu/Select):
+          posizionamento viewport-aware con flip automatico, apertura su hover e focus da tastiera, Esc per chiudere e
+          <code class="font-mono text-[12px]">aria-describedby</code> per l'accessibilita. Direttiva
+          <code class="font-mono text-[12px]">uiTooltip</code> con <code class="font-mono text-[12px]">position</code>.
+        </p>
+        <div class="flex flex-wrap items-center gap-2.5 rounded-xl border border-border bg-card p-5">
+          <button ui-button variant="secondary" uiTooltip="Passa tutte le richieste in proxy">Hover · top</button>
+          <button ui-button variant="outline" uiTooltip="Elimina la response selezionata" position="bottom">Hover · bottom</button>
+          <button ui-button variant="ghost" size="icon" aria-label="Info" uiTooltip="Percorso del file endpoint">
+            <ng-icon name="lucideInfo" size="1rem" />
+          </button>
+        </div>
+        <pre class="overflow-x-auto rounded-lg bg-[var(--code)] p-3 font-mono text-[12px] text-muted-foreground ring-1 ring-border">&lt;button ui-button uiTooltip="Testo" position="top"&gt;Azione&lt;/button&gt;</pre>
+      </section>
+
+      <!-- TABS -->
+      <section id="tabs" class="flex scroll-mt-8 flex-col gap-4">
+        <h2 class="text-xl font-semibold tracking-tight">Tabs</h2>
+        <p class="max-w-2xl text-sm leading-relaxed text-muted-foreground">
+          Helm sopra spartan brain (navigazione da tastiera + a11y). API:
+          <code class="font-mono text-[12px]">ui-tabs</code> / <code class="font-mono text-[12px]">ui-tabs-list</code> /
+          <code class="font-mono text-[12px]">ui-tabs-trigger</code> / <code class="font-mono text-[12px]">ui-tabs-content</code>.
+        </p>
+        <div class="rounded-xl border border-border bg-card p-5">
+          <div ui-tabs="panoramica">
+            <div ui-tabs-list>
+              <button ui-tabs-trigger="panoramica">Panoramica</button>
+              <button ui-tabs-trigger="headers">Headers</button>
+              <button ui-tabs-trigger="sorgente">Sorgente</button>
+            </div>
+            <div ui-tabs-content="panoramica" class="pt-3 text-sm text-muted-foreground">Metadati e dettagli dell'endpoint selezionato.</div>
+            <div ui-tabs-content="headers" class="pt-3 text-sm text-muted-foreground">Tabella degli header della response.</div>
+            <div ui-tabs-content="sorgente" class="pt-3 text-sm text-muted-foreground">Sorgente JS dell'handler / middleware.</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- CHECKBOX -->
+      <section id="checkbox" class="flex scroll-mt-8 flex-col gap-4">
+        <h2 class="text-xl font-semibold tracking-tight">Checkbox</h2>
+        <p class="max-w-2xl text-sm leading-relaxed text-muted-foreground">
+          Su BrnCheckbox (spartan brain). Selezionato usa <code class="font-mono text-[12px]">--primary</code>;
+          lo stato disabilitato e' sbiadito.
+        </p>
+        <div class="flex flex-wrap items-center gap-7 rounded-xl border border-border bg-card p-5">
+          <label class="flex cursor-pointer items-center gap-2 text-sm"><ui-checkbox [checked]="true" ariaLabel="Selezionato" /> Selezionato</label>
+          <label class="flex cursor-pointer items-center gap-2 text-sm"><ui-checkbox ariaLabel="Non selezionato" /> Non selezionato</label>
+          <label class="flex items-center gap-2 text-sm text-muted-foreground"><ui-checkbox [disabled]="true" ariaLabel="Disabilitato" /> Disabilitato</label>
+        </div>
+      </section>
+
+      <!-- SEPARATOR -->
+      <section id="separator" class="flex scroll-mt-8 flex-col gap-4">
+        <h2 class="text-xl font-semibold tracking-tight">Separator</h2>
+        <p class="max-w-2xl text-sm leading-relaxed text-muted-foreground">
+          Divisore sul token <code class="font-mono text-[12px]">--border</code>, orizzontale o verticale.
+        </p>
+        <div class="rounded-xl border border-border bg-card p-5">
+          <div class="flex flex-col gap-3">
+            <div class="text-sm">Sezione A</div>
+            <ui-separator />
+            <div class="text-sm">Sezione B</div>
+          </div>
+          <div class="mt-5 flex h-6 items-center gap-3 text-sm text-muted-foreground">
+            <span>Mocks</span>
+            <ui-separator orientation="vertical" />
+            <span>Monitor</span>
+            <ui-separator orientation="vertical" />
+            <span>Impostazioni</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- CODE BLOCK -->
+      <section id="code" class="flex scroll-mt-8 flex-col gap-4">
+        <h2 class="text-xl font-semibold tracking-tight">Code block</h2>
+        <p class="max-w-2xl text-sm leading-relaxed text-muted-foreground">
+          Blocco codice con numeri di riga ed evidenziazione JSON, sui token
+          <code class="font-mono text-[12px]">--json-*</code> / <code class="font-mono text-[12px]">--code</code>.
+        </p>
+        <ui-code [code]="jsonSample" language="json" />
+        <pre class="overflow-x-auto rounded-lg bg-[var(--code)] p-3 font-mono text-[12px] text-muted-foreground ring-1 ring-border">&lt;ui-code [code]="json" language="json" /&gt;</pre>
+      </section>
+
+      <!-- CODE EDITOR -->
+      <section id="code-editor" class="flex scroll-mt-8 flex-col gap-4">
+        <h2 class="text-xl font-semibold tracking-tight">Code editor</h2>
+        <p class="max-w-2xl text-sm leading-relaxed text-muted-foreground">
+          Editor di codice editabile basato su <code class="font-mono text-[12px]">CodeMirror 6</code>: evidenziazione
+          della sintassi, numeri di riga, parentesi abbinate e ripiegamento, con il linguaggio scelto via
+          <code class="font-mono text-[12px]">[language]</code> (<code class="font-mono text-[12px]">json</code> per i mock,
+          <code class="font-mono text-[12px]">javascript</code> per handler/middleware). Per il JSON il lint è inline; la
+          validazione che governa il salvataggio resta nel consumatore, che pilota
+          <code class="font-mono text-[12px]">[invalid]</code> per il ring di errore. Usato per body/sorgente nella schermata Mocks.
+        </p>
+        <ui-code-editor
+          [value]="codeEditorDraft()"
+          (valueChange)="codeEditorDraft.set($event)"
+          [invalid]="codeEditorInvalid()"
+          [minRows]="5"
+          ariaLabel="Editor JSON di esempio"
+        />
+        <p class="text-[12.5px]" [class]="codeEditorInvalid() ? 'text-destructive-soft' : 'text-muted-foreground'">
+          {{ codeEditorInvalid() ? 'JSON non valido — il ring diventa rosso.' : 'JSON valido. Prova a romperlo per vedere lo stato invalid.' }}
+        </p>
+        <pre class="overflow-x-auto rounded-lg bg-[var(--code)] p-3 font-mono text-[12px] text-muted-foreground ring-1 ring-border">&lt;ui-code-editor [value]="draft()" (valueChange)="draft.set($event)" [invalid]="invalid()" [minRows]="5" language="json" /&gt;</pre>
+      </section>
+
+      <!-- CARD -->
+      <section id="card" class="flex scroll-mt-8 flex-col gap-4">
+        <h2 class="text-xl font-semibold tracking-tight">Card</h2>
+        <p class="max-w-2xl text-sm leading-relaxed text-muted-foreground">
+          Superficie contenitore (bordo + <code class="font-mono text-[12px]">bg-card</code> + raggio). Il padding si aggiunge via class.
+        </p>
+        <ui-card class="max-w-md p-5">
+          <h3 class="text-sm font-semibold text-foreground">Titolo della card</h3>
+          <p class="mt-1 text-sm text-muted-foreground">Contenuto su superficie bg-card con bordo border-border.</p>
+        </ui-card>
+      </section>
+
+      <!-- ALERT -->
+      <section id="alert" class="flex scroll-mt-8 flex-col gap-4">
+        <h2 class="text-xl font-semibold tracking-tight">Alert</h2>
+        <p class="max-w-2xl text-sm leading-relaxed text-muted-foreground">
+          Avvisi con tinte di stato (info / success / warning / error) dai token.
+        </p>
+        <div class="flex max-w-xl flex-col gap-2.5">
+          <ui-alert tone="info">
+            <ng-icon name="lucideInfo" size="1.05rem" class="mt-px shrink-0" style="color: var(--ui-alert-icon)" />
+            <span>Mocking attivo: le richieste usano le response configurate.</span>
+          </ui-alert>
+          <ui-alert tone="success">
+            <ng-icon name="lucideCircleCheck" size="1.05rem" class="mt-px shrink-0" style="color: var(--ui-alert-icon)" />
+            <span>Response salvata correttamente.</span>
+          </ui-alert>
+          <ui-alert tone="warning">
+            <ng-icon name="lucideTriangleAlert" size="1.05rem" class="mt-px shrink-0" style="color: var(--ui-alert-icon)" />
+            <span>Endpoint disabilitato: le richieste vanno in proxy.</span>
+          </ui-alert>
+          <ui-alert tone="error">
+            <ng-icon name="lucideCircleX" size="1.05rem" class="mt-px shrink-0" style="color: var(--ui-alert-icon)" />
+            <span>Impossibile contattare il backend (502).</span>
+          </ui-alert>
+        </div>
+      </section>
+
+      <!-- LABEL -->
+      <section id="label" class="flex scroll-mt-8 flex-col gap-4">
+        <h2 class="text-xl font-semibold tracking-tight">Label</h2>
+        <p class="max-w-2xl text-sm leading-relaxed text-muted-foreground">
+          Etichetta di form. Direttiva <code class="font-mono text-[12px]">ui-label</code> su
+          <code class="font-mono text-[12px]">&lt;label&gt;</code>.
+        </p>
+        <ui-card class="max-w-sm p-5">
+          <div class="flex flex-col gap-1.5">
+            <label ui-label for="ds-title">Titolo response</label>
+            <input ui-input id="ds-title" placeholder="Default" />
+          </div>
+        </ui-card>
+      </section>
+
+      <!-- KBD -->
+      <section id="kbd" class="flex scroll-mt-8 flex-col gap-4">
+        <h2 class="text-xl font-semibold tracking-tight">Kbd</h2>
+        <p class="max-w-2xl text-sm leading-relaxed text-muted-foreground">Indicatore di tasto o scorciatoia.</p>
+        <div class="flex h-6 items-center gap-3 text-sm text-muted-foreground">
+          <span class="flex items-center gap-1.5">Cerca <ui-kbd>&#8984;</ui-kbd><ui-kbd>K</ui-kbd></span>
+          <ui-separator orientation="vertical" />
+          <span class="flex items-center gap-1.5">Salva <ui-kbd>Ctrl</ui-kbd><ui-kbd>S</ui-kbd></span>
+        </div>
+      </section>
+
+      <!-- SKELETON -->
+      <section id="skeleton" class="flex scroll-mt-8 flex-col gap-4">
+        <h2 class="text-xl font-semibold tracking-tight">Skeleton</h2>
+        <p class="max-w-2xl text-sm leading-relaxed text-muted-foreground">
+          Placeholder di caricamento (pulse) su bg-muted. Dimensioni via class.
+        </p>
+        <ui-card class="max-w-md p-5">
+          <div class="flex items-center gap-3">
+            <ui-skeleton class="h-9 w-9 rounded-full" />
+            <div class="flex flex-1 flex-col gap-2">
+              <ui-skeleton class="h-3.5 w-2/5" />
+              <ui-skeleton class="h-3 w-3/5" />
+            </div>
+          </div>
+        </ui-card>
+      </section>
+
+      <!-- DIALOG -->
+      <section id="dialog" class="flex scroll-mt-8 flex-col gap-4">
+        <h2 class="text-xl font-semibold tracking-tight">Dialog</h2>
+        <p class="max-w-2xl text-sm leading-relaxed text-muted-foreground">
+          Su CDK Dialog: overlay, focus trap, chiusura con Esc o click sul backdrop. Il contenuto e' stilizzato coi token.
+        </p>
+        <div>
+          <button ui-button variant="outline" (click)="openDialog()">Apri dialog</button>
+        </div>
+        <ng-template #dialogTpl>
+          <ui-card class="w-[26rem] max-w-[92vw] p-5 shadow-xl">
+            <h3 class="text-base font-semibold text-foreground">Elimina response</h3>
+            <p class="mt-1.5 text-sm leading-relaxed text-muted-foreground">
+              Eliminare la response selezionata? L'azione non e' reversibile.
+            </p>
+            <div class="mt-5 flex justify-end gap-2">
+              <button ui-button variant="ghost" (click)="closeDialog()">Annulla</button>
+              <button ui-button variant="destructive" (click)="closeDialog()">Elimina</button>
+            </div>
+          </ui-card>
+        </ng-template>
+      </section>
+
+      <!-- DROPDOWN MENU -->
+      <section id="dropdown" class="flex scroll-mt-8 flex-col gap-4">
+        <h2 class="text-xl font-semibold tracking-tight">Dropdown menu</h2>
+        <p class="max-w-2xl text-sm leading-relaxed text-muted-foreground">
+          Su CDK Menu: overlay, navigazione da tastiera, focus e chiusura. Pannello e voci dai token.
+        </p>
+        <div>
+          <button ui-button variant="outline" [cdkMenuTriggerFor]="rowMenu">
+            Azioni
+            <ng-icon name="lucideChevronDown" size="1rem" />
+          </button>
+        </div>
+        <ng-template #rowMenu>
+          <div ui-menu>
+            <button ui-menu-item><ng-icon name="lucidePencil" size="0.95rem" /> Modifica</button>
+            <button ui-menu-item><ng-icon name="lucideCopy" size="0.95rem" /> Duplica</button>
+            <button ui-menu-item>
+              <ng-icon name="lucideTrash2" size="0.95rem" class="text-[color:var(--destructive)]" /> Elimina
+            </button>
+          </div>
+        </ng-template>
+      </section>
+
+      <!-- TOAST -->
+      <section id="toast" class="flex scroll-mt-8 flex-col gap-4">
+        <h2 class="text-xl font-semibold tracking-tight">Toast</h2>
+        <p class="max-w-2xl text-sm leading-relaxed text-muted-foreground">
+          Notifiche tramite <code class="font-mono text-[12px]">ToastService</code> (signal-based, niente dipendenze) +
+          <code class="font-mono text-[12px]">&lt;ui-toaster&gt;</code> montato una volta nella shell.
+        </p>
+        <div class="flex flex-wrap gap-2.5">
+          <button ui-button variant="secondary" (click)="toast.show({ title: 'Salvato', description: 'Response aggiornata.', tone: 'success' })">Success</button>
+          <button ui-button variant="secondary" (click)="toast.show({ title: 'Attenzione', description: 'Endpoint disabilitato: va in proxy.', tone: 'warning' })">Warning</button>
+          <button ui-button variant="secondary" (click)="toast.show({ title: 'Errore', description: 'Backend non raggiungibile (502).', tone: 'error' })">Error</button>
+          <button ui-button variant="secondary" (click)="toast.show({ title: 'Info', description: 'Proxy globale attivo.', tone: 'info' })">Info</button>
+        </div>
+      </section>
+
+      <!-- RADIO -->
+      <section id="radio" class="flex scroll-mt-8 flex-col gap-4">
+        <h2 class="text-xl font-semibold tracking-tight">Radio</h2>
+        <p class="max-w-2xl text-sm leading-relaxed text-muted-foreground">
+          Gruppo radio su input nativi (a11y + tastiera native), visivo dai token.
+        </p>
+        <ui-card class="max-w-sm p-5">
+          <ui-radio-group [value]="radioValue()" (valueChange)="radioValue.set($any($event))">
+            <ui-radio [value]="'json'">Servi una response JSON</ui-radio>
+            <ui-radio [value]="'file'">Servi un file</ui-radio>
+            <ui-radio [value]="'proxy'" [disabled]="true">Proxy (disabilitato)</ui-radio>
+          </ui-radio-group>
+          <p class="mt-4 text-xs text-muted-foreground">Selezionato: <span class="font-mono text-foreground">{{ radioValue() }}</span></p>
+        </ui-card>
+      </section>
+
+      <!-- TREE -->
+      <section id="tree" class="flex scroll-mt-8 flex-col gap-4">
+        <h2 class="text-xl font-semibold tracking-tight">Tree</h2>
+        <p class="max-w-2xl text-sm leading-relaxed text-muted-foreground">
+          Albero ricorsivo con espandi/collassa, indentazione per livello e guide di profondita' (la base del catalogo).
+        </p>
+        <ui-card class="max-w-md p-2">
+          <ui-tree [nodes]="treeData" />
+        </ui-card>
+      </section>
+
+      <!-- TOGGLE GROUP -->
+      <section id="toggle-group" class="flex scroll-mt-8 flex-col gap-4">
+        <h2 class="text-xl font-semibold tracking-tight">Toggle group</h2>
+        <p class="max-w-2xl text-sm leading-relaxed text-muted-foreground">
+          Controllo "segmented": opzioni mutuamente esclusive in un unico controllo (es. JSON / File). Two-way
+          <code class="font-mono text-[12px]">[(value)]</code> sul gruppo, <code class="font-mono text-[12px]">value</code> su ogni item.
+        </p>
+        <div class="flex flex-col gap-3 rounded-xl border border-border bg-card p-5">
+          <ui-toggle-group
+            [value]="toggleValue()"
+            (valueChange)="toggleValue.set($any($event))"
+            aria-label="Tipo di risposta servita"
+          >
+            <button ui-toggle-item value="json">JSON</button>
+            <button ui-toggle-item value="file">File</button>
+          </ui-toggle-group>
+          <p class="text-[13px] text-muted-foreground">
+            Selezionato: <code class="font-mono text-foreground">{{ toggleValue() }}</code>
+          </p>
+        </div>
+        <pre class="overflow-x-auto rounded-lg bg-[var(--code)] p-3 font-mono text-[12px] text-muted-foreground ring-1 ring-border">&lt;ui-toggle-group [(value)]="mode"&gt;
+  &lt;button ui-toggle-item value="json"&gt;JSON&lt;/button&gt;
+  &lt;button ui-toggle-item value="file"&gt;File&lt;/button&gt;
+&lt;/ui-toggle-group&gt;</pre>
+      </section>
+
+      <!-- CHIP -->
+      <section id="chip" class="flex scroll-mt-8 flex-col gap-4">
+        <h2 class="text-xl font-semibold tracking-tight">Chip</h2>
+        <p class="max-w-2xl text-sm leading-relaxed text-muted-foreground">
+          Chip informativo statico (non interattivo) per coppie label/valore compatte (es. delay). Contenuto proiettato.
+        </p>
+        <div class="flex flex-wrap items-center gap-2 rounded-xl border border-border bg-card p-5">
+          <ui-chip>
+            <span class="text-[10px] font-semibold uppercase tracking-wide">delay</span>
+            <span class="font-mono font-semibold tabular-nums text-foreground">0 ms</span>
+          </ui-chip>
+          <ui-chip>
+            <span class="text-[10px] font-semibold uppercase tracking-wide">tipo</span>
+            <span class="font-semibold text-foreground">mock</span>
+          </ui-chip>
+        </div>
+      </section>
+
+      <!-- COLLAPSIBLE -->
+      <section id="collapsible" class="flex scroll-mt-8 flex-col gap-4">
+        <h2 class="text-xl font-semibold tracking-tight">Collapsible</h2>
+        <p class="max-w-2xl text-sm leading-relaxed text-muted-foreground">
+          Sezione apri/chiudi con chevron. Stato <code class="font-mono text-[12px]">[(open)]</code> (default aperto);
+          l'intestazione si proietta con <code class="font-mono text-[12px]">[uiCollapsibleHeader]</code>.
+        </p>
+        <div class="overflow-hidden rounded-xl border border-border bg-card sm:max-w-md">
+          <ui-collapsible triggerClass="bg-black/20 px-4 py-2.5 hover:bg-black/30">
+            <div uiCollapsibleHeader class="flex items-center gap-2">
+              <h3 class="text-[12px] font-bold uppercase tracking-[0.14em] text-foreground/80">Headers</h3>
+              <ui-badge tone="neutral">3</ui-badge>
+            </div>
+            <div class="border-t border-border px-4 py-3 text-[13px] text-muted-foreground">
+              Contenuto della sezione, visibile quando aperta. Clicca l'intestazione per chiudere.
+            </div>
+          </ui-collapsible>
+        </div>
+      </section>
+
+      <!-- TABLE -->
+      <section id="table" class="flex scroll-mt-8 flex-col gap-4">
+        <h2 class="text-xl font-semibold tracking-tight">Table</h2>
+        <p class="max-w-2xl text-sm leading-relaxed text-muted-foreground">
+          Direttiva <code class="font-mono text-[12px]">[ui-table]</code> su <code class="font-mono text-[12px]">&lt;table&gt;</code>:
+          larghezza piena, righe con bordo tenue, zebra e hover dai token. Il padding/allineamento delle celle resta alle utility.
+        </p>
+        <div class="overflow-hidden rounded-xl border border-border bg-[var(--code)] sm:max-w-md">
+          <table ui-table class="font-mono text-[12px]">
+            <tbody>
+              @for (h of sampleHeaders; track h[0]) {
+              <tr>
+                <td class="w-[40%] whitespace-nowrap py-1.5 pl-4 pr-4 align-top font-medium text-foreground/80">{{ h[0] }}</td>
+                <td class="py-1.5 pr-4 align-top text-muted-foreground">{{ h[1] }}</td>
+              </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ESTENSIONI -->
+      <section id="roadmap" class="flex scroll-mt-8 flex-col gap-4">
+        <h2 class="text-xl font-semibold tracking-tight">Estensioni future</h2>
+        <p class="max-w-2xl text-sm leading-relaxed text-muted-foreground">
+          Tutti i primitivi pianificati sono pronti. Eventuali aggiunte successive (sempre spartan brain + token):
+        </p>
+        <div class="flex flex-wrap gap-2">
+          @for (item of ['Accordion','Combobox','Slider','Progress','Avatar','Date picker']; track item) {
+          <span class="rounded-md border border-dashed border-border px-3 py-1.5 text-[13px] text-muted-foreground">{{ item }}</span>
+          }
+        </div>
+      </section>
+
+      <footer class="border-t border-border-soft pt-6 text-xs text-muted-foreground">
+        Tutto sui token del tema definitivo. Modifica i valori in <code class="font-mono">src/styles.css</code> e si
+        propagano a componenti e a questa pagina.
+      </footer>
+    </div>
+  </main>
+</div>

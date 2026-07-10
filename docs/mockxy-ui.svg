@@ -1,0 +1,97 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 580" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif">
+  <defs>
+    <linearGradient id="brand" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#7c83ff"/>
+      <stop offset="1" stop-color="#5b6bf0"/>
+    </linearGradient>
+    <clipPath id="win"><rect x="16" y="16" width="968" height="548" rx="12"/></clipPath>
+  </defs>
+
+  <!-- window -->
+  <rect x="16" y="16" width="968" height="548" rx="12" fill="#0e1117" stroke="#222a38"/>
+  <g clip-path="url(#win)">
+    <!-- title bar -->
+    <rect x="16" y="16" width="968" height="34" fill="#11151d"/>
+    <circle cx="38" cy="33" r="5" fill="#f87171"/>
+    <circle cx="56" cy="33" r="5" fill="#fbbf24"/>
+    <circle cx="74" cy="33" r="5" fill="#34d399"/>
+    <text x="500" y="37" text-anchor="middle" fill="#6b7480" font-size="12">Mockxy — Mock Server</text>
+
+    <!-- runtime bar -->
+    <rect x="16" y="50" width="968" height="34" fill="#141922"/>
+    <circle cx="40" cy="67" r="5" fill="#34d399"/>
+    <text x="52" y="71" fill="#cdd3df" font-size="11.5">Server on</text>
+    <text x="120" y="71" fill="#5f6877" font-size="11.5">localhost:3000</text>
+    <circle cx="220" cy="67" r="5" fill="#3a4350"/>
+    <text x="232" y="71" fill="#cdd3df" font-size="11.5">Proxy All</text>
+    <circle cx="305" cy="67" r="5" fill="#34d399"/>
+    <text x="317" y="71" fill="#cdd3df" font-size="11.5">Monitor</text>
+    <rect x="912" y="56" width="56" height="22" rx="6" fill="#1b212c" stroke="#2a3340"/>
+    <text x="940" y="71" text-anchor="middle" fill="#aab2c0" font-size="11">EN</text>
+
+    <!-- catalog topbar -->
+    <rect x="16" y="84" width="968" height="44" fill="#11151d"/>
+    <rect x="34" y="96" width="22" height="22" rx="6" fill="url(#brand)"/>
+    <text x="68" y="111" fill="#e6e9ef" font-size="14" font-weight="700">Mockxy</text>
+    <rect x="150" y="98" width="86" height="20" rx="6" fill="#1b212c" stroke="#2a3340"/>
+    <text x="193" y="112" text-anchor="middle" fill="#aab2c0" font-size="11">Catalog</text>
+    <rect x="792" y="96" width="120" height="22" rx="6" fill="#1b212c" stroke="#2a3340"/>
+    <text x="852" y="111" text-anchor="middle" fill="#aab2c0" font-size="11">Import OpenAPI</text>
+    <rect x="920" y="96" width="48" height="22" rx="6" fill="url(#brand)"/>
+    <text x="944" y="111" text-anchor="middle" fill="#fff" font-size="11" font-weight="600">New</text>
+
+    <!-- sidebar (catalog list) -->
+    <rect x="16" y="128" width="300" height="436" fill="#0f131a"/>
+    <rect x="32" y="146" width="268" height="26" rx="6" fill="#161b24"/>
+    <text x="44" y="163" fill="#5f6877" font-size="11.5">Filter the catalog…</text>
+
+    <!-- rows: method badge + path -->
+    <g font-size="12.5" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">
+      <rect x="32" y="184" width="268" height="30" rx="6" fill="#1a2130"/>
+      <rect x="42" y="192" width="40" height="15" rx="4" fill="#16341f"/><text x="62" y="203" text-anchor="middle" fill="#34d399" font-size="10" font-weight="700">GET</text>
+      <text x="92" y="203" fill="#dfe4ec">/workspaces/:id</text>
+
+      <rect x="42" y="224" width="40" height="15" rx="4" fill="#16341f"/><text x="62" y="235" text-anchor="middle" fill="#34d399" font-size="10" font-weight="700">GET</text>
+      <text x="92" y="235" fill="#aab2c0">/projects/:id/tasks</text>
+
+      <rect x="42" y="256" width="40" height="15" rx="4" fill="#14233f"/><text x="62" y="267" text-anchor="middle" fill="#60a5fa" font-size="10" font-weight="700">POST</text>
+      <text x="92" y="267" fill="#aab2c0">/projects/:id/tasks</text>
+
+      <rect x="42" y="288" width="40" height="15" rx="4" fill="#2c2440"/><text x="62" y="299" text-anchor="middle" fill="#a78bfa" font-size="9" font-weight="700">PATCH</text>
+      <text x="92" y="299" fill="#aab2c0">/tasks/:id/status</text>
+
+      <rect x="42" y="320" width="40" height="15" rx="4" fill="#3a1c1c"/><text x="62" y="331" text-anchor="middle" fill="#f87171" font-size="9" font-weight="700">DEL</text>
+      <text x="92" y="331" fill="#aab2c0">/tasks/:id</text>
+
+      <rect x="42" y="352" width="40" height="15" rx="4" fill="#16341f"/><text x="62" y="363" text-anchor="middle" fill="#34d399" font-size="10" font-weight="700">GET</text>
+      <text x="92" y="363" fill="#aab2c0">/invitations</text>
+    </g>
+    <text x="32" y="552" fill="#4b5360" font-size="11">101 endpoint · 12 collection</text>
+
+    <!-- detail panel -->
+    <rect x="316" y="128" width="668" height="436" fill="#0e1117"/>
+    <!-- detail header -->
+    <text x="344" y="166" fill="#34d399" font-size="15" font-weight="700" font-family="ui-monospace, monospace">GET</text>
+    <text x="392" y="166" fill="#e6e9ef" font-size="15" font-family="ui-monospace, monospace">/workspaces/:id</text>
+    <rect x="608" y="152" width="44" height="20" rx="5" fill="#102a1c"/>
+    <text x="630" y="166" text-anchor="middle" fill="#34d399" font-size="12" font-weight="700" font-family="ui-monospace, monospace">200</text>
+
+    <!-- body label -->
+    <text x="344" y="206" fill="#7e8696" font-size="11" font-weight="700" letter-spacing="1.5">RESPONSE · BODY</text>
+
+    <!-- code block -->
+    <rect x="344" y="218" width="612" height="316" rx="8" fill="#0a0d12" stroke="#1d2531"/>
+    <g font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12.5">
+      <text x="364" y="246" fill="#5f6877">1</text><text x="392" y="246" fill="#8a93a6">{</text>
+      <text x="364" y="268" fill="#5f6877">2</text><text x="408" y="268" fill="#7dd3fc">"workspace"</text><text x="498" y="268" fill="#8a93a6">: {</text>
+      <text x="364" y="290" fill="#5f6877">3</text><text x="430" y="290" fill="#7dd3fc">"id"</text><text x="462" y="290" fill="#8a93a6">: </text><text x="476" y="290" fill="#a5d6a7">"497f6eca-6276-4993-bfeb"</text><text x="676" y="290" fill="#8a93a6">,</text>
+      <text x="364" y="312" fill="#5f6877">4</text><text x="430" y="312" fill="#7dd3fc">"name"</text><text x="476" y="312" fill="#8a93a6">: </text><text x="490" y="312" fill="#a5d6a7">"Acme Studio"</text><text x="592" y="312" fill="#8a93a6">,</text>
+      <text x="364" y="334" fill="#5f6877">5</text><text x="430" y="334" fill="#7dd3fc">"slug"</text><text x="476" y="334" fill="#8a93a6">: </text><text x="490" y="334" fill="#a5d6a7">"acme-studio"</text><text x="588" y="334" fill="#8a93a6">,</text>
+      <text x="364" y="356" fill="#5f6877">6</text><text x="430" y="356" fill="#7dd3fc">"currentUserRole"</text><text x="566" y="356" fill="#8a93a6">: </text><text x="580" y="356" fill="#a5d6a7">"owner"</text><text x="632" y="356" fill="#8a93a6">,</text>
+      <text x="364" y="378" fill="#5f6877">7</text><text x="430" y="378" fill="#7dd3fc">"isReadOnly"</text><text x="520" y="378" fill="#8a93a6">: </text><text x="534" y="378" fill="#f0b66b">false</text><text x="568" y="378" fill="#8a93a6">,</text>
+      <text x="364" y="400" fill="#5f6877">8</text><text x="430" y="400" fill="#7dd3fc">"archivedAt"</text><text x="520" y="400" fill="#8a93a6">: </text><text x="534" y="400" fill="#f0b66b">null</text>
+      <text x="364" y="422" fill="#5f6877">9</text><text x="408" y="422" fill="#8a93a6">}</text>
+      <text x="358" y="444" fill="#5f6877">10</text><text x="392" y="444" fill="#8a93a6">}</text>
+    </g>
+  </g>
+</svg>

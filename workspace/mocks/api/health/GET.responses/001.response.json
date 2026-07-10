@@ -1,0 +1,8 @@
+{
+  "type": "mock",
+  "title": "All good",
+  "status": 200,
+  "headers": {},
+  "delayMs": 0,
+  "body": { "status": "ok" }
+}

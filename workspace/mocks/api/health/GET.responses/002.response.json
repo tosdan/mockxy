@@ -1,0 +1,8 @@
+{
+  "type": "mock",
+  "title": "Out of service",
+  "status": 503,
+  "headers": { "retry-after": "30" },
+  "delayMs": 400,
+  "body": { "status": "maintenance", "detail": "A selectable error variant: handy for testing how your client copes with failures." }
+}

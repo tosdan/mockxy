@@ -1,0 +1,7 @@
+{
+  "/_admin/api": {
+    "target": "http://localhost:3101",
+    "secure": false,
+    "changeOrigin": true
+  }
+}

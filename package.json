@@ -1,0 +1,97 @@
+{
+  "name": "mockxy",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Mockxy Mock Server — mock API server with backend proxy fallback",
+  "main": "index.js",
+  "scripts": {
+    "install:all": "npm run install:backend && npm run install:frontend && npm run install:electron",
+    "install:backend": "npm install",
+    "install:frontend": "npm --prefix mockxy-ui install",
+    "install:electron": "npm --prefix electron install",
+    "dev:backend": "nodemon scripts/dev-server.js",
+    "dev:frontend": "npm --prefix mockxy-ui start",
+    "dev:electron": "npm run build:frontend:desktop && npm --prefix electron start",
+    "build:frontend": "npm --prefix mockxy-ui run build",
+    "build:frontend:desktop": "npm --prefix mockxy-ui run build -- --base-href=/_admin/ui/",
+    "dist:electron": "npm run build:frontend:desktop && npm --prefix electron run dist",
+    "icon": "node electron/scripts/generate-icon.js",
+    "start": "node index.js",
+    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand --forceExit",
+    "test:backend": "node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand --forceExit --selectProjects backend",
+    "test:electron": "node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand --forceExit --selectProjects electron",
+    "test:frontend": "npm --prefix mockxy-ui test -- --watch=false",
+    "test:e2e": "npm run build:frontend:desktop && playwright test"
+  },
+  "nodemonConfig": {
+    "ignore": [
+      "workspace/**",
+      "workspace-vu-ish/**"
+    ]
+  },
+  "keywords": [
+    "mock",
+    "api",
+    "proxy"
+  ],
+  "author": "",
+  "license": "GPL-3.0-or-later",
+  "engines": {
+    "node": ">=24"
+  },
+  "dependencies": {
+    "@scalar/openapi-parser": "^0.28.7",
+    "ajv": "^8.17.1",
+    "chokidar": "^4.0.3",
+    "dotenv": "^17.2.3",
+    "express": "^5.1.0",
+    "js-yaml": "^3.14.1",
+    "openapi-sampler": "^1.7.4",
+    "path-to-regexp": "^8.3.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.61.1",
+    "@resvg/resvg-js": "^2.6.2",
+    "jest": "^30.2.0",
+    "nodemon": "^3.1.10",
+    "png-to-ico": "^3.0.1",
+    "supertest": "^7.1.4"
+  },
+  "jest": {
+    "projects": [
+      {
+        "displayName": "backend",
+        "testEnvironment": "node",
+        "roots": [
+          "<rootDir>/test"
+        ],
+        "testMatch": [
+          "**/*.test.js"
+        ],
+        "testPathIgnorePatterns": [
+          "/node_modules/",
+          "\\.electron\\.test\\.js$"
+        ],
+        "modulePathIgnorePatterns": [
+          "<rootDir>/electron/node_modules/"
+        ]
+      },
+      {
+        "displayName": "electron",
+        "testEnvironment": "node",
+        "roots": [
+          "<rootDir>/test"
+        ],
+        "testMatch": [
+          "**/*.electron.test.js"
+        ],
+        "modulePathIgnorePatterns": [
+          "<rootDir>/electron/node_modules/"
+        ]
+      }
+    ]
+  },
+  "volta": {
+    "node": "24.18.0"
+  }
+}

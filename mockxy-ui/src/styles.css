@@ -1,0 +1,270 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+@import '@angular/cdk/overlay-prebuilt.css';
+
+/* ============================================================
+   Restyle — esposizione dei design token come utility Tailwind.
+   Nomi compatibili shadcn/spartan-ng (bg-background, text-foreground,
+   text-muted-foreground, border-border, bg-primary, ...) + estensioni
+   di dominio (method/status/json). I valori vivono nei var :root sotto.
+   ============================================================ */
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-border: var(--border);
+  --color-border-soft: var(--border-soft);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-destructive-soft: var(--destructive-soft);
+  --color-code: var(--code);
+  --color-brand: var(--brand);
+  --color-brand-soft: var(--brand-soft);
+  --color-positive: var(--positive);
+  --color-method-get: var(--method-get);
+  --color-method-post: var(--method-post);
+  --color-method-put: var(--method-put);
+  --color-method-delete: var(--method-delete);
+  --color-method-patch: var(--method-patch);
+  --color-status-2xx: var(--status-2xx);
+  --color-status-3xx: var(--status-3xx);
+  --color-status-4xx: var(--status-4xx);
+  --color-status-5xx: var(--status-5xx);
+  --color-type-mock: var(--type-mock);
+  --color-type-handler: var(--type-handler);
+  --color-type-middleware: var(--type-middleware);
+}
+
+/* Monospace di default dell'app: Cascadia Code dove disponibile (come aurora-2),
+   poi fallback di sistema. Blocco NON-inline → emette anche la var --font-mono in
+   :root, cosi' la usano sia l'utility `font-mono` sia il preflight di code/pre/kbd
+   (e chiunque referenzi var(--font-mono)). Default monospace per tutta l'app. */
+@theme {
+  --font-mono: ui-monospace, SFMono-Regular, 'Cascadia Code', monospace;
+}
+
+:root {
+  color-scheme: dark;
+}
+
+/* ============================================================
+   Restyle design token (mock definitivo "aurora-2").
+   Tema scuro neutro. Valori presi 1:1 da aurora-2.
+   Per un eventuale tema chiaro futuro: ridefinire questi var
+   sotto un selettore (es. .theme-light) senza toccare i componenti.
+   ============================================================ */
+:root {
+  /* superfici */
+  --background: #131315;
+  --background-elevated: #161618; /* stop alto del gradiente di sfondo */
+  --card: #1a1a1d;
+  --popover: #1a1a1d;
+  --muted: #212124;
+  --code: #0f0f11;
+
+  /* testo */
+  --foreground: #e3e3e6;
+  --card-foreground: #e3e3e6;
+  --popover-foreground: #e3e3e6;
+  --muted-foreground: #a3a3a3;
+  --foreground-faint: #737373;
+
+  /* bordi / input / focus */
+  --border: rgba(255, 255, 255, 0.09);
+  --border-soft: rgba(255, 255, 255, 0.055);
+  --input: rgba(255, 255, 255, 0.12);
+  --ring: #828ca1;
+
+  /* brand / accento (slate desaturato di aurora-2) */
+  --brand: #828ca1;
+  --brand-soft: #9aa1b2;
+  --brand-cool: #7c8497;
+  --brand-strong: #5d6478; /* stop scuro dei gradienti brand/CTA */
+  --brand-deep: #4b5263;
+
+  /* primario (shadcn) = brand slate. NB: i bottoni reali useranno un
+     gradiente brand->brand-strong per contrasto, non il flat. */
+  --primary: #828ca1;
+  --primary-foreground: #f5f6f8;
+
+  /* secondario + accent-hover (significato shadcn: superficie sottile) */
+  --secondary: #212124;
+  --secondary-foreground: #e3e3e6;
+  --accent: #26262a;
+  --accent-foreground: #e3e3e6;
+
+  /* stati */
+  --positive: #6f8f79; /* server online / toggle ON */
+  --switch-off: rgba(120, 120, 128, 0.5);
+  --destructive: #fb7185; /* rose-400: bordo/fondo dei controlli distruttivi */
+  --destructive-foreground: #ffffff;
+  --destructive-soft: #fecdd3; /* rose-200: testo distruttivo soft (come "Elimina" di aurora-2) */
+
+  /* sintassi JSON */
+  --json-key: #9aa1b2;
+  --json-string: #a2ad9d;
+  --json-number: #c2b69b;
+  --json-punct: #6f6f74;
+  --json-gutter: #5f5f64;
+
+  /* colori per metodo HTTP — shade -300 come in aurora-2 (l'opacita' 85% la applica il badge) */
+  --method-get: #6ee7b7;
+  --method-post: #7dd3fc;
+  --method-put: #fcd34d;
+  --method-delete: #fda4af;
+  --method-patch: #c4b5fd;
+
+  /* colori per classe di status — shade -300 come in aurora-2 */
+  --status-2xx: #6ee7b7;
+  --status-3xx: #7dd3fc;
+  --status-4xx: #fcd34d;
+  --status-5xx: #fda4af;
+
+  /* colori per tipo di definizione (mock/handler/middleware) come in aurora-2 */
+  --type-mock: #7dd3fc; /* sky-300 */
+  --type-handler: #fcd34d; /* amber-300 */
+  --type-middleware: #c4b5fd; /* violet-300 */
+
+  /* raggio base */
+  --radius: 0.5rem;
+}
+
+/* Backdrop dei dialog (CDK Dialog), coerente col tema. */
+.ui-dialog-backdrop {
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(2px);
+}
+
+/* ============================================================
+   Effetti di pagina della schermata Mocks (mocks-next): non sono componenti del
+   design system ma "chrome" condiviso tra i suoi sotto-componenti, quindi globali.
+   ============================================================ */
+.mx-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.4) transparent;
+}
+.mx-scroll::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+.mx-scroll::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.36);
+  border-radius: 9999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+.mx-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.6);
+  background-clip: padding-box;
+}
+/* Linea-guida verticale dell'albero del catalogo. */
+.mx-tree-line {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--border);
+}
+/* Riga endpoint selezionata: velo verso destra + bordo sinistro curvo. */
+.mx-selected {
+  position: relative;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.085), rgba(255, 255, 255, 0.032) 64%, transparent);
+  box-shadow: inset 2px 0 0 0 var(--brand-soft);
+}
+/* Endpoint disabilitato: muted. */
+.mx-muted {
+  opacity: 0.42;
+}
+.mx-muted:hover {
+  opacity: 0.6;
+}
+/* Glow d'angolo dietro l'header del dettaglio. */
+.mx-glow {
+  position: absolute;
+  top: -14rem;
+  right: -10rem;
+  width: 46rem;
+  height: 30rem;
+  pointer-events: none;
+  border-radius: 9999px;
+  background: radial-gradient(closest-side, rgba(150, 160, 178, 0.1), rgba(150, 160, 178, 0.03) 55%, transparent 78%);
+  filter: blur(28px);
+  opacity: 0.6;
+  z-index: 0;
+}
+
+/* Tabella standardizzata (direttiva [ui-table]): righe con bordo tenue, zebra e
+   hover sui token. Il padding delle celle resta alle utility del consumatore. */
+.ui-table tbody tr {
+  border-bottom: 1px solid var(--border-soft);
+  transition: background-color 0.12s ease;
+}
+.ui-table tbody tr:last-child {
+  border-bottom: 0;
+}
+.ui-table tbody tr:nth-child(odd) {
+  background-color: rgba(255, 255, 255, 0.015);
+}
+.ui-table tbody tr:hover {
+  background-color: rgba(255, 255, 255, 0.03);
+}
+
+/* Drag-drop catalogo (mocks-next): anteprima trascinata, placeholder e animazione. */
+.cdk-drag-preview {
+  border-radius: 0.5rem;
+  background-color: var(--card);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+  outline: 1px solid var(--border);
+  opacity: 0.95;
+}
+.cdk-drag-placeholder {
+  opacity: 0.35;
+}
+.cdk-drag-animating {
+  transition: transform 200ms cubic-bezier(0, 0, 0.2, 1);
+}
+.cdk-drop-list-dragging .cdk-drag:not(.cdk-drag-placeholder) {
+  transition: transform 200ms cubic-bezier(0, 0, 0.2, 1);
+}
+
+/* Focus da tastiera sui nodi dell'albero CDK: il focus e' sull'host treeitem, ma
+   mostriamo il ring solo sulla riga (bottone/foglia) per non avvolgere l'intero
+   sottoalbero annidato. */
+ui-tree cdk-tree-node:focus-visible,
+ui-tree cdk-nested-tree-node:focus-visible {
+  outline: none;
+}
+ui-tree cdk-tree-node:focus-visible > div,
+ui-tree cdk-nested-tree-node:focus-visible > button {
+  border-radius: 0.375rem;
+  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--ring) 45%, transparent);
+}
+
+html,
+body {
+  min-height: 100%;
+  margin: 0;
+}
+
+html,
+body {
+  /* Fix glitch quando si inizia il trascinamento di un item del catalogo:
+  nel primo frame del drag il browser puo' ricalcolare per un istante
+  l'altezza del body, facendo comparire la scrollbar globale. */
+  height: 100%;
+  overflow: hidden;
+}
+

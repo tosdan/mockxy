@@ -1,0 +1,58 @@
+services:
+  mockxy:
+    build: .
+    ports:
+      - "${MOCKXY_HOST_PORT:-3000}:3000"
+    env_file:
+      # Facoltativo: su un clone fresco .env non esiste ancora (si parte da .env.example)
+      # e "docker compose up" deve funzionare lo stesso. Richiede Docker Compose v2.24+.
+      - path: .env
+        required: false
+    environment:
+      # Nel container il bind deve essere 0.0.0.0 (il loopback non è raggiungibile dal port
+      # mapping); ha precedenza su un eventuale HOST nel .env pensato per l'uso da CLI.
+      HOST: "0.0.0.0"
+      ADMIN_API_ENABLED: "true"
+      PROXY_FALLBACK_ENABLED: "true"
+      DEV_WATCH: "true"
+      CHOKIDAR_USEPOLLING: "true"
+      MOCKS_DIR: "workspace/mocks"
+      MONITOR_DUMP_DIR: "workspace/.mockxy/monitor-dump"
+      npm_config_delay: "${MOCKXY_DELAY:-0}"
+      npm_config_delay_all: "${MOCKXY_DELAY_ALL:-false}"
+    volumes:
+      - ./:/app
+      - mockxy_node_modules:/app/node_modules
+    command:
+      - sh
+      - -c
+      - |
+        if [ ! -d node_modules/nodemon ]; then
+          npm ci
+        fi
+        npm run dev:backend -- --legacy-watch
+
+  mockxy-ui:
+    build:
+      context: ./mockxy-ui
+    depends_on:
+      - mockxy
+    environment:
+      CHOKIDAR_USEPOLLING: "true"
+    ports:
+      - "${MOCKXY_UI_HOST_PORT:-4207}:4207"
+    volumes:
+      - ./mockxy-ui:/app
+      - mockxy_ui_node_modules:/app/node_modules
+    command:
+      - sh
+      - -c
+      - |
+        if [ ! -d node_modules/@angular ]; then
+          npm ci
+        fi
+        npm run start:docker
+
+volumes:
+  mockxy_node_modules:
+  mockxy_ui_node_modules:

@@ -1,0 +1,31 @@
+# Server standalone "mock-only": eroga i mock di un workspace, senza admin/monitor/storico.
+# L'immagine contiene SOLO il motore: si distribuisce l'applicazione, non il workspace. Mock e
+# file dati arrivano a runtime con bind mount sui punti di mount qui sotto (vedi
+# docker-compose.staging.yml) — così i mock si aggiornano senza rebuild dell'immagine.
+FROM node:24-alpine
+
+WORKDIR /app
+ENV NODE_ENV=production
+
+# Solo le dipendenze di produzione del motore (niente devDependencies).
+COPY package*.json ./
+RUN npm ci --omit=dev
+
+# Motore + entrypoint.
+COPY index.js ./
+COPY src ./src
+
+# Pura erogazione: niente admin/monitor/storico, niente proxy fallback, niente file watch.
+# MOCKS_DIR/FILES_DIR sono i punti di mount del workspace dell'utente (bind mount a runtime).
+# HOST=0.0.0.0 perché il loopback del container non è raggiungibile dal port mapping;
+# qui è senza rischi: l'admin API è spenta.
+ENV ADMIN_API_ENABLED=false \
+    PROXY_FALLBACK_ENABLED=false \
+    DEV_WATCH=false \
+    MOCKS_DIR=/workspace/mocks \
+    FILES_DIR=/workspace/files \
+    HOST=0.0.0.0 \
+    PORT=3000
+
+EXPOSE 3000
+CMD ["node", "index.js"]

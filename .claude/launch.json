@@ -1,0 +1,29 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "backend",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev"],
+      "port": 3000
+    },
+    {
+      "name": "mockxy-ui",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "mockxy-ui", "start"],
+      "port": 4207
+    },
+    {
+      "name": "monitor-preview",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "mockxy-ui", "start", "--", "--port", "4288"],
+      "port": 4288
+    },
+    {
+      "name": "mockxy-dogfood",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["scripts/dogfood-server.js"],
+      "port": 3344
+    }
+  ]
+}
