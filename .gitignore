@@ -1,5 +1,4 @@
 node_modules/
-.env
 coverage/
 electron/dist/
 npm-debug.log*
@@ -15,3 +14,21 @@ workspace-test/.run/
 
 # workspace scratch del giro di collaudo (scripts/dogfood-server.js)
 /.dogfood/
+
+
+# Configurazione locale e credenziali
+.env
+.env.*
+!.env.example
+!.env.*.example
+
+# Chiavi e certificati privati
+*.key
+*.pem
+*.p12
+*.pfx
+*.jks
+
+# Stato di autenticazione salvato dai browser/test
+playwright/.auth/
+.auth/
