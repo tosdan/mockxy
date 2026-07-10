@@ -1,6 +1,6 @@
 # Workflow speculare della suite di accettazione esterna (tosdan/
 # mock-server-acceptance-tests): a ogni push sul motore lancia i test black-box
-# CONTRO QUESTO COMMIT, con la suite al suo master (o al ref passato col dispatch).
+# CONTRO QUESTO COMMIT, con la suite al suo main (o al ref passato col dispatch).
 # È il gemello di black-box.yml nel repo della suite, con il pinning invertito:
 # lì è fisso il commit della suite e si sceglie il motore, qui il contrario.
 name: acceptance
@@ -16,7 +16,7 @@ on:
       suite-ref:
         description: "Ref della suite di accettazione (branch, tag o SHA)"
         required: false
-        default: "master"
+        default: "main"
 
 jobs:
   black-box:
@@ -33,7 +33,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: tosdan/mockxy-acceptance-tests
-          ref: ${{ inputs.suite-ref || 'master' }}
+          ref: ${{ inputs.suite-ref || 'main' }}
           # Se il repo della suite è privato serve un fine-grained PAT (contents: read)
           # salvato come secret ACCEPTANCE_REPO_TOKEN; se è pubblico basta il default.
           token: ${{ secrets.ACCEPTANCE_REPO_TOKEN || github.token }}
