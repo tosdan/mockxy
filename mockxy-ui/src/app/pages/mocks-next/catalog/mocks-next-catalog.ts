@@ -21,6 +21,7 @@ import {
   lucideFolder,
   lucideFolderPlus,
   lucideGripVertical,
+  lucideInfo,
   lucideMessageSquare,
   lucidePower,
   lucidePowerOff,
@@ -28,6 +29,7 @@ import {
   lucideSearch,
   lucideShrink,
   lucideTrash2,
+  lucideUngroup,
   lucideX,
 } from '@ng-icons/lucide';
 import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
@@ -93,6 +95,7 @@ const METHOD_TONES: ReadonlySet<string> = new Set(['get', 'post', 'put', 'delete
       lucideFolder,
       lucideFolderPlus,
       lucideGripVertical,
+      lucideInfo,
       lucideMessageSquare,
       lucidePower,
       lucidePowerOff,
@@ -100,6 +103,7 @@ const METHOD_TONES: ReadonlySet<string> = new Set(['get', 'post', 'put', 'delete
       lucideSearch,
       lucideShrink,
       lucideTrash2,
+      lucideUngroup,
       lucideX,
     }),
   ],
@@ -270,13 +274,18 @@ const METHOD_TONES: ReadonlySet<string> = new Set(['get', 'post', 'put', 'delete
         <ng-icon name="lucideChevronRight" size="0.85rem" class="shrink-0 text-muted-foreground transition-transform" [class.rotate-90]="!collapsed().has(col.id)" />
         <ng-icon name="lucideFolder" size="0.95rem" class="shrink-0 text-brand" />
         <span class="min-w-0 flex-1 truncate text-[13px] font-semibold tracking-tight" [class]="depth >= 1 ? 'text-foreground/90' : 'text-foreground'">{{ col.name }}</span>
-        @if (confirmingDeleteCollectionId() === col.id) {
+        @if (confirmingDissolveCollectionId() === col.id) {
         <span class="flex shrink-0 items-center gap-1" (click)="$event.stopPropagation()">
-          <button ui-button variant="destructive" size="sm" (click)="confirmDeleteCollection(col.id)">{{ 'catalog.delete' | transloco }}</button>
-          <button ui-button variant="outline" size="sm" (click)="cancelDeleteCollection()">{{ 'catalog.cancel' | transloco }}</button>
+          <button ui-button variant="outline" size="sm" (click)="confirmDissolveCollection(col.id)" [uiTooltip]="'catalog.dissolveCollectionTip' | transloco" [showDelay]="250">{{ 'catalog.confirmDissolve' | transloco: { count: store.collectionEndpointCount(col.id) } }}</button>
+          <button ui-button variant="outline" size="sm" (click)="cancelCollectionAction()">{{ 'catalog.cancel' | transloco }}</button>
         </span>
-        } @else if (!isUnsorted(col)) {
-        <button ui-button variant="ghost" size="icon" class="shrink-0 opacity-0 transition focus-visible:opacity-100 group-hover/folder:opacity-100" (click)="$event.stopPropagation()" [cdkMenuTriggerFor]="folderMenu" [cdkMenuTriggerData]="{ col: col }" [uiTooltip]="'catalog.collectionActionsTip' | transloco">
+        } @else if (confirmingEraseCollectionId() === col.id) {
+        <span class="flex shrink-0 items-center gap-1" (click)="$event.stopPropagation()">
+          <button ui-button variant="destructive" size="sm" [disabled]="store.erasingCollectionId() != null" (click)="confirmEraseCollection(col.id)" [uiTooltip]="isUnsorted(col) ? ('catalog.eraseUnsortedTip' | transloco) : ('catalog.eraseCollectionTip' | transloco)" [showDelay]="250">{{ 'catalog.confirmErase' | transloco: { count: store.collectionEndpointCount(col.id) } }}</button>
+          <button ui-button variant="outline" size="sm" [disabled]="store.erasingCollectionId() != null" (click)="cancelCollectionAction()">{{ 'catalog.cancel' | transloco }}</button>
+        </span>
+        } @else {
+        <button ui-button variant="ghost" size="icon" class="shrink-0 opacity-0 transition focus-visible:opacity-100 group-hover/folder:opacity-100" (click)="$event.stopPropagation()" [cdkMenuTriggerFor]="isUnsorted(col) ? unsortedMenu : folderMenu" [cdkMenuTriggerData]="{ col: col }" [uiTooltip]="'catalog.collectionActionsTip' | transloco">
           <ng-icon name="lucideEllipsisVertical" size="0.9rem" />
         </button>
         }
@@ -400,9 +409,26 @@ const METHOD_TONES: ReadonlySet<string> = new Set(['get', 'post', 'put', 'delete
         </button>
         }
         <div class="my-1 h-px bg-border"></div>
-        <button ui-menu-item (click)="askDeleteCollection(col.id)">
+        <button ui-menu-item (click)="askDissolveCollection(col.id)" [uiTooltip]="'catalog.dissolveCollectionTip' | transloco" position="left" [showDelay]="250">
+          <ng-icon name="lucideUngroup" size="0.85rem" class="text-muted-foreground" />
+          <span class="flex-1">{{ 'catalog.dissolveCollection' | transloco }}</span>
+          <ng-icon name="lucideInfo" size="0.8rem" class="text-muted-foreground" />
+        </button>
+        <button ui-menu-item (click)="askEraseCollection(col.id)" [uiTooltip]="'catalog.eraseCollectionTip' | transloco" position="left" [showDelay]="250">
           <ng-icon name="lucideTrash2" size="0.85rem" class="text-destructive-soft" />
-          <span class="flex-1">{{ 'catalog.deleteCollection' | transloco }}</span>
+          <span class="flex-1 text-destructive-soft">{{ 'catalog.eraseCollection' | transloco }}</span>
+          <ng-icon name="lucideInfo" size="0.8rem" class="text-destructive-soft/80" />
+        </button>
+      </div>
+    </ng-template>
+
+    <!-- menu azioni della collection virtuale Unsorted -->
+    <ng-template #unsortedMenu let-col="col">
+      <div ui-menu>
+        <button ui-menu-item (click)="askEraseCollection(col.id)" [uiTooltip]="'catalog.eraseUnsortedTip' | transloco" position="left" [showDelay]="250">
+          <ng-icon name="lucideTrash2" size="0.85rem" class="text-destructive-soft" />
+          <span class="flex-1 text-destructive-soft">{{ 'catalog.eraseUnsorted' | transloco }}</span>
+          <ng-icon name="lucideInfo" size="0.8rem" class="text-destructive-soft/80" />
         </button>
       </div>
     </ng-template>
@@ -437,7 +463,8 @@ export class MocksNextCatalog {
   /** Genitore sotto cui creare la collection (undefined = livello root). */
   protected readonly creatingParentId = signal<string | undefined>(undefined);
   protected readonly newCollectionLabel = signal('');
-  protected readonly confirmingDeleteCollectionId = signal<string | null>(null);
+  protected readonly confirmingDissolveCollectionId = signal<string | null>(null);
+  protected readonly confirmingEraseCollectionId = signal<string | null>(null);
   /** Linea di inserimento (coordinate viewport) durante il drag, o null quando non si trascina. */
   protected readonly dropLine = signal<{ top: number; left: number; width: number } | null>(null);
   /** Id della sotto-collection evidenziata come "drop dentro" (puntatore sulla sua intestazione), o null. */
@@ -525,14 +552,23 @@ export class MocksNextCatalog {
   }
 
   // --- eliminazione collection ---
-  protected askDeleteCollection(id: string): void {
-    this.confirmingDeleteCollectionId.set(id);
+  protected askDissolveCollection(id: string): void {
+    this.confirmingEraseCollectionId.set(null);
+    this.confirmingDissolveCollectionId.set(id);
   }
-  protected cancelDeleteCollection(): void {
-    this.confirmingDeleteCollectionId.set(null);
+  protected askEraseCollection(id: string): void {
+    this.confirmingDissolveCollectionId.set(null);
+    this.confirmingEraseCollectionId.set(id);
   }
-  protected confirmDeleteCollection(id: string): void {
-    this.store.deleteCollection(id, () => this.confirmingDeleteCollectionId.set(null));
+  protected cancelCollectionAction(): void {
+    this.confirmingDissolveCollectionId.set(null);
+    this.confirmingEraseCollectionId.set(null);
+  }
+  protected confirmDissolveCollection(id: string): void {
+    this.store.deleteCollection(id, () => this.cancelCollectionAction());
+  }
+  protected confirmEraseCollection(id: string): void {
+    this.store.eraseCollection(id, () => this.cancelCollectionAction());
   }
 
   // --- riordino/reparent collection via MENU (accessibile, un passo per volta) ---

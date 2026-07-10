@@ -104,6 +104,10 @@ export interface CollectionCreateRequest {
   parentId?: string;
 }
 
+export interface CollectionEraseResponse {
+  deleted: number;
+}
+
 export interface MockCreateRequest {
   config: MockConfig;
   body: unknown;

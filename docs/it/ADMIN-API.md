@@ -61,7 +61,8 @@ resettano lo stato tra i test, pipeline che importano una specifica aggiornata.
 | `PATCH /mocks/collections/:id/items/order` | riordina gli endpoint di una collezione |
 | `PATCH /mocks/collections/:key/children/order` | riordina le sottocollezioni |
 | `PATCH /mocks/collections/:id/enabled` | abilita/disabilita **in massa** il sottoalbero ([semantica](CATALOGO.md)) |
-| `DELETE /mocks/collections/:id` | elimina il sottoalbero; gli endpoint tornano tra i non ordinati |
+| `DELETE /mocks/collections/:id` | **dissolve** il sottoalbero; gli endpoint tornano in Unsorted |
+| `DELETE /mocks/collections/:id/contents` | elimina definitivamente il sottoalbero e tutti gli endpoint contenuti; con `id=unsorted` elimina tutti e soli gli endpoint non assegnati — risposta `{ deleted }` |
 
 ## Import OpenAPI
 

@@ -5,6 +5,7 @@ import {
   AssignCollectionRequest,
   CollectionChildrenReorderRequest,
   CollectionCreateRequest,
+  CollectionEraseResponse,
   CollectionEnabledUpdateRequest,
   CollectionItemsReorderRequest,
   CollectionReorderRequest,
@@ -128,6 +129,13 @@ export class MockAdminApiService {
   /** Elimina una collection persistita del catalogo. */
   deleteCollection(id: string): Observable<void> {
     return this.http.delete<void>(`${this.baseUrl}/mocks/collections/${encodeURIComponent(id)}`);
+  }
+
+  /** Elimina una collection (o Unsorted) insieme a tutti gli endpoint contenuti. */
+  eraseCollection(id: string): Observable<CollectionEraseResponse> {
+    return this.http.delete<CollectionEraseResponse>(
+      `${this.baseUrl}/mocks/collections/${encodeURIComponent(id)}/contents`,
+    );
   }
 
   /** Abilita o disabilita massivamente gli endpoint dentro una collection persistita e le sue sotto-collection. */

@@ -435,5 +435,14 @@ describe('MockAdminApiService', () => {
     request.flush(null);
     expect(completed).toBe(true);
   });
-});
 
+  it('should erase a collection together with its contents', () => {
+    service.eraseCollection('collection/archived').subscribe((response) => {
+      expect(response).toEqual({ deleted: 3 });
+    });
+
+    const request = http.expectOne('/_admin/api/mocks/collections/collection%2Farchived/contents');
+    expect(request.request.method).toBe('DELETE');
+    request.flush({ deleted: 3 });
+  });
+});

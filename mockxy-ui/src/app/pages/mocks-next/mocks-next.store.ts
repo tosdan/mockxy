@@ -75,6 +75,7 @@ export class MocksStore {
   readonly error = signal<string | undefined>(undefined);
   /** Id dell'endpoint con una mutazione in corso (per disabilitare i controlli). */
   readonly savingId = signal<string | undefined>(undefined);
+  readonly erasingCollectionId = signal<string | undefined>(undefined);
   /** Creazione di una nuova definizione in corso (dialog "Nuovo"). */
   readonly creating = signal(false);
 
@@ -115,6 +116,27 @@ export class MocksStore {
   ]);
   readonly totalEndpoints = computed(() => this.mocks().length);
   readonly totalCollections = computed(() => this.collections().length);
+
+  /** Numero ricorsivo di endpoint interessati da un'azione massiva sulla collection. */
+  collectionEndpointCount(id: string): number {
+    if (id === UNSORTED_COLLECTION_ID) {
+      return this.mocks().filter((item) => item.collectionId == null).length;
+    }
+    const subtreeIds = new Set([id]);
+    let changed = true;
+    while (changed) {
+      changed = false;
+      for (const collection of this.collections()) {
+        if (collection.parentId != null && subtreeIds.has(collection.parentId) && !subtreeIds.has(collection.id)) {
+          subtreeIds.add(collection.id);
+          changed = true;
+        }
+      }
+    }
+    return this.mocks().filter(
+      (item) => item.collectionId != null && subtreeIds.has(item.collectionId),
+    ).length;
+  }
   readonly activeEndpoints = computed(() => this.mocks().filter((m) => !m.disabled).length);
   readonly selectedId = computed(() => this.selected()?.id);
   readonly hasActiveFilter = computed(
@@ -373,6 +395,32 @@ export class MocksStore {
       .subscribe({
         next: (res) => {
           this.applyCatalogResponse(res);
+          onSuccess?.();
+        },
+        error: (e) => this.error.set(readErrorMessage(e) ?? this.transloco.translate('common.unexpectedError')),
+      });
+  }
+
+  /** Elimina Unsorted o una collection persistita insieme a tutti gli endpoint contenuti. */
+  eraseCollection(id: string, onSuccess?: () => void): void {
+    if (this.erasingCollectionId() != null) {
+      return;
+    }
+    this.erasingCollectionId.set(id);
+    this.error.set(undefined);
+    this.api
+      .eraseCollection(id)
+      .pipe(
+        switchMap(() => this.api.listMocks()),
+        finalize(() => this.erasingCollectionId.set(undefined)),
+      )
+      .subscribe({
+        next: (res) => {
+          this.applyCatalogResponse(res);
+          const selectedId = this.selected()?.id;
+          if (selectedId != null && !res.items.some((item) => item.id === selectedId)) {
+            this.selected.set(undefined);
+          }
           onSuccess?.();
         },
         error: (e) => this.error.set(readErrorMessage(e) ?? this.transloco.translate('common.unexpectedError')),

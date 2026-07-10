@@ -68,6 +68,7 @@ function makeApiStub() {
       createCollection: vi.fn(() => of(coll('nuova'))),
       assignDefinitionCollection: vi.fn((id: string) => of(detail(id))),
       deleteCollection: vi.fn(() => of(undefined)),
+      eraseCollection: vi.fn(() => of({ deleted: 1 })),
       updateCollectionEnabled: vi.fn(() => of(listResponse([summary('e1')]))),
       reorderCollections: vi.fn(() => of(undefined)),
       reparentCollection: vi.fn(() => of(undefined)),
@@ -118,6 +119,11 @@ describe('MocksStore', () => {
       const nested = roots[0].children.find((c) => c.kind === 'collection');
       expect(nested?.kind === 'collection' && nested.node.collection.depth).toBe(1);
       expect(store.unsortedNode()?.collection.endpoints.map((e) => e.id)).toEqual(['e3']);
+      expect(store.collectionEndpointCount(UNSORTED_COLLECTION_ID)).toBe(1);
+      expect(store.collectionEndpointCount('c1')).toBe(2);
+      store.searchTerm.set('e1');
+      expect(store.collectionEndpointCount(UNSORTED_COLLECTION_ID)).toBe(1);
+      expect(store.collectionEndpointCount('c1')).toBe(2);
       expect(store.catalogIsEmpty()).toBe(false);
     });
 
@@ -395,6 +401,35 @@ describe('MocksStore', () => {
       store.setCollectionEnabled('c1', false);
 
       expect(store.selected()?.disabled).toBe(true);
+    });
+
+    it('eraseCollection ricarica il catalogo e deseleziona un endpoint eliminato', () => {
+      const store = create();
+      store.selected.set(detail('e1'));
+      api.listMocks.mockReturnValueOnce(of(listResponse([summary('e2')], [coll('c2')])));
+      const onSuccess = vi.fn();
+
+      store.eraseCollection(UNSORTED_COLLECTION_ID, onSuccess);
+
+      expect(api.eraseCollection).toHaveBeenCalledWith(UNSORTED_COLLECTION_ID);
+      expect(store.mocks().map((item) => item.id)).toEqual(['e2']);
+      expect(store.selected()).toBeUndefined();
+      expect(store.erasingCollectionId()).toBeUndefined();
+      expect(onSuccess).toHaveBeenCalledTimes(1);
+    });
+
+    it('eraseCollection conserva catalogo e selezione in caso di errore', () => {
+      const store = create();
+      store.mocks.set([summary('e1')]);
+      store.selected.set(detail('e1'));
+      api.eraseCollection.mockReturnValueOnce(throwError(() => new Error('erase fallita')));
+
+      store.eraseCollection('c1');
+
+      expect(store.mocks().map((item) => item.id)).toEqual(['e1']);
+      expect(store.selected()?.id).toBe('e1');
+      expect(store.error()).toBe('erase fallita');
+      expect(store.erasingCollectionId()).toBeUndefined();
     });
   });
 

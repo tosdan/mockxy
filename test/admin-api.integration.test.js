@@ -1378,6 +1378,68 @@ describe("admin API", () => {
     ]);
   });
 
+  test("erases only unsorted endpoints and preserves persisted collections", async () => {
+    await writeMock({ mocksDir, folder: "unsorted-a", method: "GET", routePath: "/unsorted-a", body: {} });
+    await writeMock({ mocksDir, folder: "unsorted-b", method: "POST", routePath: "/unsorted-b", body: {} });
+    await writeMock({ mocksDir, folder: "kept", method: "GET", routePath: "/kept", body: {} });
+
+    const app = await buildApp();
+    const keptCollection = await request(app)
+      .post("/_admin/api/mocks/collections")
+      .send({ label: "Kept" });
+    const keptId = encodeMockId("kept/GET.endpoint.json");
+    await request(app)
+      .put(`/_admin/api/mocks/${keptId}/collection`)
+      .send({ collectionId: keptCollection.body.id });
+
+    const eraseResponse = await request(app)
+      .delete("/_admin/api/mocks/collections/unsorted/contents");
+
+    expect(eraseResponse.status).toBe(200);
+    expect(eraseResponse.body).toEqual({ deleted: 2 });
+    expect(fs.existsSync(path.join(mocksDir, "unsorted-a", "GET.endpoint.json"))).toBe(false);
+    expect(fs.existsSync(path.join(mocksDir, "unsorted-a", "GET.responses"))).toBe(false);
+    expect(fs.existsSync(path.join(mocksDir, "unsorted-b", "POST.endpoint.json"))).toBe(false);
+    expect(fs.existsSync(path.join(mocksDir, "kept", "GET.endpoint.json"))).toBe(true);
+
+    const listResponse = await request(app).get("/_admin/api/mocks");
+    expect(listResponse.body.items.map((item) => item.id)).toEqual([keptId]);
+    expect(listResponse.body.collections).toEqual([
+      expect.objectContaining({ id: keptCollection.body.id, itemCount: 1 }),
+    ]);
+  });
+
+  test("erases a collection subtree together with all contained endpoints", async () => {
+    await writeMock({ mocksDir, folder: "parent-erase", method: "GET", routePath: "/parent-erase", body: {} });
+    await writeMock({ mocksDir, folder: "child-erase", method: "GET", routePath: "/child-erase", body: {} });
+    await writeMock({ mocksDir, folder: "outside-erase", method: "GET", routePath: "/outside-erase", body: {} });
+
+    const app = await buildApp();
+    const parent = await request(app).post("/_admin/api/mocks/collections").send({ label: "Erase parent" });
+    const child = await request(app)
+      .post("/_admin/api/mocks/collections")
+      .send({ label: "Erase child", parentId: parent.body.id });
+    const outside = await request(app).post("/_admin/api/mocks/collections").send({ label: "Outside erase" });
+    const parentId = encodeMockId("parent-erase/GET.endpoint.json");
+    const childId = encodeMockId("child-erase/GET.endpoint.json");
+    const outsideId = encodeMockId("outside-erase/GET.endpoint.json");
+    await request(app).put(`/_admin/api/mocks/${parentId}/collection`).send({ collectionId: parent.body.id });
+    await request(app).put(`/_admin/api/mocks/${childId}/collection`).send({ collectionId: child.body.id });
+    await request(app).put(`/_admin/api/mocks/${outsideId}/collection`).send({ collectionId: outside.body.id });
+
+    const eraseResponse = await request(app)
+      .delete(`/_admin/api/mocks/collections/${parent.body.id}/contents`);
+
+    expect(eraseResponse.status).toBe(200);
+    expect(eraseResponse.body).toEqual({ deleted: 2 });
+    const listResponse = await request(app).get("/_admin/api/mocks");
+    expect(listResponse.body.items.map((item) => item.id)).toEqual([outsideId]);
+    expect(listResponse.body.collections).toEqual([
+      expect.objectContaining({ id: outside.body.id, itemCount: 1 }),
+    ]);
+    expect(listResponse.body.childOrder.root).toEqual([outside.body.id]);
+  });
+
   test("mass updates endpoint enabled state for a collection subtree", async () => {
     await writeMock({
       mocksDir,

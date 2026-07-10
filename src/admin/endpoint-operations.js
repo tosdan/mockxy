@@ -45,7 +45,13 @@ const {
   readResponseAssetFileName,
   isResponseAssetReferenced,
 } = require("./endpoint-files");
-const { removeCollectionMembership, getCollectionsMetadataFilePath } = require("./collections-state");
+const {
+  getCollectionsMetadataFilePath,
+  readCollectionsState,
+  writeCollectionsState,
+  removeRefFromChildOrder,
+  serializedByWorkspace,
+} = require("./collections-state");
 const { getAdminMockDetail } = require("./mock-catalog");
 
 // Mutazioni degli endpoint e delle loro response: creazione (mock o script), aggiornamento,
@@ -763,35 +769,82 @@ async function updateAdminMock(mocksDir, id, payload, reloadRuntime) {
   return getAdminMockDetail(mocksDir, id);
 }
 
-async function deleteAdminMock(mocksDir, id, reloadRuntime) {
-  const endpointPath = resolveAdminFilePath(mocksDir, id);
-  if (!fs.existsSync(endpointPath)) {
-    throw createAdminError(404, "Endpoint definition not found.");
+async function deleteAdminMocksUnlocked(
+  mocksDir,
+  ids,
+  reloadRuntime,
+  { mutateCollectionState, rejectionLabel = "Endpoint delete rejected" } = {}
+) {
+  if (!Array.isArray(ids)) {
+    throw createAdminError(400, "Endpoint ids must be an array.");
   }
 
-  const endpoint = await readEndpointConfig(endpointPath);
-  const responseDir = getEndpointResponsesDir(endpointPath, endpoint.method);
-  const relativePath = toPosixRelativePath(path.relative(mocksDir, endpointPath));
-  const backups = [
-    await readBackup(endpointPath),
-    await readBackup(getCollectionsMetadataFilePath(mocksDir)),
-    // La cartella delle response viene cancellata ricorsivamente qui sotto: senza il suo
-    // snapshot un fallimento nei passi successivi perderebbe le response per sempre.
-    ...(await readDirectoryBackup(responseDir)),
-  ];
+  const targets = [];
+  const seenPaths = new Set();
+  for (const id of ids) {
+    const endpointPath = resolveAdminFilePath(mocksDir, id);
+    if (!fs.existsSync(endpointPath)) {
+      throw createAdminError(404, "Endpoint definition not found.");
+    }
+    if (seenPaths.has(endpointPath)) {
+      continue;
+    }
 
-  await fs.promises.rm(endpointPath, { force: true });
-  await fs.promises.rm(responseDir, { recursive: true, force: true });
+    seenPaths.add(endpointPath);
+    const endpoint = await readEndpointConfig(endpointPath);
+    targets.push({
+      endpointPath,
+      responseDir: getEndpointResponsesDir(endpointPath, endpoint.method),
+      relativePath: toPosixRelativePath(path.relative(mocksDir, endpointPath)),
+    });
+  }
+
+  const collectionState = await readCollectionsState(mocksDir);
+  const targetBackups = await Promise.all(
+    targets.map(async ({ endpointPath, responseDir }) => [
+      await readBackup(endpointPath),
+      ...(await readDirectoryBackup(responseDir)),
+    ])
+  );
+  const backups = [
+    await readBackup(getCollectionsMetadataFilePath(mocksDir)),
+    ...targetBackups.flat(),
+  ];
 
   await commitWithRollback({
     backups,
     reloadRuntime,
-    rejectionLabel: "Endpoint delete rejected",
+    rejectionLabel,
     commit: async () => {
-      await removeCollectionMembership(mocksDir, relativePath);
-      await removeEmptyDirectory(path.dirname(endpointPath), mocksDir);
+      for (const { endpointPath, responseDir, relativePath } of targets) {
+        await fs.promises.rm(endpointPath, { force: true });
+        await fs.promises.rm(responseDir, { recursive: true, force: true });
+        delete collectionState.memberships[relativePath];
+        removeRefFromChildOrder(collectionState, relativePath);
+      }
+
+      if (typeof mutateCollectionState === "function") {
+        await mutateCollectionState(collectionState);
+      }
+      await writeCollectionsState(mocksDir, collectionState);
+
+      const candidateDirs = [...new Set(targets.map(({ endpointPath }) => path.dirname(endpointPath)))]
+        .sort((left, right) => right.length - left.length);
+      for (const candidateDir of candidateDirs) {
+        if (fs.existsSync(candidateDir)) {
+          await removeEmptyDirectory(candidateDir, mocksDir);
+        }
+      }
     },
   });
+
+  return { deleted: targets.length };
+}
+
+const deleteAdminMocks = serializedByWorkspace(deleteAdminMocksUnlocked);
+
+async function deleteAdminMock(mocksDir, id, reloadRuntime) {
+  await deleteAdminMocks(mocksDir, [id], reloadRuntime);
 }
 
 // Duplica un endpoint esistente verso un nuovo metodo+path (entrambi modificabili nella dialog "Copia").
@@ -893,5 +946,6 @@ module.exports = {
   updateAdminEndpoint,
   updateAdminMock,
   deleteAdminMock,
+  deleteAdminMocksUnlocked,
   copyAdminEndpoint,
 };

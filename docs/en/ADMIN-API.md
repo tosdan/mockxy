@@ -61,7 +61,8 @@ state between tests, pipelines that import an updated spec.
 | `PATCH /mocks/collections/:id/items/order` | reorders a collection's endpoints |
 | `PATCH /mocks/collections/:key/children/order` | reorders the sub-collections |
 | `PATCH /mocks/collections/:id/enabled` | enables/disables the subtree **in bulk** ([semantics](CATALOGO.md)) |
-| `DELETE /mocks/collections/:id` | deletes the subtree; the endpoints go back among the unsorted ones |
+| `DELETE /mocks/collections/:id` | **dissolves** the subtree; its endpoints go back to Unsorted |
+| `DELETE /mocks/collections/:id/contents` | permanently erases the subtree and all contained endpoints; with `id=unsorted`, erases all and only unassigned endpoints — response `{ deleted }` |
 
 ## OpenAPI import
 

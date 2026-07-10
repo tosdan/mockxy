@@ -28,6 +28,7 @@ const {
   createCollectionSummary,
 } = require("./collections-state");
 const { listAdminMocks, listAdminCollections, getAdminMockDetail } = require("./mock-catalog");
+const { deleteAdminMocksUnlocked } = require("./endpoint-operations");
 
 // Operazioni admin sulle collection: CRUD, riordini, assegnazione degli endpoint e
 // abilitazione di massa. Le mutazioni dello stato passano tutte dalle versioni serializzate
@@ -40,6 +41,7 @@ const reorderAdminCollections = serializedByWorkspace(reorderAdminCollectionsUnl
 const assignAdminCollection = serializedByWorkspace(assignAdminCollectionUnlocked);
 const reorderAdminCollectionItems = serializedByWorkspace(reorderAdminCollectionItemsUnlocked);
 const reorderAdminCollectionChildren = serializedByWorkspace(reorderAdminCollectionChildrenUnlocked);
+const eraseAdminCollection = serializedByWorkspace(eraseAdminCollectionUnlocked);
 
 async function createAdminCollectionUnlocked(mocksDir, payload) {
   const label = normalizeCollectionLabel(payload?.label);
@@ -162,6 +164,67 @@ async function deleteAdminCollectionUnlocked(mocksDir, id) {
   );
   collectionState.childOrder = nextChildOrder;
   await writeCollectionsState(mocksDir, collectionState);
+}
+
+// Cancella gli endpoint della collection virtuale Unsorted oppure, per una collection persistita,
+// l'intero sottoalbero con tutti gli endpoint. La primitiva bulk condivide un solo rollback/reload.
+async function eraseAdminCollectionUnlocked(mocksDir, id, reloadRuntime) {
+  const normalizedId = normalizeRequestedCollectionId(id);
+  if (normalizedId == null) {
+    throw createAdminError(400, "Collection id is required.");
+  }
+
+  const currentItems = await listAdminMocks(mocksDir);
+  let deletedCollectionIds = new Set();
+  let targetItems;
+  if (normalizedId === UNSORTED_COLLECTION_ID) {
+    targetItems = currentItems.filter((item) => item.collectionId == null);
+  } else {
+    const collectionState = await readCollectionsState(mocksDir);
+    const target = collectionState.collections.find((collection) => collection.id === normalizedId);
+    if (target == null) {
+      throw createAdminError(404, "Collection not found.");
+    }
+    deletedCollectionIds = readCollectionSubtreeIds(collectionState.collections, normalizedId);
+    targetItems = currentItems.filter(
+      (item) => item.collectionId != null && deletedCollectionIds.has(item.collectionId)
+    );
+  }
+
+  return deleteAdminMocksUnlocked(
+    mocksDir,
+    targetItems.map((item) => item.id),
+    reloadRuntime,
+    {
+      rejectionLabel: "Collection erase rejected",
+      mutateCollectionState: (collectionState) => {
+        if (deletedCollectionIds.size === 0) {
+          return;
+        }
+
+        collectionState.collections = collectionState.collections.filter(
+          (collection) => !deletedCollectionIds.has(collection.id)
+        );
+        for (const [definitionPath, collectionId] of Object.entries(collectionState.memberships)) {
+          if (deletedCollectionIds.has(collectionId)) {
+            delete collectionState.memberships[definitionPath];
+          }
+        }
+
+        const nextChildOrder = {};
+        for (const [parentKey, refs] of Object.entries(collectionState.childOrder || {})) {
+          if (deletedCollectionIds.has(parentKey)) {
+            continue;
+          }
+          const nextRefs = refs.filter((ref) => !deletedCollectionIds.has(ref));
+          if (nextRefs.length > 0) {
+            nextChildOrder[parentKey] = nextRefs;
+          }
+        }
+        collectionState.childOrder = nextChildOrder;
+      },
+    }
+  );
 }
 
 // Moves a collection under a new parent (or to the top level) while preventing cycles.
@@ -479,6 +542,7 @@ async function updateAdminCollectionEnabled(mocksDir, collectionId, payload, rel
 module.exports = {
   createAdminCollection,
   deleteAdminCollection,
+  eraseAdminCollection,
   reparentAdminCollection,
   reorderAdminCollections,
   assignAdminCollection,

@@ -14,10 +14,13 @@ drop. The organization is UI metadata (the `.collections.json` file in the mocks
 shared in git like the rest): it touches neither the served paths nor the position of the
 folders on disk. Unassigned endpoints live in the virtual collection of the *unsorted* ones.
 
-Two semantics to know:
+Three semantics to know:
 
-- **deleting a collection doesn't delete its mocks**: the whole subtree of collections
-  disappears and the endpoints it contained go back among the unsorted ones;
+- **Dissolve collection** removes the grouping without deleting its mocks: the whole collection
+  subtree disappears and its endpoints go back to Unsorted;
+- **Erase collection** permanently erases the whole subtree, its endpoints, and all their variants.
+  The same action on Unsorted erases every unassigned endpoint, including those hidden by the
+  current filters;
 - **the collection-level enable switch is a bulk action**: it writes the same `enabled`
   state onto *all* the endpoints of the subtree, file by file. It's the quick way to switch
   off a whole area («the whole master-data area to the real backend»), but it's a uniform

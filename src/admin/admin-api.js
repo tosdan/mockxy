@@ -21,6 +21,7 @@ const {
   assignAdminCollection,
   createAdminCollection,
   deleteAdminCollection,
+  eraseAdminCollection,
   reorderAdminCollections,
   reorderAdminCollectionChildren,
   reorderAdminCollectionItems,
@@ -252,6 +253,15 @@ function createAdminApiRouter({ config, reloadRuntime, requestMonitor, serverSta
   router.delete("/mocks/collections/:id", async (req, res) => {
     await deleteAdminCollection(config.mocksDir, req.params.id);
     sendJson(res, 204);
+  });
+
+  router.delete("/mocks/collections/:id/contents", async (req, res) => {
+    const result = await eraseAdminCollection(
+      config.mocksDir,
+      req.params.id,
+      reloadRuntime
+    );
+    sendJson(res, 200, result);
   });
 
   router.get("/mocks/:id", async (req, res) => {
