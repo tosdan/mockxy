@@ -8,7 +8,8 @@ livelli distinti che convivono:
 2. **Workspace** (app desktop) — impostazioni locali per-workspace in `<workspace>/.mockxy/settings.json`,
    editabili dalla **dialog impostazioni workspace**. Vengono passate al motore come override e, al
    cambio, il motore del workspace **riparte**.
-3. **Preferenze globali dell'app** (app desktop) — `mockxy-prefs.json` accanto all'eseguibile.
+3. **Preferenze globali dell'app** (app desktop) — `mockxy-prefs.json` nella directory dati utente
+   di Electron (accanto all'eseguibile solo nella build Windows portabile).
 4. **Runtime operativo** — interruttori in memoria non persistiti (runtime-bar / admin API).
 5. **Per-mock** — proprietà del singolo endpoint/variante, nei file dei mock.
 6. **Docker / Compose** — variabili a livello di container e di orchestrazione.
@@ -88,7 +89,8 @@ editabile dalla stessa dialog.
 
 ## 3. Preferenze globali dell'app (`mockxy-prefs.json`)
 
-Preferenze utente cross-workspace, salvate accanto all'eseguibile (`electron/global-prefs.js`). Non
+Preferenze utente cross-workspace, salvate nella directory dati utente di Electron
+(`electron/global-prefs.js`); nella build Windows portabile sono invece accanto all'eseguibile. Non
 per-workspace.
 
 - `recentWorkspaces` — elenco dei workspace aperti di recente (l'ultimo in cima).

@@ -1,8 +1,8 @@
 // Preferenze utente globali dell'app desktop.
 //
 // Sono le cose che riguardano TE, indipendentemente dal progetto: l'elenco dei workspace aperti
-// di recente (quindi l'ultimo aperto). Per la portabilità vivono accanto all'eseguibile: il
-// processo principale di Electron calcola quella cartella e la passa qui come `configDir`.
+// di recente (quindi l'ultimo aperto). Il processo principale di Electron sceglie la directory
+// appropriata per la piattaforma e la passa qui come `configDir`.
 // Nessuna dipendenza da Electron, quindi testabile come gli altri moduli.
 
 const fs = require("fs");

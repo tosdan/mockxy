@@ -53,10 +53,11 @@ function repoRoot() {
   return path.resolve(__dirname, "..");
 }
 
-// Cartella delle preferenze globali: accanto all'eseguibile in pacchetto, nella cartella dati in dev.
+// Cartella delle preferenze globali: la directory dati utente gestita da Electron su ogni piattaforma.
+// La build Windows portabile fa eccezione e le mantiene accanto all'eseguibile.
 function prefsConfigDir() {
-  if (app.isPackaged) {
-    return process.env.PORTABLE_EXECUTABLE_DIR || path.dirname(app.getPath("exe"));
+  if (process.platform === "win32" && process.env.PORTABLE_EXECUTABLE_DIR) {
+    return process.env.PORTABLE_EXECUTABLE_DIR;
   }
   return app.getPath("userData");
 }
