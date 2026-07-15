@@ -6,6 +6,7 @@ const { createAdminError } = require("./admin-errors");
 const { resolvePayloadPath, readJsonFile } = require("./admin-fs");
 const { ENDPOINT_SUFFIX, RESPONSE_SUFFIX, RESPONSES_DIR_SUFFIX } = require("./mock-ids");
 const { HTTP_METHOD_PATTERN, validateHeaderValue } = require("./mock-validation");
+const { normalizeSequenceConfig } = require("../mocks/sequence-config");
 
 // Lettura e normalizzazione dei file su disco di un endpoint: METHOD.endpoint.json, la
 // cartella METHOD.responses con le response (NNN.response.json) e i loro asset
@@ -89,7 +90,15 @@ function normalizeEndpointConfig(endpoint, filePath, options = {}) {
     throw createAdminError(400, "endpoint.selectedResponseFile must be listed in endpoint.responseFiles.");
   }
 
-  return {
+  // Il campo sequence va normalizzato e TRASPORTATO: le scritture admin ricostruiscono il file
+  // endpoint da questa forma, e perdere qui la sequenza significherebbe cancellarla a ogni
+  // salvataggio dalla UI (stesse regole del loader runtime: modulo condiviso sequence-config).
+  const sequenceResult = normalizeSequenceConfig(endpoint.sequence, responseFiles);
+  if (sequenceResult.errors.length > 0) {
+    throw createAdminError(400, `${sequenceResult.errors.join("; ")}.`);
+  }
+
+  const normalized = {
     method,
     path: endpoint.path,
     description: endpoint.description || "",
@@ -97,6 +106,11 @@ function normalizeEndpointConfig(endpoint, filePath, options = {}) {
     responseFiles,
     selectedResponseFile,
   };
+  // Solo quando presente: un endpoint senza sequenza non deve guadagnare "sequence": null su disco.
+  if (sequenceResult.sequence != null) {
+    normalized.sequence = sequenceResult.sequence;
+  }
+  return normalized;
 }
 
 function normalizeEndpointResponse(response, responseFilePath) {

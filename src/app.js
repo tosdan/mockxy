@@ -659,6 +659,7 @@ function createApp({
   requestMonitor,
   serverState = new ServerStateStore(),
   monitorDump,
+  sequenceStates,
 }) {
   const app = express();
   app.disable("x-powered-by");
@@ -667,7 +668,7 @@ function createApp({
   const dataFileReader = createDataFileReader(config?.filesDir);
 
   if (config?.adminApiEnabled !== false) {
-    app.use("/_admin/api", createAdminHostGuard(config), createAdminApiRouter({ config, reloadRuntime, requestMonitor, serverState, monitorDump }));
+    app.use("/_admin/api", createAdminHostGuard(config), createAdminApiRouter({ config, reloadRuntime, requestMonitor, serverState, monitorDump, sequenceStates }));
   } else {
     app.use("/_admin/api", sendAdminApiDisabled);
   }

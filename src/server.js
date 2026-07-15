@@ -219,6 +219,7 @@ async function createServerRuntime({ configOverrides = {}, logger: extLogger } =
     requestMonitor,
     serverState,
     monitorDump,
+    sequenceStates,
   });
   const watcher = startMockWatcher({
     config,

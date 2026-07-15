@@ -16,6 +16,7 @@ const {
   updateAdminMock,
   updateAdminResponse,
   setAdminResponseFile,
+  resetAdminSequence,
 } = require("./endpoint-operations");
 const {
   assignAdminCollection,
@@ -55,7 +56,7 @@ function sendJson(res, status, payload) {
   res.status(status).json(payload);
 }
 
-function createAdminApiRouter({ config, reloadRuntime, requestMonitor, serverState, monitorDump }) {
+function createAdminApiRouter({ config, reloadRuntime, requestMonitor, serverState, monitorDump, sequenceStates }) {
   const router = express.Router();
 
   router.use(express.json({ limit: "2mb" }));
@@ -266,7 +267,21 @@ function createAdminApiRouter({ config, reloadRuntime, requestMonitor, serverSta
 
   router.get("/mocks/:id", async (req, res) => {
     const detail = await getAdminMockDetail(config.mocksDir, req.params.id);
+    // Stato runtime della sequenza (cursore): la UI mostra lo step corrente accanto alla
+    // definizione (che sta in detail.endpoint.sequence). Presente solo se una sequenza esiste.
+    if (sequenceStates != null && detail.endpoint?.sequence != null) {
+      detail.sequenceState = sequenceStates.getState(
+        `${detail.method} ${detail.path}`,
+        detail.endpoint.sequence
+      );
+    }
     sendJson(res, 200, detail);
+  });
+
+  // Reset del cursore della sequenza: azione runtime immediata, nessun file toccato.
+  router.post("/mocks/:id/sequence/reset", async (req, res) => {
+    const result = await resetAdminSequence(config.mocksDir, req.params.id, sequenceStates);
+    sendJson(res, 200, result);
   });
 
   router.put("/mocks/:id/collection", async (req, res) => {

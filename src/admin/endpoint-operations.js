@@ -53,6 +53,7 @@ const {
   serializedByWorkspace,
 } = require("./collections-state");
 const { getAdminMockDetail } = require("./mock-catalog");
+const { normalizeSequenceConfig } = require("../mocks/sequence-config");
 
 // Mutazioni degli endpoint e delle loro response: creazione (mock o script), aggiornamento,
 // upload di asset, cancellazione e copia. Ogni mutazione scrive su disco con backup e, se il
@@ -674,6 +675,45 @@ async function updateAdminMock(mocksDir, id, payload, reloadRuntime) {
     throw createAdminError(404, "Endpoint definition not found.");
   }
 
+  // Aggiornamento della sola sequenza (dialog Sequenza della UI): normalizza la definizione
+  // contro le varianti dell'endpoint e valida che ogni step referenzi una response leggibile e
+  // di tipo mock/handler (i middleware vivono nel percorso proxy: esclusi dalle sequenze in v1).
+  // `sequence: null` rimuove il campo (l'endpoint torna alla sola selezione classica).
+  if (Object.prototype.hasOwnProperty.call(payload || {}, "sequence")) {
+    const endpoint = await readEndpointConfig(endpointPath);
+    const { errors, sequence } = normalizeSequenceConfig(payload.sequence, endpoint.responseFiles);
+    if (errors.length > 0) {
+      throw createAdminError(400, `${errors.join("; ")}.`);
+    }
+
+    if (sequence != null) {
+      const stepResponseFiles = [...new Set(sequence.steps.map((step) => step.response))];
+      for (const stepResponseFile of stepResponseFiles) {
+        const responseFilePath = resolveEndpointResponseFilePath(endpointPath, endpoint, stepResponseFile);
+        if (!fs.existsSync(responseFilePath)) {
+          throw createAdminError(404, `Sequence step response file not found: ${stepResponseFile}.`);
+        }
+        const stepResponse = await readEndpointResponse(responseFilePath);
+        if (stepResponse.type === "middleware") {
+          throw createAdminError(400, "Sequence steps must reference mock or handler responses.");
+        }
+      }
+    }
+
+    const nextEndpoint = { ...endpoint };
+    if (sequence != null) {
+      nextEndpoint.sequence = sequence;
+    } else {
+      delete nextEndpoint.sequence;
+    }
+    const backups = [await readBackup(endpointPath)];
+    await writeFileAtomic(endpointPath, `${JSON.stringify(nextEndpoint, null, 2)}\n`, "utf8");
+
+    await commitWithRollback({ backups, reloadRuntime, rejectionLabel: "Endpoint sequence update rejected" });
+
+    return getAdminMockDetail(mocksDir, id);
+  }
+
   if (Object.prototype.hasOwnProperty.call(payload || {}, "selectedResponseFile")) {
     const endpoint = await readEndpointConfig(endpointPath);
     const selectedResponseFile = assertSafeResponseFileName(payload.selectedResponseFile);
@@ -767,6 +807,29 @@ async function updateAdminMock(mocksDir, id, payload, reloadRuntime) {
   });
 
   return getAdminMockDetail(mocksDir, id);
+}
+
+// Reset del cursore runtime di una sequenza: la prossima richiesta riparte dal primo step.
+// Non tocca i file: è un'azione immediata sullo stato in-memory (pulsante "Riparti dall'inizio").
+async function resetAdminSequence(mocksDir, id, sequenceStates) {
+  const endpointPath = resolveAdminFilePath(mocksDir, id);
+  if (!fs.existsSync(endpointPath)) {
+    throw createAdminError(404, "Endpoint definition not found.");
+  }
+
+  const endpoint = await readEndpointConfig(endpointPath);
+  if (endpoint.sequence == null) {
+    throw createAdminError(400, "Endpoint has no sequence to reset.");
+  }
+  const sequenceKey = `${endpoint.method} ${endpoint.path}`;
+  if (sequenceStates != null) {
+    sequenceStates.reset(sequenceKey);
+  }
+  return {
+    sequenceState: sequenceStates != null
+      ? sequenceStates.getState(sequenceKey, endpoint.sequence)
+      : null,
+  };
 }
 
 async function deleteAdminMocksUnlocked(
@@ -945,6 +1008,7 @@ module.exports = {
   deleteAdminResponse,
   updateAdminEndpoint,
   updateAdminMock,
+  resetAdminSequence,
   deleteAdminMock,
   deleteAdminMocksUnlocked,
   copyAdminEndpoint,
