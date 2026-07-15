@@ -36,13 +36,26 @@
         user-select: none;
       }
 
-      /* Selettore lingua: in alto a destra */
+      /* La titlebar di sistema è nascosta (main.js): striscia in alto trascinabile per muovere la
+         finestra; i pulsanti finestra li disegna il sistema (Window Controls Overlay) sopra di essa. */
+      .drag-strip {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: env(titlebar-area-height, 38px);
+        -webkit-app-region: drag;
+      }
+
+      /* Selettore lingua: in alto a destra, accostato ai pulsanti finestra ma fuori dal loro
+         spazio (env(titlebar-area-*)) e cliccabile dentro la striscia trascinabile (no-drag). */
       .lang {
         position: fixed;
-        top: 18px;
-        right: 20px;
+        top: 8px;
+        right: calc(20px + 100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw));
         display: flex;
         gap: 4px;
+        -webkit-app-region: no-drag;
       }
       .lang-btn {
         min-width: 36px;
@@ -194,6 +207,7 @@
     </style>
   </head>
   <body>
+    <div class="drag-strip"></div>
     <div class="lang" id="lang"></div>
     <main class="shell">
       <div class="brand">

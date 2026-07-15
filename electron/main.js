@@ -468,7 +468,15 @@ async function createMainWindow() {
   const saved = getWindowBounds(prefsConfigDir());
   const win = new BrowserWindow({
     ...windowOptionsFromSaved(saved),
-    backgroundColor: "#ffffff",
+    // Sfondo della finestra prima del primo paint: il token --background della UI, per evitare
+    // il flash chiaro all'avvio su tema scuro.
+    backgroundColor: "#131315",
+    // Titlebar di sistema nascosta, ma pulsanti finestra disegnati dal sistema (Window Controls
+    // Overlay): si sovrappongono in alto al contenuto, quindi UI e welcome riservano quello spazio
+    // via env(titlebar-area-*) e offrono un'area di trascinamento. Colore/altezza allineati alla
+    // barra workspace della UI (38px, token --card / --foreground).
+    titleBarStyle: "hidden",
+    titleBarOverlay: { color: "#1a1a1d", symbolColor: "#e3e3e6", height: 38 },
     icon: windowIcon(),
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),

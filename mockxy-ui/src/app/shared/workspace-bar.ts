@@ -22,8 +22,19 @@ import { DesktopService, type OpenWorkspace } from './desktop.service';
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (desktop.isDesktop) {
-    <div class="h-[2.375rem] relative z-50 flex shrink-0 items-center border-b border-border bg-card px-3">
-      <div class="flex items-center gap-1 overflow-x-auto rounded-lg bg-muted p-1">
+    <!-- La titlebar di sistema è nascosta (main.js): questa barra fa da area di trascinamento della
+         finestra e il padding riserva lo spazio dei pulsanti finestra disegnati dal sistema
+         (env(titlebar-area-*): a destra su Windows/Linux, a sinistra su macOS; fuori da Electron
+         le env() non esistono e resta il normale padding di 0.75rem). -->
+    <div
+      class="h-[2.375rem] relative z-50 flex shrink-0 items-center border-b border-border bg-card"
+      style="
+        -webkit-app-region: drag;
+        padding-left: calc(0.75rem + env(titlebar-area-x, 0px));
+        padding-right: calc(0.75rem + 100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw));
+      "
+    >
+      <div class="flex items-center gap-1 overflow-x-auto rounded-lg bg-muted p-1" style="-webkit-app-region: no-drag">
         @for (w of openWorkspaces(); track w.root) {
         <div
           class="group/tab flex max-w-[12rem] shrink-0 items-center gap-1 rounded-md py-1 pl-2.5 pr-1 text-[12.5px] font-medium transition"
