@@ -26,6 +26,33 @@ export interface MockConfig {
   delayMs?: number;
 }
 
+/** Uno step di una sequenza di varianti: quale response e per quanto (times XOR forMs). */
+export interface SequenceStep {
+  response: string;
+  /** Risponde a N richieste (intero >= 1). */
+  times?: number;
+  /** Risponde per N millisecondi dalla sua prima richiesta (intero >= 1). */
+  forMs?: number;
+}
+
+/** Sequenza di varianti dell'endpoint: politica di selezione sopra le varianti esistenti. */
+export interface SequenceConfig {
+  enabled: boolean;
+  steps: SequenceStep[];
+  /** Esaurito l'ultimo step: 'stay' resta lì, 'loop' riparte dal primo. */
+  onEnd: 'stay' | 'loop';
+  /** Auto-reset: senza richieste per questo tempo si riparte dal primo step; null = mai. */
+  resetAfterMs: number | null;
+}
+
+/** Cursore runtime di una sequenza (stato effimero del motore, non un file). */
+export interface SequenceState {
+  stepIndex: number;
+  servedInStep: number;
+  stepStartedAt: number | null;
+  lastRequestAt: number | null;
+}
+
 export interface EndpointConfig {
   method: string;
   path: string;
@@ -33,6 +60,8 @@ export interface EndpointConfig {
   enabled: boolean;
   responseFiles: string[];
   selectedResponseFile: string;
+  /** Sequenza di varianti, quando definita (anche spenta: enabled false). */
+  sequence?: SequenceConfig;
 }
 
 export interface ResponseSummary {
@@ -61,6 +90,8 @@ export interface MockSummary {
   selectedResponseFile?: string;
   responseTitle?: string;
   responseCount?: number;
+  /** True quando l'endpoint sta servendo una sequenza di varianti (badge di catalogo). */
+  sequenceActive?: boolean;
 }
 
 export interface MockDetail extends MockSummary {
@@ -84,6 +115,8 @@ export interface MockDetail extends MockSummary {
     disabled: boolean;
   };
   source?: string;
+  /** Cursore runtime della sequenza; presente solo quando l'endpoint ne ha una (GET dettaglio). */
+  sequenceState?: SequenceState;
 }
 
 /**

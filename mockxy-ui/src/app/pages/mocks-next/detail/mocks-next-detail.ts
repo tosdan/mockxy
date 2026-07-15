@@ -2,7 +2,7 @@ import { ChangeDetectionStrategy, Component, computed, effect, inject, signal, V
 import { CdkMenuTrigger } from '@angular/cdk/menu';
 import { NgIcon, provideIcons } from '@ng-icons/core';
 import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
-import { lucideCheck, lucideCog, lucideCopy, lucideFile, lucideFileCode, lucideLayers, lucideMessageSquare, lucidePencil, lucidePlus, lucideTrash2, lucideX } from '@ng-icons/lucide';
+import { lucideCheck, lucideCog, lucideCopy, lucideFile, lucideFileCode, lucideLayers, lucideListOrdered, lucideMessageSquare, lucidePencil, lucidePlus, lucideTrash2, lucideX } from '@ng-icons/lucide';
 import { UiBadge, type BadgeTone } from '../../../ui/ui-badge/ui-badge';
 import { UiButton } from '../../../ui/ui-button/ui-button';
 import { UiChip } from '../../../ui/ui-chip/ui-chip';
@@ -16,9 +16,11 @@ import { UiSwitch } from '../../../ui/ui-switch/ui-switch';
 import { UiTable } from '../../../ui/ui-table/ui-table';
 import { UiTooltip } from '../../../ui/ui-tooltip/ui-tooltip';
 import { UiDialog } from '../../../ui/ui-dialog/ui-dialog';
+import { MockAdminApiService } from '../../../mock-admin-api.service';
 import { MocksStore } from '../mocks-next.store';
 import { StatusCombobox, isValidStatus } from '../status-combobox/status-combobox';
 import { MocksNextCopyDialog, type CopyDialogData } from '../copy/mocks-next-copy-dialog';
+import { MocksNextSequenceDialog, type SequenceDialogData } from '../sequence/mocks-next-sequence-dialog';
 import { MocksNextResponseForm } from './response-form';
 import { ResponseDraft, type DraftPayloadType, type DraftScriptType } from './response-draft';
 import type { MockType } from '../../../mock-admin-api.types';
@@ -35,7 +37,7 @@ const METHOD_TONES: ReadonlySet<string> = new Set(['get', 'post', 'put', 'delete
 @Component({
   selector: 'mocks-next-detail',
   imports: [CdkMenuTrigger, NgIcon, StatusCombobox, TranslocoPipe, UiBadge, UiButton, UiChip, UiCode, UiCollapsible, UiInput, UiMenu, UiMenuItem, UiSelect, UiSkeleton, UiSwitch, UiTable, UiTooltip, MocksNextResponseForm],
-  providers: [provideIcons({ lucideCheck, lucideCog, lucideCopy, lucideFile, lucideFileCode, lucideLayers, lucideMessageSquare, lucidePencil, lucidePlus, lucideTrash2, lucideX })],
+  providers: [provideIcons({ lucideCheck, lucideCog, lucideCopy, lucideFile, lucideFileCode, lucideLayers, lucideListOrdered, lucideMessageSquare, lucidePencil, lucidePlus, lucideTrash2, lucideX })],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { class: 'relative flex min-w-0 flex-1 flex-col overflow-hidden bg-muted' },
   template: `
@@ -101,6 +103,10 @@ const METHOD_TONES: ReadonlySet<string> = new Set(['get', 'post', 'put', 'delete
             }
           }
           <button ui-button variant="outline" (click)="openCopy()" [uiTooltip]="'detail.copyEndpointTip' | transloco"><ng-icon name="lucideCopy" size="0.85rem" /> {{ 'detail.copy' | transloco }}</button>
+          <!-- L'icona colorata segnala a colpo d'occhio la sequenza attiva (come il badge SEQ nel catalogo). -->
+          <button ui-button variant="outline" (click)="openSequence()" [uiTooltip]="(d.sequenceActive ? 'detail.sequenceTipActive' : 'detail.sequenceTip') | transloco">
+            <ng-icon name="lucideListOrdered" size="0.85rem" [class.text-brand]="d.sequenceActive" /> {{ 'detail.sequence' | transloco }}
+          </button>
         </div>
       </div>
     </div>
@@ -258,6 +264,7 @@ const METHOD_TONES: ReadonlySet<string> = new Set(['get', 'post', 'put', 'delete
 })
 export class MocksNextDetail {
   protected readonly store = inject(MocksStore);
+  private readonly api = inject(MockAdminApiService);
   private readonly dialog = inject(UiDialog);
   private readonly vcr = inject(ViewContainerRef);
   private readonly transloco = inject(TranslocoService);
@@ -473,6 +480,25 @@ export class MocksNextDetail {
   protected confirmDeleteResponse(): void {
     if (this.busy()) return;
     this.store.removeResponse(() => this.confirmingDeleteResponse.set(false));
+  }
+
+  /**
+   * Apre il dialog "Sequenza" sull'endpoint corrente. Il dettaglio viene riletto fresco dal
+   * server: è il GET dettaglio a portare sequenceState (il cursore runtime), che nello stato
+   * in store può mancare o essere stantio dopo altre mutazioni.
+   */
+  protected openSequence(): void {
+    const d = this.detail();
+    if (!d) return;
+    this.api.getMock(d.id).subscribe({
+      next: (detail) => {
+        this.dialog.open(MocksNextSequenceDialog, {
+          data: { detail } satisfies SequenceDialogData,
+          viewContainerRef: this.vcr,
+          autoFocus: 'dialog',
+        });
+      },
+    });
   }
 
   /** Apre il dialog "Copia" sull'endpoint corrente (metodo+path precompilati e modificabili). */

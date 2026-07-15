@@ -14,6 +14,7 @@ import {
   MockSummary,
   MockType,
   ResponseUpdateRequest,
+  SequenceConfig,
   UNSORTED_COLLECTION_ID,
 } from '../../mock-admin-api.types';
 
@@ -26,6 +27,7 @@ export interface CatalogEndpointVM {
   readonly type: MockType;
   readonly enabled: boolean;
   readonly responses: number;
+  readonly sequenceActive: boolean;
   readonly collectionId?: string;
 }
 
@@ -256,6 +258,18 @@ export class MocksStore {
       return;
     }
     this.runDetailMutation(sel.id, this.api.selectResponse(sel.id, { selectedResponseFile: fileName }));
+  }
+
+  /**
+   * Imposta (o rimuove, con null) la sequenza di varianti dell'endpoint aperto. Passa da
+   * runDetailMutation: il catalogo ricarica così il badge SEQ riflette lo stato.
+   */
+  updateSequence(sequence: SequenceConfig | null, onSuccess?: () => void): void {
+    const sel = this.selected();
+    if (!sel) {
+      return;
+    }
+    this.runDetailMutation(sel.id, this.api.updateSequence(sel.id, sequence), onSuccess);
   }
 
   /** Salva la response selezionata (body/headers/status/delay per mock, source per script). */
@@ -735,6 +749,7 @@ function toEndpointVM(item: MockSummary): CatalogEndpointVM {
     type: item.type,
     enabled: !item.disabled,
     responses: item.responseCount ?? 0,
+    sequenceActive: item.sequenceActive === true,
     collectionId: item.collectionId,
   };
 }

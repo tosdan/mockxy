@@ -12,7 +12,7 @@ import { UNSORTED_COLLECTION_ID, type CollectionSummary } from '../../../mock-ad
 import type { CatalogChild, CatalogEndpointVM, CatalogTreeNode } from '../mocks-next.store';
 
 function ep(id: string): CatalogEndpointVM {
-  return { id, method: 'GET', path: `/${id}`, status: 200, type: 'mock', enabled: true, responses: 1 };
+  return { id, method: 'GET', path: `/${id}`, status: 200, type: 'mock', enabled: true, responses: 1, sequenceActive: false };
 }
 
 function colNode(id: string, children: readonly CatalogChild[] = []): CatalogTreeNode {

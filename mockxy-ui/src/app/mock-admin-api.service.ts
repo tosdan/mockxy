@@ -37,6 +37,8 @@ import {
   DumpCreateMocksResult,
   ResponseUpdateRequest,
   SelectResponseRequest,
+  SequenceConfig,
+  SequenceState,
   ServerState,
   UNSORTED_COLLECTION_ID,
   MockUpdateRequest,
@@ -198,6 +200,19 @@ export class MockAdminApiService {
   /** Cambia la response selezionata per un endpoint. */
   selectResponse(id: string, request: SelectResponseRequest): Observable<MockDetail> {
     return this.http.put<MockDetail>(`${this.baseUrl}/mocks/${encodeURIComponent(id)}`, request);
+  }
+
+  /** Imposta (o rimuove, con null) la sequenza di varianti di un endpoint. */
+  updateSequence(id: string, sequence: SequenceConfig | null): Observable<MockDetail> {
+    return this.http.put<MockDetail>(`${this.baseUrl}/mocks/${encodeURIComponent(id)}`, { sequence });
+  }
+
+  /** Azzera il cursore della sequenza: la prossima richiesta riparte dal primo step. */
+  resetSequence(id: string): Observable<{ sequenceState: SequenceState }> {
+    return this.http.post<{ sequenceState: SequenceState }>(
+      `${this.baseUrl}/mocks/${encodeURIComponent(id)}/sequence/reset`,
+      {},
+    );
   }
 
   /** Crea una nuova response per l'endpoint selezionato partendo dai valori confermati dall'utente. */
