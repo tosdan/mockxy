@@ -63,21 +63,38 @@ test.describe("E9 · collection", () => {
     await expect(catalog.getByText("/api/users", { exact: true })).toBeVisible();
   });
 
-  test("elimina una collection: sparisce e i suoi endpoint tornano fra i non categorizzati", async ({ page }) => {
+  test("dissolve una collection: sparisce e i suoi endpoint tornano fra i non categorizzati", async ({ page }) => {
     await expect(catalog.getByText("Dynamic")).toBeVisible();
 
     await kebab("Dynamic").click();
-    await page.getByRole("menuitem", { name: "Elimina collection" }).click();
-    // conferma inline (scope: contenitore che ha anche "Annulla")
+    await page.getByRole("menuitem", { name: "Dissolvi collection" }).click();
+    // conferma inline col conteggio degli endpoint coinvolti (scope: contenitore con "Annulla")
     await catalog
       .locator(':is(span, div):has(> button:has-text("Annulla"))')
-      .getByRole("button", { name: "Elimina", exact: true })
+      .getByRole("button", { name: /Dissolvi \d+/ })
       .click();
 
     await expect(catalog.getByText("Dynamic")).toHaveCount(0);
     await expect(catalog.getByText(/2\s+collection/)).toBeVisible();
     // echo/enrich restano nel catalogo (tornati fra i non categorizzati)
     await expect(catalog.getByText("/api/echo", { exact: true })).toBeVisible();
+  });
+
+  test("elimina una collection insieme a tutti i suoi endpoint", async ({ page }) => {
+    await expect(catalog.getByText("Dynamic")).toBeVisible();
+
+    await kebab("Dynamic").click();
+    await page.getByRole("menuitem", { name: "Elimina collection" }).click();
+    await catalog
+      .locator(':is(span, div):has(> button:has-text("Annulla"))')
+      .getByRole("button", { name: /Elimina \d+/ })
+      .click();
+
+    await expect(catalog.getByText("Dynamic")).toHaveCount(0);
+    await expect(catalog.getByText(/2\s+collection/)).toBeVisible();
+    // stavolta gli endpoint contenuti sono stati eliminati con la collection
+    await expect(catalog.getByText("/api/echo", { exact: true })).toHaveCount(0);
+    await expect(catalog.getByText(/6\s+endpoint/)).toBeVisible();
   });
 
   test("disabilita in blocco tutti gli endpoint di una collection", async ({ page }) => {
