@@ -146,7 +146,8 @@ const DEFAULT_STEP_VALUE: Record<SequenceMode, string> = { times: '3', forMs: '1
               (input)="setStepValue($index, $any($event.target).value)"
             />
             }
-            <span class="w-12 shrink-0 text-[11px] text-muted-foreground">{{ (mode() === 'times' ? 'sequenceDialog.unitTimes' : 'sequenceDialog.unitForMs') | transloco }}</span>
+            <!-- invisible (non @if) sul terminale: la colonna resta e i pulsanti rimangono allineati -->
+            <span class="w-12 shrink-0 text-[11px] text-muted-foreground" [class.invisible]="isTerminalStep($index)">{{ (mode() === 'times' ? 'sequenceDialog.unitTimes' : 'sequenceDialog.unitForMs') | transloco }}</span>
             <button ui-button variant="ghost" size="icon" [disabled]="!editingEnabled() || $index === 0" (click)="moveStep($index, -1)" [uiTooltip]="'sequenceDialog.moveUp' | transloco"><ng-icon name="lucideArrowUp" size="0.85rem" /></button>
             <button ui-button variant="ghost" size="icon" [disabled]="!editingEnabled() || $index === steps().length - 1" (click)="moveStep($index, 1)" [uiTooltip]="'sequenceDialog.moveDown' | transloco"><ng-icon name="lucideArrowDown" size="0.85rem" /></button>
             <button ui-button variant="ghost" size="icon" [disabled]="!editingEnabled() || steps().length <= 2" (click)="removeStep($index)" [uiTooltip]="'sequenceDialog.removeStep' | transloco"><ng-icon name="lucideTrash2" size="0.85rem" /></button>
