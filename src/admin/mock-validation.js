@@ -145,7 +145,7 @@ function loadScriptDefinition(filePath, label) {
 function createEndpointSourceTemplate(type) {
   if (type === "middleware") {
     return `module.exports = {
-  async transformResponse({ status, headers, jsonBody }) {
+  async transformResponse({ status, headers, jsonBody, data }) {
     return {
       status,
       headers: {
@@ -163,9 +163,9 @@ function createEndpointSourceTemplate(type) {
   }
 
   return `module.exports = {
-  // Il contesto include anche data("nome") per leggere un file JSON dalla pagina Dati:
+  // data("nome") legge un file JSON dalla pagina Dati:
   //   const items = await data("nome-file");
-  async resolveResponse({ params, query, requestHeaders, jsonBody }) {
+  async resolveResponse({ params, query, requestHeaders, jsonBody, data }) {
     return {
       status: 200,
       headers: {

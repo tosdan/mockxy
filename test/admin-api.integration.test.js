@@ -1882,6 +1882,42 @@ describe("admin API", () => {
     expect(source).toContain("transformResponse");
   });
 
+  test("the seeded handler template supports the suggested `await data(...)` line", async () => {
+    // Regressione: la firma del template non destrutturava `data` dal contesto, quindi la riga
+    // suggerita dal suo stesso commento falliva con "ReferenceError: data is not defined" (500).
+    await writeMock({ mocksDir, folder: "seed-data", method: "GET", routePath: "/seed-data", body: { ok: true } });
+    const filesDir = await createTempDir("admin-files-");
+    try {
+      await fs.promises.writeFile(path.join(filesDir, "mydata.json"), JSON.stringify({ fromDataFile: true }));
+      const app = await buildApp({ filesDir });
+      const mockId = encodeMockId("seed-data/GET.endpoint.json");
+
+      const created = await request(app)
+        .post(`/_admin/api/mocks/${mockId}/responses`)
+        .send({ type: "handler" });
+      expect(created.status).toBe(201);
+
+      // L'utente parte dal template seminato e aggiunge SOLO la riga suggerita dal commento.
+      const sourcePath = path.join(mocksDir, "seed-data", "GET.responses", "002.handler.js");
+      const template = await fs.promises.readFile(sourcePath, "utf8");
+      const edited = template.replace(
+        /(async resolveResponse\(\{[^}]*\}\) \{)/,
+        '$1\n    const items = await data("mydata");'
+      );
+      expect(edited).not.toBe(template);
+      const updated = await request(app)
+        .put(`/_admin/api/mocks/${mockId}/responses/002.response.json`)
+        .send({ source: edited });
+      expect(updated.status).toBe(200);
+
+      const runtime = await request(app).get("/seed-data");
+      expect(runtime.status).toBe(200);
+      expect(runtime.headers["x-mock-source"]).toBe("handler");
+    } finally {
+      await removeDir(filesDir);
+    }
+  });
+
   test("uploads a file to make a response file-backed, serves it, and switches back to JSON", async () => {
     await writeMock({ mocksDir, folder: "filed", method: "GET", routePath: "/filed", body: { json: true } });
     const app = await buildApp();

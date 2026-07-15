@@ -1,9 +1,9 @@
 /** Template iniziali per la sorgente di handler/middleware (allineati a quelli del backend). */
 
 export const HANDLER_TEMPLATE = `module.exports = {
-  // Il contesto include anche data("nome") per leggere un file JSON dalla pagina Dati:
+  // data("nome") legge un file JSON dalla pagina Dati:
   //   const items = await data("nome-file");
-  async resolveResponse({ params, query, requestHeaders, jsonBody }) {
+  async resolveResponse({ params, query, requestHeaders, jsonBody, data }) {
     return {
       status: 200,
       headers: {
@@ -20,7 +20,7 @@ export const HANDLER_TEMPLATE = `module.exports = {
 `;
 
 export const MIDDLEWARE_TEMPLATE = `module.exports = {
-  async transformResponse({ status, headers, jsonBody }) {
+  async transformResponse({ status, headers, jsonBody, data }) {
     return {
       status,
       headers: {

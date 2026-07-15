@@ -12,7 +12,7 @@ import {
 } from '@codemirror/autocomplete';
 
 const HANDLER_SNIPPET = `module.exports = {
-  async resolveResponse({ params, query, requestHeaders, jsonBody }) {
+  async resolveResponse({ params, query, requestHeaders, jsonBody, data }) {
     return {
       status: 200,
       headers: {},
@@ -22,7 +22,7 @@ const HANDLER_SNIPPET = `module.exports = {
 };`;
 
 const MIDDLEWARE_SNIPPET = `module.exports = {
-  async transformResponse({ status, headers, jsonBody }) {
+  async transformResponse({ status, headers, jsonBody, data }) {
     return {
       status,
       headers: { ...headers },
@@ -31,7 +31,7 @@ const MIDDLEWARE_SNIPPET = `module.exports = {
   }
 };`;
 
-const RESOLVE_SNIPPET = `async resolveResponse({ params, query, requestHeaders, jsonBody }) {
+const RESOLVE_SNIPPET = `async resolveResponse({ params, query, requestHeaders, jsonBody, data }) {
   return {
     status: 200,
     headers: {},
@@ -39,7 +39,7 @@ const RESOLVE_SNIPPET = `async resolveResponse({ params, query, requestHeaders, 
   };
 }`;
 
-const TRANSFORM_SNIPPET = `async transformResponse({ status, headers, jsonBody }) {
+const TRANSFORM_SNIPPET = `async transformResponse({ status, headers, jsonBody, data }) {
   return {
     status,
     headers: { ...headers },
@@ -68,6 +68,12 @@ const SCRIPT_COMPLETIONS: readonly Completion[] = [
   { label: 'params', type: 'variable', detail: 'input richiesta' },
   { label: 'query', type: 'variable', detail: 'input richiesta' },
   { label: 'requestHeaders', type: 'variable', detail: 'input richiesta' },
+  snippetCompletion('const \${items} = await data("\${nome-file}");', {
+    label: 'data',
+    type: 'function',
+    detail: 'file dati (pagina Dati)',
+    info: 'Legge un file JSON della pagina Dati: va destrutturato dal contesto di resolveResponse/transformResponse',
+  }),
 ];
 
 // Sorgente di completamento: si attiva mentre si digita una parola (o su richiesta esplicita,
