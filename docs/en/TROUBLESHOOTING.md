@@ -46,7 +46,10 @@ file). Below, the recurring symptoms by area.
 ## Handlers and middleware
 
 - **`500 Handler Execution Failed`** — exception or invalid result in the script: the
-  details, with the stack, are in the log ([the contract](HANDLER.md)).
+  details, with the stack, are in the log — in the desktop app also in the `logs/` folder
+  next to the executable ([the desktop app](DESKTOP.md)) — ([the contract](HANDLER.md)). If the log says
+  `data is not defined`, the script is missing `data` among the destructured context
+  fields: the signature must be e.g. `resolveResponse({ params, data })`.
 - **`504 Handler Timeout`** — almost always a promise that never resolves (a fetch without a
   timeout); the file is named in the log.
 - **`413 Payload Too Large`** — the request body exceeds 2 MB: the handler isn't even
