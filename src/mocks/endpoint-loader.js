@@ -306,12 +306,12 @@ async function validateScriptResponse(response, filePath, responseDir, type) {
   };
 }
 
-async function loadSelectedResponse(endpoint, endpointFilePath) {
+async function loadResponseByName(endpoint, endpointFilePath, responseFileName, label) {
   const endpointDir = path.dirname(endpointFilePath);
   const responseDir = path.join(endpointDir, `${endpoint.method}${RESPONSES_DIR_SUFFIX}`);
-  const responsePath = resolveLocalFile(responseDir, endpoint.selectedResponseFile, "selectedResponseFile");
+  const responsePath = resolveLocalFile(responseDir, responseFileName, label);
   if (!(await fileExists(responsePath))) {
-    throw new Error(`Missing selected response referenced by ${endpointFilePath}: ${responsePath}`);
+    throw new Error(`Missing ${label} referenced by ${endpointFilePath}: ${responsePath}`);
   }
 
   const response = await readJsonFile(responsePath);
@@ -336,7 +336,7 @@ async function loadSelectedResponse(endpoint, endpointFilePath) {
       headers: response.headers == null ? {} : { ...response.headers },
       delayMs: response.delayMs || 0,
       responseFilePath: responsePath,
-      responseFileName: endpoint.selectedResponseFile,
+      responseFileName,
     };
     if (filePath != null) {
       // Il contenuto NON viene letto qui: resta su disco e viene servito in streaming a ogni
@@ -363,9 +363,59 @@ async function loadSelectedResponse(endpoint, endpointFilePath) {
     sourceFile: response.sourceFile,
     sourceFilePath: script.sourcePath,
     responseFilePath: responsePath,
-    responseFileName: endpoint.selectedResponseFile,
+    responseFileName,
     definition: script.definition,
   };
+}
+
+async function loadSelectedResponse(endpoint, endpointFilePath) {
+  return loadResponseByName(endpoint, endpointFilePath, endpoint.selectedResponseFile, "selected response");
+}
+
+// Carica le response referenzate dagli step di una sequenza attiva. Le sequenze scelgono la
+// variante a request-time, quindi al load si caricano (e validano) TUTTE — stessa filosofia
+// della selezionata: uno step rotto degrada l'endpoint. I passi middleware sono esclusi in v1:
+// la loro esecuzione vive nel percorso proxy, non nel serving locale.
+async function loadSequenceSteps(endpoint, endpointFilePath) {
+  const steps = [];
+  for (const step of endpoint.sequence.steps) {
+    const response = await loadResponseByName(endpoint, endpointFilePath, step.response, "sequence step response");
+    if (response.type === "middleware") {
+      throw new Error(
+        `Invalid endpoint ${endpointFilePath}: sequence steps must reference mock or handler responses (${step.response} is a middleware)`
+      );
+    }
+
+    if (response.type === "mock") {
+      steps.push({
+        type: "mock",
+        method: endpoint.method,
+        path: endpoint.path,
+        status: response.status,
+        headers: response.headers,
+        delayMs: response.delayMs,
+        payloadType: response.payloadType,
+        body: response.body,
+        configFilePath: endpointFilePath,
+        responseFilePath: response.responseFilePath,
+        selectedResponseFile: response.responseFileName,
+        payloadFilePath: response.payloadFilePath,
+      });
+      continue;
+    }
+
+    steps.push({
+      type: "handler",
+      method: endpoint.method,
+      path: endpoint.path,
+      resolveResponse: response.definition.resolveResponse,
+      configFilePath: endpointFilePath,
+      responseFilePath: response.responseFilePath,
+      sourceFilePath: response.sourceFilePath,
+      selectedResponseFile: response.responseFileName,
+    });
+  }
+  return steps;
 }
 
 function createRouteGroup(routeGroups, endpoint, filePath) {
@@ -395,6 +445,7 @@ async function loadEndpointRouteGroups(mocksDir) {
   const mockRouteGroups = new Map();
   const handlerRouteGroups = new Map();
   const proxyMiddlewareRouteGroups = new Map();
+  const sequenceRouteGroups = new Map();
   // Degradazione per-endpoint: un file rotto (JSON invalido, response mancante, duplicato)
   // viene saltato e segnalato qui, senza far fallire il caricamento degli altri. Sta ai
   // chiamanti decidere la policy (warning all'avvio, keep-previous al reload a caldo).
@@ -412,6 +463,21 @@ async function loadEndpointRouteGroups(mocksDir) {
       seenEndpointKeys.set(endpointKey, filePath);
 
       if (!endpoint.enabled) {
+        continue;
+      }
+
+      // Sequenza attiva: l'endpoint serve gli step (scelti a request-time dal registry), non la
+      // variante selezionata — che resta l'ancora del comportamento classico a sequenza spenta.
+      if (endpoint.sequence != null && endpoint.sequence.enabled) {
+        const steps = await loadSequenceSteps(endpoint, filePath);
+        const group = createRouteGroup(sequenceRouteGroups, endpoint, filePath);
+        group.methods.set(endpoint.method, {
+          method: endpoint.method,
+          path: endpoint.path,
+          configFilePath: filePath,
+          sequence: endpoint.sequence,
+          steps,
+        });
         continue;
       }
 
@@ -467,6 +533,7 @@ async function loadEndpointRouteGroups(mocksDir) {
     mockRouteGroups: sortRouteGroups(Array.from(mockRouteGroups.values())),
     handlerRouteGroups: sortRouteGroups(Array.from(handlerRouteGroups.values())),
     proxyMiddlewareRouteGroups: sortRouteGroups(Array.from(proxyMiddlewareRouteGroups.values())),
+    sequenceRouteGroups: sortRouteGroups(Array.from(sequenceRouteGroups.values())),
     loadErrors,
   };
 }
