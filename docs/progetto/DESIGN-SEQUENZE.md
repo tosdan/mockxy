@@ -88,9 +88,11 @@ ricarica a caldo resta l'ultima versione valida):
   la selezionata (la sequenza le rende tutte "selezionabili a runtime"). Una variante rotta in
   uno step = endpoint degradato, coerente con la filosofia attuale.
 
-Gli step possono referenziare varianti di **qualunque tipo** (mock, handler, middleware, anche
-misti): «processing» statico e «completed» calcolato da un handler è una combinazione legittima
-e utile.
+Gli step possono referenziare varianti **mock e handler, anche miste**: «processing» statico e
+«completed» calcolato da un handler è una combinazione legittima e utile. Gli step
+**middleware sono esclusi in v1**: la loro esecuzione vive nel percorso proxy (registry
+separato, richiesta inoltrata al backend), e attraversarlo dal serving locale non vale la
+complessità finché non emerge il bisogno. Uno step middleware è un errore di validazione.
 
 ## Semantica runtime
 

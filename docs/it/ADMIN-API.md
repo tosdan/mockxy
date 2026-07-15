@@ -36,7 +36,8 @@ resettano lo stato tra i test, pipeline che importano una specifica aggiornata.
 | `GET /mocks/resolve?method&path` | l'endpoint che oggi coprirebbe una richiesta concreta (path con eventuale query), disabilitati inclusi; `{ mock: null }` se nessuno. Fatto derivato col matching del serving, usato dal monitor per "vai al mock" |
 | `POST /mocks` | crea un endpoint (mock statico, o handler/middleware con sorgente); se per rotta+metodo esiste già risponde `409` con `details.existingMockId`, così il client può proporre l'aggiunta di una variante a quell'endpoint |
 | `GET /mocks/:id` | dettaglio di un endpoint con le sue varianti |
-| `PUT /mocks/:id` | aggiorna la definizione (inclusi `enabled` e variante selezionata) |
+| `PUT /mocks/:id` | aggiorna la definizione (inclusi `enabled`, variante selezionata e — con body `{ sequence }`, `null` per rimuoverla — la [sequenza di varianti](ENDPOINT.md)) |
+| `POST /mocks/:id/sequence/reset` | azzera il cursore della sequenza: la prossima richiesta riparte dal primo step. Risponde con lo stato azzerato (`sequenceState`) |
 | `PUT /mocks/:id/endpoint` | aggiorna metodo, percorso, descrizione |
 | `POST /mocks/:id/copy` | duplica su nuovo metodo+percorso — body `{ method, path, copyResponses }` |
 | `PUT /mocks/:id/collection` | assegna l'endpoint a una collezione |
