@@ -13,6 +13,7 @@ import {
 } from '@ng-icons/lucide';
 import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
 import { ViewSwitcher } from '../../shared/view-switcher';
+import { ViewStateService } from '../../shared/view-state.service';
 import { UiButton } from '../../ui/ui-button/ui-button';
 import { UiCheckbox } from '../../ui/ui-checkbox/ui-checkbox';
 import { UiCode } from '../../ui/ui-code/ui-code';
@@ -24,6 +25,9 @@ import type { DataFileSummary, DataFileUsage } from '../../mock-admin-api.types'
 
 /** Avviso non bloccante oltre questa dimensione: i file grandi si pagano a ogni chiamata data(). */
 const LARGE_FILE_WARNING_BYTES = 5 * 1024 * 1024;
+
+/** Chiave (ViewStateService) del file selezionato, ritrovato tornando sulla view. */
+const SELECTED_FILE_STATE_KEY = 'dati-selected';
 
 /**
  * Pagina "Dati": upload e gestione dei file JSON riusabili dagli handler/middleware via data('nome').
@@ -206,11 +210,13 @@ export class DatiPage implements OnInit {
   private readonly api = inject(MockAdminApiService);
   private readonly toast = inject(ToastService);
   private readonly transloco = inject(TranslocoService);
+  private readonly viewState = inject(ViewStateService);
 
   protected readonly files = signal<DataFileSummary[]>([]);
   protected readonly loading = signal(false);
   protected readonly busy = signal(false);
-  protected readonly selectedName = signal<string | null>(null);
+  // Selezione ripristinata dall'ultima visita: reload() la convalida contro l'elenco corrente.
+  protected readonly selectedName = signal<string | null>(this.viewState.read<string>(SELECTED_FILE_STATE_KEY));
   protected readonly previewText = signal<string | null>(null);
   protected readonly dragging = signal(false);
   protected readonly renaming = signal(false);
@@ -241,6 +247,9 @@ export class DatiPage implements OnInit {
         const current = this.selectedName();
         if (!keepSelection || current == null || !items.some((f) => f.name === current)) {
           this.select(items[0]?.name ?? null);
+        } else if (this.previewText() == null) {
+          // Selezione mantenuta ma senza preview: il caso del ripristino dall'ultima visita.
+          this.loadPreview(current);
         }
       },
       error: (error) => this.showError(error),
@@ -251,13 +260,23 @@ export class DatiPage implements OnInit {
     if (name === this.selectedName()) {
       return;
     }
-    this.selectedName.set(name);
+    this.setSelectedName(name);
     this.previewText.set(null);
     this.renaming.set(false);
     this.confirmingDelete.set(false);
     if (name == null) {
       return;
     }
+    this.loadPreview(name);
+  }
+
+  /** Rende selezionato un file e lo persiste (ViewStateService): tornando sulla view è lo stesso. */
+  private setSelectedName(name: string | null): void {
+    this.selectedName.set(name);
+    this.viewState.write(SELECTED_FILE_STATE_KEY, name);
+  }
+
+  private loadPreview(name: string): void {
     this.api.getDataFile(name).subscribe({
       next: (detail) => {
         // La risposta arrivata per ultima potrebbe riferirsi a una selezione già cambiata.
@@ -336,7 +355,7 @@ export class DatiPage implements OnInit {
           }
           if (--remaining === 0) {
             this.busy.set(false);
-            this.selectedName.set(lastUploaded);
+            this.setSelectedName(lastUploaded);
             this.reload();
           }
         },
@@ -378,7 +397,7 @@ export class DatiPage implements OnInit {
       .subscribe({
         next: (result) => {
           this.renaming.set(false);
-          this.selectedName.set(result.name);
+          this.setSelectedName(result.name);
           // Con riferimenti riscritti il toast lo segnala e ricorda i data() dinamici non rilevabili.
           const description = result.referencesRewritten > 0
             ? this.transloco.translate('dati.toastRenamedRewritten', { count: result.referencesRewritten })

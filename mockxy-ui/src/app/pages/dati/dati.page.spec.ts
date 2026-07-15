@@ -6,6 +6,7 @@ import { of, throwError } from 'rxjs';
 import { DatiPage } from './dati.page';
 import { translocoTesting } from '../../testing/transloco-testing';
 import { MockAdminApiService } from '../../mock-admin-api.service';
+import { ViewStateService } from '../../shared/view-state.service';
 import { ToastService } from '../../ui/ui-toast/ui-toast';
 import type { DataFileDetail, DataFileSummary, DataFileUsage } from '../../mock-admin-api.types';
 
@@ -21,9 +22,22 @@ function detail(name: string, content: string): DataFileDetail {
   return { ...summary(name), content };
 }
 
+/** Stub in-memory di ViewStateService: isola i test dal localStorage reale (e tra loro). */
+function makeViewStateStub() {
+  const state = new Map<string, unknown>();
+  return {
+    read: vi.fn((key: string) => state.get(key) ?? null),
+    write: vi.fn((key: string, value: unknown) => {
+      if (value == null) state.delete(key);
+      else state.set(key, value);
+    }),
+  };
+}
+
 describe('DatiPage', () => {
   let api: ReturnType<typeof makeApiStub>;
   let toast: { show: ReturnType<typeof vi.fn>; dismiss: ReturnType<typeof vi.fn> };
+  let viewState: ReturnType<typeof makeViewStateStub>;
 
   function makeApiStub() {
     return {
@@ -40,6 +54,7 @@ describe('DatiPage', () => {
   beforeEach(async () => {
     api = makeApiStub();
     toast = { show: vi.fn(), dismiss: vi.fn() };
+    viewState = makeViewStateStub();
     await TestBed.configureTestingModule({
       imports: [DatiPage, translocoTesting()],
       providers: [
@@ -47,6 +62,7 @@ describe('DatiPage', () => {
         provideRouter([]),
         { provide: MockAdminApiService, useValue: api },
         { provide: ToastService, useValue: toast },
+        { provide: ViewStateService, useValue: viewState },
       ],
     }).compileComponents();
   });
@@ -76,6 +92,26 @@ describe('DatiPage', () => {
       api.listDataFiles.mockReturnValueOnce(throwError(() => ({ error: { message: 'boom' } })));
       create();
       expect(toast.show).toHaveBeenCalledWith(expect.objectContaining({ tone: 'error', description: 'boom' }));
+    });
+
+    it('riapre l’ultimo file selezionato (persistito), caricandone l’anteprima', () => {
+      viewState.write('dati-selected', 'aziende');
+      const { c } = create();
+      expect(c.selectedName()).toBe('aziende');
+      expect(api.getDataFile).toHaveBeenCalledWith('aziende');
+      expect(c.previewText()).toContain('"id": 1');
+    });
+
+    it('un nome persistito non più esistente ripiega sul primo file', () => {
+      viewState.write('dati-selected', 'sparito');
+      const { c } = create();
+      expect(c.selectedName()).toBe('utenti');
+    });
+
+    it('selezionare un file lo persiste per la visita successiva', () => {
+      const { c } = create();
+      c.select('aziende');
+      expect(viewState.write).toHaveBeenCalledWith('dati-selected', 'aziende');
     });
   });
 

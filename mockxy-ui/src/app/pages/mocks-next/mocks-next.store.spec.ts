@@ -2,6 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { of, throwError } from 'rxjs';
 import { MocksStore } from './mocks-next.store';
 import { MockAdminApiService } from '../../mock-admin-api.service';
+import { ViewStateService } from '../../shared/view-state.service';
 import { translocoTesting } from '../../testing/transloco-testing';
 import {
   UNSORTED_COLLECTION_ID,
@@ -80,14 +81,32 @@ function makeApiStub() {
     };
 }
 
+/** Stub in-memory di ViewStateService: isola i test dal localStorage reale (e tra loro). */
+function makeViewStateStub() {
+  const state = new Map<string, unknown>();
+  return {
+    read: vi.fn((key: string) => state.get(key) ?? null),
+    write: vi.fn((key: string, value: unknown) => {
+      if (value == null) state.delete(key);
+      else state.set(key, value);
+    }),
+  };
+}
+
 describe('MocksStore', () => {
   let api: ReturnType<typeof makeApiStub>;
+  let viewState: ReturnType<typeof makeViewStateStub>;
 
   beforeEach(() => {
     api = makeApiStub();
+    viewState = makeViewStateStub();
     TestBed.configureTestingModule({
       imports: [translocoTesting()],
-      providers: [MocksStore, { provide: MockAdminApiService, useValue: api }],
+      providers: [
+        MocksStore,
+        { provide: MockAdminApiService, useValue: api },
+        { provide: ViewStateService, useValue: viewState },
+      ],
     });
   });
 
@@ -201,6 +220,27 @@ describe('MocksStore', () => {
       expect(store.selected()).toBeUndefined();
       expect(store.loading()).toBe(false);
     });
+
+    it('riapre l’ultimo endpoint selezionato (persistito), come lasciato tornando sulla view', () => {
+      viewState.write('mocks-selected', 'e2');
+      const store = create();
+      store.loadCatalog();
+      expect(store.selected()?.id).toBe('e2');
+    });
+
+    it('un id persistito non più nel catalogo ripiega sul primo endpoint', () => {
+      viewState.write('mocks-selected', 'sparito');
+      const store = create();
+      store.loadCatalog();
+      expect(store.selected()?.id).toBe('e1');
+    });
+
+    it('il preselect del monitor vince sull’id persistito', () => {
+      viewState.write('mocks-selected', 'e1');
+      const store = create();
+      store.loadCatalog({ method: 'GET', path: '/e2' });
+      expect(store.selected()?.id).toBe('e2');
+    });
   });
 
   describe('reload', () => {
@@ -237,6 +277,12 @@ describe('MocksStore', () => {
       store.selectMock('e1');
       expect(store.error()).toBe('404');
       expect(store.detailLoading()).toBe(false);
+    });
+
+    it('persiste l’id selezionato per la visita successiva', () => {
+      const store = create();
+      store.selectMock('e2');
+      expect(viewState.write).toHaveBeenCalledWith('mocks-selected', 'e2');
     });
   });
 

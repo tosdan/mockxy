@@ -2,6 +2,7 @@ import { computed, inject, Injectable, signal } from '@angular/core';
 import { finalize, map, Observable, switchMap } from 'rxjs';
 import { TranslocoService } from '@jsverse/transloco';
 import { MockAdminApiService } from '../../mock-admin-api.service';
+import { ViewStateService } from '../../shared/view-state.service';
 import {
   CollectionSummary,
   CreateResponseRequest,
@@ -52,6 +53,9 @@ export interface CatalogTreeNode {
 /** Chiave del genitore "radice" nell'ordine unificato (collection di primo livello). */
 const ROOT_ORDER_KEY = 'root';
 
+/** Chiave (ViewStateService) dell'endpoint selezionato, ritrovato tornando sulla view. */
+const SELECTED_ENDPOINT_STATE_KEY = 'mocks-selected';
+
 export type TypeFilter = 'all' | 'mock' | 'handler' | 'middleware';
 export type StatusFilter = 'all' | 'on' | 'off';
 
@@ -64,6 +68,7 @@ export type StatusFilter = 'all' | 'on' | 'off';
 export class MocksStore {
   private readonly api = inject(MockAdminApiService);
   private readonly transloco = inject(TranslocoService);
+  private readonly viewState = inject(ViewStateService);
 
   readonly mocks = signal<readonly MockSummary[]>([]);
   readonly collections = signal<readonly CollectionSummary[]>([]);
@@ -146,8 +151,9 @@ export class MocksStore {
   readonly hasMenuFilter = computed(() => this.typeFilter() !== 'all' || this.statusFilter() !== 'all');
 
   /**
-   * Carica l'elenco completo e, se non c'e' selezione, apre il primo endpoint — oppure quello che combacia
-   * con `preselect` (metodo + route), usato dal monitor per il "Vai al mock".
+   * Carica l'elenco completo e, se non c'e' selezione, apre il primo endpoint — oppure quello che
+   * combacia con `preselect` (metodo + route), usato dal monitor per il "Vai al mock" — oppure,
+   * senza preselect, l'ultimo selezionato (persistito): tornando sulla view la si ritrova com'era.
    */
   loadCatalog(preselect?: { method: string; path: string }): void {
     this.loading.set(true);
@@ -159,9 +165,10 @@ export class MocksStore {
         next: (res) => {
           this.applyCatalogResponse(res);
           if (this.selected() === undefined && res.items.length > 0) {
+            const rememberedId = this.viewState.read<string>(SELECTED_ENDPOINT_STATE_KEY);
             const target = preselect
               ? res.items.find((m) => m.method === preselect.method && m.path === preselect.path)
-              : undefined;
+              : res.items.find((m) => m.id === rememberedId);
             this.selectMock((target ?? res.items[0]).id);
           }
         },
@@ -181,7 +188,7 @@ export class MocksStore {
         next: (res) => {
           this.applyCatalogResponse(res);
           if (selId && res.items.some((i) => i.id === selId)) {
-            this.api.getMock(selId).subscribe({ next: (d) => this.selected.set(d), error: () => undefined });
+            this.api.getMock(selId).subscribe({ next: (d) => this.setSelected(d), error: () => undefined });
           } else {
             this.selected.set(undefined);
             if (res.items.length > 0) this.selectMock(res.items[0].id);
@@ -202,7 +209,7 @@ export class MocksStore {
       .getMock(id)
       .pipe(finalize(() => this.detailLoading.set(false)))
       .subscribe({
-        next: (detail) => this.selected.set(detail),
+        next: (detail) => this.setSelected(detail),
         error: (e) => this.error.set(readErrorMessage(e) ?? this.transloco.translate('common.unexpectedError')),
       });
   }
@@ -228,7 +235,7 @@ export class MocksStore {
         next: ({ updated, res }) => {
           this.applyCatalogResponse(res);
           if (this.selected()?.id === id) {
-            this.selected.set(updated);
+            this.setSelected(updated);
           }
         },
         error: (e) => {
@@ -375,7 +382,7 @@ export class MocksStore {
         next: ({ detail, res }) => {
           this.applyCatalogResponse(res);
           if (this.selected()?.id === itemId) {
-            this.selected.set(detail);
+            this.setSelected(detail);
           }
         },
         error: (e) => {
@@ -437,7 +444,7 @@ export class MocksStore {
         if (sel) {
           const updated = res.items.find((i) => i.id === sel.id);
           if (updated) {
-            this.selected.set({ ...sel, disabled: updated.disabled });
+            this.setSelected({ ...sel, disabled: updated.disabled });
           }
         }
       },
@@ -559,7 +566,7 @@ export class MocksStore {
     ).subscribe({
       next: ({ detail, res }) => {
         this.applyCatalogResponse(res);
-        this.selected.set(detail);
+        this.setSelected(detail);
         onDone?.(true);
       },
       error: (e) => {
@@ -567,6 +574,16 @@ export class MocksStore {
         onDone?.(false);
       },
     });
+  }
+
+  /**
+   * Rende selezionato un dettaglio e ne persiste l'id (ViewStateService): tornando sulla view
+   * l'endpoint aperto è lo stesso. Le transizioni verso "nessuna selezione" restano set diretti:
+   * l'ultimo id persistito è comunque validato al ripristino contro il catalogo corrente.
+   */
+  private setSelected(detail: MockDetail): void {
+    this.selected.set(detail);
+    this.viewState.write(SELECTED_ENDPOINT_STATE_KEY, detail.id);
   }
 
   /** Applica una risposta del catalogo: sincronizza insieme mocks, collections e childOrder. */
@@ -590,7 +607,7 @@ export class MocksStore {
       finalize(() => this.savingId.set(undefined)),
     ).subscribe({
       next: ({ detail, res }) => {
-        this.selected.set(detail);
+        this.setSelected(detail);
         this.applyCatalogResponse(res);
         onSuccess?.();
       },

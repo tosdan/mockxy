@@ -46,6 +46,7 @@ import {
   type TypeFilter,
 } from '../mocks-next.store';
 import { UNSORTED_COLLECTION_ID, type MockType } from '../../../mock-admin-api.types';
+import { ViewStateService } from '../../../shared/view-state.service';
 import {
   ROOT_ORDER_KEY,
   buildCatalogRows,
@@ -57,6 +58,9 @@ import {
 } from './catalog-dnd';
 
 const METHOD_TONES: ReadonlySet<string> = new Set(['get', 'post', 'put', 'delete', 'patch']);
+
+/** Chiave (ViewStateService) delle collection collassate, ritrovate tornando sulla view. */
+const COLLAPSED_COLLECTIONS_STATE_KEY = 'mocks-collapsed';
 
 /**
  * Pannello catalogo: albero appiattito in un'UNICA lista piatta (endpoint e collection intercalati,
@@ -458,6 +462,7 @@ const METHOD_TONES: ReadonlySet<string> = new Set(['get', 'post', 'put', 'delete
 export class MocksNextCatalog {
   protected readonly store = inject(MocksStore);
   private readonly transloco = inject(TranslocoService);
+  private readonly viewState = inject(ViewStateService);
 
   protected readonly creatingCollection = signal(false);
   /** Genitore sotto cui creare la collection (undefined = livello root). */
@@ -491,7 +496,16 @@ export class MocksNextCatalog {
   ];
 
   // --- espandi/collassa cartelle ---
-  protected readonly collapsed = signal<ReadonlySet<string>>(new Set());
+  // Persistite (ViewStateService): tornando sulla view le cartelle sono come lasciate. Id di
+  // collection nel frattempo eliminate restano nel set senza effetti (nessuna riga li usa).
+  protected readonly collapsed = signal<ReadonlySet<string>>(
+    new Set(this.viewState.read<string[]>(COLLAPSED_COLLECTIONS_STATE_KEY) ?? []),
+  );
+
+  private setCollapsed(next: ReadonlySet<string>): void {
+    this.collapsed.set(next);
+    this.viewState.write(COLLAPSED_COLLECTIONS_STATE_KEY, [...next]);
+  }
 
   /**
    * Lista piatta delle righe trascinabili, nell'ordine esatto dei cdkDrag della drop-list
@@ -510,18 +524,16 @@ export class MocksNextCatalog {
   }
 
   protected toggleCollapse(id: string): void {
-    this.collapsed.update((s) => {
-      const next = new Set(s);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
+    const next = new Set(this.collapsed());
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    this.setCollapsed(next);
   }
   protected expandAll(): void {
-    this.collapsed.set(new Set());
+    this.setCollapsed(new Set());
   }
   protected collapseAll(): void {
-    this.collapsed.set(new Set(this.store.collapsibleIds()));
+    this.setCollapsed(new Set(this.store.collapsibleIds()));
   }
 
   // --- creazione collection ---
@@ -532,11 +544,9 @@ export class MocksNextCatalog {
   }
   /** Apre l'input di creazione come sotto-collection di `parentId`, espandendo il genitore. */
   protected startCreateSubCollection(parentId: string): void {
-    this.collapsed.update((s) => {
-      const next = new Set(s);
-      next.delete(parentId);
-      return next;
-    });
+    const next = new Set(this.collapsed());
+    next.delete(parentId);
+    this.setCollapsed(next);
     this.creatingParentId.set(parentId);
     this.newCollectionLabel.set('');
     this.creatingCollection.set(true);
