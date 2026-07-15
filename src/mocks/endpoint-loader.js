@@ -12,6 +12,7 @@ const {
   loadScriptModule,
   collectLocalDependencyFiles,
 } = require("./script-loader");
+const { normalizeSequenceConfig } = require("./sequence-config");
 
 const HTTP_METHOD_PATTERN = /^(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)$/;
 const ENDPOINT_SUFFIX = ".endpoint.json";
@@ -164,6 +165,9 @@ function validateEndpointConfig(endpoint, filePath) {
     errors.push("selectedResponseFile must be listed in responseFiles");
   }
 
+  const sequenceResult = normalizeSequenceConfig(endpoint.sequence, responseFiles);
+  errors.push(...sequenceResult.errors);
+
   if (errors.length > 0) {
     throw new Error(`Invalid endpoint ${filePath}: ${formatValidationErrors(errors)}`);
   }
@@ -175,6 +179,7 @@ function validateEndpointConfig(endpoint, filePath) {
     enabled: endpoint.enabled,
     responseFiles: [...responseFiles],
     selectedResponseFile: endpoint.selectedResponseFile,
+    sequence: sequenceResult.sequence,
   };
 }
 
