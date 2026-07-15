@@ -20,4 +20,6 @@ contextBridge.exposeInMainWorld("desktop", {
   closeWorkspace: (root) => ipcRenderer.invoke("workspace:close", root),
   removeRecent: (root) => ipcRenderer.invoke("workspace:removeRecent", root),
   updateWorkspace: (root, patch) => ipcRenderer.invoke("workspace:update", root, patch),
+  getAppPreferences: () => ipcRenderer.invoke("prefs:get"),
+  updateAppPreferences: (patch) => ipcRenderer.invoke("prefs:set", patch),
 });

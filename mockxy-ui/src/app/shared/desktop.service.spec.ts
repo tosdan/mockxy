@@ -85,6 +85,33 @@ describe('DesktopService', () => {
     expect(closed).toBe('/ws/c');
   });
 
+  it('getAppPreferences inoltra al bridge; fuori da Electron torna null', async () => {
+    delete (window as any).desktop;
+    await expect(TestBed.inject(DesktopService).getAppPreferences()).resolves.toBeNull();
+
+    (window as any).desktop = {
+      isDesktop: true,
+      getAppPreferences: async () => ({ errorLogEnabled: true, logsDir: '/opt/mockxy/logs' }),
+    };
+    const svc = TestBed.inject(DesktopService);
+    await expect(svc.getAppPreferences()).resolves.toEqual({ errorLogEnabled: true, logsDir: '/opt/mockxy/logs' });
+  });
+
+  it('updateAppPreferences inoltra la patch al bridge e restituisce lo stato aggiornato', async () => {
+    let patched: unknown = null;
+    (window as any).desktop = {
+      isDesktop: true,
+      updateAppPreferences: async (patch: unknown) => {
+        patched = patch;
+        return { errorLogEnabled: false, logsDir: '/opt/mockxy/logs' };
+      },
+    };
+    const svc = TestBed.inject(DesktopService);
+    const result = await svc.updateAppPreferences({ errorLogEnabled: false });
+    expect(patched).toEqual({ errorLogEnabled: false });
+    expect(result).toEqual({ errorLogEnabled: false, logsDir: '/opt/mockxy/logs' });
+  });
+
   it('updateWorkspace inoltra root e patch al bridge e restituisce l\'esito', async () => {
     let calledWith: [string, unknown] | null = null;
     (window as any).desktop = {

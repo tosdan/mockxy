@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, Component, OnInit, ViewContainerRef, inject, signal } from '@angular/core';
 import { CdkMenuTrigger } from '@angular/cdk/menu';
 import { NgIcon, provideIcons } from '@ng-icons/core';
-import { lucideChevronDown, lucideClock, lucideCog, lucidePlus, lucideX } from '@ng-icons/lucide';
+import { lucideChevronDown, lucideClock, lucideCog, lucidePlus, lucideSlidersHorizontal, lucideX } from '@ng-icons/lucide';
 import { UiButton } from '../ui/ui-button/ui-button';
 import { UiMenu, UiMenuItem } from '../ui/ui-menu/ui-menu';
 import { UiTooltip } from '../ui/ui-tooltip/ui-tooltip';
@@ -9,21 +9,23 @@ import { UiDialog } from '../ui/ui-dialog/ui-dialog';
 import { TranslocoPipe } from '@jsverse/transloco';
 import { DesktopService, type WorkspaceRef } from './desktop.service';
 import { WorkspaceSettingsDialog } from './workspace-settings-dialog';
+import { AppPreferencesDialog } from './app-preferences-dialog';
 
 /**
  * Controlli workspace "secondari" (solo app desktop): elenco dei workspace aperti di recente,
- * pulsante "Apri…" e pulsante ingranaggio per le impostazioni del workspace attivo (es. porta).
- * Montato a sinistra nella barra dei toggle runtime. La scelta del workspace attivo tra quelli
- * aperti è invece nelle tab in cima (app-workspace-bar).
+ * pulsante "Apri…" e pulsante ingranaggio che apre un menu con le impostazioni del workspace
+ * attivo (es. porta) e le preferenze globali dell'app (es. log errori). Montato a sinistra nella
+ * barra dei toggle runtime. La scelta del workspace attivo tra quelli aperti è invece nelle tab
+ * in cima (app-workspace-bar).
  */
 @Component({
   selector: 'app-workspace-controls',
   imports: [CdkMenuTrigger, NgIcon, TranslocoPipe, UiButton, UiMenu, UiMenuItem, UiTooltip],
-  providers: [provideIcons({ lucideChevronDown, lucideClock, lucideCog, lucidePlus, lucideX })],
+  providers: [provideIcons({ lucideChevronDown, lucideClock, lucideCog, lucidePlus, lucideSlidersHorizontal, lucideX })],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <span class="inline-flex items-center gap-2">
-      <button ui-button variant="ghost" size="icon" (click)="openSettings()" [uiTooltip]="'workspaceControls.settings' | transloco" [attr.aria-label]="'workspaceControls.settings' | transloco">
+      <button ui-button variant="ghost" size="icon" [cdkMenuTriggerFor]="settingsMenu" [uiTooltip]="'workspaceControls.settingsMenuTip' | transloco" [attr.aria-label]="'workspaceControls.settingsMenuTip' | transloco">
         <ng-icon name="lucideCog" size="0.95rem" />
       </button>
       <button ui-button variant="ghost" size="sm" (click)="open()">
@@ -34,6 +36,20 @@ import { WorkspaceSettingsDialog } from './workspace-settings-dialog';
         <ng-icon name="lucideChevronDown" size="0.8rem" class="text-muted-foreground" />
       </button>
     </span>
+
+    <!-- Menu dell'ingranaggio: impostazioni del workspace attivo vs preferenze globali dell'app. -->
+    <ng-template #settingsMenu>
+      <div ui-menu class="min-w-[14rem]">
+        <button ui-menu-item (click)="openSettings()">
+          <ng-icon name="lucideCog" size="0.85rem" class="text-muted-foreground" />
+          <span>{{ 'workspaceControls.settings' | transloco }}</span>
+        </button>
+        <button ui-menu-item (click)="openPreferences()">
+          <ng-icon name="lucideSlidersHorizontal" size="0.85rem" class="text-muted-foreground" />
+          <span>{{ 'workspaceControls.appPreferences' | transloco }}</span>
+        </button>
+      </div>
+    </ng-template>
 
     <ng-template #recentMenu>
       <div ui-menu class="min-w-[18rem]">
@@ -103,5 +119,14 @@ export class WorkspaceControls implements OnInit {
       return;
     }
     this.dialog.open(WorkspaceSettingsDialog, { data: ws, viewContainerRef: this.vcr, autoFocus: 'dialog' });
+  }
+
+  /** Apre le preferenze globali dell'app (log errori, ...). */
+  protected async openPreferences(): Promise<void> {
+    const prefs = await this.desktop.getAppPreferences();
+    if (!prefs) {
+      return;
+    }
+    this.dialog.open(AppPreferencesDialog, { data: prefs, viewContainerRef: this.vcr, autoFocus: 'dialog' });
   }
 }

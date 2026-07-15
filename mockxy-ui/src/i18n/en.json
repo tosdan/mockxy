@@ -107,12 +107,25 @@
   },
   "workspaceControls": {
     "settings": "Workspace settings",
+    "appPreferences": "App preferences",
+    "settingsMenuTip": "Settings and preferences",
     "open": "Open…",
     "recent": "Recent",
     "recentAria": "Recent workspaces",
     "recentlyOpened": "Recently opened",
     "none": "None",
     "removeRecentTip": "Remove from recent"
+  },
+  "appPreferences": {
+    "title": "App preferences",
+    "subtitle": "Global preferences, independent of the workspace",
+    "errorLog": "Error log on disk",
+    "errorLogHint": "Writes app and engine errors to a logs/ folder next to the executable. Turn off to stop writing files to disk.",
+    "logsDir": "Folder",
+    "cancel": "Cancel",
+    "save": "Save",
+    "saving": "Saving…",
+    "savedTitle": "Preferences saved"
   },
   "workspaceSettings": {
     "portRequired": "Enter a port.",

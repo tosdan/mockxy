@@ -98,6 +98,26 @@ describe("error-log (log errori su file dell'app desktop)", () => {
       }
     });
 
+    test("preferenza spenta: non scrive, e setEnabled riaccende/spegne a runtime", async () => {
+      const base = await createTempDir("mockxy-errlog-off-");
+      try {
+        const log = createErrorFileLog({ baseDir: base, enabled: false });
+        // La destinazione resta pronta (logsDir valorizzato): spento è una scelta, non un guasto.
+        expect(log.logsDir).toBe(path.join(base, LOGS_DIR_NAME));
+        expect(log.logError("startup", new Error("boom"))).toBe(false);
+        expect(await fs.promises.readdir(log.logsDir)).toEqual([]);
+
+        log.setEnabled(true);
+        expect(log.logError("startup", new Error("boom"))).toBe(true);
+        expect(await fs.promises.readdir(log.logsDir)).toHaveLength(1);
+
+        log.setEnabled(false);
+        expect(log.logError("startup", new Error("dopo lo spegnimento"))).toBe(false);
+      } finally {
+        await removeDir(base);
+      }
+    });
+
     test("nessuna posizione scrivibile: il log si disattiva senza lanciare", async () => {
       const readOnly = await createTempDir("mockxy-errlog-ro2-");
       try {

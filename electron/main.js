@@ -35,6 +35,8 @@ const {
   setWindowBounds,
   getLanguage,
   setLanguage,
+  getErrorLogEnabled,
+  setErrorLogEnabled,
 } = require("./global-prefs");
 const { createServerPool } = require("./server-pool");
 const { resolveLogsBaseDir, createErrorFileLog } = require("./error-log");
@@ -70,6 +72,8 @@ function prefsConfigDir() {
 const errorLog = createErrorFileLog({
   baseDir: resolveLogsBaseDir({ isPackaged: app.isPackaged, devDir: __dirname }),
   fallbackBaseDir: app.getPath("userData"),
+  // Preferenza dell'utente (globale): spegnibile dalla dialog App Preferences, vedi prefs:set.
+  enabled: getErrorLogEnabled(prefsConfigDir()),
 });
 
 // Gli imprevisti del processo principale finiscono nel file: in pacchetto non c'è una console
@@ -391,6 +395,24 @@ function setupIpc() {
       await mainWindow.loadURL(entry.url);
     }
     return { ok: true, name: getWorkspaceName(root), port: entry ? entry.port : null };
+  });
+
+  // Preferenze dell'app (globali, non del workspace): lettura e aggiornamento dalla dialog
+  // App Preferences. logsDir è informativo (dove finiscono i log, o null se nessuna posizione
+  // è scrivibile). Il toggle del log errori si applica subito, senza riavvio.
+  ipcMain.handle("prefs:get", () => ({
+    errorLogEnabled: getErrorLogEnabled(prefsConfigDir()),
+    logsDir: errorLog.logsDir,
+  }));
+  ipcMain.handle("prefs:set", (_event, patch = {}) => {
+    if (typeof patch.errorLogEnabled === "boolean") {
+      setErrorLogEnabled(prefsConfigDir(), patch.errorLogEnabled);
+      errorLog.setEnabled(patch.errorLogEnabled);
+    }
+    return {
+      errorLogEnabled: getErrorLogEnabled(prefsConfigDir()),
+      logsDir: errorLog.logsDir,
+    };
   });
 
   // Lingua: lettura sincrona (il preload la espone alla UI al caricamento) e scrittura persistente

@@ -105,6 +105,19 @@ export interface SwitchResult {
   error?: 'not-found' | 'open-failed';
 }
 
+/** Preferenze dell'app desktop (globali, non del workspace). */
+export interface AppPreferences {
+  /** Log degli errori su file attivo. */
+  errorLogEnabled: boolean;
+  /** Cartella dei log (informativa), o null se nessuna posizione è scrivibile. */
+  logsDir: string | null;
+}
+
+/** Modifiche applicabili alle preferenze dell'app; si applicano subito, senza riavvio. */
+export interface AppPreferencesPatch {
+  errorLogEnabled?: boolean;
+}
+
 interface DesktopBridge {
   isDesktop?: boolean;
   getWorkspace?: () => Promise<WorkspaceInfo>;
@@ -115,6 +128,8 @@ interface DesktopBridge {
   closeWorkspace?: (root: string) => Promise<unknown>;
   removeRecent?: (root: string) => Promise<{ removed?: boolean }>;
   updateWorkspace?: (root: string, patch: WorkspacePatch) => unknown;
+  getAppPreferences?: () => Promise<AppPreferences>;
+  updateAppPreferences?: (patch: AppPreferencesPatch) => Promise<AppPreferences>;
 }
 
 function bridge(): DesktopBridge | undefined {
@@ -240,6 +255,32 @@ export class DesktopService {
       return (await fn(root, patch)) as WorkspaceUpdateResult;
     } catch {
       // Sul cambio riuscito la finestra si ricarica e la promise resta in sospeso: è atteso.
+      return null;
+    }
+  }
+
+  /** Preferenze dell'app (globali), o null fuori da Electron / in caso di errore. */
+  async getAppPreferences(): Promise<AppPreferences | null> {
+    const fn = bridge()?.getAppPreferences;
+    if (!fn) {
+      return null;
+    }
+    try {
+      return await fn();
+    } catch {
+      return null;
+    }
+  }
+
+  /** Applica le preferenze dell'app (effetto immediato). Restituisce lo stato aggiornato, o null. */
+  async updateAppPreferences(patch: AppPreferencesPatch): Promise<AppPreferences | null> {
+    const fn = bridge()?.updateAppPreferences;
+    if (!fn) {
+      return null;
+    }
+    try {
+      return await fn(patch);
+    } catch {
       return null;
     }
   }

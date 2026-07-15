@@ -11,6 +11,8 @@ const {
   setWindowBounds,
   getLanguage,
   setLanguage,
+  getErrorLogEnabled,
+  setErrorLogEnabled,
 } = require("../electron/global-prefs");
 const { createTempDir, removeDir } = require("./helpers");
 
@@ -108,5 +110,31 @@ describe("global-prefs (preferenze utente globali)", () => {
     setLanguage(dir, "en");
     expect(getRecentWorkspaces(dir)).toEqual([path.resolve(dir, "a")]);
     expect(getLanguage(dir)).toBe("en");
+  });
+
+  test("log errori: attivo di default, poi round-trip", () => {
+    expect(getErrorLogEnabled(dir)).toBe(true);
+    setErrorLogEnabled(dir, false);
+    expect(getErrorLogEnabled(dir)).toBe(false);
+    setErrorLogEnabled(dir, true);
+    expect(getErrorLogEnabled(dir)).toBe(true);
+  });
+
+  test("log errori: i valori non booleani vengono ignorati (in scrittura e in lettura)", () => {
+    setErrorLogEnabled(dir, false);
+    setErrorLogEnabled(dir, "no");
+    expect(getErrorLogEnabled(dir)).toBe(false);
+    // Un valore corrotto nel file vale come default (attivo).
+    const prefs = readPrefs(dir);
+    prefs.errorLogEnabled = "boh";
+    fs.writeFileSync(prefsFilePath(dir), JSON.stringify(prefs));
+    expect(getErrorLogEnabled(dir)).toBe(true);
+  });
+
+  test("log errori e recenti coesistono nello stesso file", () => {
+    addRecentWorkspace(dir, path.join(dir, "a"));
+    setErrorLogEnabled(dir, false);
+    expect(getRecentWorkspaces(dir)).toEqual([path.resolve(dir, "a")]);
+    expect(getErrorLogEnabled(dir)).toBe(false);
   });
 });

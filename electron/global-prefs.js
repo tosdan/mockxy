@@ -94,6 +94,22 @@ function setLanguage(configDir, lang) {
   return writePrefs(configDir, prefs);
 }
 
+// Log degli errori su file (globale): attivo di default; l'utente può spegnerlo dalle preferenze
+// dell'app. Qualunque valore non-booleano salvato nel file vale come default (attivo).
+function getErrorLogEnabled(configDir) {
+  const enabled = readPrefs(configDir).errorLogEnabled;
+  return typeof enabled === "boolean" ? enabled : true;
+}
+
+function setErrorLogEnabled(configDir, enabled) {
+  if (typeof enabled !== "boolean") {
+    return readPrefs(configDir);
+  }
+  const prefs = readPrefs(configDir);
+  prefs.errorLogEnabled = enabled;
+  return writePrefs(configDir, prefs);
+}
+
 module.exports = {
   PREFS_FILE,
   prefsFilePath,
@@ -107,4 +123,6 @@ module.exports = {
   setWindowBounds,
   getLanguage,
   setLanguage,
+  getErrorLogEnabled,
+  setErrorLogEnabled,
 };

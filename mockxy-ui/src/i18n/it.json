@@ -107,12 +107,25 @@
   },
   "workspaceControls": {
     "settings": "Impostazioni workspace",
+    "appPreferences": "Preferenze dell'app",
+    "settingsMenuTip": "Impostazioni e preferenze",
     "open": "Apri…",
     "recent": "Recenti",
     "recentAria": "Workspace recenti",
     "recentlyOpened": "Aperti di recente",
     "none": "Nessuno",
     "removeRecentTip": "Rimuovi dai recenti"
+  },
+  "appPreferences": {
+    "title": "Preferenze dell'app",
+    "subtitle": "Preferenze globali, indipendenti dal workspace",
+    "errorLog": "Log errori su disco",
+    "errorLogHint": "Scrive gli errori dell'app e del motore in una cartella logs/ accanto all'eseguibile. Disattiva per non scrivere file su disco.",
+    "logsDir": "Cartella",
+    "cancel": "Annulla",
+    "save": "Salva",
+    "saving": "Salvataggio…",
+    "savedTitle": "Preferenze salvate"
   },
   "workspaceSettings": {
     "portRequired": "Inserisci una porta.",

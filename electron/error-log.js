@@ -52,9 +52,14 @@ function formatEntry(now, context, errorOrMessage, fields) {
  * ripiego è scrivibile il log si disattiva: il logging non deve MAI abbattere l'app.
  * La scrittura è sincrona: gli errori sono rari e le righe devono arrivare su disco anche se il
  * processo sta morendo (uncaught exception all'avvio).
+ *
+ * `enabled` è la preferenza dell'utente (spegnibile a runtime con setEnabled, senza riavvio):
+ * da spento logError non scrive nulla ma la destinazione resta pronta per la riaccensione.
+ * È distinto da logsDir null (nessuna posizione scrivibile), che è un vincolo, non una scelta.
  */
-function createErrorFileLog({ baseDir, fallbackBaseDir, now = () => new Date() }) {
+function createErrorFileLog({ baseDir, fallbackBaseDir, now = () => new Date(), enabled = true }) {
   let logsDir = null;
+  let isEnabled = enabled !== false;
 
   for (const candidate of [baseDir, fallbackBaseDir]) {
     if (candidate == null) {
@@ -72,7 +77,7 @@ function createErrorFileLog({ baseDir, fallbackBaseDir, now = () => new Date() }
   }
 
   function logError(context, errorOrMessage, fields) {
-    if (logsDir == null) {
+    if (logsDir == null || !isEnabled) {
       return false;
     }
     const timestamp = now();
@@ -84,7 +89,11 @@ function createErrorFileLog({ baseDir, fallbackBaseDir, now = () => new Date() }
     }
   }
 
-  return { logsDir, logError };
+  function setEnabled(next) {
+    isEnabled = next === true;
+  }
+
+  return { logsDir, logError, setEnabled };
 }
 
 // Avvolge un logger del motore duplicando le sole righe error verso onError (il chiamante vi
