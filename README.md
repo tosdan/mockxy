@@ -486,7 +486,7 @@ npm run build:frontend   # production build of the UI
 ```
 
 There is also an **external black-box acceptance suite**
-([mock-server-acceptance-tests](https://github.com/tosdan/mockxy-acceptance-tests)):
+([mockxy-acceptance-tests](https://github.com/tosdan/mockxy-acceptance-tests)):
 it exercises the standalone Docker image with a real browser in the «browser → Mockxy →
 backend» topology (CORS, cookies, redirects, WebSocket, streaming, hot reload). It runs in CI
 on every push to this repo (the `acceptance` workflow) and on the suite's own repo.

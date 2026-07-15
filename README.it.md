@@ -486,7 +486,7 @@ npm run build:frontend   # build di produzione dell'interfaccia
 ```
 
 Esiste anche una **suite di accettazione black-box esterna**
-([mock-server-acceptance-tests](https://github.com/tosdan/mockxy-acceptance-tests)):
+([mockxy-acceptance-tests](https://github.com/tosdan/mockxy-acceptance-tests)):
 esercita l'immagine Docker standalone con un browser reale nella topologia «browser → Mockxy →
 backend» (CORS, cookie, redirect, WebSocket, streaming, hot reload). Gira in CI a ogni push su
 questo repo (workflow `acceptance`) e su quello della suite.

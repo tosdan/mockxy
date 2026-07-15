@@ -41,7 +41,7 @@ estratta, poi `git init`, commit unico, push sul repo nuovo.
 4. **La suite di accettazione è un repo privato.** `README.md` (riga ~485) la linka e
    `.github/workflows/acceptance.yml` la clona col secret `ACCEPTANCE_REPO_TOKEN`: sul repo
    pubblico il link è morto e il workflow fallisce a ogni push. Due strade:
-   - pubblicare anche `mock-server-acceptance-tests` (previo **stesso audit**: anche lì c'è un
+   - pubblicare anche `mockxy-acceptance-tests` (previo **stesso audit**: anche lì c'è un
      workspace di fixture da controllare), togliendo i due secret incrociati che non servono più
      tra repo pubblici;
    - oppure escludere `acceptance.yml` dalla copia e riformulare il paragrafo del README.
