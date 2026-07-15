@@ -1,0 +1,10 @@
+{
+  "type": "mock",
+  "title": "Gone",
+  "status": 410,
+  "headers": {
+    "content-type": "application/json"
+  },
+  "delayMs": 0,
+  "body": { "deprecated": true }
+}

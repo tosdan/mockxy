@@ -1,0 +1,8 @@
+{
+  "method": "GET",
+  "path": "/api/legacy",
+  "description": "Endpoint dismesso, tenuto spento",
+  "enabled": false,
+  "responseFiles": ["001.response.json"],
+  "selectedResponseFile": "001.response.json"
+}

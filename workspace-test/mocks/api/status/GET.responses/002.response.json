@@ -1,0 +1,10 @@
+{
+  "type": "mock",
+  "title": "Non trovato",
+  "status": 404,
+  "headers": {
+    "content-type": "application/json"
+  },
+  "delayMs": 0,
+  "body": { "error": "not found" }
+}

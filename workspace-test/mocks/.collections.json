@@ -1,0 +1,21 @@
+{
+  "collections": [
+    { "id": "collection-core", "label": "Core API" },
+    { "id": "collection-admin", "label": "Admin", "parentId": "collection-core" },
+    { "id": "collection-dynamic", "label": "Dynamic" }
+  ],
+  "memberships": {
+    "api/users/GET.endpoint.json": "collection-core",
+    "api/users/{id}/GET.endpoint.json": "collection-core",
+    "api/admin/config/GET.endpoint.json": "collection-admin",
+    "api/echo/POST.endpoint.json": "collection-dynamic",
+    "api/enrich/GET.endpoint.json": "collection-dynamic"
+  },
+  "childOrder": {
+    "root": ["collection-core", "collection-dynamic"],
+    "collection-core": ["api/users/GET.endpoint.json", "api/users/{id}/GET.endpoint.json", "collection-admin"],
+    "collection-admin": ["api/admin/config/GET.endpoint.json"],
+    "collection-dynamic": ["api/echo/POST.endpoint.json", "api/enrich/GET.endpoint.json"],
+    "unsorted": ["api/health/GET.endpoint.json", "api/legacy/GET.endpoint.json", "api/status/GET.endpoint.json"]
+  }
+}

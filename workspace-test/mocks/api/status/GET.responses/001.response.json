@@ -1,0 +1,10 @@
+{
+  "type": "mock",
+  "title": "OK",
+  "status": 200,
+  "headers": {
+    "content-type": "application/json"
+  },
+  "delayMs": 0,
+  "body": { "status": "ok" }
+}

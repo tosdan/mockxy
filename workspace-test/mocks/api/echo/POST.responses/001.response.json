@@ -1,0 +1,5 @@
+{
+  "type": "handler",
+  "title": "Echo",
+  "sourceFile": "001.handler.js"
+}

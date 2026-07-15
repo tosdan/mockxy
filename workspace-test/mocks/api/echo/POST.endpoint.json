@@ -1,0 +1,8 @@
+{
+  "method": "POST",
+  "path": "/api/echo",
+  "description": "Handler dinamico: rimanda indietro il body ricevuto",
+  "enabled": true,
+  "responseFiles": ["001.response.json"],
+  "selectedResponseFile": "001.response.json"
+}

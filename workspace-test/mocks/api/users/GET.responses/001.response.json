@@ -1,0 +1,13 @@
+{
+  "type": "mock",
+  "title": "Elenco",
+  "status": 200,
+  "headers": {
+    "content-type": "application/json"
+  },
+  "delayMs": 0,
+  "body": [
+    { "id": 1, "name": "Ada Lovelace", "role": "admin" },
+    { "id": 2, "name": "Alan Turing", "role": "editor" }
+  ]
+}

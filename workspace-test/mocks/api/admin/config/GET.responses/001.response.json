@@ -1,0 +1,13 @@
+{
+  "type": "mock",
+  "title": "Config",
+  "status": 200,
+  "headers": {
+    "content-type": "application/json"
+  },
+  "delayMs": 0,
+  "body": {
+    "maintenance": false,
+    "featureFlags": { "beta": false }
+  }
+}
