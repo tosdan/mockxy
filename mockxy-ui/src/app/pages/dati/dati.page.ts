@@ -339,6 +339,24 @@ export class DatiPage implements OnInit {
     let remaining = jsonFiles.length;
     let lastUploaded: string | null = null;
 
+    // All'ultimo upload completato: seleziona l'ultimo file caricato e azzera preview e stati
+    // transitori, così reload() ricarica la preview dal server. select() non basterebbe: su un
+    // upload che sostituisce il file già selezionato il nome non cambia e la preview resterebbe
+    // quella del contenuto precedente.
+    const done = () => {
+      if (--remaining > 0) {
+        return;
+      }
+      this.busy.set(false);
+      if (lastUploaded != null) {
+        this.setSelectedName(lastUploaded);
+        this.previewText.set(null);
+        this.renaming.set(false);
+        this.confirmingDelete.set(false);
+      }
+      this.reload();
+    };
+
     for (const file of jsonFiles) {
       const name = file.name.replace(/\.json$/i, '');
       const replaced = existing.has(name.toLowerCase());
@@ -353,18 +371,11 @@ export class DatiPage implements OnInit {
           if (detail.sizeBytes > LARGE_FILE_WARNING_BYTES) {
             this.toast.show({ title: this.t('dati.toastLargeTitle'), description: this.t('dati.toastLargeDesc'), tone: 'warning' });
           }
-          if (--remaining === 0) {
-            this.busy.set(false);
-            this.setSelectedName(lastUploaded);
-            this.reload();
-          }
+          done();
         },
         error: (error) => {
           this.showError(error, file.name);
-          if (--remaining === 0) {
-            this.busy.set(false);
-            this.reload();
-          }
+          done();
         },
       });
     }

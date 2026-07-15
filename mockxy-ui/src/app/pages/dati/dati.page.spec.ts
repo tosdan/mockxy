@@ -165,6 +165,25 @@ describe('DatiPage', () => {
       expect(toast.show).toHaveBeenCalledWith(expect.objectContaining({ tone: 'success' }));
     });
 
+    it('il file appena caricato diventa selezionato, con la sua anteprima', () => {
+      const { c } = create();
+      // la lista ricaricata dopo l'upload contiene il nuovo file (fedeltà dello stub)
+      api.listDataFiles.mockReturnValueOnce(of({ items: [summary('utenti'), summary('aziende'), summary('nuovi')] }));
+      c.uploadAll([jsonFile('nuovi.json')]);
+      expect(c.selectedName()).toBe('nuovi');
+      expect(api.getDataFile).toHaveBeenLastCalledWith('nuovi');
+      expect(c.previewText()).toContain('"id": 1');
+    });
+
+    it('ri-caricare il file già selezionato ne aggiorna l’anteprima col nuovo contenuto', () => {
+      const { c } = create();
+      expect(c.previewText()).toContain('"id": 1');
+      api.getDataFile.mockReturnValueOnce(of(detail('utenti', '[{"id":2}]')));
+      c.uploadAll([jsonFile('utenti.json')]);
+      expect(c.selectedName()).toBe('utenti');
+      expect(c.previewText()).toContain('"id": 2');
+    });
+
     it('scarta i file non-json con un toast d’errore, senza chiamare l’API', () => {
       const { c } = create();
       c.uploadAll([new File(['x'], 'note.txt', { type: 'text/plain' })]);
