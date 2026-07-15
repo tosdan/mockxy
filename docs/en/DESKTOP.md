@@ -41,6 +41,19 @@ settings file and its local nature are documented in the
 [workspace anatomy](WORKSPACE.md) — and they never touch the headless flavor, which is
 configured through environment variables only.
 
+## The error log (`logs/`)
+
+Errors are also written to files, in a **`logs/`** subfolder next to whatever you launched:
+the AppImage on Linux, the portable exe on Windows, the installed executable elsewhere
+(in development: `electron/logs/`, git-ignored). If that location is not writable, the
+fallback is the user data folder. One file per day (`errors-YYYY-MM-DD.log`), created only
+when there is something to write.
+
+It collects both app failures (startup errors, a workspace that won't open, unexpected
+exceptions) and the **error lines of the engines** of the open workspaces — for example the
+full detail of a `500 Handler Execution Failed`, which in the packaged app would otherwise
+have no way out ([troubleshooting](TROUBLESHOOTING.md)).
+
 ## Global preferences and packaging
 
 The **global** preferences — language, window geometry, list of recents — live next to the

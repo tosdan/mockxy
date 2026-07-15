@@ -41,6 +41,19 @@ dialog). Il file delle impostazioni e la sua natura locale sono documentati
 nell'[anatomia del workspace](WORKSPACE.md) — e non toccano mai la versione headless, che si
 configura solo con variabili d'ambiente.
 
+## Il log degli errori (`logs/`)
+
+Gli errori finiscono anche su file, in una sottocartella **`logs/`** accanto a ciò che hai
+lanciato: l'AppImage su Linux, l'exe portabile su Windows, l'eseguibile installato altrove
+(in sviluppo: `electron/logs/`, ignorata da git). Se quella posizione non è scrivibile, il
+ripiego è la cartella dati utente. Un file al giorno (`errors-AAAA-MM-GG.log`), creato solo
+quando c'è qualcosa da scrivere.
+
+Ci trovi sia i guasti dell'app (avvio fallito, workspace che non si apre, eccezioni
+impreviste) sia le **righe error dei motori** dei workspace aperti — ad esempio il dettaglio
+completo di un `500 Handler Execution Failed`, che nell'app impacchettata non avrebbe
+nessun'altra via d'uscita ([troubleshooting](TROUBLESHOOTING.md)).
+
 ## Preferenze globali e pacchetto
 
 Le preferenze **globali** — lingua, geometria della finestra, elenco dei recenti — vivono

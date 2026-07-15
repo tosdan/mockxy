@@ -82,6 +82,38 @@ describe("desktop-server (avvio del motore per l'app desktop)", () => {
     await expect(startDesktopServer({})).rejects.toThrow(/mocksDir/);
   });
 
+  test("con onError passa al motore un logger che duplica le righe error", async () => {
+    let captured;
+    const startServerFn = async (options) => {
+      captured = options;
+      return {};
+    };
+    const seen = [];
+
+    await startDesktopServer({
+      mocksDir: "/ws/mocks",
+      onError: (message, fields) => seen.push([message, fields]),
+      startServerFn,
+    });
+
+    expect(captured.logger).toBeDefined();
+    captured.logger.info("solo console");
+    captured.logger.error("Local handler failed.", { error: "data is not defined" });
+    expect(seen).toEqual([["Local handler failed.", { error: "data is not defined" }]]);
+  });
+
+  test("senza onError non impone un logger (il motore crea il suo)", async () => {
+    let captured;
+    const startServerFn = async (options) => {
+      captured = options;
+      return {};
+    };
+
+    await startDesktopServer({ mocksDir: "/ws/mocks", startServerFn });
+
+    expect(captured.logger).toBeUndefined();
+  });
+
   test("isPortFree: falso se la porta è occupata, vero dopo averla liberata", async () => {
     const server = net.createServer();
     await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));

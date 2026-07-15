@@ -1,6 +1,8 @@
 node_modules/
 coverage/
 electron/dist/
+# log errori dell'app desktop in sviluppo (in pacchetto stanno accanto all'eseguibile)
+electron/logs/
 npm-debug.log*
 monitor-dump/
 

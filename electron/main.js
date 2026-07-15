@@ -37,6 +37,7 @@ const {
   setLanguage,
 } = require("./global-prefs");
 const { createServerPool } = require("./server-pool");
+const { resolveLogsBaseDir, createErrorFileLog } = require("./error-log");
 
 let mainWindow = null;
 let activeRoot = null;
@@ -61,6 +62,31 @@ function prefsConfigDir() {
   }
   return app.getPath("userData");
 }
+
+// Log degli errori su file: cartella logs/ accanto all'artefatto eseguito (AppImage, exe
+// portabile, eseguibile installato; in sviluppo electron/), con ripiego sulla cartella dati
+// utente se quella posizione non è scrivibile. Creato subito, non in whenReady: deve esserci
+// già per gli errori d'avvio.
+const errorLog = createErrorFileLog({
+  baseDir: resolveLogsBaseDir({ isPackaged: app.isPackaged, devDir: __dirname }),
+  fallbackBaseDir: app.getPath("userData"),
+});
+
+// Gli imprevisti del processo principale finiscono nel file: in pacchetto non c'è una console
+// che li mostri. Registrare l'handler sostituisce il dialogo di default di Electron: lo
+// rimpiazziamo con un errorBox equivalente, e come col default l'app resta viva.
+process.on("uncaughtException", (error) => {
+  errorLog.logError("uncaught-exception", error);
+  console.error("Eccezione non gestita nel processo principale:", error);
+  try {
+    dialog.showErrorBox(dialogText().unexpectedErrorTitle, String((error && error.stack) || error));
+  } catch {
+    /* dialoghi non disponibili (app in chiusura): resta il file */
+  }
+});
+process.on("unhandledRejection", (reason) => {
+  errorLog.logError("unhandled-rejection", reason instanceof Error ? reason : String(reason));
+});
 
 // Lingua dell'interfaccia: quella salvata, oppure — al primo avvio in assoluto — quella di sistema
 // (italiano se la locale comincia per "it", inglese per ogni altra), che viene poi salvata.
@@ -104,6 +130,9 @@ async function launchEngine(root) {
     monitorDumpThreshold: ws.monitorDumpThreshold,
     monitorDumpMaxFileBytes: ws.monitorDumpMaxFileBytes,
     monitorDumpMaxTotalBytes: ws.monitorDumpMaxTotalBytes,
+    // Le righe error del motore (es. il dettaglio di un handler fallito) vanno anche nel file
+    // di log: in pacchetto lo stdout del motore non lo vede nessuno.
+    onError: (message, fields) => errorLog.logError(`engine:${getWorkspaceName(root)}`, message, fields),
   };
   try {
     return await startDesktopServer({ ...base, port: ws.port });
@@ -136,6 +165,7 @@ async function showWorkspace(root) {
     }
     return { ok: true };
   } catch (error) {
+    errorLog.logError("open-workspace", error, { root });
     dialog.showErrorBox(dialogText().openFailedTitle, String((error && error.message) || error));
     return { ok: false, error: "open-failed" };
   }
@@ -519,6 +549,7 @@ app.whenReady().then(async () => {
   try {
     await createMainWindow();
   } catch (error) {
+    errorLog.logError("startup", error);
     console.error("Avvio dell'app desktop fallito:", error.message);
     dialog.showErrorBox(dialogText().startupFailedTitle, String((error && error.message) || error));
     app.quit();

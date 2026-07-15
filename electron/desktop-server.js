@@ -7,27 +7,29 @@
 
 const net = require("net");
 
-// Carica il motore di Mockxy. In sviluppo `src/` è la cartella accanto a `electron/`
-// (`../src`); nel pacchetto electron-builder la copia dentro l'app (`./src`).
-// Il fallback scatta solo se a mancare è proprio `./src/server`: un MODULE_NOT_FOUND
+// Carica un modulo del motore di Mockxy. In sviluppo `src/` è la cartella accanto a
+// `electron/` (`../src`); nel pacchetto electron-builder la copia dentro l'app (`./src`).
+// Il fallback scatta solo se a mancare è proprio `./src/<subpath>`: un MODULE_NOT_FOUND
 // qualsiasi (es. una dipendenza del motore assente dal pacchetto) deve propagarsi
-// com'è, altrimenti l'errore reale viene mascherato da "modulo ../src/server non trovato".
-function requireEngine() {
+// com'è, altrimenti l'errore reale viene mascherato da "modulo ../src/<subpath> non trovato".
+function requireEngineModule(subpath) {
   try {
-    return require("./src/server");
+    return require(`./src/${subpath}`);
   } catch (error) {
     if (
       error &&
       error.code === "MODULE_NOT_FOUND" &&
       typeof error.message === "string" &&
-      error.message.includes("'./src/server'")
+      error.message.includes(`'./src/${subpath}'`)
     ) {
-      return require("../src/server");
+      return require(`../src/${subpath}`);
     }
     throw error;
   }
 }
-const { startServer, WORKSPACE_SETTING_DEFAULTS } = requireEngine();
+const { startServer, WORKSPACE_SETTING_DEFAULTS } = requireEngineModule("server");
+const { createLogger } = requireEngineModule("utils/logger");
+const { teeErrors } = require("./error-log");
 
 // Trova una porta TCP libera lasciando che il sistema operativo ne assegni una (listen su 0).
 function findFreePort() {
@@ -62,6 +64,8 @@ function isPortFree(port, host = "127.0.0.1") {
 // - amministrazione attiva (il desktop è il banco di lavoro),
 // - backendUrl del workspace (per-workspace): vuoto/assente = solo mock.
 // Le altre opzioni (proxy fallback, ritardi) restano quelle della configurazione normale.
+// Con onError le righe error del motore vengono duplicate verso il chiamante (il file di log
+// dell'app desktop: in pacchetto lo stdout del motore non lo vede nessuno).
 // startServerFn è iniettabile per i test.
 async function startDesktopServer({
   mocksDir,
@@ -83,6 +87,7 @@ async function startDesktopServer({
   monitorDumpThreshold,
   monitorDumpMaxFileBytes,
   monitorDumpMaxTotalBytes,
+  onError,
   startServerFn = startServer,
 } = {}) {
   if (!mocksDir) {
@@ -90,7 +95,13 @@ async function startDesktopServer({
   }
 
   const resolvedPort = port || (await findFreePort());
+  // Stesso livello di log della configurazione normale (LOG_LEVEL, default info): il logger
+  // esterno sostituisce quello che il motore creerebbe da config.logLevel.
+  const logger = onError
+    ? teeErrors(createLogger(process.env.LOG_LEVEL || "info"), onError)
+    : undefined;
   const runtime = await startServerFn({
+    logger,
     configOverrides: {
       port: resolvedPort,
       // Solo i due valori noti sono ammessi a monte (main.js); qui il fallback resta loopback.

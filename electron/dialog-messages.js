@@ -25,6 +25,7 @@ const MESSAGES = {
       "Sparisce solo dall'elenco dei recenti: la cartella e i suoi mock restano su disco.",
     removeRecentConfirm: "Rimuovi",
     startupFailedTitle: "Avvio fallito",
+    unexpectedErrorTitle: "Errore imprevisto",
   },
   en: {
     cancel: "Cancel",
@@ -48,6 +49,7 @@ const MESSAGES = {
       "It only disappears from the recent list: the folder and its mocks stay on disk.",
     removeRecentConfirm: "Remove",
     startupFailedTitle: "Startup failed",
+    unexpectedErrorTitle: "Unexpected error",
   },
 };
 
