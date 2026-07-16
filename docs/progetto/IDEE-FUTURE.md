@@ -80,5 +80,6 @@ varianti (una variante di guasto estratta a sorte con un peso).
 - **Live-reload della pagina del browser**: è il mestiere del dev server del frontend, non del
   mock server.
 - **Tunnel pubblici stile ngrok**: aprono un tema di sicurezza sproporzionato rispetto al valore.
-- **Mocking GraphQL e WebSocket**: differenzianti veri ma progetti interi; da rivalutare solo
-  davanti a una domanda concreta.
+- **Mocking GraphQL**: differenziante vero ma progetto intero; da rivalutare solo davanti a
+  una domanda concreta. *(Il mocking WebSocket, prima in questa voce, la domanda concreta l'ha
+  trovata: il design è in [`DESIGN-WEBSOCKET.md`](DESIGN-WEBSOCKET.md).)*
