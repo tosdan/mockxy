@@ -24,6 +24,8 @@ export interface MockConfig {
   bodyFile?: string;
   file?: string;
   delayMs?: number;
+  /** Templating del body/header ({{params.x}}, ...): opt-in per variante mock. */
+  templated?: boolean;
 }
 
 /** Uno step di una sequenza di varianti: quale response e per quanto (times XOR forMs). */
@@ -70,6 +72,8 @@ export interface ResponseSummary {
   title?: string;
   sourceFile?: string;
   status?: number | null;
+  /** Solo per le varianti mock: templating attivo. */
+  templated?: boolean;
   selected?: boolean;
   missing?: boolean;
 }
@@ -189,6 +193,8 @@ export interface ResponseMockUpdateRequest {
   headers?: Record<string, string | number | boolean | string[]>;
   delayMs?: number;
   body?: unknown;
+  /** Templating del body/header ({{params.x}}, ...): opt-in per variante. */
+  templated?: boolean;
 }
 
 export interface ResponseScriptUpdateRequest {

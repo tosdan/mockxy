@@ -27,6 +27,7 @@ export interface DraftSeed {
   payloadType: DraftPayloadType;
   body: string;
   scriptType: DraftScriptType;
+  templated?: boolean;
 }
 
 /**
@@ -44,6 +45,8 @@ export class ResponseDraft {
   readonly payloadType = signal<DraftPayloadType>('json');
   /** Tipo script quando la bozza è handler/middleware (governa form e payload), null per i mock. */
   readonly scriptType = signal<DraftScriptType>(null);
+  /** Templating del body/header ({{params.x}}, ...): opt-in per variante mock (mai per i file). */
+  readonly templated = signal(false);
   /** File scelto in creazione (modalità File): caricato sulla response solo dopo che è stata creata. */
   readonly file = signal<File | null>(null);
   /** Preset response in attesa di conferma quando il body corrente non è vuoto/di default. */
@@ -77,6 +80,7 @@ export class ResponseDraft {
     this.payloadType.set(seed.payloadType);
     this.body.set(seed.body);
     this.scriptType.set(seed.scriptType);
+    this.templated.set(seed.templated === true);
     this.clearTransient();
   }
 
@@ -99,6 +103,7 @@ export class ResponseDraft {
       this.payloadType.set('json');
       this.body.set('{\n  \n}');
     }
+    this.templated.set(false);
     this.clearTransient();
   }
 
@@ -201,11 +206,12 @@ export class ResponseDraft {
     }
     if (this.payloadType() === 'file') {
       // file mode: aggiorna solo i metadati (status/headers/delay); il file resta quello caricato.
+      // Niente templated: i payload file non si templano (regola del motore).
       return { type: 'mock', title, status: this.status() ?? 0, headers: this.headersObject(), delayMs: this.delay() };
     }
     const body = this.parsedBody();
     if (body === INVALID_BODY) return null;
-    return { type: 'mock', title, status: this.status() ?? 0, headers: this.headersObject(), delayMs: this.delay(), body };
+    return { type: 'mock', title, status: this.status() ?? 0, headers: this.headersObject(), delayMs: this.delay(), body, templated: this.templated() };
   }
 
   /**
@@ -223,7 +229,7 @@ export class ResponseDraft {
     }
     const body = this.parsedBody();
     if (body === INVALID_BODY) return null;
-    return { type: 'mock', title, status: this.status() ?? 0, headers: this.headersObject(), delayMs: this.delay(), body };
+    return { type: 'mock', title, status: this.status() ?? 0, headers: this.headersObject(), delayMs: this.delay(), body, templated: this.templated() };
   }
 
   private parsedBody(): unknown {

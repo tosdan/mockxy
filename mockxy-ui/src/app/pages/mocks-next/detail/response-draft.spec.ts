@@ -97,7 +97,7 @@ describe('ResponseDraft', () => {
         body: '{"a":1}',
         scriptType: null,
       });
-      expect(draft.buildUpdatePayload()).toEqual({ type: 'mock', title: 'ok', status: 201, headers: { 'x-a': '1' }, delayMs: 7, body: { a: 1 } });
+      expect(draft.buildUpdatePayload()).toEqual({ type: 'mock', title: 'ok', status: 201, headers: { 'x-a': '1' }, delayMs: 7, body: { a: 1 }, templated: false });
     });
 
     it('update con JSON rotto → null (il salvataggio non parte)', () => {
@@ -123,7 +123,24 @@ describe('ResponseDraft', () => {
 
     it('update testo: il body resta stringa grezza', () => {
       draft.seedForEdit({ title: 't', status: 200, delay: 0, headers: [], payloadType: 'text', body: 'non json {', scriptType: null });
-      expect(draft.buildUpdatePayload()).toEqual({ type: 'mock', title: 't', status: 200, headers: {}, delayMs: 0, body: 'non json {' });
+      expect(draft.buildUpdatePayload()).toEqual({ type: 'mock', title: 't', status: 200, headers: {}, delayMs: 0, body: 'non json {', templated: false });
+    });
+
+    it('templated: seminato dalla response, incluso nel payload; mai in modalità file', () => {
+      draft.seedForEdit({ title: '', status: 200, delay: 0, headers: [], payloadType: 'json', body: '{}', scriptType: null, templated: true });
+      expect(draft.templated()).toBe(true);
+      expect(draft.buildUpdatePayload()).toEqual(expect.objectContaining({ templated: true }));
+      expect(draft.buildCreatePayload()).toEqual(expect.objectContaining({ templated: true }));
+
+      // File-mode: il campo non parte (i payload file non si templano).
+      draft.seedForEdit({ title: '', status: 200, delay: 0, headers: [], payloadType: 'file', body: '', scriptType: null, templated: true });
+      expect(draft.buildUpdatePayload()).not.toHaveProperty('templated');
+    });
+
+    it('templated: seedForCreate riparte spento', () => {
+      draft.templated.set(true);
+      draft.seedForCreate('mock');
+      expect(draft.templated()).toBe(false);
     });
   });
 });

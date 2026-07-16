@@ -413,6 +413,7 @@ export class MocksNextDetail {
       payloadType,
       body: payloadType === 'file' ? '' : this.body().text,
       scriptType,
+      templated: d.config?.templated === true,
     });
     this.editingResponse.set(true);
   }

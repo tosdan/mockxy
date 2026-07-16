@@ -308,6 +308,8 @@
     "sequence": "Sequence",
     "sequenceTip": "Variant sequence: the response evolves over time",
     "sequenceTipActive": "Sequence active: the endpoint serves the steps, not the selected variant",
+    "templatedLabel": "Template",
+    "templatedTip": "Replaces placeholders in body and headers: params.id, query.x, headers.x, body.field, now, uuid, randomInt 1 10 — inside double braces. Type filter: params.id | number.",
     "editResponse": "Edit response",
     "newResponseTitle": "New {{type}} response",
     "save": "Save",
