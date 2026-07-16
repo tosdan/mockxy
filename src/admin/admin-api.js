@@ -56,7 +56,7 @@ function sendJson(res, status, payload) {
   res.status(status).json(payload);
 }
 
-function createAdminApiRouter({ config, reloadRuntime, requestMonitor, serverState, monitorDump, sequenceStates }) {
+function createAdminApiRouter({ config, reloadRuntime, requestMonitor, serverState, monitorDump, sequenceStates, handlerStates }) {
   const router = express.Router();
 
   router.use(express.json({ limit: "2mb" }));
@@ -278,9 +278,10 @@ function createAdminApiRouter({ config, reloadRuntime, requestMonitor, serverSta
     sendJson(res, 200, detail);
   });
 
-  // Reset del cursore della sequenza: azione runtime immediata, nessun file toccato.
+  // Reset del cursore della sequenza (e della memoria handler dell'endpoint): azione runtime
+  // immediata, nessun file toccato.
   router.post("/mocks/:id/sequence/reset", async (req, res) => {
-    const result = await resetAdminSequence(config.mocksDir, req.params.id, sequenceStates);
+    const result = await resetAdminSequence(config.mocksDir, req.params.id, sequenceStates, handlerStates);
     sendJson(res, 200, result);
   });
 

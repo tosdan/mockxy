@@ -333,7 +333,9 @@ function logHandlerFailure(logger, req, handlerConfig, error) {
 
 // Returns a stable request context passed to local dynamic handlers. The `data` accessor reads
 // a JSON data file on demand (lazily: files never referenced are never opened).
-function buildHandlerContext(req, decision, requestSnapshot, dataFileReader) {
+// `handlerRuntime` è la memoria per-endpoint (HandlerStateStore): state mutabile condiviso tra
+// le chiamate (e tra le varianti dell'endpoint), callCount progressivo e firstRequestAt.
+function buildHandlerContext(req, decision, requestSnapshot, dataFileReader, handlerRuntime) {
   return {
     req,
     params: decision.params || {},
@@ -343,6 +345,9 @@ function buildHandlerContext(req, decision, requestSnapshot, dataFileReader) {
     bodyText: requestSnapshot.bodyText,
     jsonBody: requestSnapshot.jsonBody,
     data: dataFileReader || createDataFileReader(undefined),
+    state: handlerRuntime.state,
+    callCount: handlerRuntime.callCount,
+    firstRequestAt: handlerRuntime.firstRequestAt,
   };
 }
 
@@ -368,11 +373,16 @@ function sendHandlerResponse(res, responsePayload) {
 }
 
 // Executes a local dynamic handler without contacting the backend.
-async function respondWithHandler(req, res, decision, logger, requestTimeoutMs, dataFileReader) {
+// `handlerStates` è facoltativo (test/usi legacy): senza store lo script riceve comunque i
+// campi state/callCount/firstRequestAt, ma effimeri per la singola richiesta.
+async function respondWithHandler(req, res, decision, logger, requestTimeoutMs, dataFileReader, handlerStates) {
   try {
     const requestSnapshot = await readHandlerRequestSnapshot(req);
+    const handlerRuntime = handlerStates != null
+      ? handlerStates.enter(`${decision.handler.method} ${decision.handler.path}`)
+      : { state: {}, callCount: 1, firstRequestAt: Date.now() };
     const handlerResult = await runWithTimeout(
-      () => decision.handler.resolveResponse(buildHandlerContext(req, decision, requestSnapshot, dataFileReader)),
+      () => decision.handler.resolveResponse(buildHandlerContext(req, decision, requestSnapshot, dataFileReader, handlerRuntime)),
       requestTimeoutMs,
       {
         code: "HANDLER_TIMEOUT",
@@ -660,6 +670,7 @@ function createApp({
   serverState = new ServerStateStore(),
   monitorDump,
   sequenceStates,
+  handlerStates,
 }) {
   const app = express();
   app.disable("x-powered-by");
@@ -668,7 +679,7 @@ function createApp({
   const dataFileReader = createDataFileReader(config?.filesDir);
 
   if (config?.adminApiEnabled !== false) {
-    app.use("/_admin/api", createAdminHostGuard(config), createAdminApiRouter({ config, reloadRuntime, requestMonitor, serverState, monitorDump, sequenceStates }));
+    app.use("/_admin/api", createAdminHostGuard(config), createAdminApiRouter({ config, reloadRuntime, requestMonitor, serverState, monitorDump, sequenceStates, handlerStates }));
   } else {
     app.use("/_admin/api", sendAdminApiDisabled);
   }
@@ -805,7 +816,7 @@ function createApp({
       req._responseMode = "handler";
       req._matchedRoutePath = decision.routePath;
       req._sequenceStep = decision.sequenceStep;
-      await respondWithHandler(req, res, decision, logger, config.requestTimeoutMs, dataFileReader);
+      await respondWithHandler(req, res, decision, logger, config.requestTimeoutMs, dataFileReader, handlerStates);
       return;
     }
 

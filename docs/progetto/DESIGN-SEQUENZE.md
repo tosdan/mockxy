@@ -220,8 +220,11 @@ famiglia di bisogni — e aprono casi che la sequenza non copre: esiti dipendent
 macchine a stati per-risorsa):
 
 - **`state`** — oggetto mutabile **per endpoint**, persistente tra le chiamate (in-memory),
-  condiviso tra le varianti dell'endpoint; azzerato dagli stessi eventi che azzerano il cursore
-  (riavvio, reset manuale, modifica dell'endpoint);
+  condiviso tra le varianti dell'endpoint; azzerato da riavvio del motore e dal reset manuale
+  della sequenza (il "Riparti dall'inizio" azzera cursore E memoria handler). **Non** si azzera
+  alla ricarica a caldo: il reload non distingue in modo affidabile quale endpoint è cambiato
+  (e con quale profondità), e uno stato che sopravvive mentre si itera sullo script è più utile
+  che sorprendente — scelta presa in implementazione, documentata in HANDLER.md;
 - **`callCount`** — numero progressivo di invocazioni dell'handler per questo endpoint;
 - **`firstRequestAt`** — timestamp (ms epoch) della prima invocazione dal reset: `Date.now() -
   firstRequestAt` è l'`elapsed` senza accrocchi d'orologio.

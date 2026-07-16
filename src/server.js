@@ -7,6 +7,7 @@ const { mergeLocalRouteGroups } = require("./mocks/local-route-groups");
 const { createLogger } = require("./utils/logger");
 const { MockRegistry } = require("./mocks/mock-registry");
 const { SequenceStateStore } = require("./mocks/sequence-state");
+const { HandlerStateStore } = require("./mocks/handler-state");
 const { ProxyMiddlewareRegistry } = require("./proxy/proxy-middleware-registry");
 const { sortRouteGroups } = require("./mocks/route-groups");
 const { RequestMonitorStore } = require("./monitoring/request-monitor");
@@ -192,6 +193,9 @@ async function createServerRuntime({ configOverrides = {}, logger: extLogger } =
   // I cursori delle sequenze vivono qui (non nel registry): sopravvivono alle ricariche a caldo
   // e vengono azzerati solo da riavvio, reset esplicito, inattività o cambio di definizione.
   const sequenceStates = new SequenceStateStore();
+  // Memoria per-endpoint degli handler (state/callCount/firstRequestAt): come i cursori,
+  // vive nel runtime e sopravvive alle ricariche a caldo; si azzera a riavvio o reset.
+  const handlerStates = new HandlerStateStore();
   const registry = new MockRegistry(routeGroups, sequenceStates);
   const proxyMiddlewareRegistry = new ProxyMiddlewareRegistry(proxyMiddlewareRouteGroups);
   const requestMonitor = new RequestMonitorStore(undefined, logger);
@@ -220,6 +224,7 @@ async function createServerRuntime({ configOverrides = {}, logger: extLogger } =
     serverState,
     monitorDump,
     sequenceStates,
+    handlerStates,
   });
   const watcher = startMockWatcher({
     config,
@@ -239,6 +244,7 @@ async function createServerRuntime({ configOverrides = {}, logger: extLogger } =
     monitorDump,
     registry,
     sequenceStates,
+    handlerStates,
     reloadRuntime,
     watcher,
   };

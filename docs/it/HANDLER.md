@@ -54,6 +54,30 @@ al file endpoint. L'interfaccia propone un template di partenza già in questa f
   chiamata (le modifiche al file sono visibili alla richiesta successiva) e ogni handler riceve
   una **copia propria**: mutarla non inquina le altre richieste. Un nome inesistente è un
   errore esplicito, che diventa il fallimento standard dell'handler.
+- **`state`** — oggetto mutabile **persistente tra le chiamate** dello stesso endpoint (e
+  condiviso tra le sue varianti): la memoria per contatori, macchine a stati per-risorsa
+  (`state[params.id] = ...`), esiti che dipendono dalla storia. È **effimero e locale al
+  motore** — non un database: si azzera al riavvio e col reset della [sequenza](ENDPOINT.md)
+  dell'endpoint; sopravvive invece alla ricarica a caldo, così iterare sullo script non
+  ricomincia il test da capo.
+- **`callCount`** — numero progressivo di invocazioni dell'handler per questo endpoint (1 alla
+  prima), stessa vita di `state`.
+- **`firstRequestAt`** — timestamp (ms epoch) della prima invocazione: `Date.now() -
+  firstRequestAt` è il tempo trascorso dall'inizio del giro, senza guardare l'orologio
+  assoluto. Con queste tre primitive un polling che cambia esito si scrive senza accrocchi:
+
+  ```js
+  module.exports = {
+    resolveResponse({ firstRequestAt }) {
+      if (Date.now() - firstRequestAt < 15000) {
+        return { status: 202, jsonBody: { status: "processing" } };
+      }
+      return { status: 200, jsonBody: { status: "completed" } };
+    },
+  };
+  ```
+
+  (per il caso semplice, senza scrivere codice, c'è la [sequenza di varianti](ENDPOINT.md)).
 - **`req`** — la richiesta Express grezza, per i casi avanzati. Attenzione: lo stream del body
   è già stato consumato dalla bufferizzazione — usare le tre forme qui sopra, non rileggerlo.
 

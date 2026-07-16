@@ -811,7 +811,9 @@ async function updateAdminMock(mocksDir, id, payload, reloadRuntime) {
 
 // Reset del cursore runtime di una sequenza: la prossima richiesta riparte dal primo step.
 // Non tocca i file: è un'azione immediata sullo stato in-memory (pulsante "Riparti dall'inizio").
-async function resetAdminSequence(mocksDir, id, sequenceStates) {
+// "Ripartire dall'inizio" rimette a zero TUTTO lo stato runtime dell'endpoint: anche la memoria
+// degli handler (state/callCount/firstRequestAt), altrimenti uno step handler ripartirebbe a metà.
+async function resetAdminSequence(mocksDir, id, sequenceStates, handlerStates) {
   const endpointPath = resolveAdminFilePath(mocksDir, id);
   if (!fs.existsSync(endpointPath)) {
     throw createAdminError(404, "Endpoint definition not found.");
@@ -824,6 +826,9 @@ async function resetAdminSequence(mocksDir, id, sequenceStates) {
   const sequenceKey = `${endpoint.method} ${endpoint.path}`;
   if (sequenceStates != null) {
     sequenceStates.reset(sequenceKey);
+  }
+  if (handlerStates != null) {
+    handlerStates.reset(sequenceKey);
   }
   return {
     sequenceState: sequenceStates != null

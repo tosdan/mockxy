@@ -9,6 +9,7 @@ const { MockRegistry } = require("../src/mocks/mock-registry");
 const { ProxyMiddlewareRegistry } = require("../src/proxy/proxy-middleware-registry");
 const { RequestMonitorStore } = require("../src/monitoring/request-monitor");
 const { SequenceStateStore } = require("../src/mocks/sequence-state");
+const { HandlerStateStore } = require("../src/mocks/handler-state");
 const { createNoopLogger, createTempDir, removeDir } = require("./helpers");
 
 // Admin API delle sequenze: definizione nel PUT /mocks/:id, stato nel dettaglio, reset del
@@ -62,6 +63,7 @@ describe("sequence admin API", () => {
 
   async function buildApp() {
     const sequenceStates = new SequenceStateStore();
+    const handlerStates = new HandlerStateStore();
     const load = async () => {
       const { mockRouteGroups, handlerRouteGroups, proxyMiddlewareRouteGroups, sequenceRouteGroups } =
         await loadEndpointRouteGroups(mocksDir);
@@ -87,8 +89,9 @@ describe("sequence admin API", () => {
       reloadRuntime,
       requestMonitor: new RequestMonitorStore(),
       sequenceStates,
+      handlerStates,
     });
-    return { app, sequenceStates };
+    return { app, sequenceStates, handlerStates };
   }
 
   const SEQUENCE_PAYLOAD = {
@@ -167,6 +170,20 @@ describe("sequence admin API", () => {
     });
 
     expect((await request(app).get("/api/operazioni")).body).toEqual({ status: "processing" });
+  });
+
+  test("il reset azzera anche la memoria handler dell'endpoint", async () => {
+    await writeEndpointWithVariants({ sequence: SEQUENCE_PAYLOAD });
+    const { app, handlerStates } = await buildApp();
+
+    handlerStates.enter("GET /api/operazioni").state.n = 7;
+    expect(handlerStates.enter("GET /api/operazioni").callCount).toBe(2);
+
+    await request(app).post(`/_admin/api/mocks/${MOCK_ID}/sequence/reset`);
+
+    const fresh = handlerStates.enter("GET /api/operazioni");
+    expect(fresh.callCount).toBe(1);
+    expect(fresh.state).toEqual({});
   });
 
   test("il reset su un endpoint senza sequenza risponde 400", async () => {
