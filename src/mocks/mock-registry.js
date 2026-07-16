@@ -69,6 +69,11 @@ class MockRegistry {
           mode: "mock",
           routePath: group.path,
           response: endpoint,
+          // I params servono solo ai mock templati ({{params.x}}): calcolarli sempre sarebbe
+          // costo inutile sul percorso caldo dei mock statici.
+          params: endpoint.templated === true
+            ? this.getParamsForGroup(group, requestPath, requestUrl)
+            : undefined,
           sequenceStep,
         };
       }

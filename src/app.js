@@ -15,6 +15,12 @@ const {
 } = require("./utils/http-body-utils");
 const { forwardToBackend, TECH_HEADER } = require("./proxy/proxy");
 const { isMonitoringCandidate, startRequestCapture, startResponseCapture } = require("./monitoring/request-monitor");
+const {
+  createTemplateContext,
+  renderTemplateString,
+  renderTemplateValue,
+  renderTemplateHeaders,
+} = require("./mocks/mock-template");
 const { runWithTimeout } = require("./utils/run-with-timeout");
 const { ServerStateStore } = require("./server-state");
 const { setNoCacheHeaders } = require("./utils/cache");
@@ -556,13 +562,65 @@ async function sendFileMockResponse(res, mockResponse) {
   });
 }
 
-async function respondWithMock(req, res, mockResponse, globalDelayMs = 0, caseInsensitiveFilters = true) {
+// Render del template di un mock (`templated: true`, vedi mock-template.js): header e body con
+// i placeholder sostituiti. Il body della richiesta viene bufferizzato solo se il template lo
+// referenzia (templateNeedsBody, deciso al load); i placeholder non risolti producono un warning
+// nel log, mai un errore — un typo non deve rompere il giro di prova.
+async function renderTemplatedMock(req, mockResponse, sanitizedHeaders, { params = {}, logger } = {}) {
+  let jsonBody;
+  if (mockResponse.templateNeedsBody) {
+    try {
+      const bodyBuffer = await readStreamToBuffer(req, { maxBytes: MAX_HANDLER_REQUEST_BODY_BYTES });
+      jsonBody = parseJsonBody(bodyBuffer, cloneHeaders(req.headers));
+    } catch (error) {
+      logger?.warn("Mock template could not read the request body.", {
+        routePath: mockResponse.path,
+        responseFilePath: mockResponse.responseFilePath,
+        error: error.message,
+      });
+    }
+  }
+
+  const context = createTemplateContext({
+    params,
+    query: req.query || {},
+    headers: req.headers || {},
+    jsonBody,
+  });
+  const onWarning = (placeholder) => {
+    logger?.warn("Mock template placeholder did not resolve.", {
+      placeholder,
+      routePath: mockResponse.path,
+      responseFilePath: mockResponse.responseFilePath,
+    });
+  };
+
+  const headers = renderTemplateHeaders(sanitizedHeaders, context, onWarning);
+  let body;
+  if (isTextMockResponse(mockResponse)) {
+    // Un body testuale resta testo anche col filtro dei tipi sul nodo intero.
+    const rendered = renderTemplateString(mockResponse.body, context, onWarning);
+    body = typeof rendered === "string" ? rendered : rendered == null ? "" : JSON.stringify(rendered);
+  } else {
+    body = renderTemplateValue(mockResponse.body, context, onWarning);
+  }
+  return { headers, body };
+}
+
+async function respondWithMock(req, res, mockResponse, globalDelayMs = 0, caseInsensitiveFilters = true, templateOptions = {}) {
   const effectiveDelayMs = resolveMockDelayMs(mockResponse, globalDelayMs);
   if (effectiveDelayMs > 0) {
     await sleep(effectiveDelayMs);
   }
 
-  const headers = sanitizeMockHeaders(mockResponse.headers);
+  let headers = sanitizeMockHeaders(mockResponse.headers);
+  let body = mockResponse.body;
+  // Template PRIMA di tutto il resto: un body templato partecipa a paginazione e filtri
+  // automatici come uno statico. Mai sui payload file (streaming dal disco).
+  if (mockResponse.templated === true && !isFileMockResponse(mockResponse)) {
+    ({ headers, body } = await renderTemplatedMock(req, mockResponse, headers, templateOptions));
+  }
+
   Object.entries(headers).forEach(([headerName, value]) => {
     res.setHeader(headerName, value);
   });
@@ -577,11 +635,11 @@ async function respondWithMock(req, res, mockResponse, globalDelayMs = 0, caseIn
   if (isTextMockResponse(mockResponse)) {
     // Nessun content-type implicito: la response serve il body così com'è e il content-type lo
     // controlla l'utente con gli header (l'editor aggiunge text/plain esplicito scegliendo "Testo").
-    res.status(mockResponse.status).send(mockResponse.body);
+    res.status(mockResponse.status).send(body);
     return;
   }
 
-  const payload = buildMockPayload(mockResponse.body, req, caseInsensitiveFilters);
+  const payload = buildMockPayload(body, req, caseInsensitiveFilters);
   if (payload.totalCount != null) {
     res.setHeader("X-Total-Count", String(payload.totalCount));
   }
@@ -808,7 +866,10 @@ function createApp({
       // Endpoint con sequenza: quale step ha risposto (indice/totale, variante) finisce nella
       // voce del monitor — senza, la progressione di una sequenza sarebbe invisibile.
       req._sequenceStep = decision.sequenceStep;
-      await respondWithMock(req, res, decision.response, config.globalDelayMs, config.caseInsensitiveFilters);
+      await respondWithMock(req, res, decision.response, config.globalDelayMs, config.caseInsensitiveFilters, {
+        params: decision.params,
+        logger,
+      });
       return;
     }
 
