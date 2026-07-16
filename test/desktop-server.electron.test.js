@@ -11,6 +11,12 @@ describe("desktop-server (avvio del motore per l'app desktop)", () => {
     expect(desktopVersion).toBe(rootVersion);
   });
 
+  test("il pacchetto desktop include ws tra le dipendenze di produzione", () => {
+    const rootWsVersion = require("../package.json").dependencies.ws;
+    const desktopWsVersion = require("../electron/package.json").dependencies.ws;
+    expect(desktopWsVersion).toBe(rootWsVersion);
+  });
+
   test("findFreePort restituisce una porta utilizzabile", async () => {
     const port = await findFreePort();
     expect(typeof port).toBe("number");
