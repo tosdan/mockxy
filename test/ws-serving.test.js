@@ -199,6 +199,51 @@ describe("ws serving", () => {
     expect(JSON.parse(firstMessages[0])).toEqual({ tipo: "promo" });
   });
 
+  test("onEnd loop: il copione riparte da capo sulla stessa connessione", async () => {
+    await writeWsEndpoint({
+      script: [
+        { afterMs: 0, data: "uno" },
+        { afterMs: 30, data: "due" },
+      ],
+      onEnd: "loop",
+    });
+    const { wsConnections } = await startApp();
+
+    const client = connect("/api/canale");
+    const messages = collectMessages(client);
+    // Almeno un giro e mezzo: il copione è ripartito, non si è fermato a fine scaletta.
+    await waitFor(() => messages.length >= 3);
+
+    expect(messages.slice(0, 3)).toEqual(["uno", "due", "uno"]);
+    const [connection] = wsConnections.listConnections("GET /api/canale");
+    expect(connection.messagesSent).toBeGreaterThanOrEqual(3);
+    // Il segnaposto del copione resta nei limiti della scaletta: a ogni giro riparte da zero.
+    expect(connection.scriptIndex).toBeLessThanOrEqual(2);
+  });
+
+  test("un frame binario finisce nel transcript come tale e non valuta le regole", async () => {
+    await writeWsEndpoint({
+      rules: [{ match: { contains: "binary" }, reply: [{ afterMs: 0, data: "mai" }] }],
+    });
+    const { wsConnections } = await startApp();
+
+    const client = connect("/api/canale");
+    const messages = collectMessages(client);
+    await waitFor(() => wsConnections.listConnections("GET /api/canale").length === 1);
+
+    client.send(Buffer.from([0x01, 0x02, 0x03]));
+    await waitFor(() => wsConnections.listTranscript("GET /api/canale").length === 1);
+    // La regola contains "binary" matcherebbe il segnaposto "[binary frame]" se il frame
+    // passasse dal match: il silenzio prova che non lo valuta. Attesa di contrasto.
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(messages).toEqual([]);
+    expect(wsConnections.listTranscript("GET /api/canale")[0]).toMatchObject({
+      direction: "in",
+      origin: "received",
+      data: "[binary frame]",
+    });
+  });
+
   test("onEnd close chiude dal server con codice e reason dichiarati", async () => {
     await writeWsEndpoint({
       script: [{ afterMs: 0, data: "fine" }],
