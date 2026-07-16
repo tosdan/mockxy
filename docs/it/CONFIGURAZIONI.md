@@ -97,6 +97,8 @@ per-workspace.
 - `window` — dimensione/posizione/stato dell'ultima finestra, per riaprirla com'era.
 - `language` — lingua dell'interfaccia (`it` / `en`), cambiabile dal selettore lingua in fondo alla
   runtime-bar (condivisa tra app e pagina di benvenuto).
+- `errorLogEnabled` — abilita la scrittura del [log degli errori](DESKTOP.md) su disco; default
+  `true`, modificabile dalla dialog **Preferenze app** e applicato subito senza riavvio.
 
 ---
 
@@ -120,8 +122,9 @@ Interruttori "da banco di lavoro" nella runtime-bar; si azzerano al riavvio. App
 
 Proprietà del singolo endpoint/variante, editabili dall'editor dei mock (persistite via
 `/_admin/api/mocks`). Scope diverso da questo documento; in sintesi: `method`, `path`, `enabled`,
-`status`, `headers`, `delayMs`, tipo payload (mock JSON/testo/file, handler, middleware), varianti di
-risposta selezionabili (anche per query string), `description`, abilitazione delle collezioni.
+`status`, `headers`, `delayMs`, `templated`, tipo di risposta (mock JSON/testo/file, handler,
+middleware, SSE, WebSocket), varianti selezionabili (anche per query string), sequenza di varianti,
+`description`, abilitazione delle collezioni.
 
 ---
 
@@ -140,4 +143,4 @@ Il file `.env.example` documenta le variabili del motore per l'uso headless (`no
 
 ---
 
-_Ultimo aggiornamento: 8 luglio 2026._
+_Ultimo aggiornamento: 16 luglio 2026._

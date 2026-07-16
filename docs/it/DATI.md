@@ -54,6 +54,11 @@ lo usano, con ricarica del runtime. La riscrittura è tutto-o-niente — o tutti
 nessuno — e il riepilogo finale riporta le occorrenze aggiornate, ricordando che gli eventuali
 riferimenti dinamici vanno controllati a mano.
 
+La pagina ricorda in `localStorage` l'ultimo file selezionato: tornando alla vista, anche dopo
+un riavvio, ricarica quel file e la sua anteprima. Se il file non esiste più, la selezione
+salvata viene ignorata; un upload completato seleziona invece il file appena caricato e mostra
+subito il contenuto aggiornato.
+
 ## Dimensioni
 
 Ogni chiamata `data()` rilegge e riparsa il file dal disco: fino al megabyte non si nota, ma un

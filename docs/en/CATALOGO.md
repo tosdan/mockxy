@@ -27,8 +27,9 @@ Three semantics to know:
   write: re-enabling the collection re-enables everything, including what had been
   individually disabled before.
 
-The list narrows down with free-text search and the filters by method, active variant type
-(mock, handler, middleware) and state.
+The list narrows down with free-text search and filters by method, active variant type
+(`mock`, `handler`, `middleware`, `sse`, `ws`) and state. A **SEQ** badge identifies endpoints
+with an active [variant sequence](ENDPOINT.md).
 
 ## Endpoints
 
@@ -43,6 +44,10 @@ right shape. Each endpoint can then be:
 - **enabled/disabled**: when off, its requests follow the [fallback](PROXY.md);
 - **deleted**, along with its variants.
 
+The **Sequence** button opens the setup for steps, request-count or duration criteria, end
+behavior and inactivity reset. The same dialog shows the current runtime step and can reset
+the cursor immediately.
+
 ## Variants and the editor
 
 Each endpoint lists its own response variants: you add new ones, edit them, delete them, and
@@ -56,6 +61,16 @@ choose the **active** one — the one actually served. The editor validates befo
 - the **headers** with presets for the common cases;
 - the variant's **delay** in milliseconds ([delays](RITARDI.md)).
 
+On JSON or textual mocks the **Template** toggle enables the placeholders described in the
+[response reference](RESPONSE.md). For `sse` and `ws` variants the body preview is replaced by
+their console: connections and history/transcript, a manual broadcast composer and macros
+configured in the presets. They are added from the new-response menu and their scripts are
+edited on disk or through the admin API.
+
 To serve a **binary file** (images, PDFs, archives) you upload the file directly onto the
 variant — up to 12 MB via the UI — with the content-type remembered; the payload is served
 streaming as documented in the [responses page](RESPONSE.md).
+
+The view remembers the last selected endpoint and collapsed collections in `localStorage`:
+when returning to the catalog, even after a restart, it is restored as left. Values that no
+longer exist are ignored, and the monitor's “go to mock” command always takes precedence.

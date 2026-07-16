@@ -69,13 +69,16 @@ None of these is textbook development — no team is perfect. But it's what actu
 ## Features
 
 - 🎯 **Selective mocks with fallback**: answers with the mocks you defined, forwards the rest to the real backend (or returns 404 in mock-only mode).
-- 🖥️ **Full web UI** (English and Italian): mock catalog with collections, response editor, traffic monitor, OpenAPI import.
+- 🖥️ **Full web UI** (English and Italian): mock catalog with collections, response editor, traffic monitor, OpenAPI import and view state restored across navigation.
 - 📡 **Real-time monitor**: captures requests and responses (mock and proxy), with filters, export, copy-as-cURL and **mock creation straight from observed traffic**, including in bulk.
 - 📁 **Mocks as files**: every endpoint is a folder of readable JSON files, versionable in git and editable by hand, with hot reload.
 - 🔀 **Multiple response variants per endpoint**: 200 with data, 404, 500, empty list… and you pick the active one with a switch.
+- 🔁 **Variant sequences**: evolve the response automatically after a number of requests or an amount of time, with looping and reset controls.
+- 🧩 **Static mock templating**: use request params, query, headers and body plus generated helpers directly in response bodies and headers.
+- 📣 **SSE and WebSocket mocks**: timed scripts, response rules, live connections and consoles for manually directing messages.
 - ⏱️ **Simulated latency**: per-response delay or a global delay to emulate a slow network.
 - 📄 **Automatic pagination and filters**: if the body is an array, `?page=0&size=10` returns just the requested page (total in the `X-Total-Count` header) and `?key=value` filters items by equality (case-insensitive by default).
-- 🧩 **JavaScript handlers**: when static JSON isn't enough, you generate the response with a function that receives the request's params, query, headers and body.
+- 🧩 **Stateful JavaScript handlers**: when static JSON isn't enough, generate the response from the request, reusable data and per-endpoint ephemeral memory (`state`, `callCount`, `firstRequestAt`).
 - 🗂️ **Reusable data files**: upload JSON collections in the Data page and read them from handlers with `data("name")` to serve or reshape them, without pasting them into code.
 - 🔧 **Proxy middleware**: intercept the real backend's response and transform it before it reaches your application.
 - 📥 **OpenAPI / Swagger import**: from a 3.x or 2.0 spec, generates a mock for every endpoint, with bodies derived from examples and schemas — a solid base to refine by hand.
@@ -96,14 +99,15 @@ flowchart LR
 
 For every incoming request Mockxy looks up the matching endpoint among those defined (method + path, with support for path parameters and the query string; the most specific route always wins). Then:
 
-1. if the endpoint has an active **mock response**, it answers with it (status, headers, body, optional delay);
+1. if the endpoint has an active **mock response**, it answers with it (status, headers, optionally templated body and delay); a sequence can choose the current variant automatically;
 2. if the active response is a **handler**, it runs your JavaScript code and answers with the result;
-3. if there is no mock and the **proxy fallback** is enabled, it forwards the request to `BACKEND_URL` and returns the backend's response — possibly transformed by a **middleware**;
-4. if the fallback is disabled it answers `404 Mock Not Found`; if the backend is needed but `BACKEND_URL` is not configured, `501 Backend Not Configured`.
+3. if the active response is **SSE**, it opens the stream and sends events from its script or console;
+4. if there is no mock and the **proxy fallback** is enabled, it forwards the request to `BACKEND_URL` and returns the backend's response — possibly transformed by a **middleware**;
+5. if the fallback is disabled it answers `404 Mock Not Found`; if the backend is needed but `BACKEND_URL` is not configured, `501 Backend Not Configured`.
 
 One detail worth knowing: the most specific route for the path is chosen first, then the method is checked. If the selected route doesn't define the requested method, the request goes to the fallback — a less specific route is not searched. The full matching and specificity rules are in [docs/en/PATH.md](docs/en/PATH.md).
 
-**WebSocket** connections don't follow this flow: being a different protocol they have no mocks, and Mockxy forwards them as-is to the backend (requires `BACKEND_URL` and the proxy fallback enabled). That works well for apps that mock their HTTP APIs but keep a live connection to the real backend for notifications or updates. Details in [docs/en/WEBSOCKET.md](docs/en/WEBSOCKET.md).
+**WebSocket** connections don't cross the HTTP pipeline: when the endpoint selects a `ws` variant, Mockxy accepts the upgrade locally and serves its script, rules and console messages; every other upgrade remains a passthrough to the real backend. Details in [docs/en/WEBSOCKET.md](docs/en/WEBSOCKET.md).
 
 Every response includes the **`x-mock-source`** header (`mock`, `handler`, `middleware`, `backend`…): it tells you at a glance who produced the response, and it's the first place to look when something doesn't add up. The details of the decision, backend forwarding, errors/timeouts and the full header taxonomy are in [docs/en/PROXY.md](docs/en/PROXY.md).
 
@@ -238,7 +242,7 @@ The endpoint file declares path, state and available variants (full format, vali
 }
 ```
 
-Each response variant is a standalone file (full format of the three types — mock, handler, middleware — in [docs/en/RESPONSE.md](docs/en/RESPONSE.md)):
+Each response variant is a standalone file (full format of the five types — mock, handler, middleware, SSE and WebSocket — in [docs/en/RESPONSE.md](docs/en/RESPONSE.md)):
 
 ```json
 {
@@ -423,7 +427,8 @@ On top of the web version:
 
 - **Multiple workspaces in parallel**, each with its own mocks folder, its own port and its own backend, managed as tabs in the UI;
 - each workspace is a plain folder containing `mockxy.json`, the mocks and the data files (to version in git and share with your team) plus a local `.mockxy/` subfolder (personal settings and monitor archive, already git-excluded) — full anatomy in [docs/en/WORKSPACE.md](docs/en/WORKSPACE.md);
-- the server listens on loopback only and preferences are saved next to the executable.
+- the server listens on loopback only and preferences are saved next to the executable;
+- app and engine errors are saved under `logs/`, with disk logging configurable from the global app preferences.
 
 To build the executable:
 
@@ -444,7 +449,7 @@ Mockxy is a development tool, meant to run locally or on a server controlled by 
 - handlers and middleware are **JavaScript executed locally**: don't open workspaces you don't trust, for the same reason you don't run arbitrary scripts;
 - the monitor masks sensitive headers, but bodies and query strings can still contain personal data or secrets — and they also end up in the on-disk archives, which must stay out of git;
 - proxy middleware buffers the backend response in memory up to 10MB: beyond the limit, and for streams (`text/event-stream`), the response reaches your application intact but **untransformed**;
-- **WebSockets** (and other upgrade requests) cross Mockxy as **pure passthrough** to the backend: they don't go through mocks, handlers or middleware — they're meant for apps that mock their HTTP APIs but keep a live connection for notifications or updates. They require `BACKEND_URL` configured and the proxy fallback enabled; in mock-only mode the upgrade is not forwarded;
+- upgrade requests matching a mocked **WebSocket** variant are handled locally; every other upgrade remains a backend passthrough and requires `BACKEND_URL` plus the proxy fallback enabled;
 - to publish a mock set to a wider audience use the standalone Docker image, which disables the admin API, the proxy and file reloading.
 
 ## Troubleshooting

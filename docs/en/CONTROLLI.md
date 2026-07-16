@@ -3,7 +3,7 @@
 In the top bar of the UI live two switches that govern the whole engine at runtime. They are
 **two independent switches that produce three effective modes**:
 
-| Mode | Mocks / handlers / middleware | Monitor | Proxy to the backend |
+| Mode | Mocks / handlers / middleware / SSE / WS | Monitor | Proxy to the backend |
 |---|---|---|---|
 | **Active** (default) | yes | records | only for requests without a mock ([fallback](PROXY.md)) |
 | **Full proxy** | no | records | everything |

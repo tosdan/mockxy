@@ -7,6 +7,10 @@ usare Mockxy — e l'unico che offre **più workspace in parallelo**.
 L'interfaccia è sempre servita dal motore stesso, anche in sviluppo: così ogni workspace è
 autosufficiente e si comporta allo stesso modo in ogni contesto.
 
+La finestra usa una barra del titolo integrata nella UI: la titlebar di sistema è nascosta,
+ma minimizza/massimizza/chiudi restano controlli nativi. La barra dei workspace è anche l'area
+di trascinamento e riserva automaticamente lo spazio dei controlli finestra.
+
 ## Più workspace, un motore ciascuno
 
 Ogni workspace aperto ha il **proprio motore su una propria porta** — il caso d'uso tipico sono
@@ -54,10 +58,15 @@ impreviste) sia le **righe error dei motori** dei workspace aperti — ad esempi
 completo di un `500 Handler Execution Failed`, che nell'app impacchettata non avrebbe
 nessun'altra via d'uscita ([troubleshooting](TROUBLESHOOTING.md)).
 
+La scrittura è attiva di default. Dal menu dell'ingranaggio si apre **Preferenze app** e si
+può disabilitare o riabilitare il log senza riavviare; la scelta globale `errorLogEnabled`
+viene salvata in `mockxy-prefs.json` ([configurazioni](CONFIGURAZIONI.md)).
+
 ## Preferenze globali e pacchetto
 
-Le preferenze **globali** — lingua, geometria della finestra, elenco dei recenti — vivono
-accanto all'eseguibile: in formato portable, tutto viaggia insieme all'exe. Per compilare:
+L'ingranaggio distingue le **impostazioni del workspace** attivo dalle **Preferenze app**.
+Le preferenze globali — lingua, geometria della finestra, elenco dei recenti e log errori —
+vivono accanto all'eseguibile: in formato portable, tutto viaggia insieme all'exe. Per compilare:
 
 ```bash
 npm run install:all

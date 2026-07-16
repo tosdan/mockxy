@@ -1,7 +1,7 @@
 # Risoluzione dei problemi di sviluppo
 
 Problemi che riguardano chi lavora **sul codice di Mockxy** (ambiente, test, build), non chi lo
-usa: per i sintomi a runtime del prodotto c'è [la pagina di troubleshooting](TROUBLESHOOTING.md).
+usa: per i sintomi a runtime del prodotto c'è [la pagina di troubleshooting](../it/TROUBLESHOOTING.md).
 
 ## `npm test` esce con `-1073740791` (0xC0000409) a caso, senza alcun output — Node 24.15.0
 

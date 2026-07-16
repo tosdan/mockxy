@@ -32,10 +32,10 @@ state between tests, pipelines that import an updated spec.
 
 | Method and path | What it does |
 |---|---|
-| `GET /mocks` | the whole catalog: endpoints, collections and orderings. An unreadable endpoint file (invalid JSON, missing selected variant) doesn't fail the request: that endpoint is skipped and reported in `loadErrors` (`[{ configFilePath, message }]`), as the runtime does at load time |
+| `GET /mocks` | the whole catalog: endpoints, collections and orderings; each endpoint also exposes `sequenceActive` for the SEQ badge. An unreadable endpoint file (invalid JSON, missing selected variant) doesn't fail the request: that endpoint is skipped and reported in `loadErrors` (`[{ configFilePath, message }]`), as the runtime does at load time |
 | `GET /mocks/resolve?method&path` | the endpoint that would cover a concrete request today (path with optional query), disabled ones included; `{ mock: null }` if none. A derived fact using the serving's matching, used by the monitor for "go to mock" |
 | `POST /mocks` | creates an endpoint (static mock, or handler/middleware with source); if one already exists for route+method it answers `409` with `details.existingMockId`, so the client can offer to add a variant to that endpoint |
-| `GET /mocks/:id` | detail of an endpoint with its variants |
+| `GET /mocks/:id` | endpoint detail with its variants: `endpoint.sequence` and `sequenceState`, the mock `templated` flag and normalized `sse`/`ws` configuration for the selected variant |
 | `PUT /mocks/:id` | updates the definition (including `enabled`, the selected variant and — with a `{ sequence }` body, `null` to remove it — the [variant sequence](ENDPOINT.md)) |
 | `POST /mocks/:id/sequence/reset` | resets the sequence cursor: the next request starts over from the first step. Responds with the cleared state (`sequenceState`) |
 | `POST /mocks/:id/sse/push` | manual push of the [SSE](RESPONSE.md) console: body `{ data, event?, id? }`, broadcast to every open connection — responds `{ delivered, connections }` |
@@ -51,8 +51,8 @@ state between tests, pipelines that import an updated spec.
 
 | Method and path | What it does |
 |---|---|
-| `POST /mocks/:id/responses` | adds a variant |
-| `PUT /mocks/:id/responses/:file` | updates a variant |
+| `POST /mocks/:id/responses` | adds a `mock`, `handler`, `middleware`, `sse` or `ws` variant; the selected one is cloned when the type matches, otherwise the requested type starts from its defaults |
+| `PUT /mocks/:id/responses/:file` | updates a variant, including `templated` for mocks and scripts/rules/presets for SSE and WebSocket |
 | `PUT /mocks/:id/responses/:file/file` | uploads the raw bytes that make the variant [file-backed](RESPONSE.md) — body `application/octet-stream` (up to 12 MB), MIME type and name in the query (`?contentType=…&filename=…`) |
 | `DELETE /mocks/:id/responses/:file` | deletes a variant |
 

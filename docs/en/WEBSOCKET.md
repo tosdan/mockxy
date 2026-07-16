@@ -36,8 +36,8 @@ the shutdown hostage.
 
 Three cases get an HTTP rejection response without contacting anyone:
 
-- **backend not configured** → `501`: upgrades exist only as forwarding, without
-  `BACKEND_URL` there is nowhere to forward to;
+- **backend not configured** → `501`: for an upgrade that did not match a `ws` mock, without
+  `BACKEND_URL` there is nowhere to forward it;
 - **proxy fallback disabled** (mock mode) → `404`: mock-only mode applies to upgrades too;
 - **`/_admin/...` paths** → `404`: the admin API has no upgrade endpoints.
 

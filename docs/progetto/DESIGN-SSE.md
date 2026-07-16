@@ -1,6 +1,7 @@
-# Design — Mock di Server-Sent Events (proposta, da discutere)
+# Design — Mock di Server-Sent Events
 
-Stato: **bozza per discussione** — non implementato.
+Stato: **MVP implementato** (luglio 2026) — copione, modalità di fine, heartbeat, connessioni
+runtime, push admin e console con regia manuale.
 
 ## Il problema
 
@@ -59,7 +60,7 @@ Accanto a `mock`, `handler` e `middleware`, il file di risposta può essere di t
   arrivano solo heartbeat ed eventuali push manuali), **`close`** (il server chiude — il caso
   «il lavoro è finito»), **`loop`** (si ricomincia dalla prima voce: feed infiniti).
 - **`retryMs`** — facoltativo: il campo `retry:` SSE inviato in testa alla connessione.
-- Come ogni variante: si seleziona (o si mette in una [sequenza](ENDPOINT.md)? no — v. sotto),
+- Come ogni variante: si seleziona (o si mette in una [sequenza](../it/ENDPOINT.md)? no — v. sotto),
   convive con varianti mock/handler dello stesso endpoint (es. GET che risponde JSON o stream
   a seconda della variante scelta... in pratica: la variante selezionata decide la natura).
 

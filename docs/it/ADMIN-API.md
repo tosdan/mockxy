@@ -32,10 +32,10 @@ resettano lo stato tra i test, pipeline che importano una specifica aggiornata.
 
 | Metodo e percorso | Cosa fa |
 |---|---|
-| `GET /mocks` | l'intero catalogo: endpoint, collezioni e ordinamenti. Un file endpoint illeggibile (JSON invalido, variante selezionata mancante) non fa fallire la richiesta: quell'endpoint viene saltato e segnalato in `loadErrors` (`[{ configFilePath, message }]`), come fa il runtime al caricamento |
+| `GET /mocks` | l'intero catalogo: endpoint, collezioni e ordinamenti; ogni endpoint espone anche `sequenceActive` per il badge SEQ. Un file endpoint illeggibile (JSON invalido, variante selezionata mancante) non fa fallire la richiesta: quell'endpoint viene saltato e segnalato in `loadErrors` (`[{ configFilePath, message }]`), come fa il runtime al caricamento |
 | `GET /mocks/resolve?method&path` | l'endpoint che oggi coprirebbe una richiesta concreta (path con eventuale query), disabilitati inclusi; `{ mock: null }` se nessuno. Fatto derivato col matching del serving, usato dal monitor per "vai al mock" |
 | `POST /mocks` | crea un endpoint (mock statico, o handler/middleware con sorgente); se per rotta+metodo esiste già risponde `409` con `details.existingMockId`, così il client può proporre l'aggiunta di una variante a quell'endpoint |
-| `GET /mocks/:id` | dettaglio di un endpoint con le sue varianti |
+| `GET /mocks/:id` | dettaglio di un endpoint con le sue varianti: `endpoint.sequence` e `sequenceState`, flag `templated` dei mock e configurazioni normalizzate `sse`/`ws` della variante selezionata |
 | `PUT /mocks/:id` | aggiorna la definizione (inclusi `enabled`, variante selezionata e — con body `{ sequence }`, `null` per rimuoverla — la [sequenza di varianti](ENDPOINT.md)) |
 | `POST /mocks/:id/sequence/reset` | azzera il cursore della sequenza: la prossima richiesta riparte dal primo step. Risponde con lo stato azzerato (`sequenceState`) |
 | `POST /mocks/:id/sse/push` | push manuale della console [SSE](RESPONSE.md): body `{ data, event?, id? }`, broadcast a tutte le connessioni aperte — risponde `{ delivered, connections }` |
@@ -51,8 +51,8 @@ resettano lo stato tra i test, pipeline che importano una specifica aggiornata.
 
 | Metodo e percorso | Cosa fa |
 |---|---|
-| `POST /mocks/:id/responses` | aggiunge una variante |
-| `PUT /mocks/:id/responses/:file` | aggiorna una variante |
+| `POST /mocks/:id/responses` | aggiunge una variante di tipo `mock`, `handler`, `middleware`, `sse` o `ws`; a parità di tipo clona la selezionata, altrimenti usa i default del tipo richiesto |
+| `PUT /mocks/:id/responses/:file` | aggiorna una variante, inclusi `templated` per i mock e copione/regole/preset per SSE e WebSocket |
 | `PUT /mocks/:id/responses/:file/file` | carica i byte grezzi che rendono la variante [file-backed](RESPONSE.md) — body `application/octet-stream` (fino a 12 MB), MIME e nome in query (`?contentType=…&filename=…`) |
 | `DELETE /mocks/:id/responses/:file` | elimina una variante |
 

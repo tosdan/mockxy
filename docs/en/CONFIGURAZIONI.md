@@ -97,6 +97,8 @@ Not per-workspace.
 - `window` — size/position/state of the last window, to reopen it as it was.
 - `language` — UI language (`it` / `en`), changeable from the language selector at the bottom of the
   runtime-bar (shared between the app and the welcome screen).
+- `errorLogEnabled` — enables writing the [error log](DESKTOP.md) to disk; defaults to `true`,
+  can be changed from the **App preferences** dialog and applies immediately without a restart.
 
 ---
 
@@ -120,8 +122,9 @@ Not per-workspace.
 
 Properties of the single endpoint/variant, editable from the mock editor (persisted via
 `/_admin/api/mocks`). Different scope from this document; in short: `method`, `path`, `enabled`,
-`status`, `headers`, `delayMs`, payload type (JSON/text/file mock, handler, middleware), selectable
-response variants (also per query string), `description`, collection enabling.
+`status`, `headers`, `delayMs`, `templated`, response type (JSON/text/file mock, handler,
+middleware, SSE, WebSocket), selectable variants (also per query string), variant sequence,
+`description`, collection enabling.
 
 ---
 
@@ -140,4 +143,4 @@ The `.env.example` file documents the engine variables for headless use (`node i
 
 ---
 
-_Last updated: July 8, 2026._
+_Last updated: July 16, 2026._

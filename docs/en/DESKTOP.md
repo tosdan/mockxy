@@ -7,6 +7,10 @@ Mockxy — and the only one that offers **multiple workspaces in parallel**.
 The UI is always served by the engine itself, in development too: this way every workspace is
 self-sufficient and behaves the same in every context.
 
+The window uses a title bar integrated into the UI: the system title bar is hidden, while
+minimize/maximize/close remain native controls. The workspace bar doubles as the draggable
+area and automatically reserves room for the window controls.
+
 ## Multiple workspaces, one engine each
 
 Every open workspace has its **own engine on its own port** — the typical use case is two git
@@ -54,10 +58,15 @@ exceptions) and the **error lines of the engines** of the open workspaces — fo
 full detail of a `500 Handler Execution Failed`, which in the packaged app would otherwise
 have no way out ([troubleshooting](TROUBLESHOOTING.md)).
 
+Disk logging is enabled by default. From the gear menu, **App preferences** can disable or
+re-enable it without a restart; the global `errorLogEnabled` choice is stored in
+`mockxy-prefs.json` ([configuration](CONFIGURAZIONI.md)).
+
 ## Global preferences and packaging
 
-The **global** preferences — language, window geometry, list of recents — live next to the
-executable: in portable format, everything travels along with the exe. To build:
+The gear menu separates settings for the active **workspace** from **App preferences**.
+Global preferences — language, window geometry, list of recents and error logging — live next
+to the executable: in portable format, everything travels along with the exe. To build:
 
 ```bash
 npm run install:all

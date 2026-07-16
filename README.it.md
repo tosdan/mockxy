@@ -69,13 +69,16 @@ Nessuno di questi è lo scenario di sviluppo da manuale — nessun team è perfe
 ## Caratteristiche
 
 - 🎯 **Mock selettivi con fallback**: risponde ai mock definiti, inoltra il resto al backend reale (o restituisce 404 in modalità solo-mock).
-- 🖥️ **Interfaccia web completa** (italiano e inglese): catalogo dei mock con collezioni, editor di risposte, monitor del traffico, import OpenAPI.
+- 🖥️ **Interfaccia web completa** (italiano e inglese): catalogo dei mock con collezioni, editor di risposte, monitor del traffico, import OpenAPI e stato delle viste ripristinato durante la navigazione.
 - 📡 **Monitor in tempo reale**: cattura richieste e risposte (mock e proxy), con filtri, esportazione, copia come cURL e **creazione di mock direttamente dal traffico osservato**, anche in blocco.
 - 📁 **Mock come file**: ogni endpoint è una cartella con file JSON leggibili, versionabili in git e modificabili anche a mano, con ricarica a caldo.
 - 🔀 **Più varianti di risposta per endpoint**: 200 con dati, 404, 500, lista vuota… e scegli quella attiva con un interruttore.
+- 🔁 **Sequenze di varianti**: fai evolvere automaticamente la risposta dopo un numero di richieste o un intervallo di tempo, con loop e reset.
+- 🧩 **Templating dei mock statici**: usa parametri, query, header, body della richiesta e helper generati direttamente nei body e negli header.
+- 📣 **Mock SSE e WebSocket**: copioni temporizzati, regole di risposta, connessioni attive e console per la regia manuale dei messaggi.
 - ⏱️ **Latenze simulate**: ritardo per singola risposta o ritardo globale per emulare una rete lenta.
 - 📄 **Paginazione e filtri automatici**: se il body è un array, `?page=0&size=10` restituisce solo la pagina richiesta (totale nell'header `X-Total-Count`) e `?chiave=valore` filtra gli elementi per uguaglianza (case-insensitive di default).
-- 🧩 **Handler JavaScript**: quando un JSON statico non basta, generi la risposta con una funzione che riceve parametri, query, header e body della richiesta.
+- 🧩 **Handler JavaScript stateful**: quando un JSON statico non basta, generi la risposta con una funzione che riceve richiesta, dati riusabili e memoria effimera per endpoint (`state`, `callCount`, `firstRequestAt`).
 - 🗂️ **File dati riusabili**: carichi collezioni JSON nella pagina Dati e le richiami dagli handler con `data("nome")` per servirle o manipolarle, senza incollarle nel codice.
 - 🔧 **Middleware proxy**: intercetti la risposta del backend reale e la trasformi prima che arrivi all'applicazione.
 - 📥 **Import OpenAPI / Swagger**: da una specifica 3.x o 2.0 genera un mock per ogni endpoint, con corpi ricavati da esempi e schemi — una base solida da rifinire a mano.
@@ -96,14 +99,15 @@ flowchart LR
 
 Per ogni richiesta in arrivo Mockxy cerca l'endpoint corrispondente tra quelli definiti (metodo + percorso, con supporto ai parametri di percorso e alla query string; vince sempre la rotta più specifica). A quel punto:
 
-1. se l'endpoint ha una **risposta mock** attiva, risponde con quella (status, header, body, eventuale ritardo);
+1. se l'endpoint ha una **risposta mock** attiva, risponde con quella (status, header, body anche templato, eventuale ritardo); una sequenza può scegliere automaticamente la variante corrente;
 2. se la risposta attiva è un **handler**, esegue il tuo codice JavaScript e risponde con il risultato;
-3. se non c'è nessun mock e il **proxy fallback** è attivo, inoltra la richiesta a `BACKEND_URL` e restituisce la risposta del backend — eventualmente trasformata da un **middleware**;
-4. se il fallback è disattivato risponde `404 Mock Not Found`; se serve il backend ma `BACKEND_URL` non è configurato, `501 Backend Not Configured`.
+3. se la risposta attiva è **SSE**, apre lo stream e manda gli eventi del copione o della console;
+4. se non c'è nessun mock e il **proxy fallback** è attivo, inoltra la richiesta a `BACKEND_URL` e restituisce la risposta del backend — eventualmente trasformata da un **middleware**;
+5. se il fallback è disattivato risponde `404 Mock Not Found`; se serve il backend ma `BACKEND_URL` non è configurato, `501 Backend Not Configured`.
 
 Un dettaglio da sapere: prima viene scelta la rotta più specifica per il percorso, poi si verifica il metodo. Se la rotta selezionata non definisce il metodo richiesto, la richiesta va al fallback — non viene cercata una rotta meno specifica. Le regole complete di matching e specificità sono in [docs/it/PATH.md](docs/it/PATH.md).
 
-Le connessioni **WebSocket** non seguono questo percorso: essendo un altro protocollo non hanno mock, e Mockxy le inoltra così come sono al backend (serve `BACKEND_URL` e il proxy fallback attivo). Va bene per le app che mockano le API HTTP ma tengono una connessione live verso il backend reale per notifiche o aggiornamenti. Dettagli in [docs/it/WEBSOCKET.md](docs/it/WEBSOCKET.md).
+Le connessioni **WebSocket** non attraversano la pipeline HTTP: se l'endpoint seleziona una variante `ws`, Mockxy accetta localmente l'upgrade e serve copione, regole e messaggi della console; gli altri upgrade restano passthrough verso il backend reale. Dettagli in [docs/it/WEBSOCKET.md](docs/it/WEBSOCKET.md).
 
 Ogni risposta include l'header **`x-mock-source`** (`mock`, `handler`, `middleware`, `backend`…): dice a colpo d'occhio chi ha generato la risposta, ed è il primo posto dove guardare quando qualcosa non torna. Il dettaglio della decisione, l'inoltro al backend, errori/timeout e la tassonomia completa dell'header sono in [docs/it/PROXY.md](docs/it/PROXY.md).
 
@@ -238,7 +242,7 @@ Il file endpoint dichiara percorso, stato e varianti disponibili (formato comple
 }
 ```
 
-Ogni variante di risposta è un file autonomo (formato completo dei tre tipi — mock, handler, middleware — in [docs/it/RESPONSE.md](docs/it/RESPONSE.md)):
+Ogni variante di risposta è un file autonomo (formato completo dei cinque tipi — mock, handler, middleware, SSE e WebSocket — in [docs/it/RESPONSE.md](docs/it/RESPONSE.md)):
 
 ```json
 {
@@ -423,7 +427,8 @@ In più rispetto alla versione web:
 
 - **Più workspace in parallelo**, ognuno con la propria cartella di mock, la propria porta e il proprio backend, gestiti a schede dall'interfaccia;
 - ogni workspace è una normale cartella con dentro `mockxy.json`, i mock e i file dati (da versionare in git e condividere con il team) e una sottocartella locale `.mockxy/` (impostazioni personali e archivio del monitor, già esclusa da git) — anatomia completa in [docs/it/WORKSPACE.md](docs/it/WORKSPACE.md);
-- il server ascolta solo su loopback e le preferenze vengono salvate accanto all'eseguibile.
+- il server ascolta solo su loopback e le preferenze vengono salvate accanto all'eseguibile;
+- gli errori dell'app e dei motori vengono salvati in `logs/`, con scrittura disattivabile dalle preferenze globali dell'app.
 
 Per compilare l'eseguibile:
 
@@ -444,7 +449,7 @@ Mockxy è uno strumento di sviluppo, pensato per girare in locale o su un server
 - handler e middleware sono **codice JavaScript eseguito localmente**: non aprire workspace che non conosci, per lo stesso motivo per cui non esegui script arbitrari;
 - il monitor maschera gli header sensibili, ma body e query string possono comunque contenere dati personali o segreti — e finiscono anche negli archivi su disco, che vanno tenuti fuori da git;
 - i middleware proxy bufferizzano in memoria la risposta del backend fino a 10MB: oltre il limite, e per gli stream (`text/event-stream`), la risposta arriva all'applicazione integra ma **non trasformata**;
-- le **WebSocket** (e le altre richieste di upgrade) attraversano Mockxy come **passthrough puro** verso il backend: non passano da mock, handler o middleware — sono pensate per le app che mockano le API HTTP ma usano una connessione live per notifiche o aggiornamenti. Servono `BACKEND_URL` configurato e il proxy fallback attivo; in modalità solo-mock l'upgrade non viene inoltrato;
+- le richieste di upgrade che corrispondono a una variante **WebSocket mockata** vengono gestite localmente; tutte le altre restano passthrough verso il backend e richiedono `BACKEND_URL` e proxy fallback attivo;
 - per pubblicare un set di mock a un pubblico più ampio usa l'immagine Docker standalone, che disattiva API di amministrazione, proxy e ricarica dei file.
 
 ## Risoluzione dei problemi

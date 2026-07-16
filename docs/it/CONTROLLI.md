@@ -3,7 +3,7 @@
 Nella barra superiore dell'interfaccia vivono due interruttori che governano l'intero motore a
 runtime. Sono **due interruttori indipendenti che producono tre modalità effettive**:
 
-| Modalità | Mock / handler / middleware | Monitor | Proxy verso il backend |
+| Modalità | Mock / handler / middleware / SSE / WS | Monitor | Proxy verso il backend |
 |---|---|---|---|
 | **Attivo** (default) | sì | registra | solo per le richieste senza mock ([fallback](PROXY.md)) |
 | **Proxy totale** | no | registra | tutto |

@@ -1,6 +1,7 @@
-# Design — Sequenze di varianti (proposta, da discutere)
+# Design — Sequenze di varianti
 
-Stato: **bozza per discussione** — non implementato.
+Stato: **MVP implementato** (luglio 2026) — validazione e serving nel motore, cursore runtime,
+reset, admin API, dialog UI, badge nel catalogo e tracciamento dello step nel monitor.
 
 ## Il problema
 

@@ -29,7 +29,8 @@ Tre semantiche da conoscere:
   disabilitato singolarmente prima.
 
 La lista si restringe con la ricerca libera e i filtri per metodo, tipo di variante attiva
-(mock, handler, middleware) e stato.
+(`mock`, `handler`, `middleware`, `sse`, `ws`) e stato. Un badge **SEQ** identifica gli endpoint
+con una [sequenza di varianti](ENDPOINT.md) attiva.
 
 ## Gli endpoint
 
@@ -43,6 +44,10 @@ giusta. Ogni endpoint si può poi:
   rapida per il « come il GET, ma in POST »;
 - **abilitare/disabilitare**: da spento, le sue richieste seguono il [fallback](PROXY.md);
 - **eliminare**, insieme alle sue varianti.
+
+Il pulsante **Sequenza** apre la configurazione degli step, del criterio per numero di richieste
+o durata, del comportamento finale e del reset per inattività. La stessa dialog mostra lo step
+runtime corrente e permette di azzerare subito il cursore.
 
 ## Le varianti e l'editor
 
@@ -58,6 +63,16 @@ di scrivere:
 - gli **header** con preset per i casi comuni;
 - il **ritardo** in millisecondi della variante ([i ritardi](RITARDI.md)).
 
+Sui mock JSON o testuali il toggle **Template** abilita i placeholder descritti nella
+[pagina sulle risposte](RESPONSE.md). Le varianti `sse` e `ws` sostituiscono l'anteprima del
+body con la rispettiva console: connessioni e storico/transcript, compositore per il broadcast
+manuale e macro configurate nei preset. Si aggiungono dal menu delle nuove risposte e il loro
+copione si modifica su file o tramite admin API.
+
 Per servire un **file binario** (immagini, PDF, archivi) si carica il file direttamente sulla
 variante — fino a 12 MB via interfaccia — con content-type ricordato; il payload viene servito
 in streaming come documentato nella [pagina sulle risposte](RESPONSE.md).
+
+La vista ricorda in `localStorage` l'ultimo endpoint selezionato e le collezioni compresse:
+tornando al catalogo, anche dopo un riavvio, lo si ritrova come lasciato. I valori non più
+validi vengono ignorati e il comando «vai al mock» dal monitor ha sempre la precedenza.

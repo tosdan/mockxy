@@ -36,7 +36,7 @@ non tiene mai in ostaggio lo shutdown.
 
 Tre casi ricevono una risposta HTTP di rifiuto senza contattare nessuno:
 
-- **backend non configurato** → `501`: gli upgrade esistono solo come inoltro, senza
+- **backend non configurato** → `501`: per un upgrade che non ha trovato un mock `ws`, senza
   `BACKEND_URL` non c'è dove inoltrare;
 - **proxy fallback disattivo** (in modalità mock) → `404`: la modalità solo-mock vale anche per
   gli upgrade;

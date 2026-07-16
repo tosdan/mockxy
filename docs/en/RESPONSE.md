@@ -6,7 +6,7 @@ respond when that variant is selected. Variants let you keep several behaviors r
 same endpoint — the populated case, the empty list, the error — and switch from one to the
 other by changing only the selected variant, without touching the contents.
 
-The `type` field distinguishes four natures of response:
+The `type` field distinguishes five natures of response:
 
 - **`mock`** — a static response described in the file itself (status, headers, body or payload from a file);
 - **`handler`** — a response computed by a local JavaScript script;

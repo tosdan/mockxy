@@ -6,7 +6,7 @@ quando quella variante è selezionata. Le varianti permettono di tenere pronti p
 per lo stesso endpoint — il caso pieno, la lista vuota, l'errore — e di passare dall'uno
 all'altro cambiando solo la variante selezionata, senza toccare i contenuti.
 
-Il campo `type` distingue quattro nature di risposta:
+Il campo `type` distingue cinque nature di risposta:
 
 - **`mock`** — risposta statica descritta nel file stesso (status, header, body o payload da file);
 - **`handler`** — risposta calcolata da uno script JavaScript locale;

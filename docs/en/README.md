@@ -1,9 +1,8 @@
 # Detailed documentation
 
 Per-feature deep dives, complementary to the main [README](../../README.md) (which remains the
-overview and the quickstart). The plan that produced these pages is complete and archived
-([archived/PIANO-DOCS.md](../../archived/PIANO-DOCS.md)); the living rule: every new feature or
-changed behavior updates the relevant page in the same round as the code.
+overview and the quickstart). Living rule: every new feature or changed behavior updates the
+relevant page in the same round as the code.
 
 ## Pages
 
@@ -12,10 +11,10 @@ changed behavior updates the relevant page in the same round as the code.
   what to share with your team.
 - [The endpoint file](ENDPOINT.md) — the JSON that declares each mocked endpoint: name and
   location, fields, variants and the selected variant, validation, per-endpoint degradation and
-  hot reload.
+  hot reload, including variant sequences and their runtime cursor.
 - [The response file](RESPONSE.md) — the variants: static responses (status, headers, JSON or
-  textual body, file payload served streaming, delay), handlers and middleware as links to
-  scripts, validation of the selected variant only.
+  textual body, file payload served streaming, delay and templating), handlers and middleware
+  as links to scripts, SSE streams and mocked WebSocket channels.
 - [The path convention](PATH.md) — how the answering endpoint is chosen: named parameters,
   declared query (exact equality), specificity rules, method check after the route has been
   chosen and diagnosing missed matches.
@@ -26,7 +25,7 @@ changed behavior updates the relevant page in the same round as the code.
   precedence rules, what never gets delayed and where each level is configured.
 - [Handlers](HANDLER.md) — responses computed by local scripts: the contract of
   `resolveResponse`, the context received (params, query, headers, body in three forms,
-  `data()`), the result format, errors, timeouts and limits.
+  `data()`, `state`, `callCount`, `firstRequestAt`), the result format, errors, timeouts and limits.
 - [Proxy middleware](MIDDLEWARE.md) — transforming the real backend's responses: the
   contract of `transformResponse`, headers merged on top of the backend's, the bypass cases
   (streams, over 10 MB) and the fail-open behavior on errors.
@@ -44,14 +43,14 @@ changed behavior updates the relevant page in the same round as the code.
   limits that remain (different sites over http).
 - [Proxied redirect rewriting](REDIRECT.md) — absolute `Location` values pointing at the
   backend mapped back to Mockxy's address; relative ones and third-party hosts untouched.
-- [WebSocket and upgrades](WEBSOCKET.md) — pure passthrough to the backend: handshake
-  forwarded, tunnel with no inactivity timeout, honest refusals (501 without a backend, 404 in
-  mock-only mode).
+- [WebSocket and upgrades](WEBSOCKET.md) — local mocks with scripts, rules and a console, plus
+  backend passthrough for upgrades that do not match a `ws` variant.
 - [Network exposure](RETE.md) — loopback by default and why, how to expose (env, dialog,
   Docker), the admin API's anti DNS-rebinding defense and the reminder for the LAN case.
 - [The mock catalog](CATALOGO.md) — the working view: nested collections and their
   semantics (deletion that doesn't touch the mocks, bulk enabling), creating/copying/
-  editing endpoints, variants and the editor with its validations, binary file upload.
+  editing endpoints, sequences, static/script/SSE/WS variants, consoles and the validated
+  editor, binary file upload and view-state restoration.
 - [The monitor](MONITOR.md) — traffic capture: what gets recorded and what is excluded,
   secret masking and capture limits, the page's filters and turning traffic into mocks
   (skeletons included).
@@ -70,7 +69,7 @@ changed behavior updates the relevant page in the same round as the code.
   conventions on ids, errors, runtime reload and the anti-CSRF defenses.
 - [The desktop app](DESKTOP.md) — multiple workspaces in parallel with one engine each, the
   tab bar, stable ports, the settings dialog (shared title, the rest local),
-  portable preferences and packaging.
+  global preferences, error logs and packaging.
 - [Deployment options](DEPLOYMENT.md) — direct run, development Docker (workspace
   mounted from the filesystem) and standalone image (engine only, read-only bind mounts), with
   a compass for choosing.

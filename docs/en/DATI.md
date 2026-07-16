@@ -53,6 +53,11 @@ it, with a runtime reload. The rewrite is all-or-nothing — either all the sour
 and the final summary reports the updated occurrences, reminding you that any dynamic
 references must be checked by hand.
 
+The page remembers the last selected file in `localStorage`: when returning to the view, even
+after a restart, that file and its preview are restored. If the file no longer exists, the
+saved selection is ignored; a completed upload selects the newly uploaded file instead and
+immediately shows its fresh content.
+
 ## Sizes
 
 Every `data()` call re-reads and re-parses the file from disk: up to a megabyte you won't

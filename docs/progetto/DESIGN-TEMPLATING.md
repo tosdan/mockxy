@@ -1,6 +1,7 @@
-# Design — Templating nei mock statici (proposta, da discutere)
+# Design — Templating nei mock statici
 
-Stato: **bozza per discussione** — non implementato.
+Stato: **MVP implementato** (luglio 2026) — placeholder opt-in nel body e negli header,
+sorgenti della richiesta, helper generati, filtri di tipo e controllo dalla UI.
 
 ## Il problema
 

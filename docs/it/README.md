@@ -1,9 +1,8 @@
 # Documentazione di dettaglio
 
 Approfondimenti per feature, complementari al [README](../../README.it.md) principale (che resta la
-panoramica e l'avvio rapido). Il piano che ha prodotto queste pagine è completato e archiviato
-([archived/PIANO-DOCS.md](../../archived/PIANO-DOCS.md)); regola viva: ogni feature nuova o
-comportamento cambiato aggiorna la pagina pertinente nello stesso giro del codice.
+panoramica e l'avvio rapido). Regola viva: ogni feature nuova o comportamento cambiato aggiorna
+la pagina pertinente nello stesso giro del codice.
 
 ## Pagine
 
@@ -12,10 +11,10 @@ comportamento cambiato aggiorna la pagina pertinente nello stesso giro del codic
   vita, cosa condividere con il team.
 - [Il file endpoint](ENDPOINT.md) — il JSON che dichiara ogni endpoint mockato: nome e
   posizione, campi, varianti e variante selezionata, validazione, degradazione per-endpoint e
-  ricarica a caldo.
+  ricarica a caldo, inclusa la sequenza di varianti e il suo cursore runtime.
 - [Il file di risposta](RESPONSE.md) — le varianti: risposte statiche (status, header, body
-  JSON o testuale, payload da file in streaming, ritardo), handler e middleware come
-  collegamenti a script, validazione della sola variante selezionata.
+  JSON o testuale, payload da file in streaming, ritardo e templating), handler e middleware
+  come collegamenti a script, stream SSE e canali WebSocket mockati.
 - [La convenzione dei path](PATH.md) — come viene scelto l'endpoint che risponde: parametri
   nominati, query dichiarata (uguaglianza esatta), regole di specificità, verifica del metodo
   dopo la scelta della rotta e diagnosi dei mancati match.
@@ -26,7 +25,8 @@ comportamento cambiato aggiorna la pagina pertinente nello stesso giro del codic
   di precedenza, cosa non riceve ritardi e dove si configura ciascun livello.
 - [Gli handler](HANDLER.md) — risposte calcolate da script locali: il contratto di
   `resolveResponse`, il contesto ricevuto (parametri, query, header, body in tre forme,
-  `data()`), il formato del risultato, errori, timeout e limiti.
+  `data()`, `state`, `callCount`, `firstRequestAt`), il formato del risultato, errori, timeout
+  e limiti.
 - [I middleware proxy](MIDDLEWARE.md) — trasformare le risposte del backend reale: il
   contratto di `transformResponse`, header fusi sopra quelli del backend, i casi di bypass
   (stream, oltre 10 MB) e il fail-open sugli errori.
@@ -44,14 +44,14 @@ comportamento cambiato aggiorna la pagina pertinente nello stesso giro del codic
   limiti che restano (site diversi su http).
 - [La riscrittura dei redirect proxati](REDIRECT.md) — i `Location` assoluti verso il backend
   riportati sull'indirizzo di Mockxy; relativi e host terzi intatti.
-- [WebSocket e upgrade](WEBSOCKET.md) — passthrough puro verso il backend: handshake
-  inoltrato, tunnel senza timeout di inattività, rifiuti onesti (501 senza backend, 404 in
-  solo-mock).
+- [WebSocket e upgrade](WEBSOCKET.md) — mock locali con copione, regole e console, più
+  passthrough verso il backend per gli upgrade che non corrispondono a una variante `ws`.
 - [Esposizione in rete](RETE.md) — loopback di default e perché, come esporre (env, dialog,
   Docker), la difesa anti DNS rebinding dell'admin API e il promemoria per il caso LAN.
 - [Il catalogo dei mock](CATALOGO.md) — la vista di lavoro: collezioni annidate e le loro
   semantiche (eliminazione che non tocca i mock, abilitazione in massa), creazione/copia/
-  modifica degli endpoint, varianti ed editor con validazioni, upload di file binari.
+  modifica degli endpoint, sequenze, varianti statiche/script/SSE/WS, console ed editor con
+  validazioni, upload di file binari e ripristino dello stato della vista.
 - [Il monitor](MONITOR.md) — la cattura del traffico: cosa viene registrato e cosa è escluso,
   mascheramento dei segreti e limiti di cattura, filtri della pagina e il travaso da traffico
   a mock (scheletri inclusi).
@@ -71,7 +71,7 @@ comportamento cambiato aggiorna la pagina pertinente nello stesso giro del codic
   convenzioni su id, errori, ricarica del runtime e le difese anti-CSRF.
 - [L'app desktop](DESKTOP.md) — più workspace in parallelo con un motore ciascuno, la barra a
   schede, le porte stabili, la dialog delle impostazioni (titolo condiviso, resto locale),
-  preferenze portable e compilazione.
+  preferenze globali, log degli errori e compilazione.
 - [Le vie di deployment](DEPLOYMENT.md) — esecuzione diretta, Docker di sviluppo (workspace
   montato dal filesystem) e immagine standalone (solo motore, bind mount in sola lettura), con
   la bussola per scegliere.
