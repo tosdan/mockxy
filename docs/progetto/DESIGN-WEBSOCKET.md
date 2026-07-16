@@ -1,6 +1,7 @@
 # Design — Mock di WebSocket (proposta, da discutere)
 
-Stato: **bozza per discussione** — non implementato.
+Stato: **MVP implementato** (luglio 2026) — copione, regole, console e admin API come da
+proposta; decisioni prese: regole nel MVP, nessun eco di default, dipendenza `ws`.
 
 ## Il problema
 

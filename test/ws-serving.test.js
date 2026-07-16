@@ -10,6 +10,7 @@ const { RequestMonitorStore } = require("../src/monitoring/request-monitor");
 const { WsConnectionStore } = require("../src/mocks/ws-connections");
 const { createWsUpgradeDispatcher } = require("../src/mocks/ws-serving");
 const { ServerStateStore } = require("../src/server-state");
+const { startServer } = require("../src/server");
 const { createNoopLogger, createTempDir, removeDir, waitFor } = require("./helpers");
 
 // Serving delle varianti ws: handshake locale sull'upgrade che matcha, copione, regole,
@@ -255,5 +256,35 @@ describe("ws serving", () => {
     wsConnections.closeAll();
     expect(await closed).toBe(1001);
     expect(wsConnections.listConnections("GET /api/canale")).toEqual([]);
+  });
+
+  // Regressione: il merge dei wsRouteGroups deve avvenire anche al CARICAMENTO INIZIALE del
+  // server, non solo al reload — senza, un endpoint ws presente al boot finiva nel passthrough
+  // finché una mutazione admin non forzava la ricarica.
+  test("un endpoint ws presente al boot è servito senza bisogno di reload", async () => {
+    await writeWsEndpoint({ script: [{ afterMs: 0, data: "boot" }] });
+    const port = 3000 + Math.floor(Math.random() * 2000);
+    const runtime = await startServer({
+      configOverrides: {
+        port,
+        host: "127.0.0.1",
+        mocksDir,
+        monitorDumpDir: mocksDir,
+        devWatch: false,
+        adminApiEnabled: false,
+        proxyFallbackEnabled: false,
+      },
+      logger: createNoopLogger(),
+    });
+
+    try {
+      const client = new WebSocket(`ws://127.0.0.1:${port}/api/canale`);
+      openClients.push(client);
+      const messages = collectMessages(client);
+      await waitFor(() => messages.length === 1);
+      expect(messages[0]).toBe("boot");
+    } finally {
+      await runtime.shutdown();
+    }
   });
 });

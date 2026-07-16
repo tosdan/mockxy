@@ -40,6 +40,8 @@ state between tests, pipelines that import an updated spec.
 | `POST /mocks/:id/sequence/reset` | resets the sequence cursor: the next request starts over from the first step. Responds with the cleared state (`sequenceState`) |
 | `POST /mocks/:id/sse/push` | manual push of the [SSE](RESPONSE.md) console: body `{ data, event?, id? }`, broadcast to every open connection — responds `{ delivered, connections }` |
 | `GET /mocks/:id/sse/connections` | SSE console state: open connections (with script position) and history of sent messages |
+| `POST /mocks/:id/ws/push` | manual push of the [WS](RESPONSE.md) console: body `{ data }`, broadcast to every open connection — responds `{ delivered, connections }` |
+| `GET /mocks/:id/ws/connections` | WS console state: open connections (with script position) and the bidirectional transcript (sent and received) |
 | `PUT /mocks/:id/endpoint` | updates method, path, description |
 | `POST /mocks/:id/copy` | duplicates onto a new method+path — body `{ method, path, copyResponses }` |
 | `PUT /mocks/:id/collection` | assigns the endpoint to a collection |
