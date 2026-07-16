@@ -54,6 +54,7 @@ const {
 } = require("./collections-state");
 const { getAdminMockDetail } = require("./mock-catalog");
 const { normalizeSequenceConfig } = require("../mocks/sequence-config");
+const { normalizeSseConfig, validateSseMessage } = require("../mocks/sse-config");
 
 // Mutazioni degli endpoint e delle loro response: creazione (mock o script), aggiornamento,
 // upload di asset, cancellazione e copia. Ogni mutazione scrive su disco con backup e, se il
@@ -259,7 +260,20 @@ function buildEndpointResponseClone(responseDir, response, responseFileName, pay
   };
 }
 
-const NEW_RESPONSE_TYPES = new Set(["mock", "handler", "middleware"]);
+const NEW_RESPONSE_TYPES = new Set(["mock", "handler", "middleware", "sse"]);
+
+// Forma su disco di una variante sse a partire dalla forma normalizzata: i campi vuoti/default
+// non sporcano il file (retryMs null e presets vuoti vengono omessi).
+function buildSseResponseFile(title, sse) {
+  const nextResponse = { type: "sse", title, script: sse.script, onEnd: sse.onEnd };
+  if (sse.retryMs != null) {
+    nextResponse.retryMs = sse.retryMs;
+  }
+  if (sse.presets.length > 0) {
+    nextResponse.presets = sse.presets;
+  }
+  return nextResponse;
+}
 
 /**
  * Costruisce una response NUOVA del tipo richiesto (mock/handler/middleware) invece di
@@ -284,6 +298,19 @@ function buildNewTypedResponse(responseDir, responseFileName, payload) {
       nextResponse.templated = true;
     }
     return { nextResponse, assetCopies: [], assetWrites: [] };
+  }
+
+  if (type === "sse") {
+    const { errors, sse } = normalizeSseConfig({
+      retryMs: payload?.retryMs,
+      script: payload?.script ?? [],
+      onEnd: payload?.onEnd,
+      presets: payload?.presets ?? [],
+    });
+    if (errors.length > 0) {
+      throw createAdminError(400, `${errors.join("; ")}.`);
+    }
+    return { nextResponse: buildSseResponseFile(title, sse), assetCopies: [], assetWrites: [] };
   }
 
   const baseName = path.basename(responseFileName, RESPONSE_SUFFIX);
@@ -357,6 +384,21 @@ function buildUpdatedEndpointResponse(response, payload) {
     }
 
     return nextResponse;
+  }
+
+  if (response.type === "sse") {
+    // Merge del payload sulla variante esistente, poi la stessa validazione del load.
+    const merged = {
+      retryMs: Object.prototype.hasOwnProperty.call(payload || {}, "retryMs") ? payload.retryMs : response.retryMs,
+      script: payload?.script ?? response.script,
+      onEnd: payload?.onEnd ?? response.onEnd,
+      presets: payload?.presets ?? response.presets,
+    };
+    const { errors, sse } = normalizeSseConfig(merged);
+    if (errors.length > 0) {
+      throw createAdminError(400, `${errors.join("; ")}.`);
+    }
+    return buildSseResponseFile(normalizeUpdatedResponseTitle(payload, response), sse);
   }
 
   return {
@@ -761,6 +803,11 @@ async function updateAdminMock(mocksDir, id, payload, reloadRuntime) {
   }
 
   const { endpoint, response, responseFilePath, responseDir } = await readEndpointSelectedResponse(endpointPath);
+  // La forma "config+body" di questo update è pensata per mock/handler/middleware: una variante
+  // sse si aggiorna dalla rotta della singola response (PUT /mocks/:id/responses/:file).
+  if (response.type === "sse") {
+    throw createAdminError(400, "Update sse responses via PUT /mocks/:id/responses/:file.");
+  }
   const expectedMethod = extractMethodFromEndpointFileName(endpointPath);
   const backups = [
     await readBackup(endpointPath),
@@ -858,6 +905,45 @@ async function resetAdminSequence(mocksDir, id, sequenceStates, handlerStates) {
     sequenceState: sequenceStates != null
       ? sequenceStates.getState(sequenceKey, endpoint.sequence)
       : null,
+  };
+}
+
+// Risolve l'endpoint per le operazioni SSE runtime: la variante SELEZIONATA deve essere sse
+// (console e push hanno senso solo mentre l'endpoint sta servendo lo stream).
+async function resolveAdminSseEndpoint(mocksDir, id) {
+  const endpointPath = resolveAdminFilePath(mocksDir, id);
+  if (!fs.existsSync(endpointPath)) {
+    throw createAdminError(404, "Endpoint definition not found.");
+  }
+  const { endpoint, response } = await readEndpointSelectedResponse(endpointPath);
+  if (response.type !== "sse") {
+    throw createAdminError(400, "The selected response of this endpoint is not an sse variant.");
+  }
+  return { key: `${endpoint.method} ${endpoint.path}`, endpoint, response };
+}
+
+// Push manuale della console: invia un messaggio ({ data, event?, id? }) a tutte le
+// connessioni aperte dell'endpoint. Azione runtime immediata, nessun file toccato.
+async function pushAdminSseMessage(mocksDir, id, payload, sseConnections) {
+  const { key } = await resolveAdminSseEndpoint(mocksDir, id);
+  const errors = [];
+  const message = validateSseMessage(payload == null ? {} : payload, "message", errors);
+  if (errors.length > 0 || message == null) {
+    throw createAdminError(400, `${errors.join("; ")}.`);
+  }
+  const delivered = sseConnections != null ? sseConnections.push(key, message) : 0;
+  return {
+    delivered,
+    connections: sseConnections != null ? sseConnections.listConnections(key).length : 0,
+  };
+}
+
+// Stato della console: connessioni aperte e storico dei messaggi usciti (copione e manuali).
+async function listAdminSseState(mocksDir, id, sseConnections) {
+  const { key } = await resolveAdminSseEndpoint(mocksDir, id);
+  return {
+    connections: sseConnections != null ? sseConnections.listConnections(key) : [],
+    history: sseConnections != null ? sseConnections.listHistory(key) : [],
   };
 }
 
@@ -1038,6 +1124,8 @@ module.exports = {
   updateAdminEndpoint,
   updateAdminMock,
   resetAdminSequence,
+  pushAdminSseMessage,
+  listAdminSseState,
   deleteAdminMock,
   deleteAdminMocksUnlocked,
   copyAdminEndpoint,
