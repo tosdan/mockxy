@@ -36,6 +36,8 @@ ma qualunque nome che termini in `.response.json` è valido, purché sia un semp
 - **`delayMs`** — facoltativo: ritardo in millisecondi prima della risposta, intero non
   negativo. Quando è maggiore di zero **vince sul ritardo globale** del server; a zero o
   assente, vale l'eventuale ritardo globale.
+- **`templated`** — facoltativo, default `false`: attiva il [templating](#il-templating) dei
+  placeholder `{{...}}` nel body e negli header. Non ammesso sulle risposte con payload `file`.
 - **`body`** oppure **`file`** — esattamente uno dei due:
   - **`body` JSON** (oggetto, array, numero, booleano) — servito come JSON. Se è un array, o un
     oggetto con un solo array di primo livello, la risposta partecipa a paginazione e filtri
@@ -49,6 +51,41 @@ ma qualunque nome che termini in `.response.json` è valido, purché sia un semp
     contenuto non viene mai caricato in memoria, quindi anche payload da centinaia di MB
     (download, immagini, PDF) non pesano sul server. Senza un `content-type` dichiarato negli
     header, la risposta esce come `application/octet-stream`.
+
+## Il templating
+
+Con **`templated: true`** i placeholder `{{...}}` nel body (JSON o testo) e negli header
+vengono sostituiti con valori della richiesta: il caso «l'id che mi chiedi te lo rimetto nella
+risposta» senza scomodare un handler.
+
+```json
+{
+  "type": "mock",
+  "status": 200,
+  "templated": true,
+  "headers": { "location": "/api/utenti/{{params.id}}" },
+  "body": {
+    "id": "{{params.id | number}}",
+    "nome": "Utente {{params.id}}",
+    "ruolo": "{{query.ruolo}}",
+    "richiestoAlle": "{{now}}"
+  }
+}
+```
+
+- **Sorgenti**: `params.<nome>` (parametri di percorso), `query.<nome>` (primo valore se
+  ripetuto), `headers.<nome>` (nomi in minuscolo), `body.<percorso.a.punti>` (il body JSON
+  della richiesta, letto solo se referenziato).
+- **Helper generati**: `now` (ISO 8601), `nowMs` (epoch ms), `uuid`, `randomInt min max`.
+- **Filtro dei tipi**: quando l'intero valore stringa è un solo placeholder,
+  `"{{params.id | number}}"` produce il numero senza virgolette (non numerico → `null`);
+  esistono anche `| boolean` e `| json` (il sotto-albero del body così com'è).
+- **Placeholder non risolto**: la risposta esce comunque (stringa vuota; `null` con filtro) e
+  il motore logga un warning col placeholder — un typo non rompe il giro di prova. Escape:
+  `\{{` produce `{{` letterale.
+- Il template si applica **prima** di [paginazione e filtri automatici](LISTE.md): un body
+  array templato vi partecipa come uno statico.
+- Niente condizioni, cicli o espressioni: quando serve logica, il gradino giusto è l'handler.
 
 ## Risposta `handler`
 
