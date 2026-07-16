@@ -139,8 +139,30 @@ describe("sse admin API", () => {
     expect((await readResponseFromDisk()).script[0].event).toBe("hello");
   });
 
-  test("creare una nuova variante sse: file scritto con i default", async () => {
+  test("nuova variante sse su un endpoint sse: clona il copione della selezionata (convenzione same-type)", async () => {
     await writeSseEndpoint();
+    const { app } = await buildApp();
+
+    const created = await request(app)
+      .post(`/_admin/api/mocks/${MOCK_ID}/responses`)
+      .send({ type: "sse", title: "Copia" });
+    expect(created.status).toBe(201);
+
+    const second = JSON.parse(await fs.promises.readFile(path.join(mocksDir, "feed", "GET.responses", "002.response.json"), "utf8"));
+    expect(second.type).toBe("sse");
+    expect(second.title).toBe("Copia");
+    expect(second.script).toEqual([{ afterMs: 0, data: { n: 1 }, event: "hello" }]);
+  });
+
+  test("nuova variante sse su un endpoint mock: copione vuoto con i default", async () => {
+    await writeSseEndpoint(); // per avere il MOCK_ID risolvibile serve comunque l'endpoint feed
+    const endpointDir = path.join(mocksDir, "feed", "GET.responses");
+    // Rendi la selezionata un mock, così la creazione sse passa dalla via "nuovo tipo" (default).
+    await fs.promises.writeFile(
+      path.join(endpointDir, "001.response.json"),
+      JSON.stringify({ type: "mock", title: "", status: 200, headers: {}, delayMs: 0, body: {} }),
+      "utf8"
+    );
     const { app } = await buildApp();
 
     const created = await request(app)
@@ -148,9 +170,7 @@ describe("sse admin API", () => {
       .send({ type: "sse", title: "Muto" });
     expect(created.status).toBe(201);
 
-    const files = await fs.promises.readdir(path.join(mocksDir, "feed", "GET.responses"));
-    expect(files).toContain("002.response.json");
-    const second = JSON.parse(await fs.promises.readFile(path.join(mocksDir, "feed", "GET.responses", "002.response.json"), "utf8"));
+    const second = JSON.parse(await fs.promises.readFile(path.join(endpointDir, "002.response.json"), "utf8"));
     expect(second).toEqual({ type: "sse", title: "Muto", script: [], onEnd: "keep-open" });
   });
 
