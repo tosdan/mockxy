@@ -6,11 +6,13 @@ quando quella variante è selezionata. Le varianti permettono di tenere pronti p
 per lo stesso endpoint — il caso pieno, la lista vuota, l'errore — e di passare dall'uno
 all'altro cambiando solo la variante selezionata, senza toccare i contenuti.
 
-Il campo `type` distingue tre nature di risposta:
+Il campo `type` distingue quattro nature di risposta:
 
 - **`mock`** — risposta statica descritta nel file stesso (status, header, body o payload da file);
 - **`handler`** — risposta calcolata da uno script JavaScript locale;
-- **`middleware`** — trasformazione applicata alla risposta del backend reale proxato.
+- **`middleware`** — trasformazione applicata alla risposta del backend reale proxato;
+- **`sse`** — stream Server-Sent Events: la connessione resta aperta e gli eventi escono
+  secondo un copione (o dalla regia manuale della console).
 
 L'interfaccia crea i file con nomi progressivi (`001.response.json`, `002.response.json`, …),
 ma qualunque nome che termini in `.response.json` è valido, purché sia un semplice nome di file
@@ -125,6 +127,47 @@ Stessa struttura dell'handler, con suffisso **`.middleware.js`** e funzione espo
 `transformResponse`: il motore inoltra la richiesta al backend reale e passa la risposta allo
 script, che può modificarla prima che raggiunga il client. Limiti e contratto sono documentati
 nella pagina sui middleware proxy.
+
+## Risposta `sse`
+
+```json
+{
+  "type": "sse",
+  "title": "Avanzamento lavoro",
+  "retryMs": 3000,
+  "script": [
+    { "afterMs": 0,    "event": "progress", "data": { "percent": 10 } },
+    { "afterMs": 1500, "event": "progress", "data": { "percent": 60 } },
+    { "afterMs": 3000, "event": "done",     "data": { "percent": 100 } }
+  ],
+  "onEnd": "keep-open",
+  "presets": [
+    { "label": "Errore", "event": "error", "data": { "message": "boom" } }
+  ]
+}
+```
+
+Quando la variante selezionata è di tipo `sse`, l'endpoint risponde con uno stream
+`text/event-stream` che resta aperto: il **copione** (`script`) va in onda **a ogni
+connessione, indipendentemente per ciascuna** — riconnettersi significa ripartire dall'inizio.
+
+- **`script`** — la scaletta degli eventi, anche vuota (endpoint muto, alimentato solo dalla
+  console). Ogni voce: **`afterMs`** (ritardo dal messaggio precedente, intero ≥ 0), **`data`**
+  (JSON — serializzato — o stringa, anche multi-linea), **`event`** e **`id`** facoltativi
+  (i campi del protocollo SSE).
+- **`onEnd`** — esaurito il copione: **`keep-open`** (default: la connessione resta aperta per
+  heartbeat e push manuali), **`close`** (il server chiude), **`loop`** (si ricomincia; serve
+  almeno un `afterMs` positivo).
+- **`retryMs`** — facoltativo: il campo `retry:` SSE inviato in testa alla connessione.
+- **`presets`** — facoltativi: i messaggi pronti (macro) della console dell'endpoint.
+
+Nei silenzi il motore invia un commento di **heartbeat** ogni 15 secondi (invisibile ai client).
+Le connessioni vengono chiuse alla ricarica a caldo e allo shutdown: il client SSE riconnette da
+solo e il copione riparte. La **console** nella scheda dell'endpoint mostra connessioni aperte e
+storico, e permette la regia manuale (broadcast a tutte le connessioni) — via API:
+`POST /mocks/:id/sse/push` e `GET /mocks/:id/sse/connections`. La voce del [monitor](MONITOR.md)
+nasce alla chiusura della connessione. Una variante `sse` non può essere lo step di una
+[sequenza](ENDPOINT.md).
 
 ## Validazione ed errori
 

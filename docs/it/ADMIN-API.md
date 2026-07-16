@@ -38,6 +38,8 @@ resettano lo stato tra i test, pipeline che importano una specifica aggiornata.
 | `GET /mocks/:id` | dettaglio di un endpoint con le sue varianti |
 | `PUT /mocks/:id` | aggiorna la definizione (inclusi `enabled`, variante selezionata e — con body `{ sequence }`, `null` per rimuoverla — la [sequenza di varianti](ENDPOINT.md)) |
 | `POST /mocks/:id/sequence/reset` | azzera il cursore della sequenza: la prossima richiesta riparte dal primo step. Risponde con lo stato azzerato (`sequenceState`) |
+| `POST /mocks/:id/sse/push` | push manuale della console [SSE](RESPONSE.md): body `{ data, event?, id? }`, broadcast a tutte le connessioni aperte — risponde `{ delivered, connections }` |
+| `GET /mocks/:id/sse/connections` | stato della console SSE: connessioni aperte (con posizione nel copione) e storico dei messaggi usciti |
 | `PUT /mocks/:id/endpoint` | aggiorna metodo, percorso, descrizione |
 | `POST /mocks/:id/copy` | duplica su nuovo metodo+percorso — body `{ method, path, copyResponses }` |
 | `PUT /mocks/:id/collection` | assegna l'endpoint a una collezione |
