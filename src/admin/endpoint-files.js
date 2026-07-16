@@ -140,10 +140,18 @@ function normalizeEndpointResponse(response, responseFilePath) {
       }
     }
 
+    if (response.templated != null && typeof response.templated !== "boolean") {
+      throw createAdminError(400, "response.templated must be a boolean.");
+    }
+
     const hasBody = Object.prototype.hasOwnProperty.call(response, "body");
     const hasFile = Object.prototype.hasOwnProperty.call(response, "file");
     if (hasBody === hasFile) {
       throw createAdminError(400, "Mock responses must define exactly one of response.body or response.file.");
+    }
+    // Stessa regola del loader runtime: i payload file (streaming dal disco) non si templano.
+    if (response.templated === true && hasFile) {
+      throw createAdminError(400, "response.templated is not supported on file payloads.");
     }
     // Stessa regola del loader runtime (validateMockResponse): sono ammessi anche percorsi
     // relativi in sottocartelle della cartella response — il confinamento viene garantito
@@ -221,6 +229,7 @@ async function readEndpointResponseSummaries(endpointFilePath, endpoint) {
         ? response.sourceFile
         : undefined,
       status: response.type === "mock" ? response.status : null,
+      templated: response.type === "mock" ? response.templated === true : undefined,
       selected: responseFile === endpoint.selectedResponseFile,
     });
   }

@@ -1,5 +1,8 @@
+const fs = require("fs");
+const path = require("path");
 const request = require("supertest");
 const { createApp } = require("../src/app");
+const { encodeMockId } = require("../src/admin/mock-ids");
 const { loadEndpointRouteGroups } = require("../src/mocks/endpoint-loader");
 const { mergeLocalRouteGroups } = require("../src/mocks/local-route-groups");
 const { MockRegistry } = require("../src/mocks/mock-registry");
@@ -193,5 +196,105 @@ describe("mock templating nel serving", () => {
     const result = await loadEndpointRouteGroups(mocksDir);
     expect(result.loadErrors).toHaveLength(1);
     expect(result.loadErrors[0].message).toContain("templated must be a boolean");
+  });
+
+  describe("admin API", () => {
+    const MOCK_ID = encodeMockId("utenti/GET.endpoint.json");
+
+    async function buildAdminApp() {
+      const load = async () => {
+        const { mockRouteGroups, handlerRouteGroups, proxyMiddlewareRouteGroups, sequenceRouteGroups } =
+          await loadEndpointRouteGroups(mocksDir);
+        return {
+          routeGroups: mergeLocalRouteGroups({ mockRouteGroups, handlerRouteGroups, sequenceRouteGroups }),
+          proxyMiddlewareRouteGroups,
+        };
+      };
+      const initial = await load();
+      const registry = new MockRegistry(initial.routeGroups);
+      const proxyMiddlewareRegistry = new ProxyMiddlewareRegistry(initial.proxyMiddlewareRouteGroups);
+      const reloadRuntime = async () => {
+        const next = await load();
+        registry.setRouteGroups(next.routeGroups);
+        proxyMiddlewareRegistry.setRouteGroups(next.proxyMiddlewareRouteGroups);
+      };
+      return createApp({
+        registry,
+        config: { mocksDir, requestTimeoutMs: 5000, proxyFallbackEnabled: false },
+        logger: createNoopLogger(),
+        proxyMiddlewareRegistry,
+        reloadRuntime,
+        requestMonitor: new RequestMonitorStore(),
+      });
+    }
+
+    async function readResponseFromDisk() {
+      return JSON.parse(
+        await fs.promises.readFile(path.join(mocksDir, "utenti", "GET.responses", "001.response.json"), "utf8"),
+      );
+    }
+
+    test("accendere templated dalla PUT della response: persistito, servito, esposto nel dettaglio", async () => {
+      await writeMock({
+        mocksDir,
+        folder: "utenti",
+        method: "GET",
+        routePath: "/api/utenti/:id",
+        body: { id: "{{params.id | number}}" },
+      });
+      const app = await buildAdminApp();
+
+      // Prima dell'opt-in il placeholder resta letterale.
+      expect((await request(app).get("/api/utenti/5")).body).toEqual({ id: "{{params.id | number}}" });
+
+      const put = await request(app)
+        .put(`/_admin/api/mocks/${MOCK_ID}/responses/001.response.json`)
+        .send({ templated: true });
+      expect(put.status).toBe(200);
+
+      expect((await readResponseFromDisk()).templated).toBe(true);
+      expect((await request(app).get("/api/utenti/5")).body).toEqual({ id: 5 });
+
+      const detail = await request(app).get(`/_admin/api/mocks/${MOCK_ID}`);
+      expect(detail.body.config.templated).toBe(true);
+      expect(detail.body.responses[0].templated).toBe(true);
+    });
+
+    test("le altre scritture conservano templated (aggiornare il body non lo spegne)", async () => {
+      await writeMock({
+        mocksDir,
+        folder: "utenti",
+        method: "GET",
+        routePath: "/api/utenti/:id",
+        templated: true,
+        body: { id: "{{params.id | number}}" },
+      });
+      const app = await buildAdminApp();
+
+      const put = await request(app)
+        .put(`/_admin/api/mocks/${MOCK_ID}/responses/001.response.json`)
+        .send({ body: { id: "{{params.id | number}}", nuovo: true } });
+      expect(put.status).toBe(200);
+
+      expect((await readResponseFromDisk()).templated).toBe(true);
+      expect((await request(app).get("/api/utenti/8")).body).toEqual({ id: 8, nuovo: true });
+    });
+
+    test("templated non booleano nella PUT: 400 senza toccare il file", async () => {
+      await writeMock({
+        mocksDir,
+        folder: "utenti",
+        method: "GET",
+        routePath: "/api/utenti/:id",
+        body: { ok: true },
+      });
+      const app = await buildAdminApp();
+
+      const put = await request(app)
+        .put(`/_admin/api/mocks/${MOCK_ID}/responses/001.response.json`)
+        .send({ templated: "sì" });
+      expect(put.status).toBe(400);
+      expect((await readResponseFromDisk())).not.toHaveProperty("templated");
+    });
   });
 });
