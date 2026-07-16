@@ -39,6 +39,9 @@ import {
   SelectResponseRequest,
   SequenceConfig,
   SequenceState,
+  SseMessage,
+  SsePushResult,
+  SseStateResponse,
   ServerState,
   UNSORTED_COLLECTION_ID,
   MockUpdateRequest,
@@ -213,6 +216,16 @@ export class MockAdminApiService {
       `${this.baseUrl}/mocks/${encodeURIComponent(id)}/sequence/reset`,
       {},
     );
+  }
+
+  /** Stato della console SSE: connessioni aperte + storico dei messaggi usciti. */
+  getSseState(id: string): Observable<SseStateResponse> {
+    return this.http.get<SseStateResponse>(`${this.baseUrl}/mocks/${encodeURIComponent(id)}/sse/connections`);
+  }
+
+  /** Push manuale della console SSE: broadcast a tutte le connessioni aperte dell'endpoint. */
+  pushSse(id: string, message: SseMessage): Observable<SsePushResult> {
+    return this.http.post<SsePushResult>(`${this.baseUrl}/mocks/${encodeURIComponent(id)}/sse/push`, message);
   }
 
   /** Crea una nuova response per l'endpoint selezionato partendo dai valori confermati dall'utente. */

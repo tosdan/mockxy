@@ -2,7 +2,7 @@ import { ChangeDetectionStrategy, Component, computed, effect, inject, signal, V
 import { CdkMenuTrigger } from '@angular/cdk/menu';
 import { NgIcon, provideIcons } from '@ng-icons/core';
 import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
-import { lucideCheck, lucideCog, lucideCopy, lucideFile, lucideFileCode, lucideLayers, lucideListOrdered, lucideMessageSquare, lucidePencil, lucidePlus, lucideTrash2, lucideX } from '@ng-icons/lucide';
+import { lucideCheck, lucideCog, lucideCopy, lucideFile, lucideFileCode, lucideLayers, lucideListOrdered, lucideMessageSquare, lucidePencil, lucidePlus, lucideRadio, lucideTrash2, lucideX } from '@ng-icons/lucide';
 import { UiBadge, type BadgeTone } from '../../../ui/ui-badge/ui-badge';
 import { UiButton } from '../../../ui/ui-button/ui-button';
 import { UiChip } from '../../../ui/ui-chip/ui-chip';
@@ -21,6 +21,7 @@ import { MocksStore } from '../mocks-next.store';
 import { StatusCombobox, isValidStatus } from '../status-combobox/status-combobox';
 import { MocksNextCopyDialog, type CopyDialogData } from '../copy/mocks-next-copy-dialog';
 import { MocksNextSequenceDialog, type SequenceDialogData } from '../sequence/mocks-next-sequence-dialog';
+import { MocksNextSseConsole } from '../sse/mocks-next-sse-console';
 import { MocksNextResponseForm } from './response-form';
 import { ResponseDraft, type DraftPayloadType, type DraftScriptType } from './response-draft';
 import type { MockType } from '../../../mock-admin-api.types';
@@ -36,8 +37,8 @@ const METHOD_TONES: ReadonlySet<string> = new Set(['get', 'post', 'put', 'delete
  */
 @Component({
   selector: 'mocks-next-detail',
-  imports: [CdkMenuTrigger, NgIcon, StatusCombobox, TranslocoPipe, UiBadge, UiButton, UiChip, UiCode, UiCollapsible, UiInput, UiMenu, UiMenuItem, UiSelect, UiSkeleton, UiSwitch, UiTable, UiTooltip, MocksNextResponseForm],
-  providers: [provideIcons({ lucideCheck, lucideCog, lucideCopy, lucideFile, lucideFileCode, lucideLayers, lucideListOrdered, lucideMessageSquare, lucidePencil, lucidePlus, lucideTrash2, lucideX })],
+  imports: [CdkMenuTrigger, NgIcon, StatusCombobox, TranslocoPipe, UiBadge, UiButton, UiChip, UiCode, UiCollapsible, UiInput, UiMenu, UiMenuItem, UiSelect, UiSkeleton, UiSwitch, UiTable, UiTooltip, MocksNextResponseForm, MocksNextSseConsole],
+  providers: [provideIcons({ lucideCheck, lucideCog, lucideCopy, lucideFile, lucideFileCode, lucideLayers, lucideListOrdered, lucideMessageSquare, lucidePencil, lucidePlus, lucideRadio, lucideTrash2, lucideX })],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { class: 'relative flex min-w-0 flex-1 flex-col overflow-hidden bg-muted' },
   template: `
@@ -186,6 +187,10 @@ const METHOD_TONES: ReadonlySet<string> = new Set(['get', 'post', 'put', 'delete
               <ng-icon name="lucideCog" size="0.9rem" class="text-type-middleware" />
               <span class="flex-1">{{ 'detail.newResponseMiddleware' | transloco }}</span>
             </button>
+            <button ui-menu-item (click)="createSseResponse()">
+              <ng-icon name="lucideRadio" size="0.9rem" class="text-brand" />
+              <span class="flex-1">{{ 'detail.newResponseSse' | transloco }}</span>
+            </button>
             @if (isMockSelected()) {
             <div class="mx-1 my-1 h-px bg-border"></div>
             <button ui-menu-item (click)="createResponseOfType('handler', 'clone')">
@@ -207,6 +212,9 @@ const METHOD_TONES: ReadonlySet<string> = new Set(['get', 'post', 'put', 'delete
       <div class="min-h-0 flex-1" [class]="responseFormOpen() ? 'overflow-y-auto mx-scroll' : 'flex flex-col overflow-hidden'">
         @if (responseFormOpen()) {
         <mocks-next-response-form [draft]="draft" [creating]="creatingResponse()" (filePicked)="uploadResponseFile($event)" />
+        } @else if (d.type === 'sse') {
+        <!-- Variante SSE: al posto della preview del body c'è la console (regia manuale). -->
+        <mocks-next-sse-console [detail]="d" />
         } @else {
         @if (headerEntries().length) {
         <div class="shrink-0 border-b border-border">
@@ -304,10 +312,11 @@ export class MocksNextDetail {
   protected readonly newResponseLabel = computed(() =>
     this.transloco.translate('detail.newResponseTitle', { type: this.draft.scriptType() ?? 'mock' }));
 
-  /** La response selezionata e' modificabile in posto? (no payload binari). */
+  /** La response selezionata e' modificabile in posto? (no payload binari, no sse: il copione si edita da file/API). */
   protected readonly responseEditable = computed(() => {
     const d = this.detail();
     if (!d || !d.editable) return false;
+    if (d.type === 'sse') return false;
     if (d.type === 'handler' || d.type === 'middleware') return d.source != null;
     return d.payloadType === 'json' || d.payloadType === 'text' || d.payloadType === 'file' || d.payloadType == null;
   });
@@ -461,13 +470,23 @@ export class MocksNextDetail {
   // --- crea response (C2): apre il form su una BOZZA del tipo scelto (anche diverso dall'attuale).
   //     Niente create lato backend qui: avviene solo a "Salva" (createDraftResponse). "Annulla" scarta.
   //     seed='clone' semina lo script dalla response mock attuale; 'vanilla' usa il template. ---
-  protected createResponseOfType(type: MockType, seed: 'clone' | 'vanilla' = 'vanilla'): void {
+  protected createResponseOfType(type: Exclude<MockType, 'sse'>, seed: 'clone' | 'vanilla' = 'vanilla'): void {
     const d = this.detail();
     if (this.busy() || !d?.editable) return;
     this.resetEditState();
     const seededSource = type !== 'mock' && seed === 'clone' ? this.seedSourceFromMock(type) : undefined;
     this.draft.seedForCreate(type, seededSource);
     this.creatingResponse.set(true);
+  }
+
+  /**
+   * Crea una variante sse e la seleziona. Nessun form intermedio: nasce col copione vuoto (o
+   * clonato, se la selezionata è già sse) e si edita da file/API; la console appare subito.
+   */
+  protected createSseResponse(): void {
+    if (this.busy()) return;
+    this.resetEditState();
+    this.store.addResponse({ type: 'sse' });
   }
 
   // --- elimina response (C2) ---
