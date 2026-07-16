@@ -58,7 +58,7 @@ const ROOT_ORDER_KEY = 'root';
 /** Chiave (ViewStateService) dell'endpoint selezionato, ritrovato tornando sulla view. */
 const SELECTED_ENDPOINT_STATE_KEY = 'mocks-selected';
 
-export type TypeFilter = 'all' | 'mock' | 'handler' | 'middleware' | 'sse';
+export type TypeFilter = 'all' | 'mock' | 'handler' | 'middleware' | 'sse' | 'ws';
 export type StatusFilter = 'all' | 'on' | 'off';
 
 /**

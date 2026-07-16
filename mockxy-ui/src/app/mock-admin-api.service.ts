@@ -42,6 +42,9 @@ import {
   SseMessage,
   SsePushResult,
   SseStateResponse,
+  WsMessage,
+  WsPushResult,
+  WsStateResponse,
   ServerState,
   UNSORTED_COLLECTION_ID,
   MockUpdateRequest,
@@ -226,6 +229,16 @@ export class MockAdminApiService {
   /** Push manuale della console SSE: broadcast a tutte le connessioni aperte dell'endpoint. */
   pushSse(id: string, message: SseMessage): Observable<SsePushResult> {
     return this.http.post<SsePushResult>(`${this.baseUrl}/mocks/${encodeURIComponent(id)}/sse/push`, message);
+  }
+
+  /** Stato della console WS: connessioni aperte e transcript bidirezionale. */
+  getWsState(id: string): Observable<WsStateResponse> {
+    return this.http.get<WsStateResponse>(`${this.baseUrl}/mocks/${encodeURIComponent(id)}/ws/connections`);
+  }
+
+  /** Push manuale della console WS: broadcast a tutte le connessioni aperte. */
+  pushWs(id: string, message: WsMessage): Observable<WsPushResult> {
+    return this.http.post<WsPushResult>(`${this.baseUrl}/mocks/${encodeURIComponent(id)}/ws/push`, message);
   }
 
   /** Crea una nuova response per l'endpoint selezionato partendo dai valori confermati dall'utente. */

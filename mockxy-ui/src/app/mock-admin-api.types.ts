@@ -1,4 +1,4 @@
-export type MockType = 'mock' | 'middleware' | 'handler' | 'sse';
+export type MockType = 'mock' | 'middleware' | 'handler' | 'sse' | 'ws';
 
 /** Un messaggio SSE: data obbligatorio (JSON o stringa), event/id facoltativi. */
 export interface SseMessage {
@@ -50,6 +50,73 @@ export interface SseStateResponse {
 }
 
 export interface SsePushResult {
+  delivered: number;
+  connections: number;
+}
+
+/** Un messaggio WS: solo data (JSON — serializzato sul filo — o stringa). */
+export interface WsMessage {
+  data: unknown;
+}
+
+/** Voce del copione (o del reply di una regola): afterMs relativo al messaggio precedente. */
+export interface WsScriptEntry extends WsMessage {
+  afterMs: number;
+}
+
+/** Messaggio pronto della console WS (macro). */
+export interface WsPreset extends WsMessage {
+  label: string;
+}
+
+/** Il match di una regola: esattamente uno tra equals, contains e json (subset di primo livello). */
+export interface WsRuleMatch {
+  equals?: string;
+  contains?: string;
+  json?: Record<string, unknown>;
+}
+
+/** Regola dichiarativa sui messaggi in ingresso: prima che matcha vince, reply alla sola connessione. */
+export interface WsRule {
+  match: WsRuleMatch;
+  reply: WsScriptEntry[];
+}
+
+/** Definizione di una variante ws (normalizzata dal server). */
+export interface WsVariantConfig {
+  script: WsScriptEntry[];
+  onEnd: 'keep-open' | 'close' | 'loop';
+  closeCode: number | null;
+  closeReason: string | null;
+  rules: WsRule[];
+  presets: WsPreset[];
+}
+
+/** Una connessione WS aperta (console). */
+export interface WsConnectionInfo {
+  id: number;
+  startedAt: number;
+  messagesSent: number;
+  messagesReceived: number;
+  scriptIndex: number;
+  scriptLength: number;
+}
+
+/** Una voce del transcript bidirezionale della console WS. */
+export interface WsTranscriptEntry {
+  at: number;
+  direction: 'in' | 'out';
+  origin: 'script' | 'rule' | 'manual' | 'received';
+  connectionId?: number;
+  data: unknown;
+}
+
+export interface WsStateResponse {
+  connections: WsConnectionInfo[];
+  transcript: WsTranscriptEntry[];
+}
+
+export interface WsPushResult {
   delivered: number;
   connections: number;
 }
@@ -177,6 +244,8 @@ export interface MockDetail extends MockSummary {
   sequenceState?: SequenceState;
   /** Definizione della variante sse selezionata (copione, onEnd, presets). */
   sse?: SseVariantConfig;
+  /** Definizione della variante ws selezionata (copione, regole, presets). */
+  ws?: WsVariantConfig;
 }
 
 /**
@@ -269,7 +338,18 @@ export interface ResponseSseUpdateRequest {
   presets?: SsePreset[];
 }
 
-export type ResponseUpdateRequest = ResponseMockUpdateRequest | ResponseScriptUpdateRequest | ResponseSseUpdateRequest;
+export interface ResponseWsUpdateRequest {
+  type: 'ws';
+  title?: string;
+  script?: WsScriptEntry[];
+  onEnd?: 'keep-open' | 'close' | 'loop';
+  closeCode?: number | null;
+  closeReason?: string | null;
+  rules?: WsRule[];
+  presets?: WsPreset[];
+}
+
+export type ResponseUpdateRequest = ResponseMockUpdateRequest | ResponseScriptUpdateRequest | ResponseSseUpdateRequest | ResponseWsUpdateRequest;
 
 export type CreateResponseRequest = ResponseUpdateRequest | { title?: string };
 

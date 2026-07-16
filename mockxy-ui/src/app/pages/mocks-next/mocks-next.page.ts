@@ -60,7 +60,7 @@ export class MocksNextPage implements OnInit {
   }
 
   /** Apre il dialog "Nuovo" per il tipo scelto (vcr → il dialog vede lo store page-scoped). */
-  protected openCreate(type: Exclude<MockType, 'sse'>): void {
+  protected openCreate(type: Exclude<MockType, 'sse' | 'ws'>): void {
     this.dialog.open(MocksNextCreateDialog, {
       data: { type } satisfies CreateDialogData,
       viewContainerRef: this.vcr,
