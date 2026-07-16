@@ -146,6 +146,7 @@ async function getAdminMockDetail(mocksDir, id) {
       disabled: endpoint.enabled !== true,
       headers: response.headers == null ? {} : response.headers,
       delayMs: response.delayMs || 0,
+      templated: response.templated === true,
     };
     if (response.file != null) {
       const payloadPath = resolvePayloadPath(responseDir, response.file);

@@ -13,6 +13,7 @@ const {
   collectLocalDependencyFiles,
 } = require("./script-loader");
 const { normalizeSequenceConfig } = require("./sequence-config");
+const { templateReferencesRequestBody } = require("./mock-template");
 
 const HTTP_METHOD_PATTERN = /^(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)$/;
 const ENDPOINT_SUFFIX = ".endpoint.json";
@@ -190,10 +191,17 @@ function validateMockResponse(response, filePath, responseDir) {
   if (response.delayMs != null && (!Number.isInteger(response.delayMs) || response.delayMs < 0)) {
     throw new Error(`Invalid response ${filePath}: delayMs must be a non-negative integer`);
   }
+  if (response.templated != null && typeof response.templated !== "boolean") {
+    throw new Error(`Invalid response ${filePath}: templated must be a boolean`);
+  }
   validateHeaders(response.headers, filePath);
 
   const hasBody = Object.prototype.hasOwnProperty.call(response, "body");
   const hasFile = Object.prototype.hasOwnProperty.call(response, "file");
+  // I payload file sono serviti in streaming dal disco: il contenuto non si tocca.
+  if (response.templated === true && hasFile) {
+    throw new Error(`Invalid response ${filePath}: templated is not supported on file payloads`);
+  }
   if (hasBody && hasFile) {
     throw new Error(`Invalid response ${filePath}: body and file are mutually exclusive`);
   }
@@ -353,6 +361,11 @@ async function loadResponseByName(endpoint, endpointFilePath, responseFileName, 
 
     result.payloadType = typeof response.body === "string" ? "text" : "json";
     result.body = response.body;
+    // Templating opt-in (vedi mock-template.js). Deciso al load se il template referenzia il
+    // body della richiesta: solo in quel caso il serving lo bufferizza.
+    result.templated = response.templated === true;
+    result.templateNeedsBody = result.templated
+      && (templateReferencesRequestBody(response.body) || templateReferencesRequestBody(response.headers));
     return result;
   }
 
@@ -397,6 +410,8 @@ async function loadSequenceSteps(endpoint, endpointFilePath) {
         delayMs: response.delayMs,
         payloadType: response.payloadType,
         body: response.body,
+        templated: response.templated,
+        templateNeedsBody: response.templateNeedsBody,
         configFilePath: endpointFilePath,
         responseFilePath: response.responseFilePath,
         selectedResponseFile: response.responseFileName,
@@ -494,6 +509,8 @@ async function loadEndpointRouteGroups(mocksDir) {
           delayMs: response.delayMs,
           payloadType: response.payloadType,
           body: response.body,
+          templated: response.templated,
+          templateNeedsBody: response.templateNeedsBody,
           configFilePath: filePath,
           responseFilePath: response.responseFilePath,
           selectedResponseFile: response.responseFileName,

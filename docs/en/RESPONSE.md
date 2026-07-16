@@ -36,6 +36,8 @@ but any name ending in `.response.json` is valid, as long as it is a plain file 
 - **`delayMs`** — optional: delay in milliseconds before the response, non-negative
   integer. When greater than zero it **wins over the server's global delay**; at zero or
   absent, the global delay (if any) applies.
+- **`templated`** — optional, default `false`: enables [templating](#templating) of the
+  `{{...}}` placeholders in body and headers. Not allowed on `file`-backed responses.
 - **`body`** or **`file`** — exactly one of the two:
   - **JSON `body`** (object, array, number, boolean) — served as JSON. If it is an array, or an
     object with a single top-level array, the response takes part in automatic pagination and
@@ -49,6 +51,41 @@ but any name ending in `.response.json` is valid, as long as it is a plain file 
     content is never loaded into memory, so even payloads of hundreds of MB
     (downloads, images, PDFs) don't weigh on the server. Without a `content-type` declared in
     the headers, the response goes out as `application/octet-stream`.
+
+## Templating
+
+With **`templated: true`** the `{{...}}` placeholders in the body (JSON or text) and in the
+headers are replaced with values from the request: the «echo back the id you asked for» case
+without reaching for a handler.
+
+```json
+{
+  "type": "mock",
+  "status": 200,
+  "templated": true,
+  "headers": { "location": "/api/utenti/{{params.id}}" },
+  "body": {
+    "id": "{{params.id | number}}",
+    "nome": "Utente {{params.id}}",
+    "ruolo": "{{query.ruolo}}",
+    "richiestoAlle": "{{now}}"
+  }
+}
+```
+
+- **Sources**: `params.<name>` (path parameters), `query.<name>` (first value if repeated),
+  `headers.<name>` (lowercase names), `body.<dot.path>` (the request's JSON body, read only
+  when referenced).
+- **Generated helpers**: `now` (ISO 8601), `nowMs` (epoch ms), `uuid`, `randomInt min max`.
+- **Type filter**: when the whole string value is a single placeholder,
+  `"{{params.id | number}}"` produces the number without quotes (non-numeric → `null`);
+  `| boolean` and `| json` (the body subtree as-is) also exist.
+- **Unresolved placeholder**: the response is served anyway (empty string; `null` with a
+  filter) and the engine logs a warning with the placeholder — a typo doesn't break your test
+  run. Escape: `\{{` produces a literal `{{`.
+- The template is applied **before** [automatic pagination and filters](LISTE.md): a templated
+  array body takes part in them like a static one.
+- No conditionals, loops or expressions: when you need logic, the right step up is a handler.
 
 ## `handler` response
 

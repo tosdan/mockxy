@@ -280,6 +280,9 @@ function buildNewTypedResponse(responseDir, responseFileName, payload) {
       delayMs: payload?.delayMs ?? 0,
       body: Object.prototype.hasOwnProperty.call(payload || {}, "body") ? payload.body : {},
     };
+    if (normalizeTemplatedFlag(payload, null)) {
+      nextResponse.templated = true;
+    }
     return { nextResponse, assetCopies: [], assetWrites: [] };
   }
 
@@ -309,6 +312,19 @@ function normalizeUpdatedResponseTitle(payload, response) {
   return payload.title;
 }
 
+// Flag templated della variante mock: dal payload quando presente (validato), altrimenti
+// conservato dalla response esistente — le scritture ricostruiscono il file e perderlo qui
+// significherebbe spegnere il templating a ogni salvataggio.
+function normalizeTemplatedFlag(payload, response) {
+  if (Object.prototype.hasOwnProperty.call(payload || {}, "templated")) {
+    if (payload.templated != null && typeof payload.templated !== "boolean") {
+      throw createAdminError(400, "templated must be a boolean.");
+    }
+    return payload.templated === true;
+  }
+  return response?.templated === true;
+}
+
 function buildUpdatedEndpointResponse(response, payload) {
   const requestedType = payload?.type || response.type;
   if (requestedType !== response.type) {
@@ -325,11 +341,16 @@ function buildUpdatedEndpointResponse(response, payload) {
         : response.headers == null ? {} : response.headers,
       delayMs: payload?.delayMs ?? response.delayMs ?? 0,
     };
+    if (normalizeTemplatedFlag(payload, response)) {
+      nextResponse.templated = true;
+    }
 
     const payloadHasBody = Object.prototype.hasOwnProperty.call(payload || {}, "body");
     if (response.file != null && !payloadHasBody) {
       // response file-backed senza un body esplicito: resta file (modifica solo i metadati).
       nextResponse.file = response.file;
+      // I payload file sono serviti in streaming: niente templating (stessa regola del loader).
+      delete nextResponse.templated;
     } else {
       // json/text, oppure switch file→body: un body esplicito sgancia il file.
       nextResponse.body = payloadHasBody ? payload.body : response.body ?? {};
@@ -790,6 +811,9 @@ async function updateAdminMock(mocksDir, id, payload, reloadRuntime) {
       delayMs: config.delayMs || 0,
       body: Object.prototype.hasOwnProperty.call(payload || {}, "body") ? payload.body : response.body ?? {},
     };
+    if (normalizeTemplatedFlag(payload?.config, response)) {
+      nextResponse.templated = true;
+    }
   }
 
   await writeFileAtomic(responseFilePath, `${JSON.stringify(nextResponse, null, 2)}\n`, "utf8");

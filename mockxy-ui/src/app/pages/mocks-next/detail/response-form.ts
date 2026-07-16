@@ -9,6 +9,7 @@ import { UiCodeEditor } from '../../../ui/ui-code-editor/ui-code-editor';
 import { EditorShortcutsHelp } from '../../../ui/ui-code-editor/editor-shortcuts-help';
 import { UiInput } from '../../../ui/ui-input/ui-input';
 import { UiMenu, UiMenuItem } from '../../../ui/ui-menu/ui-menu';
+import { UiSwitch } from '../../../ui/ui-switch/ui-switch';
 import { UiToggleGroup, UiToggleItem } from '../../../ui/ui-toggle-group/ui-toggle-group';
 import { UiTooltip } from '../../../ui/ui-tooltip/ui-tooltip';
 import { MocksStore } from '../mocks-next.store';
@@ -32,7 +33,7 @@ import type { ResponseDraft } from './response-draft';
  */
 @Component({
   selector: 'mocks-next-response-form',
-  imports: [CdkMenuTrigger, HeaderNameCombobox, NgIcon, StatusCombobox, TranslocoPipe, UiBadge, UiButton, UiCodeEditor, EditorShortcutsHelp, UiInput, UiMenu, UiMenuItem, UiToggleGroup, UiToggleItem, UiTooltip],
+  imports: [CdkMenuTrigger, HeaderNameCombobox, NgIcon, StatusCombobox, TranslocoPipe, UiBadge, UiButton, UiCodeEditor, EditorShortcutsHelp, UiInput, UiMenu, UiMenuItem, UiSwitch, UiToggleGroup, UiToggleItem, UiTooltip],
   providers: [provideIcons({ lucideBan, lucideCheck, lucideChevronDown, lucideGlobe, lucideKey, lucideLayers, lucidePlus, lucideRefreshCw, lucideRepeat, lucideShield, lucideUpload, lucideX, lucideZap })],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -57,6 +58,16 @@ import type { ResponseDraft } from './response-draft';
           <label class="text-[12px] font-bold uppercase tracking-[0.14em] text-foreground/80">{{ 'detail.delayLabel' | transloco }}</label>
           <input ui-input type="number" min="0" class="w-32 text-[13px] tabular-nums" [value]="draft().delay()" (input)="draft().delay.set(toInt($any($event.target).value))" />
         </div>
+        @if (draft().payloadType() !== 'file') {
+        <!-- Templating opt-in: placeholder params/query/headers/body nel body e negli header (mai sui file). -->
+        <div class="flex flex-col gap-1.5" [uiTooltip]="'detail.templatedTip' | transloco">
+          <label class="text-[12px] font-bold uppercase tracking-[0.14em] text-foreground/80">{{ 'detail.templatedLabel' | transloco }}</label>
+          <span class="inline-flex h-9 items-center gap-2">
+            <ui-switch [checked]="draft().templated()" (checkedChange)="draft().templated.set($event)" size="sm" [ariaLabel]="'detail.templatedLabel' | transloco" />
+            <code class="font-mono text-[11px] text-muted-foreground">{{ templateExample }}</code>
+          </span>
+        </div>
+        }
       </div>
 
       @if (draft().pendingPreset(); as p) {
@@ -200,6 +211,8 @@ import type { ResponseDraft } from './response-draft';
 export class MocksNextResponseForm {
   /** Bozza condivisa col dettaglio (che tiene Salva/Annulla in toolbar). */
   readonly draft = input.required<ResponseDraft>();
+  /** Esempio mostrato accanto al toggle Template (le doppie graffe non si scrivono nel template Angular). */
+  protected readonly templateExample = '{{params.id}} · {{query.x}}';
   /** True in creazione: il file scelto resta in bozza invece di essere caricato subito. */
   readonly creating = input(false);
   /** File scelto in MODIFICA: il padre lo carica subito sulla response corrente. */
