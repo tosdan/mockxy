@@ -1,7 +1,7 @@
 const { sortRouteGroups } = require("./route-groups");
 
 // Merges every locally served endpoint so exact and dynamic precedence stays stable across types.
-function mergeLocalRouteGroups({ mockRouteGroups = [], handlerRouteGroups = [], sequenceRouteGroups = [] }) {
+function mergeLocalRouteGroups({ mockRouteGroups = [], handlerRouteGroups = [], sequenceRouteGroups = [], sseRouteGroups = [] }) {
   const mergedGroups = new Map();
 
   function ingestRouteGroups(routeGroups, type) {
@@ -39,6 +39,7 @@ function mergeLocalRouteGroups({ mockRouteGroups = [], handlerRouteGroups = [], 
   ingestRouteGroups(mockRouteGroups, "mock");
   ingestRouteGroups(handlerRouteGroups, "handler");
   ingestRouteGroups(sequenceRouteGroups, "sequence");
+  ingestRouteGroups(sseRouteGroups, "sse");
 
   return sortRouteGroups(Array.from(mergedGroups.values()));
 }

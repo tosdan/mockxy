@@ -65,6 +65,15 @@ class MockRegistry {
           };
         }
 
+        // Variante SSE: la connessione resta aperta e il copione va in onda (vedi app.js).
+        if (endpoint.type === "sse") {
+          return {
+            mode: "sse",
+            routePath: group.path,
+            sse: endpoint,
+          };
+        }
+
         return {
           mode: "mock",
           routePath: group.path,
