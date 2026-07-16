@@ -32,10 +32,12 @@ marcate come tali. Le voci si cancellano quando implementate, come nel TODO.
    Implementata la decisione: il dropdown della provenienza ora ha l'etichetta visibile
    "Servita da" e una voce combinata "Backend vero" (= tutto ciò che non uscì da mock/handler:
    proxy, middleware, miss); il pulsante "Non mockate" col numero è stato eliminato.
-2. **Stringhe UI sfuggite all'i18n** *(scoperte il 10 lug durante la traduzione della doc)*:
-   almeno due testi visibili sono cablati nel codice fuori dai file di traduzione — il "Proxy
-   All" della barra runtime e il titolo «dal monitor · HH:mm:ss» delle varianti create dalla
-   cattura. Censire con un grep mirato e portarle nei file i18n.
+2. ~~Stringhe UI sfuggite all'i18n~~ **RISOLTO** *(censite e portate in i18n il 16 lug 2026)*.
+   Spostate nelle chiavi: gli stati del Proxy All («straight to backend»/«mocking active»),
+   «live» del monitor e il titolo «dal monitor · HH:mm:ss» delle varianti catturate. Restano
+   letterali di proposito: i nomi delle feature (Proxy All, Monitor, Dump, Flush) per la regola
+   sui termini tecnici, e il marcatore «[da completare]», gemello della costante del motore
+   (`dump-to-mock.js`) che la ricerca nel catalogo deve trovare in entrambe le lingue.
 3. **Toast di conferma che resta indietro.** Dopo creazioni ravvicinate il toast mostrava
    ancora il testo della creazione precedente (visto creando la fattura subito dopo il mock di
    `instabile`). *(osservato una volta — da riprodurre prima di fixare)*
