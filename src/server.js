@@ -8,6 +8,7 @@ const { createLogger } = require("./utils/logger");
 const { MockRegistry } = require("./mocks/mock-registry");
 const { SequenceStateStore } = require("./mocks/sequence-state");
 const { HandlerStateStore } = require("./mocks/handler-state");
+const { SseConnectionStore } = require("./mocks/sse-connections");
 const { ProxyMiddlewareRegistry } = require("./proxy/proxy-middleware-registry");
 const { sortRouteGroups } = require("./mocks/route-groups");
 const { RequestMonitorStore } = require("./monitoring/request-monitor");
@@ -42,7 +43,7 @@ function graftPreviousRoutes(nextRouteGroups, previousRouteGroups, erroredFilePa
   return grafted ? sortRouteGroups(Array.from(groupsByPath.values())) : nextRouteGroups;
 }
 
-function createReloadHandler({ mocksDir, registry, proxyMiddlewareRegistry, logger }) {
+function createReloadHandler({ mocksDir, registry, proxyMiddlewareRegistry, logger, sseConnections }) {
   let reloadInProgress = false;
   let reloadQueued = false;
 
@@ -54,12 +55,13 @@ function createReloadHandler({ mocksDir, registry, proxyMiddlewareRegistry, logg
 
     reloadInProgress = true;
     try {
-      const { mockRouteGroups, handlerRouteGroups, proxyMiddlewareRouteGroups, sequenceRouteGroups, loadErrors } =
+      const { mockRouteGroups, handlerRouteGroups, proxyMiddlewareRouteGroups, sequenceRouteGroups, sseRouteGroups, loadErrors } =
         await loadEndpointRouteGroups(mocksDir);
       let routeGroups = mergeLocalRouteGroups({
         mockRouteGroups,
         handlerRouteGroups,
         sequenceRouteGroups,
+        sseRouteGroups,
       });
       let middlewareRouteGroups = proxyMiddlewareRouteGroups;
       if (loadErrors.length > 0) {
@@ -79,6 +81,10 @@ function createReloadHandler({ mocksDir, registry, proxyMiddlewareRegistry, logg
       }
       registry.setRouteGroups(routeGroups);
       proxyMiddlewareRegistry.setRouteGroups(middlewareRouteGroups);
+      // Le connessioni SSE aperte vanno chiuse: stanno servendo copioni della configurazione
+      // precedente. Il client SSE riconnette da solo e il copione (eventualmente nuovo) riparte
+      // — "riconnessione = reset" è la semantica documentata.
+      sseConnections?.closeAll();
       logger.info("Runtime routes reloaded.", {
         routeCount: routeGroups.length,
         proxyMiddlewareCount: middlewareRouteGroups.length,
@@ -175,7 +181,7 @@ async function createServerRuntime({ configOverrides = {}, logger: extLogger } =
       "BACKEND_URL is not configured. Mocks and local handlers work normally, but requests that fall through to the backend (proxy fallback) or use proxy middleware will return 501 until BACKEND_URL is set."
     );
   }
-  const { mockRouteGroups, handlerRouteGroups, proxyMiddlewareRouteGroups, sequenceRouteGroups, loadErrors } =
+  const { mockRouteGroups, handlerRouteGroups, proxyMiddlewareRouteGroups, sequenceRouteGroups, sseRouteGroups, loadErrors } =
     await loadEndpointRouteGroups(config.mocksDir);
   // Avvio resiliente: un file rotto non blocca il boot — l'endpoint viene saltato con un
   // warning per file, gli altri mock partono normalmente.
@@ -189,6 +195,7 @@ async function createServerRuntime({ configOverrides = {}, logger: extLogger } =
     mockRouteGroups,
     handlerRouteGroups,
     sequenceRouteGroups,
+    sseRouteGroups,
   });
   // I cursori delle sequenze vivono qui (non nel registry): sopravvivono alle ricariche a caldo
   // e vengono azzerati solo da riavvio, reset esplicito, inattività o cambio di definizione.
@@ -196,6 +203,8 @@ async function createServerRuntime({ configOverrides = {}, logger: extLogger } =
   // Memoria per-endpoint degli handler (state/callCount/firstRequestAt): come i cursori,
   // vive nel runtime e sopravvive alle ricariche a caldo; si azzera a riavvio o reset.
   const handlerStates = new HandlerStateStore();
+  // Connessioni SSE vive + storico per la console; chiuse a ogni reload e allo shutdown.
+  const sseConnections = new SseConnectionStore();
   const registry = new MockRegistry(routeGroups, sequenceStates);
   const proxyMiddlewareRegistry = new ProxyMiddlewareRegistry(proxyMiddlewareRouteGroups);
   const requestMonitor = new RequestMonitorStore(undefined, logger);
@@ -213,6 +222,7 @@ async function createServerRuntime({ configOverrides = {}, logger: extLogger } =
     registry,
     proxyMiddlewareRegistry,
     logger,
+    sseConnections,
   });
   const app = createApp({
     registry,
@@ -225,6 +235,7 @@ async function createServerRuntime({ configOverrides = {}, logger: extLogger } =
     monitorDump,
     sequenceStates,
     handlerStates,
+    sseConnections,
   });
   const watcher = startMockWatcher({
     config,
@@ -245,6 +256,7 @@ async function createServerRuntime({ configOverrides = {}, logger: extLogger } =
     registry,
     sequenceStates,
     handlerStates,
+    sseConnections,
     reloadRuntime,
     watcher,
   };
@@ -309,6 +321,8 @@ async function startServer(options = {}) {
     const cleanupSteps = [
       ["monitor dump stop", () => runtime.monitorDump?.stop()],
       ["watcher close", () => runtime.watcher?.close()],
+      // Gli stream SSE aperti trattengono server.close come le WebSocket: chiusura esplicita.
+      ["sse connections close", () => runtime.sseConnections?.closeAll()],
       // I tunnel di upgrade (WebSocket) si staccano dal tracking del server: vanno chiusi a mano,
       // altrimenti server.close resta appeso su una connessione lunga ancora attiva.
       ["upgrade tunnels close", () => upgradeHandler.closeConnections()],

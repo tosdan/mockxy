@@ -1,4 +1,58 @@
-export type MockType = 'mock' | 'middleware' | 'handler';
+export type MockType = 'mock' | 'middleware' | 'handler' | 'sse';
+
+/** Un messaggio SSE: data obbligatorio (JSON o stringa), event/id facoltativi. */
+export interface SseMessage {
+  event?: string;
+  id?: string;
+  data: unknown;
+}
+
+/** Voce del copione di una variante sse: afterMs relativo al messaggio precedente. */
+export interface SseScriptEntry extends SseMessage {
+  afterMs: number;
+}
+
+/** Messaggio pronto della console (macro). */
+export interface SsePreset extends SseMessage {
+  label: string;
+}
+
+/** Definizione di una variante sse (normalizzata dal server). */
+export interface SseVariantConfig {
+  retryMs: number | null;
+  script: SseScriptEntry[];
+  onEnd: 'keep-open' | 'close' | 'loop';
+  presets: SsePreset[];
+}
+
+/** Una connessione SSE aperta (console). */
+export interface SseConnectionInfo {
+  id: number;
+  startedAt: number;
+  eventsSent: number;
+  scriptIndex: number;
+  scriptLength: number;
+}
+
+/** Una voce dello storico della console: messaggio uscito, dal copione o dalla regia manuale. */
+export interface SseHistoryEntry {
+  at: number;
+  origin: 'script' | 'manual';
+  connectionId?: number;
+  event?: string;
+  id?: string;
+  data: unknown;
+}
+
+export interface SseStateResponse {
+  connections: SseConnectionInfo[];
+  history: SseHistoryEntry[];
+}
+
+export interface SsePushResult {
+  delivered: number;
+  connections: number;
+}
 export type MockPayloadType = 'json' | 'text' | 'file' | 'none';
 export const UNSORTED_COLLECTION_ID = 'unsorted';
 
@@ -121,6 +175,8 @@ export interface MockDetail extends MockSummary {
   source?: string;
   /** Cursore runtime della sequenza; presente solo quando l'endpoint ne ha una (GET dettaglio). */
   sequenceState?: SequenceState;
+  /** Definizione della variante sse selezionata (copione, onEnd, presets). */
+  sse?: SseVariantConfig;
 }
 
 /**
@@ -204,7 +260,16 @@ export interface ResponseScriptUpdateRequest {
   source?: string;
 }
 
-export type ResponseUpdateRequest = ResponseMockUpdateRequest | ResponseScriptUpdateRequest;
+export interface ResponseSseUpdateRequest {
+  type: 'sse';
+  title?: string;
+  retryMs?: number | null;
+  script?: SseScriptEntry[];
+  onEnd?: 'keep-open' | 'close' | 'loop';
+  presets?: SsePreset[];
+}
+
+export type ResponseUpdateRequest = ResponseMockUpdateRequest | ResponseScriptUpdateRequest | ResponseSseUpdateRequest;
 
 export type CreateResponseRequest = ResponseUpdateRequest | { title?: string };
 

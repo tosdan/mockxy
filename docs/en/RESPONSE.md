@@ -6,11 +6,13 @@ respond when that variant is selected. Variants let you keep several behaviors r
 same endpoint — the populated case, the empty list, the error — and switch from one to the
 other by changing only the selected variant, without touching the contents.
 
-The `type` field distinguishes three natures of response:
+The `type` field distinguishes four natures of response:
 
 - **`mock`** — a static response described in the file itself (status, headers, body or payload from a file);
 - **`handler`** — a response computed by a local JavaScript script;
-- **`middleware`** — a transformation applied to the response of the proxied real backend.
+- **`middleware`** — a transformation applied to the response of the proxied real backend;
+- **`sse`** — a Server-Sent Events stream: the connection stays open and events go out
+  following a script (or the console's manual direction).
 
 The UI creates the files with progressive names (`001.response.json`, `002.response.json`, …),
 but any name ending in `.response.json` is valid, as long as it is a plain file name
@@ -125,6 +127,47 @@ Same structure as the handler, with the **`.middleware.js`** suffix and the expo
 `transformResponse`: the engine forwards the request to the real backend and passes the
 response to the script, which can modify it before it reaches the client. Limits and contract
 are documented in the page on proxy middleware.
+
+## `sse` response
+
+```json
+{
+  "type": "sse",
+  "title": "Job progress",
+  "retryMs": 3000,
+  "script": [
+    { "afterMs": 0,    "event": "progress", "data": { "percent": 10 } },
+    { "afterMs": 1500, "event": "progress", "data": { "percent": 60 } },
+    { "afterMs": 3000, "event": "done",     "data": { "percent": 100 } }
+  ],
+  "onEnd": "keep-open",
+  "presets": [
+    { "label": "Error", "event": "error", "data": { "message": "boom" } }
+  ]
+}
+```
+
+When the selected variant is of type `sse`, the endpoint answers with a `text/event-stream`
+that stays open: the **script** plays **on every connection, independently for each one** —
+reconnecting means starting over.
+
+- **`script`** — the event timeline, possibly empty (a silent endpoint, fed only from the
+  console). Each entry: **`afterMs`** (delay from the previous message, integer ≥ 0), **`data`**
+  (JSON — serialized — or a string, multi-line allowed), optional **`event`** and **`id`**
+  (the SSE protocol fields).
+- **`onEnd`** — once the script is over: **`keep-open`** (default: the connection stays open
+  for heartbeats and manual pushes), **`close`** (the server closes), **`loop`** (start over;
+  at least one positive `afterMs` is required).
+- **`retryMs`** — optional: the SSE `retry:` field sent at the start of the connection.
+- **`presets`** — optional: the ready-made messages (macros) of the endpoint's console.
+
+During silences the engine sends a **heartbeat** comment every 15 seconds (invisible to
+clients). Connections are closed on hot reload and shutdown: the SSE client reconnects on its
+own and the script starts over. The **console** in the endpoint detail shows open connections
+and history, and allows manual direction (broadcast to every connection) — via API:
+`POST /mocks/:id/sse/push` and `GET /mocks/:id/sse/connections`. The [monitor](MONITOR.md)
+entry is written when the connection closes. An `sse` variant cannot be a step of a
+[sequence](ENDPOINT.md).
 
 ## Validation and errors
 

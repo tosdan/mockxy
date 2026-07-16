@@ -172,6 +172,18 @@ async function getAdminMockDetail(mocksDir, id) {
     return detail;
   }
 
+  // Variante SSE: niente sorgente su disco, la definizione È il copione (script/onEnd/...).
+  if (response.type === "sse") {
+    detail.sse = {
+      retryMs: response.retryMs,
+      script: response.script,
+      onEnd: response.onEnd,
+      presets: response.presets,
+    };
+    detail.payloadFilePath = responseFilePath;
+    return detail;
+  }
+
   const sourcePath = resolvePayloadPath(responseDir, response.sourceFile);
   detail.definition = {
     method: endpoint.method,

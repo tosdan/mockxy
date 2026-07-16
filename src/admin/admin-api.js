@@ -17,6 +17,8 @@ const {
   updateAdminResponse,
   setAdminResponseFile,
   resetAdminSequence,
+  pushAdminSseMessage,
+  listAdminSseState,
 } = require("./endpoint-operations");
 const {
   assignAdminCollection,
@@ -56,7 +58,7 @@ function sendJson(res, status, payload) {
   res.status(status).json(payload);
 }
 
-function createAdminApiRouter({ config, reloadRuntime, requestMonitor, serverState, monitorDump, sequenceStates, handlerStates }) {
+function createAdminApiRouter({ config, reloadRuntime, requestMonitor, serverState, monitorDump, sequenceStates, handlerStates, sseConnections }) {
   const router = express.Router();
 
   router.use(express.json({ limit: "2mb" }));
@@ -282,6 +284,17 @@ function createAdminApiRouter({ config, reloadRuntime, requestMonitor, serverSta
   // immediata, nessun file toccato.
   router.post("/mocks/:id/sequence/reset", async (req, res) => {
     const result = await resetAdminSequence(config.mocksDir, req.params.id, sequenceStates, handlerStates);
+    sendJson(res, 200, result);
+  });
+
+  // Console SSE: push manuale broadcast e stato (connessioni aperte + storico) dell'endpoint
+  // la cui variante selezionata è di tipo sse. Azioni runtime, nessun file toccato.
+  router.post("/mocks/:id/sse/push", async (req, res) => {
+    const result = await pushAdminSseMessage(config.mocksDir, req.params.id, req.body, sseConnections);
+    sendJson(res, 200, result);
+  });
+  router.get("/mocks/:id/sse/connections", async (req, res) => {
+    const result = await listAdminSseState(config.mocksDir, req.params.id, sseConnections);
     sendJson(res, 200, result);
   });
 

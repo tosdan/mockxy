@@ -76,8 +76,10 @@ connessione È il reset.
   chiudono per inattività. Non è un evento: i client non lo vedono.
 - **CORS**: vale l'opzione già esistente del motore (l'hook su writeHead copre anche questo ramo).
 - Le connessioni si chiudono in modo pulito allo shutdown del motore e alla ricarica a caldo
-  che tocca l'endpoint (il client SSE ri-connette da solo: è il comportamento naturale del
-  protocollo, e il copione riparte — coerente con «riconnessione = reset»).
+  (il client SSE ri-connette da solo: è il comportamento naturale del protocollo, e il copione
+  riparte — coerente con «riconnessione = reset»). *Deviazione presa in implementazione:* si
+  chiudono a **ogni** reload, non solo quando cambia l'endpoint interessato — il reload non
+  distingue in modo affidabile cosa è cambiato, e una riconnessione in più è innocua.
 - Fuori scope MVP: ritardi/paginazione/filtri automatici (non hanno senso su uno stream),
   variante `sse` dentro una sequenza di varianti (la sequenza sceglie tra risposte "chiuse";
   mescolare i due tempi — tra richieste e dentro la connessione — confonde più di quanto serva).

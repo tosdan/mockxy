@@ -491,6 +491,7 @@ export class MocksNextCatalog {
     { value: 'mock', labelKey: 'catalog.filterMock' },
     { value: 'handler', labelKey: 'catalog.filterHandler' },
     { value: 'middleware', labelKey: 'catalog.filterMiddleware' },
+    { value: 'sse', labelKey: 'catalog.filterSse' },
   ];
   protected readonly statusOptions: ReadonlyArray<{ value: StatusFilter; labelKey: string }> = [
     { value: 'all', labelKey: 'catalog.filterAll' },
@@ -735,10 +736,10 @@ export class MocksNextCatalog {
   }
 
   protected typeDotClass(type: MockType): string {
-    return type === 'handler' ? 'bg-type-handler/55' : type === 'middleware' ? 'bg-type-middleware/55' : 'bg-type-mock/55';
+    return type === 'handler' ? 'bg-type-handler/55' : type === 'middleware' ? 'bg-type-middleware/55' : type === 'sse' ? 'bg-brand/55' : 'bg-type-mock/55';
   }
 
   protected typeTextClass(type: MockType): string {
-    return type === 'handler' ? 'text-type-handler/75' : type === 'middleware' ? 'text-type-middleware/75' : 'text-type-mock/75';
+    return type === 'handler' ? 'text-type-handler/75' : type === 'middleware' ? 'text-type-middleware/75' : type === 'sse' ? 'text-brand/75' : 'text-type-mock/75';
   }
 }

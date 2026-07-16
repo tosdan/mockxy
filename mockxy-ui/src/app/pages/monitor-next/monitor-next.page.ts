@@ -777,9 +777,9 @@ export class MonitorNextPage {
     return this.sourceMeta(source).color;
   }
 
-  /** "Non mockata": servita dal backend (proxy / middleware / miss), senza una response locale (mock/handler). */
+  /** "Non mockata": servita dal backend (proxy / middleware / miss), senza una response locale (mock/handler/sse). */
   protected isUnmocked(source: string): boolean {
-    return source !== 'mock' && source !== 'handler';
+    return source !== 'mock' && source !== 'handler' && source !== 'sse';
   }
 
   private sourceMeta(source: string): SourceMeta {
@@ -787,6 +787,7 @@ export class MonitorNextPage {
       case 'mock': return { label: 'Mock', color: 'var(--type-mock)' };
       case 'handler': return { label: 'Handler', color: 'var(--type-handler)' };
       case 'middleware': return { label: 'Middleware', color: 'var(--type-middleware)' };
+      case 'sse': return { label: 'SSE', color: 'var(--brand)' };
       case 'backend': return { label: 'Proxy', color: 'var(--brand-soft)' };
       case 'mock-only':
       case 'mock-only-miss': return { label: 'Miss', color: 'var(--foreground-faint)' };

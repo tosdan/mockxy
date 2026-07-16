@@ -38,6 +38,8 @@ state between tests, pipelines that import an updated spec.
 | `GET /mocks/:id` | detail of an endpoint with its variants |
 | `PUT /mocks/:id` | updates the definition (including `enabled`, the selected variant and — with a `{ sequence }` body, `null` to remove it — the [variant sequence](ENDPOINT.md)) |
 | `POST /mocks/:id/sequence/reset` | resets the sequence cursor: the next request starts over from the first step. Responds with the cleared state (`sequenceState`) |
+| `POST /mocks/:id/sse/push` | manual push of the [SSE](RESPONSE.md) console: body `{ data, event?, id? }`, broadcast to every open connection — responds `{ delivered, connections }` |
+| `GET /mocks/:id/sse/connections` | SSE console state: open connections (with script position) and history of sent messages |
 | `PUT /mocks/:id/endpoint` | updates method, path, description |
 | `POST /mocks/:id/copy` | duplicates onto a new method+path — body `{ method, path, copyResponses }` |
 | `PUT /mocks/:id/collection` | assigns the endpoint to a collection |

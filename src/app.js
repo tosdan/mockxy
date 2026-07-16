@@ -21,6 +21,7 @@ const {
   renderTemplateValue,
   renderTemplateHeaders,
 } = require("./mocks/mock-template");
+const { formatSseMessage, SseConnectionStore } = require("./mocks/sse-connections");
 const { runWithTimeout } = require("./utils/run-with-timeout");
 const { ServerStateStore } = require("./server-state");
 const { setNoCacheHeaders } = require("./utils/cache");
@@ -646,6 +647,85 @@ async function respondWithMock(req, res, mockResponse, globalDelayMs = 0, caseIn
   res.status(mockResponse.status).json(payload.body);
 }
 
+// Heartbeat delle connessioni SSE: un commento ogni 15s tiene vivi proxy e client durante i
+// silenzi del copione, senza che i client lo vedano come evento.
+const SSE_HEARTBEAT_MS = 15000;
+
+/**
+ * Serve una variante `sse`: apre lo stream (headers + eventuale retry), registra la connessione
+ * nello store (console/push) e manda in onda il copione con i suoi tempi. `afterMs` è relativo
+ * al messaggio precedente; a copione esaurito vale onEnd (keep-open/close/loop). La pulizia
+ * (timer, heartbeat, registrazione) passa tutta dal 'close' della response, qualunque sia la
+ * causa (client, reload, shutdown).
+ */
+function respondWithSse(req, res, decision, sseConnections, heartbeatMs) {
+  const effectiveHeartbeatMs = heartbeatMs ?? SSE_HEARTBEAT_MS;
+  const sse = decision.sse;
+  const key = `${sse.method} ${sse.path}`;
+
+  res.status(200);
+  res.setHeader("content-type", "text/event-stream");
+  setNoCacheHeaders(res);
+  res.setHeader(TECH_HEADER, "sse");
+  // I buffer intermedi (nginx & co.) devono lasciar passare gli eventi appena scritti.
+  res.setHeader("x-accel-buffering", "no");
+  res.flushHeaders();
+  if (sse.retryMs != null) {
+    res.write(`retry: ${sse.retryMs}\n\n`);
+  }
+
+  const connection = sseConnections.register(key, {
+    scriptLength: sse.script.length,
+    write: (text) => res.write(text),
+    close: () => res.end(),
+  });
+
+  let scriptTimer = null;
+  let scriptIndex = 0;
+
+  const playNext = () => {
+    if (scriptIndex >= sse.script.length) {
+      if (sse.onEnd === "close") {
+        res.end();
+        return;
+      }
+      if (sse.onEnd === "loop") {
+        // La validazione garantisce almeno un afterMs > 0: il giro non può stringersi a zero.
+        scriptIndex = 0;
+        playNext();
+      }
+      // keep-open: si resta in ascolto (heartbeat + eventuali push manuali).
+      return;
+    }
+    const entry = sse.script[scriptIndex];
+    scriptTimer = setTimeout(() => {
+      res.write(formatSseMessage(entry));
+      connection.eventsSent += 1;
+      scriptIndex += 1;
+      connection.scriptIndex = scriptIndex;
+      sseConnections.recordSent(key, entry, "script", connection.id);
+      playNext();
+    }, entry.afterMs);
+  };
+  playNext();
+
+  const heartbeat = setInterval(() => {
+    try {
+      res.write(": ping\n\n");
+    } catch {
+      /* la connessione sta morendo: chiude il 'close' qui sotto */
+    }
+  }, effectiveHeartbeatMs);
+
+  res.on("close", () => {
+    if (scriptTimer != null) {
+      clearTimeout(scriptTimer);
+    }
+    clearInterval(heartbeat);
+    sseConnections.unregister(key, connection.id);
+  });
+}
+
 // --- CORS opt-in (config.corsEnabled) ---
 // Con l'opzione attiva Mockxy possiede la superficie CORS di TUTTO ciò che serve: preflight
 // automatici e header Allow-Origin/Allow-Credentials su ogni risposta, comprese quelle proxate
@@ -729,6 +809,7 @@ function createApp({
   monitorDump,
   sequenceStates,
   handlerStates,
+  sseConnections = new SseConnectionStore(),
 }) {
   const app = express();
   app.disable("x-powered-by");
@@ -737,7 +818,7 @@ function createApp({
   const dataFileReader = createDataFileReader(config?.filesDir);
 
   if (config?.adminApiEnabled !== false) {
-    app.use("/_admin/api", createAdminHostGuard(config), createAdminApiRouter({ config, reloadRuntime, requestMonitor, serverState, monitorDump, sequenceStates, handlerStates }));
+    app.use("/_admin/api", createAdminHostGuard(config), createAdminApiRouter({ config, reloadRuntime, requestMonitor, serverState, monitorDump, sequenceStates, handlerStates, sseConnections }));
   } else {
     app.use("/_admin/api", sendAdminApiDisabled);
   }
@@ -786,7 +867,12 @@ function createApp({
       path: req.path,
     });
 
-    res.on("finish", () => {
+    let monitoringFinalized = false;
+    const finalizeMonitoring = () => {
+      if (monitoringFinalized) {
+        return;
+      }
+      monitoringFinalized = true;
       const sourceHeader = res.getHeader(TECH_HEADER);
       const completedMode = typeof sourceHeader === "string" && sourceHeader !== ""
         ? sourceHeader
@@ -812,6 +898,14 @@ function createApp({
           capture: requestCapture,
           responseCapture,
         });
+      }
+    };
+    res.on("finish", finalizeMonitoring);
+    // Gli stream SSE chiusi dal client non emettono 'finish': la voce del monitor (durata,
+    // transcript degli eventi) nasce comunque alla chiusura della connessione.
+    res.on("close", () => {
+      if (req._responseMode === "sse") {
+        finalizeMonitoring();
       }
     });
 
@@ -881,6 +975,14 @@ function createApp({
       return;
     }
 
+    if (decision.mode === "sse") {
+      req._responseMode = "sse";
+      req._matchedRoutePath = decision.routePath;
+      // config.sseHeartbeatMs è un knob non documentato (test e casi limite): default 15s.
+      respondWithSse(req, res, decision, sseConnections, config.sseHeartbeatMs);
+      return;
+    }
+
     req._responseMode = "proxy";
     if (!isProxyFallbackEnabled(config)) {
       req._responseMode = "mock-only-miss";
@@ -925,6 +1027,7 @@ module.exports = {
   createApp,
   respondWithHandler,
   respondWithMock,
+  respondWithSse,
   resolveMockDelayMs,
   resolveProxyDelayMs,
   isProxyFallbackEnabled,
