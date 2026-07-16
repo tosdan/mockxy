@@ -1,6 +1,5 @@
 const fs = require("fs");
 const path = require("path");
-const { spawnSync } = require("child_process");
 
 const rootDir = path.resolve(__dirname, "..");
 const releaseType = process.argv[2];
@@ -24,29 +23,55 @@ for (const filePath of versionFiles) {
 }
 
 const snapshots = new Map(versionFiles.map((filePath) => [filePath, fs.readFileSync(filePath)]));
-const npmCommand = process.platform === "win32" ? "npm.cmd" : "npm";
 
-function runNpmVersion(projectDir, version) {
-  const result = spawnSync(
-    npmCommand,
-    ["version", version, "--no-git-tag-version", "--allow-same-version"],
-    { cwd: projectDir, stdio: "inherit" }
-  );
-  if (result.error) {
-    throw result.error;
+function nextVersion(currentVersion, type) {
+  const match = /^(\d+)\.(\d+)\.(\d+)$/.exec(currentVersion);
+  if (!match) {
+    throw new Error(`Unsupported current version: ${currentVersion}`);
   }
-  if (result.status !== 0) {
-    throw new Error(`npm version failed in ${path.relative(rootDir, projectDir) || "."}`);
+
+  let [, major, minor, patch] = match.map(Number);
+  if (type === "major") {
+    major += 1;
+    minor = 0;
+    patch = 0;
+  } else if (type === "minor") {
+    minor += 1;
+    patch = 0;
+  } else {
+    patch += 1;
   }
+
+  return `${major}.${minor}.${patch}`;
+}
+
+function writeJson(filePath, value) {
+  const original = snapshots.get(filePath).toString("utf8");
+  const eol = original.includes("\r\n") ? "\r\n" : "\n";
+  fs.writeFileSync(filePath, `${JSON.stringify(value, null, 2).replace(/\n/g, eol)}${eol}`);
+}
+
+function updateProjectVersion(projectDir, version) {
+  const packagePath = path.join(projectDir, "package.json");
+  const lockPath = path.join(projectDir, "package-lock.json");
+  const packageJson = JSON.parse(snapshots.get(packagePath).toString("utf8"));
+  const packageLock = JSON.parse(snapshots.get(lockPath).toString("utf8"));
+
+  packageJson.version = version;
+  packageLock.version = version;
+  if (packageLock.packages?.[""]) {
+    packageLock.packages[""].version = version;
+  }
+
+  writeJson(packagePath, packageJson);
+  writeJson(lockPath, packageLock);
 }
 
 try {
-  runNpmVersion(rootDir, releaseType);
-  const targetVersion = JSON.parse(
-    fs.readFileSync(path.join(rootDir, "package.json"), "utf8")
-  ).version;
-  for (const projectDir of projects.slice(1)) {
-    runNpmVersion(projectDir, targetVersion);
+  const currentVersion = JSON.parse(snapshots.get(path.join(rootDir, "package.json"))).version;
+  const targetVersion = nextVersion(currentVersion, releaseType);
+  for (const projectDir of projects) {
+    updateProjectVersion(projectDir, targetVersion);
   }
   console.log(`Mockxy packages updated to ${targetVersion}.`);
   console.log("Review and commit the six package/package-lock changes, then create the release tag if needed.");
