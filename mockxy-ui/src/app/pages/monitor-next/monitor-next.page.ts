@@ -645,8 +645,12 @@ export class MonitorNextPage {
     const { existingMockId, request, entry } = prompt;
     const skeleton = request.description != null;
     // Titolo della variante: provenienza + orario di cattura (dal timestamp ISO della entry),
-    // così nella lista delle response si distingue a colpo d'occhio.
-    const title = `${skeleton ? '[da completare] ' : ''}dal monitor · ${entry.timestamp.slice(11, 19)}`;
+    // così nella lista delle response si distingue a colpo d'occhio. Il prefisso "[da completare]"
+    // resta letterale: è il marcatore condiviso con SKELETON_DESCRIPTION (e col motore, vedi
+    // dump-to-mock.js) che la ricerca nel catalogo deve trovare in entrambe le lingue.
+    const title = `${skeleton ? '[da completare] ' : ''}${this.transloco.translate('monitor.capturedVariantTitle', {
+      time: entry.timestamp.slice(11, 19),
+    })}`;
     this.creatingMock.set(true);
     this.api
       .createResponse(existingMockId, {

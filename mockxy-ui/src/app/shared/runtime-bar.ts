@@ -44,8 +44,8 @@ import { LanguageSwitcher } from './language-switcher';
         <span class="inline-flex items-center gap-2" [class.opacity-50]="!server.serverEnabled()">
           <ui-switch [checked]="server.proxyAll()" (checkedChange)="server.setProxyAll($event)" [disabled]="!server.serverEnabled()" size="sm" ariaLabel="Proxy All" />
           <span class="font-medium text-foreground">Proxy All</span>
-          <span class="font-mono text-muted-foreground">{{ server.serverEnabled() && server.proxyAll() ? 'straight to backend' : 'mocking active' }}</span>
-          <!-- 'straight to backend' / 'mocking active': termini tecnici, non tradotti (rule 3) -->
+          <!-- "Proxy All" resta non tradotto: è il nome del kill-switch (come Monitor/Dump/Flush). -->
+          <span class="font-mono text-muted-foreground">{{ (server.serverEnabled() && server.proxyAll() ? 'runtimeBar.proxyAllOn' : 'runtimeBar.proxyAllOff') | transloco }}</span>
         </span>
 
         <span class="h-3.5 w-px bg-border"></span>
@@ -56,7 +56,7 @@ import { LanguageSwitcher } from './language-switcher';
           <span class="inline-flex items-center gap-1.5 font-medium text-foreground">
             <ng-icon name="lucideActivity" size="0.85rem" [style.color]="stream.streaming() ? 'var(--positive)' : null" /> Monitor
           </span>
-          <span class="font-mono text-muted-foreground">@if (stream.streaming()) { live } @else { {{ 'runtimeBar.monitorPaused' | transloco }} }</span>
+          <span class="font-mono text-muted-foreground">{{ (stream.streaming() ? 'runtimeBar.monitorLive' : 'runtimeBar.monitorPaused') | transloco }}</span>
         </span>
 
         <!-- Dump su disco dello storico (+ flush) -->
