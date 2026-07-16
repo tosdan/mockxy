@@ -55,6 +55,7 @@ const {
 const { getAdminMockDetail } = require("./mock-catalog");
 const { normalizeSequenceConfig } = require("../mocks/sequence-config");
 const { normalizeSseConfig, validateSseMessage } = require("../mocks/sse-config");
+const { normalizeWsConfig, validateWsMessage } = require("../mocks/ws-config");
 
 // Mutazioni degli endpoint e delle loro response: creazione (mock o script), aggiornamento,
 // upload di asset, cancellazione e copia. Ogni mutazione scrive su disco con backup e, se il
@@ -260,7 +261,7 @@ function buildEndpointResponseClone(responseDir, response, responseFileName, pay
   };
 }
 
-const NEW_RESPONSE_TYPES = new Set(["mock", "handler", "middleware", "sse"]);
+const NEW_RESPONSE_TYPES = new Set(["mock", "handler", "middleware", "sse", "ws"]);
 
 // Forma su disco di una variante sse a partire dalla forma normalizzata: i campi vuoti/default
 // non sporcano il file (retryMs null e presets vuoti vengono omessi).
@@ -271,6 +272,25 @@ function buildSseResponseFile(title, sse) {
   }
   if (sse.presets.length > 0) {
     nextResponse.presets = sse.presets;
+  }
+  return nextResponse;
+}
+
+// Forma su disco di una variante ws dalla forma normalizzata: campi vuoti/default omessi
+// (closeCode/closeReason null, rules e presets vuoti non sporcano il file).
+function buildWsResponseFile(title, ws) {
+  const nextResponse = { type: "ws", title, script: ws.script, onEnd: ws.onEnd };
+  if (ws.closeCode != null) {
+    nextResponse.closeCode = ws.closeCode;
+  }
+  if (ws.closeReason != null) {
+    nextResponse.closeReason = ws.closeReason;
+  }
+  if (ws.rules.length > 0) {
+    nextResponse.rules = ws.rules;
+  }
+  if (ws.presets.length > 0) {
+    nextResponse.presets = ws.presets;
   }
   return nextResponse;
 }
@@ -311,6 +331,21 @@ function buildNewTypedResponse(responseDir, responseFileName, payload) {
       throw createAdminError(400, `${errors.join("; ")}.`);
     }
     return { nextResponse: buildSseResponseFile(title, sse), assetCopies: [], assetWrites: [] };
+  }
+
+  if (type === "ws") {
+    const { errors, ws } = normalizeWsConfig({
+      script: payload?.script ?? [],
+      onEnd: payload?.onEnd,
+      closeCode: payload?.closeCode,
+      closeReason: payload?.closeReason,
+      rules: payload?.rules ?? [],
+      presets: payload?.presets ?? [],
+    });
+    if (errors.length > 0) {
+      throw createAdminError(400, `${errors.join("; ")}.`);
+    }
+    return { nextResponse: buildWsResponseFile(title, ws), assetCopies: [], assetWrites: [] };
   }
 
   const baseName = path.basename(responseFileName, RESPONSE_SUFFIX);
@@ -399,6 +434,23 @@ function buildUpdatedEndpointResponse(response, payload) {
       throw createAdminError(400, `${errors.join("; ")}.`);
     }
     return buildSseResponseFile(normalizeUpdatedResponseTitle(payload, response), sse);
+  }
+
+  if (response.type === "ws") {
+    // Merge del payload sulla variante esistente, poi la stessa validazione del load.
+    const merged = {
+      script: payload?.script ?? response.script,
+      onEnd: payload?.onEnd ?? response.onEnd,
+      closeCode: Object.prototype.hasOwnProperty.call(payload || {}, "closeCode") ? payload.closeCode : response.closeCode,
+      closeReason: Object.prototype.hasOwnProperty.call(payload || {}, "closeReason") ? payload.closeReason : response.closeReason,
+      rules: payload?.rules ?? response.rules,
+      presets: payload?.presets ?? response.presets,
+    };
+    const { errors, ws } = normalizeWsConfig(merged);
+    if (errors.length > 0) {
+      throw createAdminError(400, `${errors.join("; ")}.`);
+    }
+    return buildWsResponseFile(normalizeUpdatedResponseTitle(payload, response), ws);
   }
 
   return {
@@ -757,7 +809,7 @@ async function updateAdminMock(mocksDir, id, payload, reloadRuntime) {
           throw createAdminError(404, `Sequence step response file not found: ${stepResponseFile}.`);
         }
         const stepResponse = await readEndpointResponse(responseFilePath);
-        if (stepResponse.type === "middleware") {
+        if (stepResponse.type !== "mock" && stepResponse.type !== "handler") {
           throw createAdminError(400, "Sequence steps must reference mock or handler responses.");
         }
       }
@@ -804,9 +856,9 @@ async function updateAdminMock(mocksDir, id, payload, reloadRuntime) {
 
   const { endpoint, response, responseFilePath, responseDir } = await readEndpointSelectedResponse(endpointPath);
   // La forma "config+body" di questo update è pensata per mock/handler/middleware: una variante
-  // sse si aggiorna dalla rotta della singola response (PUT /mocks/:id/responses/:file).
-  if (response.type === "sse") {
-    throw createAdminError(400, "Update sse responses via PUT /mocks/:id/responses/:file.");
+  // sse/ws si aggiorna dalla rotta della singola response (PUT /mocks/:id/responses/:file).
+  if (response.type === "sse" || response.type === "ws") {
+    throw createAdminError(400, `Update ${response.type} responses via PUT /mocks/:id/responses/:file.`);
   }
   const expectedMethod = extractMethodFromEndpointFileName(endpointPath);
   const backups = [
@@ -944,6 +996,45 @@ async function listAdminSseState(mocksDir, id, sseConnections) {
   return {
     connections: sseConnections != null ? sseConnections.listConnections(key) : [],
     history: sseConnections != null ? sseConnections.listHistory(key) : [],
+  };
+}
+
+// Risolve l'endpoint per le operazioni WS runtime: la variante SELEZIONATA deve essere ws
+// (console e push hanno senso solo mentre l'endpoint sta servendo il canale).
+async function resolveAdminWsEndpoint(mocksDir, id) {
+  const endpointPath = resolveAdminFilePath(mocksDir, id);
+  if (!fs.existsSync(endpointPath)) {
+    throw createAdminError(404, "Endpoint definition not found.");
+  }
+  const { endpoint, response } = await readEndpointSelectedResponse(endpointPath);
+  if (response.type !== "ws") {
+    throw createAdminError(400, "The selected response of this endpoint is not a ws variant.");
+  }
+  return { key: `${endpoint.method} ${endpoint.path}`, endpoint, response };
+}
+
+// Push manuale della console WS: invia { data } in broadcast a tutte le connessioni aperte.
+// Azione runtime immediata, nessun file toccato.
+async function pushAdminWsMessage(mocksDir, id, payload, wsConnections) {
+  const { key } = await resolveAdminWsEndpoint(mocksDir, id);
+  const errors = [];
+  const message = validateWsMessage(payload == null ? {} : payload, "message", errors);
+  if (errors.length > 0 || message == null) {
+    throw createAdminError(400, `${errors.join("; ")}.`);
+  }
+  const delivered = wsConnections != null ? wsConnections.push(key, message.data) : 0;
+  return {
+    delivered,
+    connections: wsConnections != null ? wsConnections.listConnections(key).length : 0,
+  };
+}
+
+// Stato della console WS: connessioni aperte e transcript bidirezionale (usciti e ricevuti).
+async function listAdminWsState(mocksDir, id, wsConnections) {
+  const { key } = await resolveAdminWsEndpoint(mocksDir, id);
+  return {
+    connections: wsConnections != null ? wsConnections.listConnections(key) : [],
+    transcript: wsConnections != null ? wsConnections.listTranscript(key) : [],
   };
 }
 
@@ -1126,6 +1217,8 @@ module.exports = {
   resetAdminSequence,
   pushAdminSseMessage,
   listAdminSseState,
+  pushAdminWsMessage,
+  listAdminWsState,
   deleteAdminMock,
   deleteAdminMocksUnlocked,
   copyAdminEndpoint,

@@ -184,6 +184,20 @@ async function getAdminMockDetail(mocksDir, id) {
     return detail;
   }
 
+  // Variante WS: come la SSE, la definizione è copione + regole (+ presets della console).
+  if (response.type === "ws") {
+    detail.ws = {
+      script: response.script,
+      onEnd: response.onEnd,
+      closeCode: response.closeCode,
+      closeReason: response.closeReason,
+      rules: response.rules,
+      presets: response.presets,
+    };
+    detail.payloadFilePath = responseFilePath;
+    return detail;
+  }
+
   const sourcePath = resolvePayloadPath(responseDir, response.sourceFile);
   detail.definition = {
     method: endpoint.method,

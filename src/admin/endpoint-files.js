@@ -8,6 +8,7 @@ const { ENDPOINT_SUFFIX, RESPONSE_SUFFIX, RESPONSES_DIR_SUFFIX } = require("./mo
 const { HTTP_METHOD_PATTERN, validateHeaderValue } = require("./mock-validation");
 const { normalizeSequenceConfig } = require("../mocks/sequence-config");
 const { normalizeSseConfig } = require("../mocks/sse-config");
+const { normalizeWsConfig } = require("../mocks/ws-config");
 
 // Lettura e normalizzazione dei file su disco di un endpoint: METHOD.endpoint.json, la
 // cartella METHOD.responses con le response (NNN.response.json) e i loro asset
@@ -118,8 +119,8 @@ function normalizeEndpointResponse(response, responseFilePath) {
   if (response == null || typeof response !== "object" || Array.isArray(response)) {
     throw createAdminError(400, "response must be an object.");
   }
-  if (response.type !== "mock" && response.type !== "handler" && response.type !== "middleware" && response.type !== "sse") {
-    throw createAdminError(400, "response.type must be mock, handler, middleware or sse.");
+  if (response.type !== "mock" && response.type !== "handler" && response.type !== "middleware" && response.type !== "sse" && response.type !== "ws") {
+    throw createAdminError(400, "response.type must be mock, handler, middleware, sse or ws.");
   }
   if (response.title != null && typeof response.title !== "string") {
     throw createAdminError(400, "response.title must be a string.");
@@ -176,6 +177,25 @@ function normalizeEndpointResponse(response, responseFilePath) {
       script: sse.script,
       onEnd: sse.onEnd,
       presets: sse.presets,
+      responseFilePath,
+    };
+  }
+
+  if (response.type === "ws") {
+    // Stesse regole del loader runtime (modulo condiviso ws-config), incorniciate a 400.
+    const { errors, ws } = normalizeWsConfig(response);
+    if (errors.length > 0) {
+      throw createAdminError(400, `${errors.join("; ")}.`);
+    }
+    return {
+      type: "ws",
+      title: response.title || "",
+      script: ws.script,
+      onEnd: ws.onEnd,
+      closeCode: ws.closeCode,
+      closeReason: ws.closeReason,
+      rules: ws.rules,
+      presets: ws.presets,
       responseFilePath,
     };
   }
