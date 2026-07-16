@@ -201,6 +201,7 @@
     "emptyFiltered": "No requests match the current filter.",
     "resizeHint": "Drag to resize · double-click to reset",
     "goToDefinitionTip": "Open the definition in the catalog",
+    "sequenceStepTip": "Sequence step that served this request",
     "goToMock": "Go to mock",
     "coveringMockTip": "This route is now covered by a catalog mock",
     "coveringMockDisabledTip": "This route has a catalog mock, but it is disabled",

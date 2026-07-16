@@ -794,6 +794,9 @@ function createApp({
     if (decision.mode === "mock") {
       req._responseMode = "mock";
       req._matchedRoutePath = decision.routePath;
+      // Endpoint con sequenza: quale step ha risposto (indice/totale, variante) finisce nella
+      // voce del monitor — senza, la progressione di una sequenza sarebbe invisibile.
+      req._sequenceStep = decision.sequenceStep;
       await respondWithMock(req, res, decision.response, config.globalDelayMs, config.caseInsensitiveFilters);
       return;
     }
@@ -801,6 +804,7 @@ function createApp({
     if (decision.mode === "handler") {
       req._responseMode = "handler";
       req._matchedRoutePath = decision.routePath;
+      req._sequenceStep = decision.sequenceStep;
       await respondWithHandler(req, res, decision, logger, config.requestTimeoutMs, dataFileReader);
       return;
     }

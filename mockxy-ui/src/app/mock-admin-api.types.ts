@@ -254,6 +254,13 @@ export interface RequestMonitorEntry {
   latencyMs: number;
   source: RequestMonitorSource;
   matchedRoutePath?: string;
+  /** Endpoint con sequenza di varianti: lo step che ha servito questa richiesta. */
+  sequenceStep?: {
+    index: number;
+    count: number;
+    responseFile: string;
+    responseTitle?: string;
+  };
   middlewareRoutePath?: string;
   middlewareFilePath?: string;
   requestHeaders: Record<string, string | string[]>;

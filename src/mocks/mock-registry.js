@@ -50,6 +50,7 @@ class MockRegistry {
             index: stepIndex,
             count: endpoint.steps.length,
             responseFile: step.selectedResponseFile,
+            responseTitle: step.title || "",
           };
           endpoint = step;
         }

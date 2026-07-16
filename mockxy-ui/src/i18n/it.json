@@ -201,6 +201,7 @@
     "emptyFiltered": "Nessuna request col filtro attuale.",
     "resizeHint": "Trascina per ridimensionare · doppio click per reimpostare",
     "goToDefinitionTip": "Apri la definizione nel catalogo",
+    "sequenceStepTip": "Step della sequenza che ha servito questa richiesta",
     "goToMock": "Vai al mock",
     "coveringMockTip": "Questa rotta è ora coperta da un mock del catalogo",
     "coveringMockDisabledTip": "Questa rotta ha un mock nel catalogo, ma è disabilitato",

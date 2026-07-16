@@ -18,7 +18,10 @@ connections](WEBSOCKET.md), which don't go through the HTTP pipeline.
 The entry is written **once the response completes** and contains: method, path and full URL,
 status, latency, the **origin** (the same values as the `x-mock-source` header — the
 [taxonomy](PROXY.md) is the monitor's legend), the matched route and any references to the
-middleware involved, plus request and response headers and bodies.
+middleware involved, plus request and response headers and bodies. For endpoints with a
+[variant sequence](ENDPOINT.md) the entry also records **the step that served the request**
+(position and variant, «SEQ n/m» badge): the sequence progression can be read by scrolling the
+monitor.
 
 ## Masking and capture limits
 

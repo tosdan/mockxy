@@ -68,7 +68,7 @@ describe("sequence serving", () => {
     return { type: "mock", title: "", status, headers: {}, delayMs: 0, body };
   }
 
-  async function buildApp({ sequenceStates } = {}) {
+  async function buildApp({ sequenceStates, requestMonitor } = {}) {
     const { mockRouteGroups, handlerRouteGroups, proxyMiddlewareRouteGroups, sequenceRouteGroups, loadErrors } =
       await loadEndpointRouteGroups(mocksDir);
     expect(loadErrors).toEqual([]);
@@ -79,7 +79,7 @@ describe("sequence serving", () => {
       config: { requestTimeoutMs: 5000, proxyFallbackEnabled: false },
       logger: createNoopLogger(),
       proxyMiddlewareRegistry: new ProxyMiddlewareRegistry(proxyMiddlewareRouteGroups),
-      requestMonitor: new RequestMonitorStore(),
+      requestMonitor: requestMonitor || new RequestMonitorStore(),
     });
   }
 
@@ -269,6 +269,53 @@ describe("sequence serving", () => {
     const result = await loadEndpointRouteGroups(mocksDir);
     expect(result.loadErrors).toHaveLength(1);
     expect(result.loadErrors[0].message).toContain("sequence step response");
+  });
+
+  test("il monitor registra lo step servito (indice, totale, variante); assente senza sequenza", async () => {
+    await writeSequenceEndpoint({
+      folder: "monitorato",
+      routePath: "/api/monitorato",
+      responses: {
+        "001.response.json": { type: "mock", title: "Processing", status: 202, headers: {}, delayMs: 0, body: {} },
+        "002.response.json": { type: "mock", title: "Completed", status: 200, headers: {}, delayMs: 0, body: {} },
+      },
+      sequence: {
+        steps: [
+          { response: "001.response.json", times: 1 },
+          { response: "002.response.json" },
+        ],
+      },
+    });
+    await writeSequenceEndpoint({
+      folder: "classico",
+      routePath: "/api/classico",
+      responses: {
+        "001.response.json": mockResponse({ ok: true }),
+        "002.response.json": mockResponse({ ok: false }),
+      },
+    });
+    const requestMonitor = new RequestMonitorStore();
+    const app = await buildApp({ requestMonitor });
+
+    await request(app).get("/api/monitorato");
+    await request(app).get("/api/monitorato");
+    await request(app).get("/api/classico");
+
+    // listEntries: più recenti prima.
+    const [classico, second, first] = requestMonitor.listEntries();
+    expect(first.sequenceStep).toEqual({
+      index: 0,
+      count: 2,
+      responseFile: "001.response.json",
+      responseTitle: "Processing",
+    });
+    expect(second.sequenceStep).toEqual({
+      index: 1,
+      count: 2,
+      responseFile: "002.response.json",
+      responseTitle: "Completed",
+    });
+    expect(classico.sequenceStep).toBeUndefined();
   });
 
   test("le risposte mock degli step conservano paginazione e filtri automatici", async () => {
