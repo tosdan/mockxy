@@ -13,6 +13,8 @@ The `type` field distinguishes four natures of response:
 - **`middleware`** — a transformation applied to the response of the proxied real backend;
 - **`sse`** — a Server-Sent Events stream: the connection stays open and events go out
   following a script (or the console's manual direction).
+- **`ws`** — a mocked WebSocket channel: the upgrade handshake is accepted locally and
+  messages go out following a script, answer declarative rules, or come from the console.
 
 The UI creates the files with progressive names (`001.response.json`, `002.response.json`, …),
 but any name ending in `.response.json` is valid, as long as it is a plain file name
@@ -168,6 +170,54 @@ and history, and allows manual direction (broadcast to every connection) — via
 `POST /mocks/:id/sse/push` and `GET /mocks/:id/sse/connections`. The [monitor](MONITOR.md)
 entry is written when the connection closes. An `sse` variant cannot be a step of a
 [sequence](ENDPOINT.md).
+
+## `ws` response
+
+```json
+{
+  "type": "ws",
+  "title": "Notification channel",
+  "script": [
+    { "afterMs": 0,    "data": { "kind": "welcome" } },
+    { "afterMs": 2000, "data": { "kind": "promo", "discount": 20 } }
+  ],
+  "onEnd": "keep-open",
+  "rules": [
+    { "match": { "equals": "ping" }, "reply": [{ "afterMs": 0, "data": "pong" }] },
+    { "match": { "json": { "action": "subscribe" } },
+      "reply": [{ "afterMs": 100, "data": { "outcome": "subscribed" } }] }
+  ],
+  "presets": [{ "label": "Error", "data": { "kind": "error" } }]
+}
+```
+
+When the selected variant is of type `ws`, the WebSocket **upgrade** request on the endpoint
+is handled locally (101, handshake accepted) instead of being forwarded to the backend;
+upgrades that do not match a `ws` endpoint follow the usual passthrough (see
+[WEBSOCKET.md](WEBSOCKET.md)). A plain HTTP request on the endpoint answers
+**`426 Upgrade Required`**.
+
+- **`script`** — the outgoing message script, possibly empty (mute endpoint: rules and console
+  only). Each entry: **`afterMs`** (delay from the previous message, integer ≥ 0) and
+  **`data`** (JSON — serialized on the wire — or a string). It plays **on every connection,
+  independently for each one**: reconnecting means starting over.
+- **`onEnd`** — once the script is over: **`keep-open`** (default), **`close`** (the server
+  closes, with optional **`closeCode`**/**`closeReason`** alongside — code `1000` or
+  `3000-4999`), **`loop`** (start over; at least one positive `afterMs` is required).
+- **`rules`** — declarative rules on incoming messages, evaluated in order (**first match
+  wins**): `match` with **exactly one** of `equals` (exact text), `contains` (substring) and
+  `json` (the message is JSON and contains the given pairs — first-level subset); `reply` is a
+  script-shaped list, sent **only to the connection that spoke**. A message with no matching
+  rule is only recorded in the transcript: no default echo, no logic — when you need more,
+  the right step up is the handler.
+- **`presets`** — optional: the ready-made messages (macros) of the console.
+
+During silences the engine sends a protocol **ping** every 30 seconds (permissive: a missing
+pong does not close). Connections are closed on hot reload and shutdown: the client reconnects
+and the script starts over. The **console** in the endpoint detail shows connections and the
+**bidirectional transcript** (▶ sent by script/rules/direction, ◀ received from clients), with
+one-click re-send — via API: `POST /mocks/:id/ws/push` and `GET /mocks/:id/ws/connections`.
+A `ws` variant cannot be a step of a [sequence](ENDPOINT.md).
 
 ## Validation and errors
 

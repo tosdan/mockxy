@@ -74,6 +74,16 @@ class MockRegistry {
           };
         }
 
+        // Variante WS: si serve solo sull'upgrade (ws-serving.js); una richiesta HTTP normale
+        // che arriva qui riceve 426 Upgrade Required (vedi app.js).
+        if (endpoint.type === "ws") {
+          return {
+            mode: "ws",
+            routePath: group.path,
+            ws: endpoint,
+          };
+        }
+
         return {
           mode: "mock",
           routePath: group.path,

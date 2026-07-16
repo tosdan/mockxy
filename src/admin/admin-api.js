@@ -19,6 +19,8 @@ const {
   resetAdminSequence,
   pushAdminSseMessage,
   listAdminSseState,
+  pushAdminWsMessage,
+  listAdminWsState,
 } = require("./endpoint-operations");
 const {
   assignAdminCollection,
@@ -58,7 +60,7 @@ function sendJson(res, status, payload) {
   res.status(status).json(payload);
 }
 
-function createAdminApiRouter({ config, reloadRuntime, requestMonitor, serverState, monitorDump, sequenceStates, handlerStates, sseConnections }) {
+function createAdminApiRouter({ config, reloadRuntime, requestMonitor, serverState, monitorDump, sequenceStates, handlerStates, sseConnections, wsConnections }) {
   const router = express.Router();
 
   router.use(express.json({ limit: "2mb" }));
@@ -295,6 +297,15 @@ function createAdminApiRouter({ config, reloadRuntime, requestMonitor, serverSta
   });
   router.get("/mocks/:id/sse/connections", async (req, res) => {
     const result = await listAdminSseState(config.mocksDir, req.params.id, sseConnections);
+    sendJson(res, 200, result);
+  });
+
+  router.post("/mocks/:id/ws/push", async (req, res) => {
+    const result = await pushAdminWsMessage(config.mocksDir, req.params.id, req.body, wsConnections);
+    sendJson(res, 200, result);
+  });
+  router.get("/mocks/:id/ws/connections", async (req, res) => {
+    const result = await listAdminWsState(config.mocksDir, req.params.id, wsConnections);
     sendJson(res, 200, result);
   });
 

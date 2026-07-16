@@ -18,7 +18,7 @@ import { MOCK_METHODS } from '../../../mock-admin-ui.constants';
 
 export interface CreateDialogData {
   /** Il dialog "Nuovo" crea endpoint mock/handler/middleware; le varianti sse nascono dal dettaglio. */
-  readonly type: Exclude<MockType, 'sse'>;
+  readonly type: Exclude<MockType, 'sse' | 'ws'>;
 }
 
 const METHOD_OPTIONS: readonly UiSelectOption<string>[] = MOCK_METHODS.map((m) => ({ value: m, label: m }));

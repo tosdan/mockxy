@@ -1,10 +1,19 @@
 # WebSockets and upgrade requests
 
-WebSockets can't be mocked: they are a different protocol, negotiated with an HTTP *upgrade*
-request and then made of bidirectional frames that have nothing of the request/response pair.
-Mockxy therefore treats them as **pure passthrough to the real backend**: the use case is the
-app that mocks its HTTP APIs but keeps a live connection to the backend for notifications or
-updates — and must not find it broken.
+WebSockets are a different protocol: negotiated with an HTTP *upgrade* request, then
+bidirectional frames that have nothing of the request/response pair. Mockxy treats them in
+two complementary ways:
+
+- **local mock** — an endpoint whose selected variant is of type [`ws`](RESPONSE.md) handles
+  the handshake locally: message script, reply rules and a console with manual direction, no
+  backend needed;
+- **passthrough to the real backend** — everything else: the use case is the app that mocks
+  its HTTP APIs but keeps a live connection to the backend for notifications or updates — and
+  must not find it broken.
+
+On upgrade the engine consults the mock registry (with the server on and outside Proxy All):
+if the endpoint matches a `ws` variant the connection is served by the mock, otherwise the
+tunnel described below applies. The rest of this page documents the **passthrough**.
 
 ## How it works
 

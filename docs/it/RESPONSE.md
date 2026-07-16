@@ -13,6 +13,8 @@ Il campo `type` distingue quattro nature di risposta:
 - **`middleware`** — trasformazione applicata alla risposta del backend reale proxato;
 - **`sse`** — stream Server-Sent Events: la connessione resta aperta e gli eventi escono
   secondo un copione (o dalla regia manuale della console).
+- **`ws`** — canale WebSocket mockato: l'handshake di upgrade viene accettato localmente e i
+  messaggi escono secondo un copione, rispondono a regole dichiarative o partono dalla console.
 
 L'interfaccia crea i file con nomi progressivi (`001.response.json`, `002.response.json`, …),
 ma qualunque nome che termini in `.response.json` è valido, purché sia un semplice nome di file
@@ -167,6 +169,55 @@ solo e il copione riparte. La **console** nella scheda dell'endpoint mostra conn
 storico, e permette la regia manuale (broadcast a tutte le connessioni) — via API:
 `POST /mocks/:id/sse/push` e `GET /mocks/:id/sse/connections`. La voce del [monitor](MONITOR.md)
 nasce alla chiusura della connessione. Una variante `sse` non può essere lo step di una
+[sequenza](ENDPOINT.md).
+
+## Risposta `ws`
+
+```json
+{
+  "type": "ws",
+  "title": "Canale notifiche",
+  "script": [
+    { "afterMs": 0,    "data": { "tipo": "benvenuto" } },
+    { "afterMs": 2000, "data": { "tipo": "promo", "sconto": 20 } }
+  ],
+  "onEnd": "keep-open",
+  "rules": [
+    { "match": { "equals": "ping" }, "reply": [{ "afterMs": 0, "data": "pong" }] },
+    { "match": { "json": { "azione": "subscribe" } },
+      "reply": [{ "afterMs": 100, "data": { "esito": "sottoscritto" } }] }
+  ],
+  "presets": [{ "label": "Errore", "data": { "tipo": "errore" } }]
+}
+```
+
+Quando la variante selezionata è di tipo `ws`, la richiesta di **upgrade** WebSocket
+sull'endpoint viene gestita localmente (101, handshake accettato) invece di essere inoltrata
+al backend; gli upgrade che non matchano un endpoint `ws` seguono il passthrough di sempre
+(vedi [WEBSOCKET.md](WEBSOCKET.md)). Una richiesta HTTP normale sull'endpoint risponde
+**`426 Upgrade Required`**.
+
+- **`script`** — il copione dei messaggi in uscita, anche vuoto (endpoint muto: solo regole e
+  console). Ogni voce: **`afterMs`** (ritardo dal messaggio precedente, intero ≥ 0) e
+  **`data`** (JSON — serializzato sul filo — o stringa). Va in onda **a ogni connessione,
+  indipendentemente per ciascuna**: riconnettersi significa ripartire dall'inizio.
+- **`onEnd`** — esaurito il copione: **`keep-open`** (default), **`close`** (il server chiude,
+  con **`closeCode`**/**`closeReason`** facoltativi accanto — codice `1000` o `3000-4999`),
+  **`loop`** (si ricomincia; serve almeno un `afterMs` positivo).
+- **`rules`** — regole dichiarative sui messaggi in ingresso, valutate in ordine (**la prima
+  che matcha vince**): `match` con **uno solo** tra `equals` (testo esatto), `contains`
+  (sottostringa) e `json` (il messaggio è JSON e contiene le coppie indicate — subset di primo
+  livello); `reply` è una scaletta come lo script, inviata **solo alla connessione che ha
+  parlato**. Un messaggio senza regola viene solo registrato nel transcript: niente eco di
+  default, niente logica — quando serve di più, il gradino giusto è l'handler.
+- **`presets`** — facoltativi: i messaggi pronti (macro) della console.
+
+Nei silenzi il motore invia un **ping** di protocollo ogni 30 secondi (permissivo: un pong
+mancato non chiude). Le connessioni vengono chiuse alla ricarica a caldo e allo shutdown: il
+client riconnette e il copione riparte. La **console** nella scheda dell'endpoint mostra le
+connessioni e il **transcript bidirezionale** (▶ usciti dal copione/regole/regia, ◀ ricevuti
+dai client), con re-invio a un clic — via API: `POST /mocks/:id/ws/push` e
+`GET /mocks/:id/ws/connections`. Una variante `ws` non può essere lo step di una
 [sequenza](ENDPOINT.md).
 
 ## Validazione ed errori
