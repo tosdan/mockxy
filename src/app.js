@@ -810,6 +810,7 @@ function createApp({
   sequenceStates,
   handlerStates,
   sseConnections = new SseConnectionStore(),
+  wsConnections,
 }) {
   const app = express();
   app.disable("x-powered-by");
@@ -818,7 +819,7 @@ function createApp({
   const dataFileReader = createDataFileReader(config?.filesDir);
 
   if (config?.adminApiEnabled !== false) {
-    app.use("/_admin/api", createAdminHostGuard(config), createAdminApiRouter({ config, reloadRuntime, requestMonitor, serverState, monitorDump, sequenceStates, handlerStates, sseConnections }));
+    app.use("/_admin/api", createAdminHostGuard(config), createAdminApiRouter({ config, reloadRuntime, requestMonitor, serverState, monitorDump, sequenceStates, handlerStates, sseConnections, wsConnections }));
   } else {
     app.use("/_admin/api", sendAdminApiDisabled);
   }
@@ -980,6 +981,21 @@ function createApp({
       req._matchedRoutePath = decision.routePath;
       // config.sseHeartbeatMs è un knob non documentato (test e casi limite): default 15s.
       respondWithSse(req, res, decision, sseConnections, config.sseHeartbeatMs);
+      return;
+    }
+
+    // Variante WS raggiunta via HTTP normale: l'endpoint esiste ma vive sull'upgrade
+    // (ws-serving.js). 426 esplicito = diagnosi immediata, invece di un mock muto o del proxy.
+    if (decision.mode === "ws") {
+      req._responseMode = "ws-upgrade-required";
+      req._matchedRoutePath = decision.routePath;
+      res.status(426);
+      res.setHeader(TECH_HEADER, "ws");
+      res.setHeader("upgrade", "websocket");
+      res.json({
+        error: "Upgrade Required",
+        message: "This endpoint serves a mocked WebSocket: connect with a WebSocket client (ws:// upgrade), not plain HTTP.",
+      });
       return;
     }
 

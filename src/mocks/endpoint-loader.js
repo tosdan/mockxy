@@ -15,6 +15,7 @@ const {
 const { normalizeSequenceConfig } = require("./sequence-config");
 const { templateReferencesRequestBody } = require("./mock-template");
 const { normalizeSseConfig } = require("./sse-config");
+const { normalizeWsConfig } = require("./ws-config");
 
 const HTTP_METHOD_PATTERN = /^(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)$/;
 const ENDPOINT_SUFFIX = ".endpoint.json";
@@ -332,8 +333,27 @@ async function loadResponseByName(endpoint, endpointFilePath, responseFileName, 
   }
 
   const type = response.type;
-  if (type !== "mock" && type !== "handler" && type !== "middleware" && type !== "sse") {
-    throw new Error(`Invalid response ${responsePath}: type must be mock, handler, middleware or sse`);
+  if (type !== "mock" && type !== "handler" && type !== "middleware" && type !== "sse" && type !== "ws") {
+    throw new Error(`Invalid response ${responsePath}: type must be mock, handler, middleware, sse or ws`);
+  }
+
+  if (type === "ws") {
+    const { errors, ws } = normalizeWsConfig(response);
+    if (errors.length > 0) {
+      throw new Error(`Invalid response ${responsePath}: ${errors.join("; ")}`);
+    }
+    return {
+      type,
+      title: response.title || "",
+      script: ws.script,
+      onEnd: ws.onEnd,
+      closeCode: ws.closeCode,
+      closeReason: ws.closeReason,
+      rules: ws.rules,
+      presets: ws.presets,
+      responseFilePath: responsePath,
+      responseFileName,
+    };
   }
 
   if (type === "sse") {
@@ -411,7 +431,7 @@ async function loadSequenceSteps(endpoint, endpointFilePath) {
   const steps = [];
   for (const step of endpoint.sequence.steps) {
     const response = await loadResponseByName(endpoint, endpointFilePath, step.response, "sequence step response");
-    if (response.type === "middleware" || response.type === "sse") {
+    if (response.type === "middleware" || response.type === "sse" || response.type === "ws") {
       throw new Error(
         `Invalid endpoint ${endpointFilePath}: sequence steps must reference mock or handler responses (${step.response} is a ${response.type})`
       );
@@ -482,6 +502,7 @@ async function loadEndpointRouteGroups(mocksDir) {
   const proxyMiddlewareRouteGroups = new Map();
   const sequenceRouteGroups = new Map();
   const sseRouteGroups = new Map();
+  const wsRouteGroups = new Map();
   // Degradazione per-endpoint: un file rotto (JSON invalido, response mancante, duplicato)
   // viene saltato e segnalato qui, senza far fallire il caricamento degli altri. Sta ai
   // chiamanti decidere la policy (warning all'avvio, keep-previous al reload a caldo).
@@ -555,6 +576,25 @@ async function loadEndpointRouteGroups(mocksDir) {
         continue;
       }
 
+      if (response.type === "ws") {
+        const group = createRouteGroup(wsRouteGroups, endpoint, filePath);
+        group.methods.set(endpoint.method, {
+          method: endpoint.method,
+          path: endpoint.path,
+          title: response.title,
+          script: response.script,
+          onEnd: response.onEnd,
+          closeCode: response.closeCode,
+          closeReason: response.closeReason,
+          rules: response.rules,
+          presets: response.presets,
+          configFilePath: filePath,
+          responseFilePath: response.responseFilePath,
+          selectedResponseFile: response.responseFileName,
+        });
+        continue;
+      }
+
       if (response.type === "handler") {
         const group = createRouteGroup(handlerRouteGroups, endpoint, filePath);
         group.methods.set(endpoint.method, {
@@ -590,6 +630,7 @@ async function loadEndpointRouteGroups(mocksDir) {
     proxyMiddlewareRouteGroups: sortRouteGroups(Array.from(proxyMiddlewareRouteGroups.values())),
     sequenceRouteGroups: sortRouteGroups(Array.from(sequenceRouteGroups.values())),
     sseRouteGroups: sortRouteGroups(Array.from(sseRouteGroups.values())),
+    wsRouteGroups: sortRouteGroups(Array.from(wsRouteGroups.values())),
     loadErrors,
   };
 }

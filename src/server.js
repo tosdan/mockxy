@@ -9,6 +9,8 @@ const { MockRegistry } = require("./mocks/mock-registry");
 const { SequenceStateStore } = require("./mocks/sequence-state");
 const { HandlerStateStore } = require("./mocks/handler-state");
 const { SseConnectionStore } = require("./mocks/sse-connections");
+const { WsConnectionStore } = require("./mocks/ws-connections");
+const { createWsUpgradeDispatcher } = require("./mocks/ws-serving");
 const { ProxyMiddlewareRegistry } = require("./proxy/proxy-middleware-registry");
 const { sortRouteGroups } = require("./mocks/route-groups");
 const { RequestMonitorStore } = require("./monitoring/request-monitor");
@@ -43,7 +45,7 @@ function graftPreviousRoutes(nextRouteGroups, previousRouteGroups, erroredFilePa
   return grafted ? sortRouteGroups(Array.from(groupsByPath.values())) : nextRouteGroups;
 }
 
-function createReloadHandler({ mocksDir, registry, proxyMiddlewareRegistry, logger, sseConnections }) {
+function createReloadHandler({ mocksDir, registry, proxyMiddlewareRegistry, logger, sseConnections, wsConnections }) {
   let reloadInProgress = false;
   let reloadQueued = false;
 
@@ -55,13 +57,14 @@ function createReloadHandler({ mocksDir, registry, proxyMiddlewareRegistry, logg
 
     reloadInProgress = true;
     try {
-      const { mockRouteGroups, handlerRouteGroups, proxyMiddlewareRouteGroups, sequenceRouteGroups, sseRouteGroups, loadErrors } =
+      const { mockRouteGroups, handlerRouteGroups, proxyMiddlewareRouteGroups, sequenceRouteGroups, sseRouteGroups, wsRouteGroups, loadErrors } =
         await loadEndpointRouteGroups(mocksDir);
       let routeGroups = mergeLocalRouteGroups({
         mockRouteGroups,
         handlerRouteGroups,
         sequenceRouteGroups,
         sseRouteGroups,
+        wsRouteGroups,
       });
       let middlewareRouteGroups = proxyMiddlewareRouteGroups;
       if (loadErrors.length > 0) {
@@ -81,10 +84,11 @@ function createReloadHandler({ mocksDir, registry, proxyMiddlewareRegistry, logg
       }
       registry.setRouteGroups(routeGroups);
       proxyMiddlewareRegistry.setRouteGroups(middlewareRouteGroups);
-      // Le connessioni SSE aperte vanno chiuse: stanno servendo copioni della configurazione
-      // precedente. Il client SSE riconnette da solo e il copione (eventualmente nuovo) riparte
+      // Le connessioni SSE/WS aperte vanno chiuse: stanno servendo copioni della configurazione
+      // precedente. Il client riconnette da solo e il copione (eventualmente nuovo) riparte
       // — "riconnessione = reset" è la semantica documentata.
       sseConnections?.closeAll();
+      wsConnections?.closeAll();
       logger.info("Runtime routes reloaded.", {
         routeCount: routeGroups.length,
         proxyMiddlewareCount: middlewareRouteGroups.length,
@@ -205,6 +209,8 @@ async function createServerRuntime({ configOverrides = {}, logger: extLogger } =
   const handlerStates = new HandlerStateStore();
   // Connessioni SSE vive + storico per la console; chiuse a ogni reload e allo shutdown.
   const sseConnections = new SseConnectionStore();
+  // Connessioni WebSocket mockate + transcript bidirezionale; stessa vita delle SSE.
+  const wsConnections = new WsConnectionStore();
   const registry = new MockRegistry(routeGroups, sequenceStates);
   const proxyMiddlewareRegistry = new ProxyMiddlewareRegistry(proxyMiddlewareRouteGroups);
   const requestMonitor = new RequestMonitorStore(undefined, logger);
@@ -223,6 +229,7 @@ async function createServerRuntime({ configOverrides = {}, logger: extLogger } =
     proxyMiddlewareRegistry,
     logger,
     sseConnections,
+    wsConnections,
   });
   const app = createApp({
     registry,
@@ -236,6 +243,7 @@ async function createServerRuntime({ configOverrides = {}, logger: extLogger } =
     sequenceStates,
     handlerStates,
     sseConnections,
+    wsConnections,
   });
   const watcher = startMockWatcher({
     config,
@@ -257,6 +265,7 @@ async function createServerRuntime({ configOverrides = {}, logger: extLogger } =
     sequenceStates,
     handlerStates,
     sseConnections,
+    wsConnections,
     reloadRuntime,
     watcher,
   };
@@ -286,13 +295,23 @@ async function startServer(options = {}) {
 
   // Le richieste di upgrade (WebSocket) non passano da Express: senza questo handler Node
   // chiuderebbe il socket e le WebSocket delle app attraverso Mockxy morirebbero in silenzio.
-  // Policy: passthrough puro verso il backend (vedi upgrade-proxy.js).
+  // Prima il dispatcher dei mock ws (endpoint abilitato con variante selezionata ws →
+  // handshake locale, vedi ws-serving.js), poi il passthrough verso il backend (upgrade-proxy.js).
   const upgradeHandler = createUpgradeHandler({
     config: runtime.config,
     serverState: runtime.serverState,
     logger: runtime.logger,
   });
-  server.on("upgrade", upgradeHandler);
+  const upgradeDispatcher = createWsUpgradeDispatcher({
+    registry: runtime.registry,
+    serverState: runtime.serverState,
+    wsConnections: runtime.wsConnections,
+    logger: runtime.logger,
+    fallback: upgradeHandler,
+    // Knob non documentato (test e casi limite), come sseHeartbeatMs: default 30s.
+    pingIntervalMs: runtime.config.wsPingIntervalMs,
+  });
+  server.on("upgrade", upgradeDispatcher);
 
   // Aspetta l'ascolto e propaga un eventuale errore (es. porta occupata) come rejection, invece
   // di lasciarlo come evento 'error' non gestito (che farebbe crashare il processo).
@@ -323,6 +342,7 @@ async function startServer(options = {}) {
       ["watcher close", () => runtime.watcher?.close()],
       // Gli stream SSE aperti trattengono server.close come le WebSocket: chiusura esplicita.
       ["sse connections close", () => runtime.sseConnections?.closeAll()],
+      ["ws mock connections close", () => runtime.wsConnections?.closeAll()],
       // I tunnel di upgrade (WebSocket) si staccano dal tracking del server: vanno chiusi a mano,
       // altrimenti server.close resta appeso su una connessione lunga ancora attiva.
       ["upgrade tunnels close", () => upgradeHandler.closeConnections()],

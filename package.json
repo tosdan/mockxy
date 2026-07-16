@@ -50,7 +50,8 @@
     "express": "^5.1.0",
     "js-yaml": "^3.14.1",
     "openapi-sampler": "^1.7.4",
-    "path-to-regexp": "^8.3.0"
+    "path-to-regexp": "^8.3.0",
+    "ws": "^8.21.1"
   },
   "devDependencies": {
     "@playwright/test": "^1.61.1",
