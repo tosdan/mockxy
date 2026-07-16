@@ -322,7 +322,7 @@ const COLLAPSED_COLLECTIONS_STATE_KEY = 'mocks-collapsed';
               {{ ep.responses }}
             </span>
             @if (ep.sequenceActive) {
-            <span class="rounded bg-[color-mix(in_srgb,var(--brand)_16%,transparent)] px-1 font-bold tracking-wide text-brand" [uiTooltip]="'catalog.sequenceBadgeTip' | transloco">SEQ</span>
+            <span class="rounded bg-[color-mix(in_srgb,var(--sequence)_16%,transparent)] px-1 font-bold tracking-wide text-sequence" [uiTooltip]="'catalog.sequenceBadgeTip' | transloco">SEQ</span>
             }
           </div>
         </div>

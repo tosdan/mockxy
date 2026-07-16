@@ -104,9 +104,12 @@ const METHOD_TONES: ReadonlySet<string> = new Set(['get', 'post', 'put', 'delete
             }
           }
           <button ui-button variant="outline" (click)="openCopy()" [uiTooltip]="'detail.copyEndpointTip' | transloco"><ng-icon name="lucideCopy" size="0.85rem" /> {{ 'detail.copy' | transloco }}</button>
-          <!-- L'icona colorata segnala a colpo d'occhio la sequenza attiva (come il badge SEQ nel catalogo). -->
+          <!-- Il chip SEQ (stesso segnale del catalogo) rende evidente la sequenza attiva. -->
           <button ui-button variant="outline" (click)="openSequence()" [uiTooltip]="(d.sequenceActive ? 'detail.sequenceTipActive' : 'detail.sequenceTip') | transloco">
-            <ng-icon name="lucideListOrdered" size="0.85rem" [class.text-brand]="d.sequenceActive" /> {{ 'detail.sequence' | transloco }}
+            <ng-icon name="lucideListOrdered" size="0.85rem" [class.text-sequence]="d.sequenceActive" /> {{ 'detail.sequence' | transloco }}
+            @if (d.sequenceActive) {
+            <span class="rounded bg-[color-mix(in_srgb,var(--sequence)_16%,transparent)] px-1 text-[0.7rem] font-bold tracking-wide text-sequence">SEQ</span>
+            }
           </button>
         </div>
       </div>

@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
+import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
 import { NgIcon, provideIcons } from '@ng-icons/core';
 import { lucideActivity, lucideDatabase, lucideSave } from '@ng-icons/lucide';
 import { TranslocoPipe } from '@jsverse/transloco';
@@ -35,7 +35,7 @@ import { LanguageSwitcher } from './language-switcher';
         <span class="inline-flex items-center gap-2">
           <ui-switch [checked]="server.serverEnabled()" (checkedChange)="server.setServerEnabled($event)" size="sm" ariaLabel="Server" />
           <span class="font-medium text-foreground">{{ (server.serverEnabled() ? 'runtimeBar.serverOn' : 'runtimeBar.serverOff') | transloco }}</span>
-          <span class="font-mono text-muted-foreground">{{ serverAddress }}</span>
+          <span class="font-mono text-muted-foreground">{{ serverAddress() }}</span>
         </span>
 
         <span class="h-3.5 w-px bg-border"></span>
@@ -91,11 +91,27 @@ export class RuntimeBar {
   protected readonly stream = inject(MonitorStreamStore);
   protected readonly dump = inject(MonitorDumpStore);
   protected readonly desktop = inject(DesktopService);
-  protected readonly serverAddress = resolveServerAddress({
-    isDesktop: this.desktop.isDesktop,
-    baseUri: typeof document !== 'undefined' ? document.baseURI : '',
-    host: typeof window !== 'undefined' ? window.location.host : '',
-  });
+  protected readonly serverAddress = signal(
+    resolveServerAddress({
+      isDesktop: this.desktop.isDesktop,
+      baseUri: typeof document !== 'undefined' ? document.baseURI : '',
+      host: typeof window !== 'undefined' ? window.location.host : '',
+    })
+  );
+
+  constructor() {
+    // Nel desktop l'indirizzo della pagina è SEMPRE loopback (la finestra carica dal motore
+    // locale), anche quando il bind del workspace è 0.0.0.0: l'etichetta deve mostrare
+    // l'interfaccia di ascolto scelta nei settings, non l'URL della finestra.
+    if (this.desktop.isDesktop) {
+      void this.desktop.getWorkspace().then((info) => {
+        const address = resolveDesktopBindAddress(info, typeof window !== 'undefined' ? window.location.host : '');
+        if (address) {
+          this.serverAddress.set(address);
+        }
+      });
+    }
+  }
 }
 
 /**
@@ -106,6 +122,10 @@ export class RuntimeBar {
  * ricarica) e nel browser sulla UI compilata sotto /_admin/ui/ — dove `host` intero copre anche
  * l'accesso da LAN con hostname non-localhost. Il default cablato resta solo per lo sviluppo con
  * ng serve, dove la pagina gira su una porta propria e parla col motore attraverso il proxy dev.
+ *
+ * Nel desktop questo è solo il valore INIZIALE: appena arrivano le info del workspace vale
+ * resolveDesktopBindAddress, perché la finestra carica sempre dal loopback e non può riflettere
+ * un bind 0.0.0.0.
  */
 export function resolveServerAddress(context: { isDesktop: boolean; baseUri: string; host: string }): string {
   const servedByEngine = context.baseUri.includes('/_admin/ui');
@@ -113,4 +133,23 @@ export function resolveServerAddress(context: { isDesktop: boolean; baseUri: str
     return context.host;
   }
   return 'localhost:3000';
+}
+
+/**
+ * Indirizzo di bind del workspace per l'app desktop: `host` dei settings (127.0.0.1 o 0.0.0.0)
+ * più la porta effettiva. Mostrare 0.0.0.0 è una scelta: indica chiaramente QUALE opzione di
+ * esposizione è attiva; l'IP concreto della macchina non è compito di questa etichetta.
+ * La porta arriva dalle info del workspace, con l'URL della pagina come ripiego; senza host
+ * (fuori dal desktop, o su errore del bridge) restituisce null e l'etichetta non cambia.
+ */
+export function resolveDesktopBindAddress(
+  info: { host?: string | null; port?: number | null } | null,
+  pageHost: string
+): string | null {
+  if (!info?.host) {
+    return null;
+  }
+  const pagePort = pageHost.includes(':') ? Number(pageHost.split(':').pop()) : NaN;
+  const port = info.port ?? (Number.isFinite(pagePort) ? pagePort : null);
+  return port != null ? `${info.host}:${port}` : info.host;
 }
