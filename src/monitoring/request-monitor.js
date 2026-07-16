@@ -252,6 +252,9 @@ function createRequestMonitorEntry({
     latencyMs: Math.max(0, completedAt - startedAt),
     source,
     matchedRoutePath: req._matchedRoutePath,
+    // Endpoint con sequenza: step servito ({ index, count, responseFile, responseTitle }),
+    // altrimenti assente. La progressione della sequenza si legge da qui.
+    sequenceStep: req._sequenceStep,
     middlewareRoutePath: req._proxyMiddlewareMeta?.routePath,
     middlewareFilePath: req._proxyMiddlewareMeta?.filePath,
     requestHeaders,

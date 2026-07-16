@@ -56,6 +56,8 @@ function summarizeEndpointResponse(endpoint, response) {
     selectedResponseFile: endpoint.selectedResponseFile,
     responseTitle: response.title || "",
     responseCount: endpoint.responseFiles.length,
+    // Badge di catalogo: l'endpoint sta servendo una sequenza di varianti (non la selezionata).
+    sequenceActive: endpoint.sequence != null && endpoint.sequence.enabled === true,
   };
 }
 

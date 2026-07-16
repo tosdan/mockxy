@@ -62,6 +62,49 @@ workspace navigabile.
 Il contenuto delle varianti (status, header, body o file binario, ritardo, tipo mock/handler/
 middleware) è documentato nella pagina sul formato delle risposte.
 
+## La sequenza di varianti
+
+Per gli endpoint la cui risposta deve **evolvere nel tempo** (il caso tipico: un client in
+polling che prima riceve `processing` e poi `completed`), il file endpoint può dichiarare una
+**sequenza**: un ordine di varianti con la durata di ciascuna. La sequenza è una politica di
+selezione sopra le varianti esistenti — i contenuti restano nei normali file di risposta.
+
+```json
+{
+  "sequence": {
+    "enabled": true,
+    "steps": [
+      { "response": "001.response.json", "times": 3 },
+      { "response": "002.response.json" }
+    ],
+    "onEnd": "stay",
+    "resetAfterMs": 30000
+  }
+}
+```
+
+- **`enabled`** — facoltativo, default `true`. A `false` la definizione resta nel file ma vale
+  la selezione classica (`selectedResponseFile`), che rimane obbligatoria in ogni caso.
+- **`steps`** — almeno 2 voci. Ogni step referenzia una variante elencata in `responseFiles`
+  (di tipo `mock` o `handler`: i middleware non sono ammessi negli step) e dichiara al più un
+  criterio di avanzamento: **`times`** (risponde a N richieste, intero ≥ 1) oppure **`forMs`**
+  (risponde per N millisecondi **dalla sua prima richiesta**, non dall'orologio del server).
+  L'ultimo step può non avere criterio: è lo stato terminale. La stessa variante può comparire
+  in più step.
+- **`onEnd`** — `"stay"` (default): esaurito l'ultimo step si resta lì; `"loop"`: si riparte
+  dal primo (in tal caso anche l'ultimo step deve avere un criterio).
+- **`resetAfterMs`** — facoltativo: senza richieste per questo tempo la sequenza riparte dal
+  primo step alla chiamata successiva. Utile per le sessioni di prova ripetute: il polling si
+  ferma quando il client vede l'esito finale, e al giro successivo si riparte da capo senza
+  interventi manuali.
+
+Il punto in cui la sequenza si trova (il **cursore**) è stato runtime, non un file: si azzera
+al riavvio del motore, con il reset esplicito (dall'interfaccia o dall'admin API), per
+inattività (`resetAfterMs`) e quando la definizione della sequenza cambia. Le modifiche al
+file endpoint che **non** toccano la sequenza (es. la descrizione) non lo azzerano. Le
+risposte servite dagli step seguono le regole della loro natura (ritardi, paginazione e filtri
+automatici, timeout degli handler): la sequenza decide *quale* variante risponde, non *come*.
+
 ## Validazione ed errori
 
 Il file viene validato al caricamento: metodo riconosciuto e coerente col nome del file,

@@ -18,7 +18,10 @@ upgrade](WEBSOCKET.md), che non attraversano la pipeline HTTP.
 La voce viene scritta **a risposta completata** e contiene: metodo, percorso e URL completo,
 status, latenza, la **provenienza** (gli stessi valori dell'header `x-mock-source` — la
 [tassonomia](PROXY.md) è la legenda del monitor), la rotta abbinata e gli eventuali riferimenti
-al middleware coinvolto, più header e body di richiesta e risposta.
+al middleware coinvolto, più header e body di richiesta e risposta. Per gli endpoint con una
+[sequenza di varianti](ENDPOINT.md) la voce registra anche **lo step che ha servito la
+richiesta** (posizione e variante, badge «SEQ n/m»): la progressione della sequenza si legge
+scorrendo il monitor.
 
 ## Mascheramento e limiti di cattura
 

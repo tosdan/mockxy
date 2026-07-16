@@ -1,9 +1,13 @@
 const { createPathParamsMatcher } = require("./route-groups");
 
 class MockRegistry {
-  constructor(routeGroups = []) {
+  constructor(routeGroups = [], sequenceStates = null) {
     this.routeGroups = routeGroups;
     this.paramsMatchers = new Map();
+    // Cursori delle sequenze di varianti (SequenceStateStore): vive fuori dal registry perché
+    // deve sopravvivere alle ricariche a caldo (setRouteGroups). Assente nei contesti senza
+    // sequenze (test/usi legacy): lì una sequenza serve sempre il primo step.
+    this.sequenceStates = sequenceStates;
   }
 
   setRouteGroups(routeGroups) {
@@ -31,13 +35,33 @@ class MockRegistry {
       }
 
       if (group.methods.has(normalizedMethod)) {
-        const endpoint = group.methods.get(normalizedMethod);
+        let endpoint = group.methods.get(normalizedMethod);
+        let sequenceStep;
+
+        // Sequenza di varianti: il cursore sceglie lo step che risponde a QUESTA richiesta, poi
+        // la decisione prosegue con la natura dello step (mock o handler) come se fosse la
+        // variante registrata. sequenceStep accompagna la decisione per monitor/diagnostica.
+        if (endpoint.type === "sequence") {
+          const stepIndex = this.sequenceStates != null
+            ? this.sequenceStates.resolveStep(`${normalizedMethod} ${group.path}`, endpoint.sequence)
+            : 0;
+          const step = endpoint.steps[stepIndex];
+          sequenceStep = {
+            index: stepIndex,
+            count: endpoint.steps.length,
+            responseFile: step.selectedResponseFile,
+            responseTitle: step.title || "",
+          };
+          endpoint = step;
+        }
+
         if (endpoint.type === "handler") {
           return {
             mode: "handler",
             routePath: group.path,
             handler: endpoint,
             params: this.getParamsForGroup(group, requestPath, requestUrl),
+            sequenceStep,
           };
         }
 
@@ -45,6 +69,7 @@ class MockRegistry {
           mode: "mock",
           routePath: group.path,
           response: endpoint,
+          sequenceStep,
         };
       }
 

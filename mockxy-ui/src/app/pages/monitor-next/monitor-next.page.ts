@@ -166,6 +166,9 @@ interface SourceMeta {
                   <span class="block truncate font-mono text-[13px] text-foreground">{{ row.originalUrl }}</span>
                   <span class="mt-0.5 flex items-center gap-1.5 text-[11px] text-muted-foreground">
                     <span class="size-1.5 rounded-full" [style.background]="sourceColor(row.source)"></span>{{ sourceLabel(row.source) }}
+                    @if (row.sequenceStep; as seq) {
+                    <span class="rounded bg-[color-mix(in_srgb,var(--brand)_16%,transparent)] px-1 text-[10px] font-bold tracking-wide text-brand" [uiTooltip]="'monitor.sequenceStepTip' | transloco">SEQ {{ seq.index + 1 }}/{{ seq.count }}</span>
+                    }
                   </span>
                 </span>
                 <span class="shrink-0 rounded-md px-1.5 py-0.5 font-mono text-[11.5px] font-bold tabular-nums" [style.color]="statusColor(row.status)" [style.background]="tint(statusColor(row.status), 12)">{{ row.status }}</span>
@@ -210,6 +213,13 @@ interface SourceMeta {
               <span class="inline-flex items-center gap-1.5 text-[12.5px] text-muted-foreground">
                 <span class="size-1.5 rounded-full" [style.background]="sourceColor(sel.source)"></span>{{ sourceLabel(sel.source) }} · {{ sel.latencyMs }} ms · {{ sel.timestamp | date: 'HH:mm:ss.SSS' }}
               </span>
+              @if (sel.sequenceStep; as seq) {
+              <!-- Endpoint con sequenza: quale step ha risposto, con la variante — la progressione si legge da qui. -->
+              <span class="inline-flex items-center gap-1.5 text-[12.5px] text-muted-foreground" [uiTooltip]="'monitor.sequenceStepTip' | transloco">
+                <span class="rounded bg-[color-mix(in_srgb,var(--brand)_16%,transparent)] px-1 text-[10.5px] font-bold tracking-wide text-brand">SEQ {{ seq.index + 1 }}/{{ seq.count }}</span>
+                <span class="font-mono text-[11.5px]">{{ seq.responseTitle ? seq.responseTitle + ' — ' : '' }}{{ seq.responseFile }}</span>
+              </span>
+              }
               <span class="ml-auto flex flex-wrap items-center gap-2">
                 @if (sel.source === 'mock' || sel.source === 'handler') {
                 <button ui-button variant="outline" size="sm" (click)="goToDefinition(sel)" [uiTooltip]="'monitor.goToDefinitionTip' | transloco"><ng-icon name="lucideListTree" size="0.85rem" /> {{ 'monitor.goToMock' | transloco }}</button>

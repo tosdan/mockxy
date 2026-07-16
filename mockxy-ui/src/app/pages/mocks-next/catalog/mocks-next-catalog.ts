@@ -321,6 +321,9 @@ const COLLAPSED_COLLECTIONS_STATE_KEY = 'mocks-collapsed';
               <ng-icon name="lucideMessageSquare" size="0.7rem" />
               {{ ep.responses }}
             </span>
+            @if (ep.sequenceActive) {
+            <span class="rounded bg-[color-mix(in_srgb,var(--brand)_16%,transparent)] px-1 font-bold tracking-wide text-brand" [uiTooltip]="'catalog.sequenceBadgeTip' | transloco">SEQ</span>
+            }
           </div>
         </div>
         <button

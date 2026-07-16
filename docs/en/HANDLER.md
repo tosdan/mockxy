@@ -56,6 +56,30 @@ endpoint file. The UI offers a starter template already in this shape.
   (changes to the file are visible on the next request) and every handler receives its **own
   copy**: mutating it doesn't pollute other requests. A non-existent name is an explicit
   error, which becomes the handler's standard failure.
+- **`state`** — a mutable object **persistent across calls** of the same endpoint (and shared
+  by its variants): the memory for counters, per-resource state machines
+  (`state[params.id] = ...`), outcomes that depend on history. It is **ephemeral and local to
+  the engine** — not a database: it resets on restart and with the endpoint's
+  [sequence](ENDPOINT.md) reset; it survives hot reloads instead, so iterating on the script
+  doesn't restart your test from scratch.
+- **`callCount`** — progressive number of handler invocations for this endpoint (1 on the
+  first), same lifetime as `state`.
+- **`firstRequestAt`** — timestamp (ms epoch) of the first invocation: `Date.now() -
+  firstRequestAt` is the time elapsed since the round started, without looking at the absolute
+  clock. With these three primitives a polling endpoint that changes outcome needs no hacks:
+
+  ```js
+  module.exports = {
+    resolveResponse({ firstRequestAt }) {
+      if (Date.now() - firstRequestAt < 15000) {
+        return { status: 202, jsonBody: { status: "processing" } };
+      }
+      return { status: 200, jsonBody: { status: "completed" } };
+    },
+  };
+  ```
+
+  (for the simple case, with no code at all, there is the [variant sequence](ENDPOINT.md)).
 - **`req`** — the raw Express request, for advanced cases. Beware: the body stream has already
   been consumed by the buffering — use the three forms above, don't re-read it.
 

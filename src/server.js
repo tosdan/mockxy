@@ -6,6 +6,8 @@ const { loadEndpointRouteGroups } = require("./mocks/endpoint-loader");
 const { mergeLocalRouteGroups } = require("./mocks/local-route-groups");
 const { createLogger } = require("./utils/logger");
 const { MockRegistry } = require("./mocks/mock-registry");
+const { SequenceStateStore } = require("./mocks/sequence-state");
+const { HandlerStateStore } = require("./mocks/handler-state");
 const { ProxyMiddlewareRegistry } = require("./proxy/proxy-middleware-registry");
 const { sortRouteGroups } = require("./mocks/route-groups");
 const { RequestMonitorStore } = require("./monitoring/request-monitor");
@@ -52,11 +54,12 @@ function createReloadHandler({ mocksDir, registry, proxyMiddlewareRegistry, logg
 
     reloadInProgress = true;
     try {
-      const { mockRouteGroups, handlerRouteGroups, proxyMiddlewareRouteGroups, loadErrors } =
+      const { mockRouteGroups, handlerRouteGroups, proxyMiddlewareRouteGroups, sequenceRouteGroups, loadErrors } =
         await loadEndpointRouteGroups(mocksDir);
       let routeGroups = mergeLocalRouteGroups({
         mockRouteGroups,
         handlerRouteGroups,
+        sequenceRouteGroups,
       });
       let middlewareRouteGroups = proxyMiddlewareRouteGroups;
       if (loadErrors.length > 0) {
@@ -172,7 +175,7 @@ async function createServerRuntime({ configOverrides = {}, logger: extLogger } =
       "BACKEND_URL is not configured. Mocks and local handlers work normally, but requests that fall through to the backend (proxy fallback) or use proxy middleware will return 501 until BACKEND_URL is set."
     );
   }
-  const { mockRouteGroups, handlerRouteGroups, proxyMiddlewareRouteGroups, loadErrors } =
+  const { mockRouteGroups, handlerRouteGroups, proxyMiddlewareRouteGroups, sequenceRouteGroups, loadErrors } =
     await loadEndpointRouteGroups(config.mocksDir);
   // Avvio resiliente: un file rotto non blocca il boot — l'endpoint viene saltato con un
   // warning per file, gli altri mock partono normalmente.
@@ -185,8 +188,15 @@ async function createServerRuntime({ configOverrides = {}, logger: extLogger } =
   const routeGroups = mergeLocalRouteGroups({
     mockRouteGroups,
     handlerRouteGroups,
+    sequenceRouteGroups,
   });
-  const registry = new MockRegistry(routeGroups);
+  // I cursori delle sequenze vivono qui (non nel registry): sopravvivono alle ricariche a caldo
+  // e vengono azzerati solo da riavvio, reset esplicito, inattività o cambio di definizione.
+  const sequenceStates = new SequenceStateStore();
+  // Memoria per-endpoint degli handler (state/callCount/firstRequestAt): come i cursori,
+  // vive nel runtime e sopravvive alle ricariche a caldo; si azzera a riavvio o reset.
+  const handlerStates = new HandlerStateStore();
+  const registry = new MockRegistry(routeGroups, sequenceStates);
   const proxyMiddlewareRegistry = new ProxyMiddlewareRegistry(proxyMiddlewareRouteGroups);
   const requestMonitor = new RequestMonitorStore(undefined, logger);
   const serverState = new ServerStateStore();
@@ -213,6 +223,8 @@ async function createServerRuntime({ configOverrides = {}, logger: extLogger } =
     requestMonitor,
     serverState,
     monitorDump,
+    sequenceStates,
+    handlerStates,
   });
   const watcher = startMockWatcher({
     config,
@@ -231,6 +243,8 @@ async function createServerRuntime({ configOverrides = {}, logger: extLogger } =
     serverState,
     monitorDump,
     registry,
+    sequenceStates,
+    handlerStates,
     reloadRuntime,
     watcher,
   };
