@@ -79,4 +79,4 @@ stato.
 | Scrittura capitoli Parte VII — Pratica e riferimenti rapidi | ✅ (32–34) |
 | Inserimento screenshot | ⬜ |
 | Revisione complessiva e indice finale | ⬜ |
-| Traduzione inglese | ⬜ |
+| Traduzione inglese (`docs/en/guide/`) | ✅ |
