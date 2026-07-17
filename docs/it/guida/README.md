@@ -75,7 +75,7 @@ stato.
 | Scrittura capitoli Parte III — Risposte dinamiche e streaming | ✅ (15–19) |
 | Scrittura capitoli Parte IV — Osservare e catturare il traffico | ✅ (20–22) |
 | Scrittura capitoli Parte V — Import e mock come file | ✅ (23–24) |
-| Scrittura capitoli Parte VI — Configurazione e amministrazione | ⬜ |
+| Scrittura capitoli Parte VI — Configurazione e amministrazione | ✅ (25–31) |
 | Scrittura capitoli Parte VII — Pratica e riferimenti rapidi | ⬜ |
 | Inserimento screenshot | ⬜ |
 | Revisione complessiva e indice finale | ⬜ |
