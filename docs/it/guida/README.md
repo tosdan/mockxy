@@ -76,7 +76,7 @@ stato.
 | Scrittura capitoli Parte IV — Osservare e catturare il traffico | ✅ (20–22) |
 | Scrittura capitoli Parte V — Import e mock come file | ✅ (23–24) |
 | Scrittura capitoli Parte VI — Configurazione e amministrazione | ✅ (25–31) |
-| Scrittura capitoli Parte VII — Pratica e riferimenti rapidi | ⬜ |
+| Scrittura capitoli Parte VII — Pratica e riferimenti rapidi | ✅ (32–34) |
 | Inserimento screenshot | ⬜ |
 | Revisione complessiva e indice finale | ⬜ |
 | Traduzione inglese | ⬜ |
