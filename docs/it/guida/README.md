@@ -71,7 +71,7 @@ stato.
 |---|---|
 | Mappa completa dei contenuti (MAPPA.md) | ✅ fatta |
 | Scrittura capitoli Parte I — Partire | ✅ (01–05) |
-| Scrittura capitoli Parte II — Il lavoro quotidiano con i mock | ⬜ |
+| Scrittura capitoli Parte II — Il lavoro quotidiano con i mock | ✅ (06–14) |
 | Scrittura capitoli Parte III — Risposte dinamiche e streaming | ⬜ |
 | Scrittura capitoli Parte IV — Osservare e catturare il traffico | ⬜ |
 | Scrittura capitoli Parte V — Import e mock come file | ⬜ |
