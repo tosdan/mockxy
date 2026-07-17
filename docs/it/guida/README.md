@@ -73,7 +73,7 @@ stato.
 | Scrittura capitoli Parte I — Partire | ✅ (01–05) |
 | Scrittura capitoli Parte II — Il lavoro quotidiano con i mock | ✅ (06–14) |
 | Scrittura capitoli Parte III — Risposte dinamiche e streaming | ✅ (15–19) |
-| Scrittura capitoli Parte IV — Osservare e catturare il traffico | ⬜ |
+| Scrittura capitoli Parte IV — Osservare e catturare il traffico | ✅ (20–22) |
 | Scrittura capitoli Parte V — Import e mock come file | ⬜ |
 | Scrittura capitoli Parte VI — Configurazione e amministrazione | ⬜ |
 | Scrittura capitoli Parte VII — Pratica e riferimenti rapidi | ⬜ |
