@@ -5,5 +5,6 @@ implementate (non si conservano TODO vecchi a lungo).
 
 ---
 
-(vuoto — l'ultima voce, lo split test backend/electron, è stata implementata l'8 lug 2026
-con jest projects e suffisso `*.electron.test.js`)
+- [ ] Eseguire il piano per notifiche, Microsoft Store e build desktop, tracciato nella
+      checklist dedicata
+      [PIANO-DISTRIBUZIONE-DESKTOP.md](PIANO-DISTRIBUZIONE-DESKTOP.md).
