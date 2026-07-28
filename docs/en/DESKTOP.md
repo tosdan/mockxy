@@ -25,6 +25,25 @@ workspace bar manages them as tabs:
 - the **recents** reopen previously used workspaces; removing an entry from the recents
   doesn't touch the folder.
 
+Open tabs are saved on every open, switch or close. On the next launch the app reopens all
+those workspaces and returns to the tab that was active; if a folder no longer exists or a
+workspace fails to start, the others are still restored.
+
+For a recovery launch without opening any workspace, use the one-shot
+`--no-restore-workspaces` option. It does not erase the saved session:
+
+```powershell
+.\Mockxy-<version>-portable.exe --no-restore-workspaces
+```
+
+```bash
+./Mockxy-<version>.AppImage --no-restore-workspaces
+```
+
+Command-line arguments reach the Electron app normally in both formats. On Linux the AppImage
+must be executable; if Mockxy is launched from a `.desktop` entry, the option can temporarily
+be added to its `Exec` line, or the terminal can be used.
+
 **Ports are stable**: on first opening a free port is assigned and saved in the local
 settings — the workspace always reopens there, so the configured frontends don't need
 retouching. If at startup the saved port turns out to be busy, the engine falls back to a free
@@ -65,8 +84,9 @@ re-enable it without a restart; the global `errorLogEnabled` choice is stored in
 ## Global preferences and packaging
 
 The gear menu separates settings for the active **workspace** from **App preferences**.
-Global preferences — language, window geometry, list of recents and error logging — live next
-to the executable: in portable format, everything travels along with the exe. To build:
+Global preferences — language, window geometry, workspace session, list of recents and error
+logging — live next to the Windows executable in portable format, so everything travels with
+the exe; on Linux they use the user data folder. To build:
 
 ```bash
 npm run install:all

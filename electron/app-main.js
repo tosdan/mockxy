@@ -30,6 +30,8 @@ const {
   addRecentWorkspace,
   getRecentWorkspaces,
   getLastWorkspace,
+  getOpenWorkspaceSession,
+  setOpenWorkspaceSession,
   removeRecentWorkspace,
   getWindowBounds,
   setWindowBounds,
@@ -40,6 +42,8 @@ const {
 } = require("./global-prefs");
 const { createServerPool } = require("./server-pool");
 const { resolveLogsBaseDir, createErrorFileLog } = require("./error-log");
+const { shouldRestoreWorkspaces } = require("./startup-options");
+const { restoreSavedWorkspaces } = require("./workspace-session");
 
 let mainWindow = null;
 let activeRoot = null;
@@ -152,11 +156,22 @@ async function launchEngine(root) {
 
 const pool = createServerPool({ launch: launchEngine });
 
+// Salva la sessione a ogni mutazione, non solo in chiusura: anche dopo un crash resta una fotografia
+// aggiornata delle schede che l'utente aveva aperto e di quella che stava guardando.
+function persistWorkspaceSession() {
+  setOpenWorkspaceSession(
+    prefsConfigDir(),
+    pool.list().map((entry) => entry.root),
+    activeRoot,
+  );
+}
+
 // Apre (se serve) il workspace, lo rende attivo e lo mostra nella finestra; lo registra tra i recenti.
 async function showWorkspace(root) {
   if (!fs.existsSync(root)) {
     // La cartella non esiste più: la tolgo dai recenti e lo segnalo (l'interfaccia rilegge l'elenco).
     removeRecentWorkspace(prefsConfigDir(), root);
+    persistWorkspaceSession();
     dialog.showErrorBox(dialogText().workspaceNotFoundTitle, dialogText().workspaceNotFoundDetail(root));
     return { ok: false, error: "not-found" };
   }
@@ -164,11 +179,13 @@ async function showWorkspace(root) {
     const entry = await pool.open(root);
     activeRoot = root;
     addRecentWorkspace(prefsConfigDir(), root);
+    persistWorkspaceSession();
     if (mainWindow) {
       await mainWindow.loadURL(entry.url);
     }
     return { ok: true };
   } catch (error) {
+    persistWorkspaceSession();
     errorLog.logError("open-workspace", error, { root });
     dialog.showErrorBox(dialogText().openFailedTitle, String((error && error.message) || error));
     return { ok: false, error: "open-failed" };
@@ -189,6 +206,7 @@ async function showWelcome() {
 async function closeWorkspace(root) {
   await pool.close(root);
   if (root !== activeRoot) {
+    persistWorkspaceSession();
     return;
   }
   activeRoot = null;
@@ -197,6 +215,7 @@ async function closeWorkspace(root) {
     await showWorkspace(others[0].root);
   } else {
     await showWelcome();
+    persistWorkspaceSession();
   }
 }
 
@@ -486,6 +505,37 @@ function windowIcon() {
   return fs.existsSync(icon) ? icon : undefined;
 }
 
+async function restoreWorkspaceSession() {
+  const savedSession = getOpenWorkspaceSession(prefsConfigDir());
+  // Migrazione trasparente: le preferenze create dalle versioni precedenti conoscevano soltanto
+  // l'ultimo workspace. Dopo questo avvio verranno risalvate nel nuovo formato di sessione.
+  const legacyLastWorkspace = savedSession ? null : getLastWorkspace(prefsConfigDir());
+  const restored = await restoreSavedWorkspaces({
+    savedSession,
+    legacyLastWorkspace,
+    exists: fs.existsSync,
+    open: (root) => pool.open(root),
+  });
+
+  for (const root of restored.missingRoots) {
+    removeRecentWorkspace(prefsConfigDir(), root);
+  }
+  for (const { root, error } of restored.failures) {
+    errorLog.logError("restore-workspace", error, { root });
+    console.error(`Ripristino del workspace fallito (${root}):`, error.message);
+    dialog.showErrorBox(dialogText().openFailedTitle, String((error && error.message) || error));
+  }
+
+  activeRoot = restored.activeRoot;
+  persistWorkspaceSession();
+
+  if (!activeRoot) {
+    return false;
+  }
+  await mainWindow.loadURL(pool.get(activeRoot).url);
+  return true;
+}
+
 async function createMainWindow() {
   const saved = getWindowBounds(prefsConfigDir());
   const win = new BrowserWindow({
@@ -560,12 +610,9 @@ async function createMainWindow() {
       win.webContents.reload();
     }
   });
-  // All'avvio riapri l'ultimo workspace se la sua cartella esiste ancora; altrimenti (primo avvio o
-  // cartella rimossa) mostra la view di benvenuto: è ammesso partire senza alcun workspace aperto.
-  const last = getLastWorkspace(prefsConfigDir());
-  if (last && fs.existsSync(last)) {
-    await showWorkspace(last);
-  } else {
+  // Il flag di recupero salta il ripristino per questo solo avvio e non cancella la sessione salvata.
+  // Senza flag riapre tutte le schede precedenti e torna su quella che era attiva.
+  if (!shouldRestoreWorkspaces(process.argv) || !(await restoreWorkspaceSession())) {
     await showWelcome();
   }
   return win;

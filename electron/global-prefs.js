@@ -58,6 +58,62 @@ function getLastWorkspace(configDir) {
   return readPrefs(configDir).recentWorkspaces[0] || null;
 }
 
+// Sessione dell'app desktop: tutte le schede aperte e quella attiva. `null` distingue le
+// preferenze precedenti a questa proprietà da una sessione salvata intenzionalmente vuota.
+function getOpenWorkspaceSession(configDir) {
+  const session = readPrefs(configDir).workspaceSession;
+  if (!session || !Array.isArray(session.openWorkspaces)) {
+    return null;
+  }
+
+  const openWorkspaces = [];
+  const seen = new Set();
+  for (const candidate of session.openWorkspaces) {
+    if (typeof candidate !== "string" || candidate.length === 0) {
+      continue;
+    }
+    const normalized = normalize(candidate);
+    if (!seen.has(normalized)) {
+      seen.add(normalized);
+      openWorkspaces.push(normalized);
+    }
+  }
+
+  const requestedActive =
+    typeof session.activeWorkspace === "string" && session.activeWorkspace.length > 0
+      ? normalize(session.activeWorkspace)
+      : null;
+
+  return {
+    openWorkspaces,
+    activeWorkspace: requestedActive && seen.has(requestedActive) ? requestedActive : null,
+  };
+}
+
+function setOpenWorkspaceSession(configDir, workspacePaths, activeWorkspace) {
+  const openWorkspaces = [];
+  const seen = new Set();
+  for (const candidate of Array.isArray(workspacePaths) ? workspacePaths : []) {
+    if (typeof candidate !== "string" || candidate.length === 0) {
+      continue;
+    }
+    const normalized = normalize(candidate);
+    if (!seen.has(normalized)) {
+      seen.add(normalized);
+      openWorkspaces.push(normalized);
+    }
+  }
+
+  const requestedActive =
+    typeof activeWorkspace === "string" && activeWorkspace.length > 0 ? normalize(activeWorkspace) : null;
+  const prefs = readPrefs(configDir);
+  prefs.workspaceSession = {
+    openWorkspaces,
+    activeWorkspace: requestedActive && seen.has(requestedActive) ? requestedActive : null,
+  };
+  return writePrefs(configDir, prefs);
+}
+
 // Rimuove un workspace dai recenti (utile quando la cartella non esiste più).
 function removeRecentWorkspace(configDir, workspacePath) {
   const target = normalize(workspacePath);
@@ -118,6 +174,8 @@ module.exports = {
   addRecentWorkspace,
   getRecentWorkspaces,
   getLastWorkspace,
+  getOpenWorkspaceSession,
+  setOpenWorkspaceSession,
   removeRecentWorkspace,
   getWindowBounds,
   setWindowBounds,

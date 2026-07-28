@@ -25,6 +25,26 @@ barra dei workspace li gestisce a schede:
 - i **recenti** riaprono i workspace usati; rimuovere una voce dai recenti non tocca la
   cartella.
 
+Le schede aperte vengono salvate a ogni apertura, cambio o chiusura. Al successivo avvio
+l'app riapre tutti quei workspace e torna sulla scheda che era attiva; se una cartella non
+esiste più o un workspace non riesce ad avviarsi, gli altri vengono comunque ripristinati.
+
+Per un avvio di recupero, senza riaprire alcun workspace, si può usare il flag monouso
+`--no-restore-workspaces`. Non cancella la sessione salvata:
+
+```powershell
+.\Mockxy-<versione>-portable.exe --no-restore-workspaces
+```
+
+```bash
+./Mockxy-<versione>.AppImage --no-restore-workspaces
+```
+
+Gli argomenti da riga di comando arrivano normalmente all'app Electron in entrambi i formati.
+Su Linux il file AppImage deve essere eseguibile; se Mockxy viene lanciato da una voce
+`.desktop`, il flag può essere aggiunto temporaneamente alla sua riga `Exec`, oppure si può
+usare il terminale.
+
 **Le porte sono stabili**: alla prima apertura viene assegnata una porta libera e salvata nelle
 impostazioni locali — il workspace riapre sempre lì, così i frontend configurati non vanno
 ritoccati. Se all'avvio la porta salvata risulta occupata, il motore ripiega su una libera e
@@ -65,8 +85,9 @@ viene salvata in `mockxy-prefs.json` ([configurazioni](CONFIGURAZIONI.md)).
 ## Preferenze globali e pacchetto
 
 L'ingranaggio distingue le **impostazioni del workspace** attivo dalle **Preferenze app**.
-Le preferenze globali — lingua, geometria della finestra, elenco dei recenti e log errori —
-vivono accanto all'eseguibile: in formato portable, tutto viaggia insieme all'exe. Per compilare:
+Le preferenze globali — lingua, geometria della finestra, sessione dei workspace, elenco dei
+recenti e log errori — vivono accanto all'eseguibile Windows in formato portable, così tutto
+viaggia insieme all'exe; su Linux usano la cartella dati utente. Per compilare:
 
 ```bash
 npm run install:all

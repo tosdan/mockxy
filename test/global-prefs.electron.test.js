@@ -5,6 +5,8 @@ const {
   addRecentWorkspace,
   getRecentWorkspaces,
   getLastWorkspace,
+  getOpenWorkspaceSession,
+  setOpenWorkspaceSession,
   removeRecentWorkspace,
   prefsFilePath,
   getWindowBounds,
@@ -75,6 +77,46 @@ describe("global-prefs (preferenze utente globali)", () => {
 
   test("getLastWorkspace è null senza recenti", () => {
     expect(getLastWorkspace(dir)).toBeNull();
+  });
+
+  test("sessione workspace: distingue il primo avvio da una sessione salvata vuota", () => {
+    expect(getOpenWorkspaceSession(dir)).toBeNull();
+
+    setOpenWorkspaceSession(dir, [], null);
+
+    expect(getOpenWorkspaceSession(dir)).toEqual({
+      openWorkspaces: [],
+      activeWorkspace: null,
+    });
+  });
+
+  test("sessione workspace: normalizza, deduplica e conserva la scheda attiva", () => {
+    const a = path.join(dir, "a");
+    const b = path.join(dir, "b");
+
+    setOpenWorkspaceSession(dir, [a, b, a], b);
+
+    expect(getOpenWorkspaceSession(dir)).toEqual({
+      openWorkspaces: [path.resolve(a), path.resolve(b)],
+      activeWorkspace: path.resolve(b),
+    });
+  });
+
+  test("sessione workspace: scarta una scheda attiva che non è tra quelle aperte", () => {
+    setOpenWorkspaceSession(dir, [path.join(dir, "a")], path.join(dir, "b"));
+
+    expect(getOpenWorkspaceSession(dir).activeWorkspace).toBeNull();
+  });
+
+  test("sessione workspace e recenti coesistono nello stesso file", () => {
+    const a = path.join(dir, "a");
+    const b = path.join(dir, "b");
+    addRecentWorkspace(dir, a);
+
+    setOpenWorkspaceSession(dir, [a, b], b);
+
+    expect(getRecentWorkspaces(dir)).toEqual([path.resolve(a)]);
+    expect(getOpenWorkspaceSession(dir).activeWorkspace).toBe(path.resolve(b));
   });
 
   test("window bounds: default null, poi round-trip", () => {
