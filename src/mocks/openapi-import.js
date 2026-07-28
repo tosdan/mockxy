@@ -44,6 +44,101 @@ function convertPath(openapiPath) {
   return String(openapiPath).replace(/\{([^/}]+)\}/g, ":$1");
 }
 
+// Carattere riservato alle cartelle-query derivate: non puo' comparire in un path (vedi route-groups).
+const RESERVED_QUERY_FOLDER_CHAR = "^";
+
+/**
+ * Normalizza il prefisso da anteporre ai path importati: "be/" -> "/be", "/" -> "".
+ * Stringa vuota = nessun prefisso. Lancia un errore 400 se il valore non puo' produrre path validi
+ * (query string, spazi, carattere riservato): meglio fallire subito che creare mock inservibili.
+ */
+function normalizePrefix(prefix) {
+  if (prefix == null) {
+    return "";
+  }
+  const trimmed = String(prefix).trim();
+  if (trimmed === "" || trimmed === "/") {
+    return "";
+  }
+
+  const withLeadingSlash = trimmed.startsWith("/") ? trimmed : `/${trimmed}`;
+  const normalized = withLeadingSlash.replace(/\/+$/, "");
+
+  if (/[?#\s]/.test(normalized) || normalized.includes(RESERVED_QUERY_FOLDER_CHAR)) {
+    throw createImportError(
+      `Prefisso non valido: "${trimmed}". Sono ammessi solo segmenti di path (niente spazi, "?", "#" o "${RESERVED_QUERY_FOLDER_CHAR}").`,
+    );
+  }
+  if (normalized.includes("//")) {
+    throw createImportError(`Prefisso non valido: "${trimmed}". Segmenti vuoti non ammessi.`);
+  }
+
+  return normalized;
+}
+
+// Antepone il prefisso gia' normalizzato al path convertito.
+function applyPrefix(path, prefix) {
+  return prefix === "" ? path : `${prefix}${path}`;
+}
+
+// Sostituisce le variabili di un server template ("/{version}/api") con i loro default;
+// undefined se manca il default di almeno una variabile (nessun suggerimento sensato).
+function resolveServerVariables(url, variables) {
+  if (!url.includes("{")) {
+    return url;
+  }
+  let unresolved = false;
+  const resolved = url.replace(/\{([^/}]+)\}/g, (_match, name) => {
+    const fallback = variables?.[name]?.default;
+    if (typeof fallback !== "string" && typeof fallback !== "number") {
+      unresolved = true;
+      return "";
+    }
+    return String(fallback);
+  });
+  return unresolved ? undefined : resolved;
+}
+
+/**
+ * Prefisso suggerito dal documento: il path del primo `servers[].url` che ne dichiara uno
+ * (es. "https://api.example.com/be/v1" -> "/be/v1"). Stringa vuota se i server non aggiungono
+ * nulla oltre host e porta. E' solo un suggerimento: l'utente lo conferma o lo cambia.
+ */
+function suggestPrefix(document) {
+  const servers = document?.servers;
+  if (!Array.isArray(servers)) {
+    return "";
+  }
+
+  for (const server of servers) {
+    if (server == null || typeof server.url !== "string") {
+      continue;
+    }
+    const url = resolveServerVariables(server.url.trim(), server.variables);
+    if (url == null || url === "") {
+      continue;
+    }
+    // URL relativo ("/be") o assoluto: in entrambi i casi ci serve solo il pathname.
+    // La base fittizia serve a interpretare i relativi senza inventarsi un host.
+    let pathname;
+    try {
+      pathname = new URL(url, "http://openapi.invalid").pathname;
+    } catch {
+      continue;
+    }
+    try {
+      const candidate = normalizePrefix(pathname);
+      if (candidate !== "") {
+        return candidate;
+      }
+    } catch {
+      /* server url inutilizzabile come prefisso: prova il prossimo */
+    }
+  }
+
+  return "";
+}
+
 // Risolve un JSON Pointer interno ("#/components/schemas/User") dentro il documento.
 function resolvePointer(document, ref) {
   if (typeof ref !== "string" || !ref.startsWith("#/")) {
@@ -156,9 +251,12 @@ function firstTag(tags) {
  * Costruisce il piano di import da un documento OpenAPI gia' interpretato.
  * `existingKeys` e' un Set di chiavi "METHOD /path" gia' presenti nel catalogo: le operazioni che
  * combaciano vengono marcate `skip`. Ogni voce: { method, path, status, body, collection, action }.
+ * `options.prefix` viene anteposto ai path importati (anche ai fini del confronto con l'esistente:
+ * con un prefisso diverso lo stesso endpoint e' un mock nuovo, non un duplicato).
  */
-function buildImportPlan(document, existingKeys = new Set()) {
+function buildImportPlan(document, existingKeys = new Set(), options = {}) {
   const paths = document?.paths || {};
+  const prefix = normalizePrefix(options.prefix);
   const items = [];
 
   for (const [rawPath, pathItem] of Object.entries(paths)) {
@@ -172,7 +270,7 @@ function buildImportPlan(document, existingKeys = new Set()) {
         continue;
       }
 
-      const path = convertPath(rawPath);
+      const path = applyPrefix(convertPath(rawPath), prefix);
       const status = firstSuccessStatus(operation.responses);
       const item = {
         method: method.toUpperCase(),
@@ -198,23 +296,32 @@ function summarizePlan(items) {
   return { total: items.length, create, skip: items.length - create, collections: collections.size };
 }
 
-// Comodità per l'endpoint: parse + piano + conteggi in un colpo.
-async function planFromDocument(text, existingKeys = new Set()) {
+// Comodità per l'endpoint: parse + piano + conteggi in un colpo. Riporta anche il prefisso
+// applicato e quello suggerito dai `servers`, che il wizard propone all'utente.
+async function planFromDocument(text, existingKeys = new Set(), options = {}) {
   const document = await parseOpenapi(text);
-  const items = buildImportPlan(document, existingKeys);
-  return { items, ...summarizePlan(items) };
+  const items = buildImportPlan(document, existingKeys, options);
+  return {
+    items,
+    ...summarizePlan(items),
+    prefix: normalizePrefix(options.prefix),
+    suggestedPrefix: suggestPrefix(document),
+  };
 }
 
 module.exports = {
   SUPPORTED_METHODS,
+  applyPrefix,
   buildImportPlan,
   buildResponseBody,
   convertPath,
   createImportError,
   firstSuccessStatus,
   firstTag,
+  normalizePrefix,
   parseOpenapi,
   planFromDocument,
   resolveRef,
+  suggestPrefix,
   summarizePlan,
 };

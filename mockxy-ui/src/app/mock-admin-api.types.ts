@@ -485,13 +485,19 @@ export interface OpenapiImportItem {
   action: 'create' | 'skip';
 }
 
-/** Anteprima (dryRun) dell'import OpenAPI: piano + conteggi, senza scrivere nulla. */
+/**
+ * Anteprima (dryRun) dell'import OpenAPI: piano + conteggi, senza scrivere nulla.
+ * `prefix` è quello effettivamente applicato ai path del piano (normalizzato dal server),
+ * `suggestedPrefix` quello ricavato dai `servers` del documento, da proporre all'utente.
+ */
 export interface OpenapiImportPreview {
   items: OpenapiImportItem[];
   total: number;
   create: number;
   skip: number;
   collections: number;
+  prefix: string;
+  suggestedPrefix: string;
 }
 
 /** Esito dell'import OpenAPI reale. */
@@ -501,6 +507,7 @@ export interface OpenapiImportResult {
   failed: number;
   total: number;
   collections: number;
+  prefix: string;
 }
 
 export interface RequestMonitorSnapshotEvent {
