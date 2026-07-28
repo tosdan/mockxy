@@ -5,6 +5,7 @@ const {
   STATUS,
   compareVersions,
   normalizeRelease,
+  isTrustedReleaseUrl,
   checkLatestRelease,
   shouldCheckForUpdates,
 } = require("../electron/release-checker");
@@ -53,6 +54,19 @@ describe("desktop release checker", () => {
       reason: null,
       httpStatus: null,
     });
+  });
+
+  test("accepts only canonical HTTPS release URLs", () => {
+    expect(isTrustedReleaseUrl("https://github.com/tosdan/mockxy/releases/tag/v1.2.0")).toBe(true);
+    expect(isTrustedReleaseUrl("http://github.com/tosdan/mockxy/releases/tag/v1.2.0")).toBe(false);
+    expect(isTrustedReleaseUrl("https://github.com/other/mockxy/releases/tag/v1.2.0")).toBe(false);
+    expect(isTrustedReleaseUrl("https://github.com/tosdan/mockxy/releases/tag/latest")).toBe(false);
+    expect(
+      isTrustedReleaseUrl("https://github.com/tosdan/mockxy/releases/tag/v1.2.0?redirect=evil"),
+    ).toBe(false);
+    expect(isTrustedReleaseUrl("https://github.com.evil.test/tosdan/mockxy/releases/tag/v1.2.0")).toBe(
+      false,
+    );
   });
 
   test("does not propose the same release or a downgrade", () => {

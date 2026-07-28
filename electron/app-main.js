@@ -12,7 +12,7 @@
 
 const fs = require("fs");
 const path = require("path");
-const { app, BrowserWindow, Menu, dialog, ipcMain, screen, shell } = require("electron");
+const { app, BrowserWindow, Menu, dialog, ipcMain, net, screen, shell } = require("electron");
 const { findFreePort, isPortFree, startDesktopServer, WORKSPACE_SETTING_DEFAULTS } = require("./desktop-server");
 const { decideNavigation, decideWindowOpen } = require("./navigation-guard");
 const { getDialogMessages } = require("./dialog-messages");
@@ -39,16 +39,23 @@ const {
   setLanguage,
   getErrorLogEnabled,
   setErrorLogEnabled,
+  getUpdatePreferences,
+  recordSuccessfulUpdateCheck,
+  setIgnoredUpdateVersion,
 } = require("./global-prefs");
 const { createServerPool } = require("./server-pool");
 const { resolveLogsBaseDir, createErrorFileLog } = require("./error-log");
 const { shouldRestoreWorkspaces } = require("./startup-options");
 const { restoreSavedWorkspaces } = require("./workspace-session");
+const { createUpdateService, detectDistributionChannel } = require("./update-service");
+const { registerUpdateIpc } = require("./update-ipc");
 
 let mainWindow = null;
 let activeRoot = null;
+let automaticUpdateTimer = null;
 // Lingua corrente dell'interfaccia, condivisa tra app e view di benvenuto (vedi resolveLanguage).
 let currentLanguage = "en";
+const AUTOMATIC_UPDATE_DELAY_MS = 5_000;
 
 // Stringhe dei dialoghi nativi nella lingua corrente: da leggere al momento dell'uso, mai
 // memorizzare il risultato (la lingua può cambiare a runtime dal selettore dell'interfaccia).
@@ -79,6 +86,57 @@ const errorLog = createErrorFileLog({
   // Preferenza dell'utente (globale): spegnibile dalla dialog App Preferences, vedi prefs:set.
   enabled: getErrorLogEnabled(prefsConfigDir()),
 });
+
+// Lo Store gestisce i propri aggiornamenti e non deve contattare GitHub. Nelle altre build il
+// controllo manuale resta disponibile; quello automatico parte soltanto da un'app pacchettizzata,
+// mai da sviluppo o test.
+const distributionChannel = detectDistributionChannel({
+  isPackaged: app.isPackaged,
+  windowsStore: process.windowsStore === true,
+});
+const checksEnabled = distributionChannel !== "store";
+const automaticChecksEnabled =
+  checksEnabled && app.isPackaged && process.env.NODE_ENV !== "test";
+const updateService = createUpdateService({
+  currentVersion: app.getVersion(),
+  distributionChannel,
+  checksEnabled,
+  automaticChecksEnabled,
+  fetchImpl: (url, options) => net.fetch(url, options),
+  readPreferences: () => getUpdatePreferences(prefsConfigDir()),
+  recordSuccessfulCheck: (result, checkedAt) =>
+    recordSuccessfulUpdateCheck(prefsConfigDir(), result, checkedAt),
+  setIgnoredVersion: (version) => setIgnoredUpdateVersion(prefsConfigDir(), version),
+});
+
+let reportUpdateCheckFailure = () => undefined;
+
+async function runAutomaticUpdateCheck(win) {
+  try {
+    const result = await updateService.check({ automatic: true });
+    reportUpdateCheckFailure(result);
+    if (
+      result.status === "available" &&
+      !result.ignored &&
+      !win.isDestroyed() &&
+      !win.webContents.isDestroyed()
+    ) {
+      win.webContents.send("updates:available", result);
+    }
+  } catch (error) {
+    errorLog.logError("update-check", error);
+  }
+}
+
+function scheduleAutomaticUpdateCheck(win) {
+  if (automaticUpdateTimer) {
+    clearTimeout(automaticUpdateTimer);
+  }
+  automaticUpdateTimer = setTimeout(() => {
+    automaticUpdateTimer = null;
+    void runAutomaticUpdateCheck(win);
+  }, AUTOMATIC_UPDATE_DELAY_MS);
+}
 
 // Gli imprevisti del processo principale finiscono nel file: in pacchetto non c'è una console
 // che li mostri. Registrare l'handler sostituisce il dialogo di default di Electron: lo
@@ -434,6 +492,15 @@ function setupIpc() {
     };
   });
 
+  // Aggiornamenti: il renderer vede stato e azioni, ma non riceve l'URL. `updates:open` apre
+  // soltanto l'URL canonico conservato dal main dopo una risposta GitHub valida.
+  ({ reportFailure: reportUpdateCheckFailure } = registerUpdateIpc({
+    ipcMain,
+    updateService,
+    shell,
+    errorLog,
+  }));
+
   // Lingua: lettura sincrona (il preload la espone alla UI al caricamento) e scrittura persistente
   // (sia l'app sia la view di benvenuto la cambiano e la condividono tramite le preferenze globali).
   ipcMain.on("lang:current", (event) => {
@@ -561,6 +628,10 @@ async function createMainWindow() {
     win.maximize();
   }
   win.on("closed", () => {
+    if (automaticUpdateTimer) {
+      clearTimeout(automaticUpdateTimer);
+      automaticUpdateTimer = null;
+    }
     mainWindow = null;
   });
 
@@ -614,6 +685,9 @@ async function createMainWindow() {
   // Senza flag riapre tutte le schede precedenti e torna su quella che era attiva.
   if (!shouldRestoreWorkspaces(process.argv) || !(await restoreWorkspaceSession())) {
     await showWelcome();
+  }
+  if (automaticChecksEnabled) {
+    scheduleAutomaticUpdateCheck(win);
   }
   return win;
 }

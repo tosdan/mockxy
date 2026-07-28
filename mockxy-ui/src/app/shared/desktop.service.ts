@@ -118,6 +118,23 @@ export interface AppPreferencesPatch {
   errorLogEnabled?: boolean;
 }
 
+export type UpdateStatus = 'not-checked' | 'available' | 'up-to-date' | 'unavailable';
+
+/** Stato aggiornamenti preparato dal main process; non contiene URL arbitrari. */
+export interface UpdateState {
+  status: UpdateStatus;
+  currentVersion: string;
+  latestVersion: string | null;
+  releaseName: string | null;
+  publishedAt: string | null;
+  checkedAt: string | null;
+  ignored: boolean;
+  reason: string | null;
+  checksEnabled: boolean;
+  automaticChecksEnabled: boolean;
+  distributionChannel: string;
+}
+
 interface DesktopBridge {
   isDesktop?: boolean;
   getWorkspace?: () => Promise<WorkspaceInfo>;
@@ -130,6 +147,11 @@ interface DesktopBridge {
   updateWorkspace?: (root: string, patch: WorkspacePatch) => unknown;
   getAppPreferences?: () => Promise<AppPreferences>;
   updateAppPreferences?: (patch: AppPreferencesPatch) => Promise<AppPreferences>;
+  getUpdateState?: () => Promise<UpdateState>;
+  checkForUpdates?: () => Promise<UpdateState>;
+  ignoreUpdate?: (version: string) => Promise<UpdateState>;
+  openUpdate?: () => Promise<{ opened: boolean }>;
+  onUpdateAvailable?: (callback: (state: UpdateState) => void) => () => void;
 }
 
 function bridge(): DesktopBridge | undefined {
@@ -282,6 +304,61 @@ export class DesktopService {
       return await fn(patch);
     } catch {
       return null;
+    }
+  }
+
+  /** Stato dell'ultimo controllo aggiornamenti noto al main process. */
+  async getUpdateState(): Promise<UpdateState | null> {
+    const fn = bridge()?.getUpdateState;
+    if (!fn) return null;
+    try {
+      return await fn();
+    } catch {
+      return null;
+    }
+  }
+
+  /** Forza un controllo manuale, anche se ne è stato eseguito uno nelle ultime 24 ore. */
+  async checkForUpdates(): Promise<UpdateState | null> {
+    const fn = bridge()?.checkForUpdates;
+    if (!fn) return null;
+    try {
+      return await fn();
+    } catch {
+      return null;
+    }
+  }
+
+  /** Ignora la sola versione indicata; una release successiva verrà proposta normalmente. */
+  async ignoreUpdate(version: string): Promise<UpdateState | null> {
+    const fn = bridge()?.ignoreUpdate;
+    if (!fn) return null;
+    try {
+      return await fn(version);
+    } catch {
+      return null;
+    }
+  }
+
+  /** Chiede al main process di aprire la release verificata, senza passargli un URL. */
+  async openUpdate(): Promise<boolean> {
+    const fn = bridge()?.openUpdate;
+    if (!fn) return false;
+    try {
+      return (await fn()).opened === true;
+    } catch {
+      return false;
+    }
+  }
+
+  /** Ascolta le nuove release trovate dal controllo automatico. */
+  onUpdateAvailable(callback: (state: UpdateState) => void): () => void {
+    const fn = bridge()?.onUpdateAvailable;
+    if (!fn) return () => undefined;
+    try {
+      return fn(callback);
+    } catch {
+      return () => undefined;
     }
   }
 }

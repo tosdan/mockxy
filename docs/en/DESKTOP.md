@@ -81,12 +81,33 @@ Disk logging is enabled by default. From the gear menu, **App preferences** can 
 re-enable it without a restart; the global `errorLogEnabled` choice is stored in
 `mockxy-prefs.json` ([configuration](CONFIGURAZIONI.md)).
 
+## Update notifications
+
+Packaged desktop builds, including Windows portable and AppImage, check for a newer stable
+release on `tosdan/mockxy`. The first check starts about five seconds after the window opens
+and is not repeated automatically more than once every 24 hours. Local development performs
+no automatic checks; future Microsoft Store builds leave updates entirely to the Store.
+
+The check calls the GitHub Releases API without credentials and stores only the last
+successful check time and the latest release metadata in global preferences. A network
+error, timeout, or temporary GitHub rate limit does not prevent startup and produces no
+automatic warning.
+
+When a newer version exists, a non-blocking banner appears. **View release** opens the
+verified release page in the system browser; **Ignore this version** hides only that version,
+so the next one is offered normally. **App preferences → Updates** shows the installed and
+latest versions and provides **Check for updates**: unlike an automatic check, a manual one
+also reports that Mockxy is current or that the service is unavailable.
+
+This first implementation **does not download or install anything automatically**. The user
+chooses the artifact on the release page and remains in control of the update.
+
 ## Global preferences and packaging
 
 The gear menu separates settings for the active **workspace** from **App preferences**.
-Global preferences — language, window geometry, workspace session, list of recents and error
-logging — live next to the Windows executable in portable format, so everything travels with
-the exe; on Linux they use the user data folder. To build:
+Global preferences — language, window geometry, workspace session, list of recents, error
+logging and update state — live next to the Windows executable in portable format, so
+everything travels with the exe; on Linux they use the user data folder. To build:
 
 ```bash
 npm run install:all

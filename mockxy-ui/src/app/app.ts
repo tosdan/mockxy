@@ -3,6 +3,7 @@ import { RouterOutlet } from '@angular/router';
 import { WorkspaceBar } from './shared/workspace-bar';
 import { RuntimeBar } from './shared/runtime-bar';
 import { UiToaster } from './ui/ui-toast/ui-toast';
+import { UpdateNotification } from './shared/update-notification';
 
 /**
  * Shell applicativa: barra workspace (solo app desktop) e barra di stato runtime globale
@@ -11,7 +12,7 @@ import { UiToaster } from './ui/ui-toast/ui-toast';
  */
 @Component({
   selector: 'app-root',
-  imports: [RouterOutlet, WorkspaceBar, RuntimeBar, UiToaster],
+  imports: [RouterOutlet, WorkspaceBar, RuntimeBar, UpdateNotification, UiToaster],
   templateUrl: './app.html',
   styleUrl: './app.css',
   changeDetection: ChangeDetectionStrategy.OnPush,

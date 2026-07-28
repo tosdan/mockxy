@@ -1,12 +1,13 @@
-import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
 import { DIALOG_DATA, DialogRef } from '@angular/cdk/dialog';
 import { NgIcon, provideIcons } from '@ng-icons/core';
-import { lucideCheck, lucideSlidersHorizontal, lucideX } from '@ng-icons/lucide';
+import { lucideCheck, lucideRefreshCw, lucideSlidersHorizontal, lucideX } from '@ng-icons/lucide';
 import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
 import { UiButton } from '../ui/ui-button/ui-button';
 import { UiSwitch } from '../ui/ui-switch/ui-switch';
 import { DesktopService, type AppPreferences, type AppPreferencesPatch } from './desktop.service';
 import { ToastService } from '../ui/ui-toast/ui-toast';
+import { UpdateNotificationService } from './update-notification.service';
 
 /**
  * Dialog "Preferenze dell'app" (app desktop): le preferenze GLOBALI dell'applicazione, distinte
@@ -17,7 +18,7 @@ import { ToastService } from '../ui/ui-toast/ui-toast';
 @Component({
   selector: 'app-preferences-dialog',
   imports: [NgIcon, UiButton, UiSwitch, TranslocoPipe],
-  providers: [provideIcons({ lucideCheck, lucideSlidersHorizontal, lucideX })],
+  providers: [provideIcons({ lucideCheck, lucideRefreshCw, lucideSlidersHorizontal, lucideX })],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="flex w-[min(70vw,560px)] flex-col overflow-hidden rounded-xl border border-border bg-card text-foreground shadow-2xl">
@@ -41,6 +42,44 @@ import { ToastService } from '../ui/ui-toast/ui-toast';
           <span class="break-all font-mono text-[11px] text-muted-foreground" [title]="data.logsDir">{{ 'appPreferences.logsDir' | transloco }}: {{ data.logsDir }}</span>
           }
         </div>
+
+        <div class="border-t border-border pt-4">
+          <div class="flex items-start justify-between gap-4">
+            <div class="flex min-w-0 flex-col gap-1">
+              <span class="text-[12px] font-bold uppercase tracking-[0.14em] text-foreground/80">
+                {{ 'updates.title' | transloco }}
+              </span>
+              @if (updates.state(); as update) {
+              <span class="text-[11.5px] text-muted-foreground">
+                {{ 'updates.currentVersion' | transloco }}:
+                <span class="font-mono text-foreground">{{ update.currentVersion }}</span>
+                @if (update.latestVersion) {
+                · {{ 'updates.latestVersion' | transloco }}:
+                <span class="font-mono text-foreground">{{ update.latestVersion }}</span>
+                }
+              </span>
+              @if (!update.checksEnabled) {
+              <span class="text-[11.5px] text-muted-foreground">{{ 'updates.managedByStore' | transloco }}</span>
+              } @else {
+              <span class="text-[11.5px] text-muted-foreground">{{ 'updates.manualHint' | transloco }}</span>
+              }
+              }
+            </div>
+            @if (updates.state()?.checksEnabled === true) {
+            <button
+              ui-button
+              variant="outline"
+              size="sm"
+              [disabled]="checkingUpdates()"
+              (click)="checkForUpdates()"
+            >
+              <ng-icon name="lucideRefreshCw" size="0.85rem" [class.animate-spin]="checkingUpdates()" />
+              {{ (checkingUpdates() ? 'updates.checking' : 'updates.checkNow') | transloco }}
+            </button>
+            }
+          </div>
+          <div class="sr-only" role="status" aria-live="polite">{{ updateCheckAnnouncement() }}</div>
+        </div>
       </div>
 
       <div class="flex items-center justify-end gap-2 border-t border-border px-5 py-3">
@@ -50,18 +89,54 @@ import { ToastService } from '../ui/ui-toast/ui-toast';
     </div>
   `,
 })
-export class AppPreferencesDialog {
+export class AppPreferencesDialog implements OnInit {
   private readonly dialogRef = inject<DialogRef<string>>(DialogRef);
   protected readonly data = inject<AppPreferences>(DIALOG_DATA);
   private readonly desktop = inject(DesktopService);
   private readonly toast = inject(ToastService);
   private readonly transloco = inject(TranslocoService);
+  protected readonly updates = inject(UpdateNotificationService);
 
   protected readonly saving = signal(false);
+  protected readonly checkingUpdates = signal(false);
+  protected readonly updateCheckAnnouncement = signal('');
   protected readonly errorLogEnabled = signal(this.data.errorLogEnabled);
 
   private readonly errorLogChanged = computed(() => this.errorLogEnabled() !== this.data.errorLogEnabled);
   protected readonly canSave = computed(() => this.errorLogChanged());
+
+  ngOnInit(): void {
+    void this.updates.start();
+  }
+
+  protected async checkForUpdates(): Promise<void> {
+    if (this.checkingUpdates()) return;
+    this.checkingUpdates.set(true);
+    const result = await this.updates.checkManually();
+    this.checkingUpdates.set(false);
+
+    if (!result || result.status === 'unavailable') {
+      const message = this.transloco.translate('updates.checkFailed');
+      this.updateCheckAnnouncement.set(message);
+      this.toast.show({ tone: 'warning', title: message });
+      return;
+    }
+    if (result.status === 'up-to-date') {
+      const message = this.transloco.translate('updates.upToDate', {
+        version: result.currentVersion,
+      });
+      this.updateCheckAnnouncement.set(message);
+      this.toast.show({ tone: 'success', title: message });
+      return;
+    }
+    if (result.status === 'available') {
+      const message = this.transloco.translate('updates.availableTitle', {
+        version: result.latestVersion,
+      });
+      this.updateCheckAnnouncement.set(message);
+      this.toast.show({ tone: 'info', title: message });
+    }
+  }
 
   protected async save(): Promise<void> {
     if (!this.canSave() || this.saving()) return;

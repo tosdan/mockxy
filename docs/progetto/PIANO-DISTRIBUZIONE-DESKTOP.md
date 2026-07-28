@@ -68,7 +68,7 @@ l'app a un servizio remoto.
 - [x] Verificare che lo script di bump aggiorni tutte le copie della versione usate da
       backend, UI ed Electron.
 - [x] Aggiungere un controllo CI che fallisca se le versioni divergono.
-- [ ] Fare in modo che la versione mostrata nell'app provenga da `app.getVersion()`.
+- [x] Fare in modo che la versione mostrata nell'app provenga da `app.getVersion()`.
 - [ ] Definire la conversione per i pacchetti Windows a quattro componenti
       (`1.2.3` → `1.2.3.0`).
 
@@ -116,45 +116,45 @@ implementazione deve funzionare anche con la portable.
 - [x] Non proporre downgrade se la versione installata è più nuova.
 - [x] Impostare timeout brevi nel modulo di rete.
 - [x] Trattare assenza di rete, timeout e rate limit come condizioni non fatali.
-- [ ] Non effettuare controlli automatici in sviluppo o durante i test.
+- [x] Non effettuare controlli automatici in sviluppo o durante i test.
 - [x] Rendere configurabile l'origine delle release in fase di build, evitando URL sparsi nel
       codice.
 
 ### 1.2 Frequenza e preferenze
 
-- [ ] Effettuare il primo controllo alcuni secondi dopo l'apertura della finestra, non prima.
-- [ ] Salvare la data dell'ultimo controllo riuscito nelle preferenze globali.
-- [ ] Non ripetere automaticamente il controllo più di una volta ogni 24 ore.
-- [ ] Aggiungere un comando manuale «Controlla aggiornamenti».
-- [ ] Distinguere il controllo manuale da quello automatico:
+- [x] Effettuare il primo controllo alcuni secondi dopo l'apertura della finestra, non prima.
+- [x] Salvare la data dell'ultimo controllo riuscito nelle preferenze globali.
+- [x] Non ripetere automaticamente il controllo più di una volta ogni 24 ore.
+- [x] Aggiungere un comando manuale «Controlla aggiornamenti».
+- [x] Distinguere il controllo manuale da quello automatico:
   - quello manuale mostra anche «Mockxy è aggiornato» o l'errore;
   - quello automatico rimane silenzioso se non ci sono novità o manca la rete.
-- [ ] Consentire di ignorare la notifica per la specifica versione disponibile.
-- [ ] Riproporre la notifica quando viene pubblicata una versione successiva.
+- [x] Consentire di ignorare la notifica per la specifica versione disponibile.
+- [x] Riproporre la notifica quando viene pubblicata una versione successiva.
 - [ ] Valutare una preferenza per disabilitare i controlli automatici.
 
 ### 1.3 Integrazione Electron e IPC
 
-- [ ] Esporre tramite preload soltanto le operazioni e i dati necessari alla UI.
-- [ ] Validare i messaggi IPC e non permettere al renderer di richiedere URL arbitrari.
-- [ ] Usare `shell.openExternal` soltanto per URL HTTPS appartenenti agli host consentiti.
-- [ ] Registrare gli errori nel sistema di logging esistente senza mostrare stack trace
+- [x] Esporre tramite preload soltanto le operazioni e i dati necessari alla UI.
+- [x] Validare i messaggi IPC e non permettere al renderer di richiedere URL arbitrari.
+- [x] Usare `shell.openExternal` soltanto per URL HTTPS appartenenti agli host consentiti.
+- [x] Registrare gli errori nel sistema di logging esistente senza mostrare stack trace
       all'utente.
-- [ ] Evitare controlli duplicati quando la seconda istanza inoltra argomenti alla prima.
-- [ ] Prevedere un identificatore del canale di distribuzione (`portable`, `appimage`,
+- [x] Evitare controlli duplicati quando la seconda istanza inoltra argomenti alla prima.
+- [x] Prevedere un identificatore del canale di distribuzione (`portable`, `appimage`,
       `store`, `nsis`, ecc.) utilizzabile nelle fasi successive.
 
 ### 1.4 Interfaccia utente
 
-- [ ] Mostrare una notifica non bloccante con versione disponibile.
-- [ ] Offrire «Vedi novità» e «Scarica» o un unico pulsante verso la pagina della release.
-- [ ] Offrire «Ignora questa versione».
-- [ ] Aggiungere il controllo manuale in una posizione stabile, per esempio nelle preferenze
+- [x] Mostrare una notifica non bloccante con versione disponibile.
+- [x] Offrire «Vedi novità» e «Scarica» o un unico pulsante verso la pagina della release.
+- [x] Offrire «Ignora questa versione».
+- [x] Aggiungere il controllo manuale in una posizione stabile, per esempio nelle preferenze
       globali o in una futura finestra «Informazioni».
-- [ ] Mostrare chiaramente versione corrente e ultima versione trovata.
-- [ ] Non interrompere workspace attivi e server in esecuzione.
-- [ ] Aggiungere tutte le stringhe sia in italiano sia in inglese.
-- [ ] Verificare accessibilità da tastiera, focus e lettura dello stato.
+- [x] Mostrare chiaramente versione corrente e ultima versione trovata.
+- [x] Non interrompere workspace attivi e server in esecuzione.
+- [x] Aggiungere tutte le stringhe sia in italiano sia in inglese.
+- [x] Verificare accessibilità da tastiera, focus e lettura dello stato.
 
 ### 1.5 Test
 
@@ -163,17 +163,17 @@ implementazione deve funzionare anche con la portable.
 - [x] Testare risposta vuota o malformata.
 - [x] Testare timeout, DNS/rete assente, HTTP 403/404/429 e HTTP 5xx.
 - [x] Testare la regola di scadenza delle 24 ore.
-- [ ] Testare «Ignora questa versione» e la comparsa di una versione ancora successiva.
-- [ ] Testare che il controllo automatico non parta in sviluppo o nei test.
-- [ ] Testare la validazione dell'URL aperto esternamente.
-- [ ] Aggiungere un test d'integrazione IPC senza dipendere dalla rete reale.
+- [x] Testare «Ignora questa versione» e la comparsa di una versione ancora successiva.
+- [x] Testare che il controllo automatico non parta in sviluppo o nei test.
+- [x] Testare la validazione dell'URL aperto esternamente.
+- [x] Aggiungere un test d'integrazione IPC senza dipendere dalla rete reale.
 - [ ] Eseguire un collaudo manuale sulla portable Windows e sull'AppImage Linux.
 
 ### 1.6 Documentazione e rilascio
 
-- [ ] Documentare il controllo remoto nelle pagine desktop italiane e inglesi.
-- [ ] Documentare frequenza, dati richiesti e modalità per disattivarlo, se presente.
-- [ ] Specificare che la prima versione notifica soltanto e non installa.
+- [x] Documentare il controllo remoto nelle pagine desktop italiane e inglesi.
+- [x] Documentare frequenza, dati richiesti e modalità per disattivarlo, se presente.
+- [x] Specificare che la prima versione notifica soltanto e non installa.
 - [ ] Inserire la funzionalità nelle note di rilascio.
 - [ ] Pubblicare una release di prova più nuova e verificare il flusso end-to-end.
 
@@ -454,20 +454,20 @@ Questa fase non deve ritardare la notifica dell'obiettivo 1 né la prima pubblic
 | 28 lug 2026 | Auto-update distinto dalla semplice notifica | La portable e lo Store richiedono strategie diverse dagli installer diretti |
 | 28 lug 2026 | `tosdan/mockxy` è il repository canonico delle release | Codice, release e manifest degli aggiornamenti rimangono nello stesso repository |
 | 29 lug 2026 | Checker GitHub isolato da Electron e UI | Consente test locali, nessuna credenziale nel client e futura integrazione con updater diversi |
+| 29 lug 2026 | Controllo automatico dopo 5 secondi, massimo ogni 24 ore | Non rallenta l'avvio e limita le richieste remote; il controllo manuale resta sempre esplicito |
+| 29 lug 2026 | Build Store esclusa dal checker GitHub | Lo Store resta l'unica autorità per gli aggiornamenti del proprio pacchetto |
 
 ## Prossimo incremento consigliato
 
-Il contratto del release checker, i metadati del repository e il controllo delle versioni sono
-stati implementati. Il prossimo incremento deve collegare il checker al ciclo di vita
-Electron, alle preferenze globali e alla UI, senza introdurre ancora il download automatico.
+Il checker è ora collegato al ciclo di vita Electron, alle preferenze globali, a IPC/preload
+e alla UI bilingue, senza download automatico. Restano il collaudo sugli artefatti reali e il
+workflow di pubblicazione necessario per provare il percorso completo.
 
 Sequenza proposta per il prossimo ciclo:
 
-1. leggere la versione da `app.getVersion()` e saltare i controlli automatici in sviluppo;
-2. salvare ultimo controllo riuscito e versione ignorata nelle preferenze globali;
-3. avviare il controllo ritardato senza bloccare la finestra;
-4. esporre IPC/preload per controllo manuale, stato e apertura sicura della release;
-5. aggiungere notifica e controllo manuale alla UI;
-6. creare il workflow di release minimo;
-7. provare il flusso con una release di test;
-8. aggiornare documentazione utente e completare l'obiettivo 1.
+1. creare il workflow di release minimo avviato da un tag;
+2. eseguire test e build prima di creare una draft release;
+3. allegare artefatti e checksum alla draft;
+4. provare il controllo aggiornamenti tra due versioni reali;
+5. collaudare la notifica su portable Windows e AppImage Linux;
+6. completare criteri di accettazione e note di rilascio dell'obiettivo 1.

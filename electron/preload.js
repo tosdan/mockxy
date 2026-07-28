@@ -22,4 +22,16 @@ contextBridge.exposeInMainWorld("desktop", {
   updateWorkspace: (root, patch) => ipcRenderer.invoke("workspace:update", root, patch),
   getAppPreferences: () => ipcRenderer.invoke("prefs:get"),
   updateAppPreferences: (patch) => ipcRenderer.invoke("prefs:set", patch),
+  getUpdateState: () => ipcRenderer.invoke("updates:get"),
+  checkForUpdates: () => ipcRenderer.invoke("updates:check"),
+  ignoreUpdate: (version) => ipcRenderer.invoke("updates:ignore", version),
+  openUpdate: () => ipcRenderer.invoke("updates:open"),
+  onUpdateAvailable: (callback) => {
+    if (typeof callback !== "function") {
+      return () => undefined;
+    }
+    const listener = (_event, state) => callback(state);
+    ipcRenderer.on("updates:available", listener);
+    return () => ipcRenderer.removeListener("updates:available", listener);
+  },
 });

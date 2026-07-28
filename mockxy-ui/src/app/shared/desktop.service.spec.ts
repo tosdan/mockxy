@@ -126,4 +126,52 @@ describe('DesktopService', () => {
     expect(calledWith).toEqual(['/ws/c', { name: 'API staging', port: 4500 }]);
     expect(result).toEqual({ ok: false, error: 'port-in-use', port: 4500 });
   });
+
+  it('inoltra stato, controllo, ignore, apertura e notifiche degli aggiornamenti', async () => {
+    const available = {
+      status: 'available' as const,
+      currentVersion: '1.1.0',
+      latestVersion: '1.2.0',
+      releaseName: 'Mockxy 1.2.0',
+      publishedAt: null,
+      checkedAt: '2026-07-29T12:00:00Z',
+      ignored: false,
+      reason: null,
+      checksEnabled: true,
+      automaticChecksEnabled: true,
+      distributionChannel: 'portable',
+    };
+    let ignored = '';
+    const listener: { callback?: (state: typeof available) => void } = {};
+    let unsubscribed = false;
+    (window as any).desktop = {
+      isDesktop: true,
+      getUpdateState: async () => available,
+      checkForUpdates: async () => available,
+      ignoreUpdate: async (version: string) => {
+        ignored = version;
+        return { ...available, ignored: true };
+      },
+      openUpdate: async () => ({ opened: true }),
+      onUpdateAvailable: (callback: (state: typeof available) => void) => {
+        listener.callback = callback;
+        return () => {
+          unsubscribed = true;
+        };
+      },
+    };
+    const svc = TestBed.inject(DesktopService);
+    const received: typeof available[] = [];
+    const unsubscribe = svc.onUpdateAvailable((state) => received.push(state as typeof available));
+
+    await expect(svc.getUpdateState()).resolves.toEqual(available);
+    await expect(svc.checkForUpdates()).resolves.toEqual(available);
+    await expect(svc.ignoreUpdate('1.2.0')).resolves.toMatchObject({ ignored: true });
+    await expect(svc.openUpdate()).resolves.toBe(true);
+    expect(ignored).toBe('1.2.0');
+    listener.callback?.(available);
+    expect(received).toEqual([available]);
+    unsubscribe();
+    expect(unsubscribed).toBe(true);
+  });
 });

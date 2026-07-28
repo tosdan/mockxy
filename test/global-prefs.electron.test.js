@@ -15,6 +15,9 @@ const {
   setLanguage,
   getErrorLogEnabled,
   setErrorLogEnabled,
+  getUpdatePreferences,
+  recordSuccessfulUpdateCheck,
+  setIgnoredUpdateVersion,
 } = require("../electron/global-prefs");
 const { createTempDir, removeDir } = require("./helpers");
 
@@ -178,5 +181,66 @@ describe("global-prefs (preferenze utente globali)", () => {
     setErrorLogEnabled(dir, false);
     expect(getRecentWorkspaces(dir)).toEqual([path.resolve(dir, "a")]);
     expect(getErrorLogEnabled(dir)).toBe(false);
+  });
+
+  test("aggiornamenti: default, ultimo controllo riuscito e release vengono persistiti", () => {
+    expect(getUpdatePreferences(dir)).toEqual({
+      lastSuccessfulCheckAt: null,
+      latestRelease: null,
+      ignoredVersion: null,
+    });
+
+    recordSuccessfulUpdateCheck(
+      dir,
+      {
+        status: "available",
+        latestVersion: "1.2.0",
+        releaseName: "Mockxy 1.2.0",
+        releaseUrl: "https://github.com/tosdan/mockxy/releases/tag/v1.2.0",
+        publishedAt: "2026-07-29T10:00:00Z",
+      },
+      "2026-07-29T12:00:00Z",
+    );
+
+    expect(getUpdatePreferences(dir)).toEqual({
+      lastSuccessfulCheckAt: "2026-07-29T12:00:00.000Z",
+      latestRelease: {
+        version: "1.2.0",
+        name: "Mockxy 1.2.0",
+        url: "https://github.com/tosdan/mockxy/releases/tag/v1.2.0",
+        publishedAt: "2026-07-29T10:00:00Z",
+      },
+      ignoredVersion: null,
+    });
+  });
+
+  test("aggiornamenti: un errore non sovrascrive l'ultimo controllo riuscito", () => {
+    recordSuccessfulUpdateCheck(
+      dir,
+      {
+        status: "up-to-date",
+        latestVersion: "1.1.0",
+        releaseName: "v1.1.0",
+        releaseUrl: "https://github.com/tosdan/mockxy/releases/tag/v1.1.0",
+        publishedAt: null,
+      },
+      "2026-07-29T12:00:00Z",
+    );
+    recordSuccessfulUpdateCheck(
+      dir,
+      { status: "unavailable", latestVersion: null },
+      "2026-07-30T12:00:00Z",
+    );
+
+    expect(getUpdatePreferences(dir).lastSuccessfulCheckAt).toBe("2026-07-29T12:00:00.000Z");
+  });
+
+  test("aggiornamenti: ignora solo versioni valide e conserva le altre preferenze", () => {
+    addRecentWorkspace(dir, path.join(dir, "a"));
+    setIgnoredUpdateVersion(dir, "1.2.0");
+    setIgnoredUpdateVersion(dir, "latest");
+
+    expect(getUpdatePreferences(dir).ignoredVersion).toBe("1.2.0");
+    expect(getRecentWorkspaces(dir)).toEqual([path.resolve(dir, "a")]);
   });
 });

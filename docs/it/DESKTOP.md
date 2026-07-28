@@ -82,12 +82,37 @@ La scrittura è attiva di default. Dal menu dell'ingranaggio si apre **Preferenz
 può disabilitare o riabilitare il log senza riavviare; la scelta globale `errorLogEnabled`
 viene salvata in `mockxy-prefs.json` ([configurazioni](CONFIGURAZIONI.md)).
 
+## Notifica degli aggiornamenti
+
+Le build desktop pacchettizzate, portable Windows e AppImage comprese, controllano se esiste
+una nuova release stabile su `tosdan/mockxy`. Il primo controllo parte circa cinque secondi
+dopo l'apertura della finestra e non viene ripetuto automaticamente più di una volta ogni
+24 ore. Lo sviluppo locale non esegue controlli automatici; le future build Microsoft Store
+li lasciano invece interamente allo Store.
+
+Il controllo interroga la GitHub Releases API senza credenziali e salva nelle preferenze
+globali soltanto data dell'ultimo successo e metadati dell'ultima release trovata. Un errore
+di rete, un timeout o un limite temporaneo di GitHub non impediscono l'avvio e non mostrano
+avvisi automatici.
+
+Quando è disponibile una versione più recente compare un banner non bloccante. **Vedi
+release** apre nel browser la pagina verificata della release; **Ignora questa versione**
+nasconde soltanto quella versione, quindi la successiva verrà proposta normalmente. Da
+**Preferenze app → Aggiornamenti** si possono vedere versione installata e ultima trovata e
+avviare **Controlla aggiornamenti**: il controllo manuale mostra anche «aggiornato» o
+l'eventuale indisponibilità del servizio.
+
+Questa prima implementazione **non scarica e non installa automaticamente** alcun file:
+l'utente sceglie l'artefatto dalla pagina della release e mantiene il controllo
+dell'aggiornamento.
+
 ## Preferenze globali e pacchetto
 
 L'ingranaggio distingue le **impostazioni del workspace** attivo dalle **Preferenze app**.
 Le preferenze globali — lingua, geometria della finestra, sessione dei workspace, elenco dei
-recenti e log errori — vivono accanto all'eseguibile Windows in formato portable, così tutto
-viaggia insieme all'exe; su Linux usano la cartella dati utente. Per compilare:
+recenti, log errori e stato degli aggiornamenti — vivono accanto all'eseguibile Windows in
+formato portable, così tutto viaggia insieme all'exe; su Linux usano la cartella dati utente.
+Per compilare:
 
 ```bash
 npm run install:all

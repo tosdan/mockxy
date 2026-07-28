@@ -95,6 +95,29 @@ function normalizeRelease(release, currentVersion) {
   };
 }
 
+function isTrustedReleaseUrl(value) {
+  if (typeof value !== "string") {
+    return false;
+  }
+  try {
+    const url = new URL(value);
+    return (
+      url.protocol === "https:" &&
+      url.hostname === "github.com" &&
+      url.port === "" &&
+      url.username === "" &&
+      url.password === "" &&
+      url.search === "" &&
+      url.hash === "" &&
+      /^\/tosdan\/mockxy\/releases\/tag\/v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.test(
+        url.pathname,
+      )
+    );
+  } catch {
+    return false;
+  }
+}
+
 async function checkLatestRelease({
   currentVersion,
   fetchImpl = globalThis.fetch,
@@ -181,6 +204,7 @@ module.exports = {
   STATUS,
   compareVersions,
   normalizeRelease,
+  isTrustedReleaseUrl,
   checkLatestRelease,
   shouldCheckForUpdates,
 };

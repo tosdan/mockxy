@@ -10,6 +10,7 @@ const path = require("path");
 
 const PREFS_FILE = "mockxy-prefs.json";
 const DEFAULT_MAX_RECENT = 10;
+const VERSION_PATTERN = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
 
 function prefsFilePath(configDir) {
   return path.join(configDir, PREFS_FILE);
@@ -166,6 +167,95 @@ function setErrorLogEnabled(configDir, enabled) {
   return writePrefs(configDir, prefs);
 }
 
+// Stato del controllo aggiornamenti desktop. Conserviamo soltanto l'ultimo controllo riuscito:
+// un errore di rete non deve far ripartire le 24 ore né cancellare una release già nota.
+function getUpdatePreferences(configDir) {
+  const updates = readPrefs(configDir).updates;
+  if (!updates || typeof updates !== "object" || Array.isArray(updates)) {
+    return {
+      lastSuccessfulCheckAt: null,
+      latestRelease: null,
+      ignoredVersion: null,
+    };
+  }
+
+  const checkedAt =
+    typeof updates.lastSuccessfulCheckAt === "string" &&
+    !Number.isNaN(Date.parse(updates.lastSuccessfulCheckAt))
+      ? updates.lastSuccessfulCheckAt
+      : null;
+  const release = updates.latestRelease;
+  const latestRelease =
+    release &&
+    typeof release === "object" &&
+    !Array.isArray(release) &&
+    VERSION_PATTERN.test(release.version) &&
+    typeof release.name === "string" &&
+    typeof release.url === "string"
+      ? {
+          version: release.version,
+          name: release.name,
+          url: release.url,
+          publishedAt:
+            typeof release.publishedAt === "string" && !Number.isNaN(Date.parse(release.publishedAt))
+              ? release.publishedAt
+              : null,
+        }
+      : null;
+  const ignoredVersion =
+    typeof updates.ignoredVersion === "string" && VERSION_PATTERN.test(updates.ignoredVersion)
+      ? updates.ignoredVersion
+      : null;
+
+  return {
+    lastSuccessfulCheckAt: checkedAt,
+    latestRelease,
+    ignoredVersion,
+  };
+}
+
+function recordSuccessfulUpdateCheck(configDir, result, checkedAt = new Date()) {
+  if (
+    !result ||
+    (result.status !== "available" && result.status !== "up-to-date") ||
+    !VERSION_PATTERN.test(result.latestVersion) ||
+    typeof result.releaseName !== "string" ||
+    typeof result.releaseUrl !== "string"
+  ) {
+    return readPrefs(configDir);
+  }
+  const timestamp = checkedAt instanceof Date ? checkedAt.toISOString() : new Date(checkedAt).toISOString();
+  const prefs = readPrefs(configDir);
+  const previous = getUpdatePreferences(configDir);
+  prefs.updates = {
+    lastSuccessfulCheckAt: timestamp,
+    latestRelease: {
+      version: result.latestVersion,
+      name: result.releaseName,
+      url: result.releaseUrl,
+      publishedAt:
+        typeof result.publishedAt === "string" && !Number.isNaN(Date.parse(result.publishedAt))
+          ? result.publishedAt
+          : null,
+    },
+    ignoredVersion: previous.ignoredVersion,
+  };
+  return writePrefs(configDir, prefs);
+}
+
+function setIgnoredUpdateVersion(configDir, version) {
+  if (version !== null && (typeof version !== "string" || !VERSION_PATTERN.test(version))) {
+    return readPrefs(configDir);
+  }
+  const prefs = readPrefs(configDir);
+  const updates = getUpdatePreferences(configDir);
+  prefs.updates = {
+    ...updates,
+    ignoredVersion: version,
+  };
+  return writePrefs(configDir, prefs);
+}
+
 module.exports = {
   PREFS_FILE,
   prefsFilePath,
@@ -183,4 +273,7 @@ module.exports = {
   setLanguage,
   getErrorLogEnabled,
   setErrorLogEnabled,
+  getUpdatePreferences,
+  recordSuccessfulUpdateCheck,
+  setIgnoredUpdateVersion,
 };

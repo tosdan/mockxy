@@ -130,6 +130,21 @@
     "saving": "Salvataggio…",
     "savedTitle": "Preferenze salvate"
   },
+  "updates": {
+    "title": "Aggiornamenti",
+    "currentVersion": "Versione corrente",
+    "latestVersion": "Ultima trovata",
+    "manualHint": "Il controllo manuale ignora il limite automatico di 24 ore.",
+    "managedByStore": "Gli aggiornamenti sono gestiti da Microsoft Store.",
+    "checkNow": "Controlla aggiornamenti",
+    "checking": "Controllo…",
+    "upToDate": "Mockxy {{version}} è aggiornato",
+    "checkFailed": "Impossibile controllare gli aggiornamenti",
+    "availableTitle": "È disponibile Mockxy {{version}}",
+    "availableDescription": "Versione installata: {{current}}. L'aggiornamento non viene scaricato automaticamente.",
+    "viewRelease": "Vedi release",
+    "ignoreVersion": "Ignora questa versione"
+  },
   "workspaceSettings": {
     "portRequired": "Inserisci una porta.",
     "portInteger": "La porta deve essere un numero intero.",
