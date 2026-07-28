@@ -467,6 +467,55 @@ describe("admin API", () => {
       const list = await request(app).get("/_admin/api/mocks");
       expect(list.body.items).toHaveLength(0);
     });
+
+    test("?prefix antepone il prefisso ai path importati e i mock rispondono lì", async () => {
+      const app = await buildApp();
+
+      const dryRun = await request(app)
+        .post("/_admin/api/mocks/import/openapi?dryRun=true&prefix=be")
+        .set("Content-Type", "application/yaml")
+        .send(document);
+      expect(dryRun.status).toBe(200);
+      expect(dryRun.body.prefix).toBe("/be");
+      expect(dryRun.body.items.map((item) => item.path).sort()).toEqual(["/be/health", "/be/users", "/be/users/:id"]);
+
+      const imported = await request(app)
+        .post("/_admin/api/mocks/import/openapi?prefix=/be")
+        .set("Content-Type", "application/json")
+        .send(document);
+      expect(imported.status).toBe(201);
+      expect(imported.body).toMatchObject({ created: 3, prefix: "/be" });
+
+      const served = await request(app).get("/be/users");
+      expect(served.status).toBe(200);
+      expect(served.body).toEqual([{ id: 1 }]);
+    });
+
+    test("suggerisce il prefisso dal path dei servers", async () => {
+      const app = await buildApp();
+
+      const res = await request(app)
+        .post("/_admin/api/mocks/import/openapi?dryRun=true")
+        .set("Content-Type", "application/yaml")
+        .send(JSON.stringify({ ...JSON.parse(document), servers: [{ url: "https://api.example.com/be/v1" }] }));
+
+      expect(res.status).toBe(200);
+      expect(res.body).toMatchObject({ prefix: "", suggestedPrefix: "/be/v1" });
+    });
+
+    test("prefisso non valido: 400 senza creare nulla", async () => {
+      const app = await buildApp();
+
+      const res = await request(app)
+        .post("/_admin/api/mocks/import/openapi?prefix=%2Fbe%5Eq")
+        .set("Content-Type", "application/json")
+        .send(document);
+
+      expect(res.status).toBe(400);
+
+      const list = await request(app).get("/_admin/api/mocks");
+      expect(list.body.items).toHaveLength(0);
+    });
   });
 
   test("lists mock responses and proxy middleware definitions including disabled mocks", async () => {

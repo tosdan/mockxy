@@ -20,12 +20,27 @@ const PREVIEW: OpenapiImportPreview = {
   create: 2,
   skip: 1,
   collections: 1,
+  prefix: '',
+  suggestedPrefix: '',
+};
+
+/** Stesso piano ma già prefissato, come lo ricalcola il server con ?prefix=/be. */
+const PREFIXED_PREVIEW: OpenapiImportPreview = {
+  ...PREVIEW,
+  items: PREVIEW.items.map((item) => ({ ...item, path: `/be${item.path}`, action: 'create' as const })),
+  create: 3,
+  skip: 0,
+  prefix: '/be',
+  suggestedPrefix: '/be',
 };
 
 describe('OpenapiImportDialog', () => {
   const api = {
-    previewOpenapi: vi.fn(() => of(PREVIEW)),
-    importOpenapi: vi.fn(() => of({ created: 2, skipped: 1, failed: 0, total: 3, collections: 1 })),
+    // Firme esplicite: i test verificano anche il prefisso inoltrato al servizio.
+    previewOpenapi: vi.fn((_document: string, _prefix?: string) => of(PREVIEW)),
+    importOpenapi: vi.fn((_document: string, _prefix?: string) =>
+      of({ created: 2, skipped: 1, failed: 0, total: 3, collections: 1, prefix: '' }),
+    ),
   };
   const store = { loadCatalog: vi.fn() };
   const toast = { show: vi.fn() };
@@ -113,6 +128,97 @@ describe('OpenapiImportDialog', () => {
     await Promise.resolve();
     expect(api.previewOpenapi).toHaveBeenCalledTimes(1);
     expect(c.preview()).toEqual(PREVIEW);
+  });
+
+  it('precompila il prefisso suggerito dai servers e ricalcola il piano con quello', async () => {
+    const { c } = create();
+    api.previewOpenapi.mockReturnValueOnce(of({ ...PREVIEW, suggestedPrefix: '/be' }));
+    api.previewOpenapi.mockReturnValueOnce(of(PREFIXED_PREVIEW));
+    const file = { name: 'spec.yaml', text: () => Promise.resolve('openapi: 3.0.0') };
+
+    c.onDrop({ preventDefault: vi.fn(), dataTransfer: { files: [file] } } as unknown as DragEvent);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(api.previewOpenapi).toHaveBeenCalledTimes(2);
+    expect(api.previewOpenapi.mock.calls[1][1]).toBe('/be');
+    expect(c.prefix()).toBe('/be');
+    // La lista mostra già i path definitivi, prefisso incluso.
+    expect(c.preview().items[0].path).toBe('/be/users');
+    expect(c.loading()).toBe(false);
+    expect(c.refreshing()).toBe(false);
+  });
+
+  it('prefisso modificato a mano: ricalcola la preview dopo il debounce', () => {
+    vi.useFakeTimers();
+    try {
+      const { c } = create();
+      c.docText = '{"openapi":"3.0.0","paths":{}}';
+      c.preview.set(PREVIEW);
+      api.previewOpenapi.mockReturnValueOnce(of(PREFIXED_PREVIEW));
+
+      c.onPrefixInput('/be');
+      expect(api.previewOpenapi).not.toHaveBeenCalled();
+
+      vi.advanceTimersByTime(400);
+
+      expect(api.previewOpenapi).toHaveBeenCalledTimes(1);
+      expect(api.previewOpenapi.mock.calls[0][1]).toBe('/be');
+      expect(c.preview()).toEqual(PREFIXED_PREVIEW);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('prefisso non valido: errore inline, nessuna chiamata, import bloccato', () => {
+    vi.useFakeTimers();
+    try {
+      const { c } = create();
+      c.docText = '{"openapi":"3.0.0","paths":{}}';
+      c.preview.set(PREVIEW);
+
+      c.onPrefixInput('/be^q');
+      vi.advanceTimersByTime(400);
+
+      expect(c.prefixError()).toBe('pathError.reservedChar');
+      expect(api.previewOpenapi).not.toHaveBeenCalled();
+      expect(c.canImport()).toBe(false);
+
+      // Corretto il valore, il piano riparte.
+      api.previewOpenapi.mockReturnValueOnce(of(PREFIXED_PREVIEW));
+      c.onPrefixInput('be/');
+      expect(c.prefixError()).toBeNull();
+      vi.advanceTimersByTime(400);
+      expect(api.previewOpenapi).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('import: inoltra il prefisso corrente', () => {
+    const { c } = create();
+    c.docText = '{"openapi":"3.0.0","paths":{}}';
+    c.preview.set(PREFIXED_PREVIEW);
+    c.prefix.set(' /be ');
+
+    c.runImport();
+
+    expect(api.importOpenapi).toHaveBeenCalledWith(c.docText, '/be');
+  });
+
+  it('un nuovo file azzera il prefisso della sessione precedente', async () => {
+    const { c } = create();
+    c.prefix.set('/be');
+    c.prefixError.set('pathError.convention');
+    const file = { name: 'spec.json', text: () => Promise.resolve('{"openapi":"3.0.0","paths":{}}') };
+
+    c.onDrop({ preventDefault: vi.fn(), dataTransfer: { files: [file] } } as unknown as DragEvent);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(c.prefix()).toBe('');
+    expect(c.prefixError()).toBeNull();
+    expect(api.previewOpenapi).toHaveBeenCalledTimes(1);
   });
 
   it('drop di un file non supportato mostra un errore e non chiama la preview', () => {

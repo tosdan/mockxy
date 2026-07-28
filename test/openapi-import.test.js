@@ -4,8 +4,10 @@ const {
   buildResponseBody,
   convertPath,
   firstSuccessStatus,
+  normalizePrefix,
   parseOpenapi,
   planFromDocument,
+  suggestPrefix,
   summarizePlan,
 } = require("../src/mocks/openapi-import");
 
@@ -215,6 +217,73 @@ describe("buildImportPlan", () => {
     expect(get.action).toBe("skip");
     expect(post.action).toBe("create");
   });
+
+  test("antepone il prefisso ai path (parametri inclusi)", () => {
+    const plan = buildImportPlan(doc, new Set(), { prefix: "/be" });
+    const paths = plan.map((item) => item.path).sort();
+    expect(paths).toEqual(["/be/health", "/be/users", "/be/users", "/be/users/:id"]);
+  });
+
+  test("col prefisso l'esistente senza prefisso non e' un duplicato", () => {
+    const plan = buildImportPlan(doc, new Set(["GET /users"]), { prefix: "/be" });
+    expect(plan.every((item) => item.action === "create")).toBe(true);
+    const withPrefix = buildImportPlan(doc, new Set(["GET /be/users"]), { prefix: "/be" });
+    expect(withPrefix.find((item) => item.path === "/be/users" && item.method === "GET").action).toBe("skip");
+  });
+});
+
+describe("normalizePrefix", () => {
+  test("normalizza slash iniziale, finali e valori vuoti", () => {
+    expect(normalizePrefix("/be")).toBe("/be");
+    expect(normalizePrefix("be")).toBe("/be");
+    expect(normalizePrefix(" /be/v1/ ")).toBe("/be/v1");
+    expect(normalizePrefix("")).toBe("");
+    expect(normalizePrefix("   ")).toBe("");
+    expect(normalizePrefix("/")).toBe("");
+    expect(normalizePrefix(undefined)).toBe("");
+  });
+
+  test("rifiuta i prefissi che produrrebbero path non validi", () => {
+    expect(() => normalizePrefix("/be?x=1")).toThrow(/Prefisso non valido/);
+    expect(() => normalizePrefix("/be v1")).toThrow(/Prefisso non valido/);
+    expect(() => normalizePrefix("/be^q")).toThrow(/Prefisso non valido/);
+    expect(() => normalizePrefix("/be//v1")).toThrow(/Segmenti vuoti/);
+  });
+
+  test("il prefisso invalido fa fallire il piano con un errore 400", () => {
+    let thrown;
+    try {
+      buildImportPlan({ paths: {} }, new Set(), { prefix: "/be?x=1" });
+    } catch (error) {
+      thrown = error;
+    }
+    expect(thrown.statusCode).toBe(400);
+  });
+});
+
+describe("suggestPrefix", () => {
+  test("usa il path del primo server che ne dichiara uno", () => {
+    expect(suggestPrefix({ servers: [{ url: "https://api.example.com/be/v1" }] })).toBe("/be/v1");
+    expect(suggestPrefix({ servers: [{ url: "https://api.example.com:8443/be/" }] })).toBe("/be");
+    expect(suggestPrefix({ servers: [{ url: "/be" }] })).toBe("/be");
+    // Il primo server e' solo host+porta: vale il primo che aggiunge davvero un path.
+    expect(suggestPrefix({ servers: [{ url: "https://api.example.com" }, { url: "https://stg.example.com/be" }] })).toBe("/be");
+  });
+
+  test("nessun suggerimento senza server o senza path", () => {
+    expect(suggestPrefix({})).toBe("");
+    expect(suggestPrefix({ servers: [] })).toBe("");
+    expect(suggestPrefix({ servers: [{ url: "https://api.example.com/" }] })).toBe("");
+    expect(suggestPrefix({ servers: [{ description: "senza url" }] })).toBe("");
+  });
+
+  test("risolve le variabili del server usando i default", () => {
+    const withDefault = { servers: [{ url: "https://{host}/{stage}/api", variables: { host: { default: "api.example.com" }, stage: { default: "be" } } }] };
+    expect(suggestPrefix(withDefault)).toBe("/be/api");
+    // Senza default non c'e' niente di sensato da proporre: si passa al server successivo.
+    const noDefault = { servers: [{ url: "https://api.example.com/{stage}/api" }, { url: "https://api.example.com/be" }] };
+    expect(suggestPrefix(noDefault)).toBe("/be");
+  });
 });
 
 describe("planFromDocument + summarizePlan", () => {
@@ -235,5 +304,23 @@ describe("planFromDocument + summarizePlan", () => {
 
     const counts = summarizePlan(plan.items);
     expect(counts).toEqual({ total: 3, create: 2, skip: 1, collections: 1 });
+  });
+
+  test("riporta prefisso applicato e suggerito", async () => {
+    const text = JSON.stringify({
+      openapi: "3.0.0",
+      servers: [{ url: "https://api.example.com/be" }],
+      paths: { "/a": { get: { responses: { "200": {} } } } },
+    });
+
+    const withoutPrefix = await planFromDocument(text);
+    expect(withoutPrefix.prefix).toBe("");
+    expect(withoutPrefix.suggestedPrefix).toBe("/be");
+    expect(withoutPrefix.items[0].path).toBe("/a");
+
+    const withPrefix = await planFromDocument(text, new Set(), { prefix: "be/" });
+    expect(withPrefix.prefix).toBe("/be");
+    expect(withPrefix.suggestedPrefix).toBe("/be");
+    expect(withPrefix.items[0].path).toBe("/be/a");
   });
 });
