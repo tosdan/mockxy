@@ -16,6 +16,12 @@ test.describe("E11 · import OpenAPI", () => {
     },
   });
 
+  // Stessa spec, ma coi `servers`: il path del server diventa il prefisso suggerito.
+  const SPEC_WITH_SERVER = JSON.stringify({
+    ...JSON.parse(SPEC),
+    servers: [{ url: "https://api.example.com/be" }],
+  });
+
   test.beforeEach(async ({ page }) => {
     await gotoMocks(page);
     catalog = page.locator("mocks-next-catalog");
@@ -25,14 +31,14 @@ test.describe("E11 · import OpenAPI", () => {
     await resetWorkspace(request, page);
   });
 
-  async function openDialogAndLoadSpec(page) {
+  async function openDialogAndLoadSpec(page, spec = SPEC) {
     await page.getByRole("button", { name: "Importa OpenAPI" }).click();
     const dialog = page.locator("cdk-dialog-container");
     await expect(dialog).toBeVisible();
     await dialog.locator('input[type="file"]').setInputFiles({
       name: "spec.json",
       mimeType: "application/json",
-      buffer: Buffer.from(SPEC),
+      buffer: Buffer.from(spec),
     });
     return dialog;
   }
@@ -61,6 +67,27 @@ test.describe("E11 · import OpenAPI", () => {
     // Il dialog si chiude e i due endpoint compaiono nel catalogo (8 → 10).
     await expect(catalog.getByText("/e2e/imported", { exact: true })).toBeVisible();
     await expect(catalog.getByText("/e2e/altro", { exact: true })).toBeVisible();
+    await expect(catalog.getByText(/10\s+endpoint/)).toBeVisible();
+  });
+
+  test("il prefisso suggerito dai servers si applica all'anteprima e all'import", async ({ page }) => {
+    const dialog = await openDialogAndLoadSpec(page, SPEC_WITH_SERVER);
+    const prefixInput = dialog.locator("#openapi-import-prefix");
+
+    // Il path del server è precompilato e l'anteprima mostra già i path prefissati.
+    await expect(prefixInput).toHaveValue("/be");
+    await expect(dialog.getByText("/be/e2e/imported")).toBeVisible();
+
+    // Svuotando il campo si torna ai path originali; riscrivendolo tornano prefissati.
+    await prefixInput.fill("");
+    await expect(dialog.getByText("/e2e/imported", { exact: true })).toBeVisible();
+    await prefixInput.fill("/api-be");
+    await expect(dialog.getByText("/api-be/e2e/imported")).toBeVisible();
+
+    await dialog.getByRole("button", { name: /Importa/ }).click();
+
+    await expect(catalog.getByText("/api-be/e2e/imported", { exact: true })).toBeVisible();
+    await expect(catalog.getByText("/api-be/e2e/altro", { exact: true })).toBeVisible();
     await expect(catalog.getByText(/10\s+endpoint/)).toBeVisible();
   });
 });

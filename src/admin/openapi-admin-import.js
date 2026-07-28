@@ -7,11 +7,12 @@ const { createAdminMock } = require("./endpoint-operations");
 
 // Crea endpoint mock a partire da un documento OpenAPI (vedi openapi-import). `document` puo' essere il
 // testo grezzo (YAML/JSON) o un oggetto gia' interpretato. Con `dryRun` ritorna solo piano + conteggi.
+// `options.prefix` antepone un prefisso ai path importati (es. "/be").
 async function importAdminOpenapi(mocksDir, document, reloadRuntime, options = {}) {
   const dryRun = options.dryRun === true;
   const existingItems = await listAdminMocks(mocksDir);
   const existingKeys = new Set(existingItems.map((item) => `${item.method} ${item.path}`));
-  const plan = await planFromDocument(document, existingKeys);
+  const plan = await planFromDocument(document, existingKeys, { prefix: options.prefix });
   if (dryRun) {
     // L'anteprima non usa il body delle response (puo' essere grosso): lo togliamo dal payload.
     return { ...plan, items: plan.items.map(({ body, ...rest }) => rest) };
@@ -99,6 +100,7 @@ async function importAdminOpenapi(mocksDir, document, reloadRuntime, options = {
     failed: failed.length,
     total: plan.total,
     collections: Object.keys(collectionIdByTag).length,
+    prefix: plan.prefix,
   };
 }
 

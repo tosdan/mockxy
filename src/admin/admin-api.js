@@ -320,6 +320,8 @@ function createAdminApiRouter({ config, reloadRuntime, requestMonitor, serverSta
   });
 
   // Import OpenAPI: corpo grezzo (YAML/JSON) come text; ?dryRun=true ritorna solo il piano + conteggi.
+  // ?prefix=/be antepone un prefisso ai path importati (il corpo e' il documento, quindi le opzioni
+  // viaggiano in query string).
   // Content-type ammessi: espliciti e mai "simple request" — è la difesa CSRF. text/plain è escluso
   // apposta: una POST cross-origin text/plain partirebbe dal browser senza preflight, e questo è
   // l'unico endpoint mutante che non richiede JSON. Con i tipi sotto, il tentativo cross-origin
@@ -345,7 +347,8 @@ function createAdminApiRouter({ config, reloadRuntime, requestMonitor, serverSta
     express.text({ type: OPENAPI_IMPORT_CONTENT_TYPES, limit: "12mb" }),
     async (req, res) => {
       const dryRun = String(req.query.dryRun) === "true";
-      const result = await importAdminOpenapi(config.mocksDir, req.body, reloadRuntime, { dryRun });
+      const prefix = typeof req.query.prefix === "string" ? req.query.prefix : "";
+      const result = await importAdminOpenapi(config.mocksDir, req.body, reloadRuntime, { dryRun, prefix });
       sendJson(res, dryRun ? 200 : 201, result);
     }
   );

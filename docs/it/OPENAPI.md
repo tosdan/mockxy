@@ -37,6 +37,23 @@ Dalla UI (barra superiore) l'import parte sempre con un'**anteprima**: il piano 
 cosa verrebbe creato, cosa verrebbe saltato perché già esistente, con i conteggi — senza
 scrivere nulla. Via API è `POST /_admin/api/mocks/import/openapi?dryRun=true`.
 
+## Prefisso dei percorsi
+
+Il campo **Prefisso (facoltativo)** del wizard antepone una radice a **tutti** i percorsi
+importati: con `/be`, `/users/{id}` diventa `/be/users/:id`. Serve quando il front-end chiama
+l'API sotto un contesto che la specifica non dichiara nei percorsi.
+
+- Se i `servers` della specifica dichiarano un percorso dopo host e porta (es.
+  `https://api.example.com/be/v1`), quello del **primo server che ne ha uno** viene proposto
+  già compilato — resta un suggerimento: si conferma, si cambia o si svuota il campo.
+- Il campo compare **dopo aver caricato il documento**, sotto i filtri _Tutti / Da creare /
+  Saltati_. A ogni modifica il piano viene ricalcolato, quindi la lista mostra i percorsi
+  definitivi e i conteggi restano veri: con un prefisso diverso lo stesso endpoint è un mock
+  nuovo, non un duplicato di quello già presente.
+- Via API è il parametro `prefix` (`?prefix=/be`), valido anche in `dryRun`. Uno slash iniziale
+  mancante o finale di troppo viene normalizzato; un valore che non può produrre percorsi validi
+  (spazi, `?`, `#`, il carattere riservato `^`) è rifiutato con `400`.
+
 ## Limiti e note
 
 - Documento fino a **12 MB**.

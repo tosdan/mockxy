@@ -60,3 +60,59 @@ describe("importAdminOpenapi: tag insidiosi non abortiscono l'import", () => {
     expect(byPath.get("/riservato").collectionId ?? null).toBeNull();
   });
 });
+
+describe("importAdminOpenapi: prefisso dei path", () => {
+  let mocksDir;
+
+  const document = {
+    openapi: "3.0.0",
+    info: { title: "t", version: "1" },
+    servers: [{ url: "https://api.example.com/be" }],
+    paths: {
+      "/users": { get: { responses: { "200": { description: "ok" } } } },
+      "/users/{id}": { get: { responses: { "200": { description: "ok" } } } },
+    },
+  };
+
+  beforeEach(async () => {
+    mocksDir = await createTempDir("openapi-import-prefix-");
+  });
+
+  afterEach(async () => {
+    await removeDir(mocksDir);
+  });
+
+  test("crea i mock col prefisso anteposto", async () => {
+    const result = await importAdminOpenapi(mocksDir, document, jest.fn(), { prefix: "/be" });
+
+    expect(result).toMatchObject({ created: 2, failed: 0, prefix: "/be" });
+    const paths = (await listAdminMocks(mocksDir)).map((item) => item.path).sort();
+    expect(paths).toEqual(["/be/users", "/be/users/:id"]);
+  });
+
+  test("dryRun riporta il piano prefissato e il prefisso suggerito dai servers", async () => {
+    const plan = await importAdminOpenapi(mocksDir, document, jest.fn(), { dryRun: true, prefix: "be" });
+
+    expect(plan.prefix).toBe("/be");
+    expect(plan.suggestedPrefix).toBe("/be");
+    expect(plan.items.map((item) => item.path).sort()).toEqual(["/be/users", "/be/users/:id"]);
+    // dryRun non scrive nulla.
+    expect(await listAdminMocks(mocksDir)).toHaveLength(0);
+  });
+
+  test("stesso documento, prefisso diverso: nessuno skip, i mock convivono", async () => {
+    await importAdminOpenapi(mocksDir, document, jest.fn(), { prefix: "/be" });
+    const result = await importAdminOpenapi(mocksDir, document, jest.fn(), { prefix: "/api" });
+
+    expect(result).toMatchObject({ created: 2, skipped: 0 });
+    const paths = (await listAdminMocks(mocksDir)).map((item) => item.path).sort();
+    expect(paths).toEqual(["/api/users", "/api/users/:id", "/be/users", "/be/users/:id"]);
+  });
+
+  test("prefisso non valido: errore 400 senza scrivere nulla", async () => {
+    await expect(importAdminOpenapi(mocksDir, document, jest.fn(), { prefix: "/be?x=1" })).rejects.toMatchObject({
+      statusCode: 400,
+    });
+    expect(await listAdminMocks(mocksDir)).toHaveLength(0);
+  });
+});

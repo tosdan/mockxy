@@ -1,24 +1,31 @@
-import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, OnDestroy, computed, inject, signal } from '@angular/core';
 import { DialogRef } from '@angular/cdk/dialog';
 import { NgIcon, provideIcons } from '@ng-icons/core';
 import { lucideCheck, lucideUpload, lucideX } from '@ng-icons/lucide';
 import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
 import { UiButton } from '../../../ui/ui-button/ui-button';
+import { UiInput } from '../../../ui/ui-input/ui-input';
 import { ToastService } from '../../../ui/ui-toast/ui-toast';
 import { MockAdminApiService } from '../../../mock-admin-api.service';
 import { MocksStore } from '../mocks-next.store';
+import { routePathError } from '../../../mock-path-convention';
 import type { OpenapiImportPreview } from '../../../mock-admin-api.types';
 
 type ImportFilter = 'all' | 'create' | 'skip';
 
+/** Attesa prima di ricalcolare il piano mentre si digita il prefisso. */
+const PREFIX_DEBOUNCE_MS = 350;
+
 /**
  * Mini-wizard di import OpenAPI: carica un documento (YAML/JSON), mostra l'anteprima degli endpoint
  * che verranno creati o saltati (con filtro rapido e conteggi), poi crea i mock mancanti.
+ * Il prefisso opzionale (es. "/be") viene anteposto ai path importati: il piano si ricalcola lato
+ * server a ogni modifica, così la lista mostra i path definitivi e i conteggi create/skip restano veri.
  * Aperto col viewContainerRef della pagina così vede il MocksStore page-scoped per ricaricare il catalogo.
  */
 @Component({
   selector: 'mocks-next-openapi-import',
-  imports: [NgIcon, UiButton, TranslocoPipe],
+  imports: [NgIcon, UiButton, UiInput, TranslocoPipe],
   providers: [provideIcons({ lucideCheck, lucideUpload, lucideX })],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -74,6 +81,32 @@ type ImportFilter = 'all' | 'create' | 'skip';
           }
         </div>
 
+        <div class="flex flex-col gap-1.5">
+          <label for="openapi-import-prefix" class="text-[12px] font-bold uppercase tracking-[0.14em] text-foreground/80">{{ 'openapiImport.prefixLabel' | transloco }}</label>
+          <input
+            id="openapi-import-prefix"
+            ui-input
+            type="text"
+            class="w-full font-mono text-[13px]"
+            placeholder="/be"
+            autocomplete="off"
+            spellcheck="false"
+            [value]="prefix()"
+            [disabled]="importing()"
+            (input)="onPrefixInput($any($event.target).value)"
+          />
+          @if (prefixError(); as err) {
+          <span class="text-[11.5px] text-destructive-soft">{{ err | transloco }}</span>
+          } @else {
+          <span class="flex flex-wrap items-center gap-2 text-[11.5px] text-muted-foreground">
+            {{ 'openapiImport.prefixHint' | transloco }}
+            @if (p.suggestedPrefix && p.suggestedPrefix !== prefix().trim()) {
+            <button type="button" class="rounded px-1.5 py-0.5 font-mono text-[11px] text-brand ring-1 ring-border transition hover:bg-muted/60" (click)="applySuggestedPrefix(p.suggestedPrefix)">{{ 'openapiImport.prefixUseSuggested' | transloco: { prefix: p.suggestedPrefix } }}</button>
+            }
+          </span>
+          }
+        </div>
+
         <div class="min-h-0 flex-1 overflow-auto mx-scroll rounded-lg border border-border">
           @for (item of filteredItems(); track item.method + ' ' + item.path) {
           <div class="flex items-center gap-2.5 border-b border-border-soft px-3 py-2 last:border-b-0" [class.opacity-45]="item.action === 'skip'">
@@ -95,14 +128,14 @@ type ImportFilter = 'all' | 'create' | 'skip';
 
       <div class="flex items-center justify-end gap-2 border-t border-border px-5 py-3">
         <button ui-button variant="outline" (click)="close()" [disabled]="importing()">{{ 'openapiImport.cancel' | transloco }}</button>
-        <button ui-button (click)="runImport()" [disabled]="(preview()?.create ?? 0) === 0 || importing()">
+        <button ui-button (click)="runImport()" [disabled]="!canImport()">
           <ng-icon name="lucideCheck" size="0.9rem" /> {{ 'openapiImport.import' | transloco }}{{ preview() ? ' (' + preview()!.create + ')' : '' }}
         </button>
       </div>
     </div>
   `,
 })
-export class OpenapiImportDialog {
+export class OpenapiImportDialog implements OnDestroy {
   private readonly api = inject(MockAdminApiService);
   private readonly store = inject(MocksStore);
   private readonly toast = inject(ToastService);
@@ -116,8 +149,17 @@ export class OpenapiImportDialog {
   protected readonly preview = signal<OpenapiImportPreview | undefined>(undefined);
   protected readonly filter = signal<ImportFilter>('all');
   protected readonly dragging = signal(false);
+  /** Prefisso da anteporre ai path importati: vuoto = nessuno. */
+  protected readonly prefix = signal('');
+  /** Chiave i18n dell'errore sul prefisso (null se valido): blocca il ricalcolo e l'import. */
+  protected readonly prefixError = signal<string | null>(null);
+  /** Ricalcolo del piano in corso dopo una modifica del prefisso (l'anteprima resta visibile). */
+  protected readonly refreshing = signal(false);
 
   private docText = '';
+  /** Progressivo delle richieste di anteprima: scarta le risposte di quelle superate. */
+  private previewSeq = 0;
+  private prefixTimer?: ReturnType<typeof setTimeout>;
 
   protected readonly filters = [
     { key: 'all' as ImportFilter, label: 'openapiImport.filterAll', color: 'var(--brand-soft)' },
@@ -174,17 +216,29 @@ export class OpenapiImportDialog {
     this.error.set(undefined);
     this.preview.set(undefined);
     this.filter.set('all');
+    this.resetPrefix();
     this.loading.set(true);
 
     file.text().then(
       (text) => {
         this.docText = text;
+        const seq = ++this.previewSeq;
         this.api.previewOpenapi(text).subscribe({
           next: (plan) => {
+            if (seq !== this.previewSeq) return;
+            // Se i `servers` del documento dichiarano un path, lo proponiamo già applicato
+            // (l'utente conferma o svuota il campo): serve un secondo giro perché il prefisso
+            // cambia anche il verdetto create/skip di ogni endpoint.
+            if (plan.suggestedPrefix !== '') {
+              this.prefix.set(plan.suggestedPrefix);
+              this.requestPreview();
+              return;
+            }
             this.preview.set(plan);
             this.loading.set(false);
           },
           error: (e: unknown) => {
+            if (seq !== this.previewSeq) return;
             this.loading.set(false);
             this.error.set(this.readError(e));
           },
@@ -197,12 +251,66 @@ export class OpenapiImportDialog {
     );
   }
 
+  /** Prefisso modificato a mano: valida subito e ricalcola il piano con un debounce. */
+  protected onPrefixInput(value: string): void {
+    this.prefix.set(value);
+    this.prefixError.set(prefixError(value));
+    clearTimeout(this.prefixTimer);
+    if (this.prefixError() != null || this.docText === '') return;
+    this.prefixTimer = setTimeout(() => this.requestPreview(), PREFIX_DEBOUNCE_MS);
+  }
+
+  /** Ripristina il prefisso suggerito dal documento (scorciatoia dell'hint). */
+  protected applySuggestedPrefix(suggested: string): void {
+    clearTimeout(this.prefixTimer);
+    this.prefix.set(suggested);
+    this.prefixError.set(null);
+    this.requestPreview();
+  }
+
+  /** Ricalcola l'anteprima con il prefisso corrente; le risposte superate vengono scartate. */
+  private requestPreview(): void {
+    const seq = ++this.previewSeq;
+    this.refreshing.set(true);
+    this.api.previewOpenapi(this.docText, this.prefix().trim()).subscribe({
+      next: (plan) => {
+        if (seq !== this.previewSeq) return;
+        this.preview.set(plan);
+        this.error.set(undefined);
+        this.loading.set(false);
+        this.refreshing.set(false);
+      },
+      error: (e: unknown) => {
+        if (seq !== this.previewSeq) return;
+        this.loading.set(false);
+        this.refreshing.set(false);
+        this.error.set(this.readError(e));
+      },
+    });
+  }
+
+  private resetPrefix(): void {
+    clearTimeout(this.prefixTimer);
+    this.prefix.set('');
+    this.prefixError.set(null);
+    this.refreshing.set(false);
+  }
+
+  ngOnDestroy(): void {
+    clearTimeout(this.prefixTimer);
+  }
+
+  /** Import possibile solo con un piano aggiornato, un prefisso valido e qualcosa da creare. */
+  protected readonly canImport = computed(
+    () => (this.preview()?.create ?? 0) > 0 && !this.importing() && !this.refreshing() && this.prefixError() == null,
+  );
+
   /** Esegue l'import reale, mostra il riepilogo e ricarica il catalogo. */
   protected runImport(): void {
-    if (this.docText === '' || this.importing()) return;
+    if (this.docText === '' || !this.canImport()) return;
     this.importing.set(true);
     this.error.set(undefined);
-    this.api.importOpenapi(this.docText).subscribe({
+    this.api.importOpenapi(this.docText, this.prefix().trim()).subscribe({
       next: (result) => {
         this.importing.set(false);
         this.toast.show({
@@ -253,6 +361,18 @@ export class OpenapiImportDialog {
   private readError(error: unknown): string {
     return readErrorMessage(error) ?? this.transloco.translate('openapiImport.errImportFailed');
   }
+}
+
+/**
+ * Chiave i18n dell'errore sul prefisso, null se valido (vuoto incluso: il campo è facoltativo).
+ * "be" e "/be/" sono accettati — li normalizziamo come fa il server — poi vale la stessa
+ * convenzione dei path del dialog "Nuovo", visto che il prefisso finisce dentro i path creati.
+ */
+function prefixError(value: string): string | null {
+  const trimmed = value.trim();
+  if (trimmed === '' || trimmed === '/') return null;
+  const normalized = (trimmed.startsWith('/') ? trimmed : `/${trimmed}`).replace(/\/+$/, '');
+  return routePathError(normalized);
 }
 
 /** Estensioni accettate come il picker; i file senza estensione passano e li valida il backend. */

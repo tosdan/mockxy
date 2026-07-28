@@ -75,6 +75,7 @@ resettano lo stato tra i test, pipeline che importano una specifica aggiornata.
 |---|---|
 | `POST /mocks/import/openapi` | importa la specifica (body grezzo JSON/YAML, fino a 12 MB) — [regole di generazione](OPENAPI.md) |
 | `POST /mocks/import/openapi?dryRun=true` | solo il piano con i conteggi, senza scrivere nulla |
+| `POST /mocks/import/openapi?prefix=/be` | antepone `/be` a tutti i percorsi importati (vale anche con `dryRun`); il piano riporta `prefix` applicato e `suggestedPrefix` ricavato dai `servers` |
 
 ## File dati
 

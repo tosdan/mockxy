@@ -400,16 +400,17 @@ export class MockAdminApiService {
    * rifiuta apposta text/plain — una POST "simple" attraverserebbe le origini senza preflight
    * CORS (guardia anti-CSRF sull'unico endpoint mutante che non richiede JSON).
    */
-  previewOpenapi(document: string): Observable<OpenapiImportPreview> {
+  previewOpenapi(document: string, prefix = ''): Observable<OpenapiImportPreview> {
     return this.http.post<OpenapiImportPreview>(`${this.baseUrl}/mocks/import/openapi`, document, {
-      params: { dryRun: 'true' },
+      params: { dryRun: 'true', prefix },
       headers: { 'Content-Type': 'application/yaml' },
     });
   }
 
   /** Importa un documento OpenAPI creando gli endpoint mancanti (stesso content-type dell'anteprima). */
-  importOpenapi(document: string): Observable<OpenapiImportResult> {
+  importOpenapi(document: string, prefix = ''): Observable<OpenapiImportResult> {
     return this.http.post<OpenapiImportResult>(`${this.baseUrl}/mocks/import/openapi`, document, {
+      params: { prefix },
       headers: { 'Content-Type': 'application/yaml' },
     });
   }
