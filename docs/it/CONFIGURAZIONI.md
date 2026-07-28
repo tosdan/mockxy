@@ -54,9 +54,10 @@ impostabile per-workspace dall'app desktop.
 | `watchUsePolling` | `CHOKIDAR_USEPOLLING` | `false` | Polling del watcher (per Docker/cartelle di rete) | ❌ |
 | `nodeEnv` | `NODE_ENV` | `development` | Ambiente; `production` disabilita watch e (di default) admin API | ❌ |
 
-**CLI / npm.** Il ritardo si può passare anche da riga di comando: `npm run dev:backend -- --delay=500`
-e `--delay-all`; in Docker/Compose gli stessi valori arrivano via `npm_config_delay` /
-`npm_config_delay_all` (vedi §6). Parsing in `parseCliArgs` (`src/config.js`).
+**Precedenza del ritardo.** `--delay` / `--delay-all` (e gli equivalenti `npm_config_delay` /
+`npm_config_delay_all`) prevalgono su `MOCKXY_DELAY` / `MOCKXY_DELAY_ALL` del file `.env`, che
+a loro volta prevalgono sui default. Parsing CLI in `parseCliArgs`, risoluzione finale in
+`loadConfig` (`src/config.js`).
 
 ---
 
@@ -133,8 +134,7 @@ middleware, SSE, WebSocket), varianti selezionabili (anche per query string), se
 `docker-compose.yml` imposta l'ambiente del container e alcuni knob di orchestrazione:
 
 - Mapping porte host: `MOCKXY_HOST_PORT` (motore, default `3000`), `MOCKXY_UI_HOST_PORT` (UI, default `4207`).
-- Ritardo simulato: `MOCKXY_DELAY` / `MOCKXY_DELAY_ALL` → passati come `npm_config_delay` /
-  `npm_config_delay_all`.
+- Ritardo simulato: `MOCKXY_DELAY` / `MOCKXY_DELAY_ALL`, letti direttamente dal motore.
 - Env del container: `HOST=0.0.0.0` (il loopback del container non è raggiungibile dal port mapping),
   `ADMIN_API_ENABLED=true`, `PROXY_FALLBACK_ENABLED=true`, `DEV_WATCH=true`, `CHOKIDAR_USEPOLLING=true`
   (eventi nativi inaffidabili su volumi montati), `MOCKS_DIR`, `MONITOR_DUMP_DIR`.

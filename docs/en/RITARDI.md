@@ -29,9 +29,11 @@ network will see it.
 
 - **Desktop app**: workspace settings, the "Global delay (ms)" and "Delay proxied requests
   too" entries (per-workspace, the engine restarts on change).
+- **`.env` file**: `MOCKXY_DELAY=500` and `MOCKXY_DELAY_ALL=true`.
 - **Command line**: `--delay=<ms>` and `--delay-all` flags
-  (`node index.js --delay=500 --delay-all`, or `npm run dev:backend -- --delay=500`).
-- **Docker Compose**: `MOCKXY_DELAY` and `MOCKXY_DELAY_ALL` variables, which the compose
-  translates into the launch flags — the engine alone doesn't read them.
+  (`node index.js --delay=500 --delay-all`, or `npm run dev:backend -- --delay=500`);
+  they take precedence over the `.env` file.
+- **Docker Compose**: directly uses the same `MOCKXY_DELAY` and `MOCKXY_DELAY_ALL`
+  variables from the `.env` file.
 
 The complete inventory, with the defaults, is in [CONFIGURAZIONI.md](CONFIGURAZIONI.md).

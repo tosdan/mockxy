@@ -11,18 +11,22 @@ Besides the [desktop app](DESKTOP.md), Mockxy runs in three ways. The compass fo
 
 In all cases the engine's configuration goes **through environment variables only** (or CLI):
 the complete census is in [CONFIGURAZIONI.md](CONFIGURAZIONI.md), and the `.env.example` file
-documents every variable — including those read *only* by Docker Compose and not by the engine
-(host ports and `MOCKXY_*` latency).
+documents every variable — including host ports, which only concern Docker Compose.
 
 ## Direct run
 
 ```bash
 npm install
-cp .env.example .env      # optional: without it, defaults apply
+cp .env.example .env      # recommended: configure at least BACKEND_URL and PORT
 npm run dev:backend       # development, with mock watching
 node index.js             # plain run
 node index.js --delay=500 --delay-all   # with simulated latency (see docs/RITARDI.md)
 ```
+
+The file is technically optional, but for real headless use you should create it and review
+at least `BACKEND_URL` and `PORT`. Without `.env` the server listens on port `3000` and, with
+no configured backend, stays in mock-only mode. Defaults are convenient for a first trial;
+they do not replace an explicit configuration choice.
 
 With `NODE_ENV=production` mock watching turns off and the admin API is disabled by default:
 the right setup for a process that only has to serve.
@@ -30,8 +34,9 @@ the right setup for a process that only has to serve.
 ## Development Docker
 
 `docker compose up` starts the complete environment: the engine (host port `3000`) and the UI
-with automatic reload (host port `4207`). The `.env` is optional; the host ports can be
-changed with `MOCKXY_HOST_PORT` and `MOCKXY_UI_HOST_PORT`.
+with automatic reload (host port `4207`). Here too `.env` is technically optional but
+recommended for real use; host ports can be changed with `MOCKXY_HOST_PORT` and
+`MOCKXY_UI_HOST_PORT`.
 
 The qualifying point is that **the workspace stays on the local filesystem**, mounted into the
 container: hot reload, hand edits and git versioning work exactly as in the direct run. On

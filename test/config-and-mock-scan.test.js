@@ -432,6 +432,44 @@ describe("mock scan and config", () => {
     expect(config.delayAllRequests).toBe(true);
   });
 
+  test("loadConfig legge il ritardo globale dalle variabili del file .env", () => {
+    const originalDelay = process.env.MOCKXY_DELAY;
+    const originalDelayAll = process.env.MOCKXY_DELAY_ALL;
+    process.env.MOCKXY_DELAY = "275";
+    process.env.MOCKXY_DELAY_ALL = "true";
+
+    try {
+      const config = loadConfig();
+
+      expect(config.globalDelayMs).toBe(275);
+      expect(config.delayAllRequests).toBe(true);
+    } finally {
+      if (originalDelay == null) delete process.env.MOCKXY_DELAY;
+      else process.env.MOCKXY_DELAY = originalDelay;
+      if (originalDelayAll == null) delete process.env.MOCKXY_DELAY_ALL;
+      else process.env.MOCKXY_DELAY_ALL = originalDelayAll;
+    }
+  });
+
+  test("gli override espliciti hanno precedenza sul ritardo del file .env", () => {
+    const originalDelay = process.env.MOCKXY_DELAY;
+    const originalDelayAll = process.env.MOCKXY_DELAY_ALL;
+    process.env.MOCKXY_DELAY = "275";
+    process.env.MOCKXY_DELAY_ALL = "true";
+
+    try {
+      const config = loadConfig({ globalDelayMs: 40, delayAllRequests: false });
+
+      expect(config.globalDelayMs).toBe(40);
+      expect(config.delayAllRequests).toBe(false);
+    } finally {
+      if (originalDelay == null) delete process.env.MOCKXY_DELAY;
+      else process.env.MOCKXY_DELAY = originalDelay;
+      if (originalDelayAll == null) delete process.env.MOCKXY_DELAY_ALL;
+      else process.env.MOCKXY_DELAY_ALL = originalDelayAll;
+    }
+  });
+
   test("loadConfig fa il bind di default solo su loopback, con HOST come opt-in", () => {
     const originalHost = process.env.HOST;
     delete process.env.HOST;

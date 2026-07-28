@@ -11,18 +11,22 @@ Oltre all'[app desktop](DESKTOP.md), Mockxy si esegue in tre modi. La bussola pe
 
 In tutti i casi la configurazione del motore passa **solo da variabili d'ambiente** (o CLI):
 il censimento completo è in [CONFIGURAZIONI.md](CONFIGURAZIONI.md), e il file `.env.example`
-documenta ogni variabile — comprese quelle lette *solo* da Docker Compose e non dal motore
-(porte host e latenza `MOCKXY_*`).
+documenta ogni variabile — comprese le porte host, che riguardano solo Docker Compose.
 
 ## Esecuzione diretta
 
 ```bash
 npm install
-cp .env.example .env      # facoltativo: senza, valgono i default
+cp .env.example .env      # raccomandato: configura almeno BACKEND_URL e PORT
 npm run dev:backend       # sviluppo, con watch dei mock
 node index.js             # esecuzione semplice
 node index.js --delay=500 --delay-all   # con latenza simulata (vedi docs/RITARDI.md)
 ```
+
+Il file è tecnicamente facoltativo, ma per un uso headless reale è consigliabile crearlo e
+rivederne almeno `BACKEND_URL` e `PORT`. Senza `.env` il server ascolta sulla porta `3000` e,
+non avendo un backend configurato, resta in modalità solo-mock. I default sono comodi per una
+prima prova, non sostituiscono una scelta esplicita della configurazione.
 
 Con `NODE_ENV=production` il watch dei mock si spegne e l'admin API è disattivata di default:
 è l'assetto giusto per un processo che deve solo servire.
@@ -30,8 +34,9 @@ Con `NODE_ENV=production` il watch dei mock si spegne e l'admin API è disattiva
 ## Docker di sviluppo
 
 `docker compose up` avvia l'ambiente completo: il motore (porta host `3000`) e l'interfaccia
-con ricaricamento automatico (porta host `4207`). Il `.env` è facoltativo; le porte host si
-cambiano con `MOCKXY_HOST_PORT` e `MOCKXY_UI_HOST_PORT`.
+con ricaricamento automatico (porta host `4207`). Anche qui il `.env` è tecnicamente
+facoltativo ma raccomandato per un uso reale; le porte host si cambiano con
+`MOCKXY_HOST_PORT` e `MOCKXY_UI_HOST_PORT`.
 
 Il punto qualificante è che **il workspace resta sul filesystem locale**, montato nel
 container: ricarica a caldo, modifiche a mano e versionamento in git funzionano esattamente

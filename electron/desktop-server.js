@@ -116,8 +116,10 @@ async function startDesktopServer({
       corsEnabled,
       adaptProxyCookies,
       rewriteProxyRedirects,
-      globalDelayMs,
-      delayAllRequests,
+      // Il desktop usa sempre il valore del workspace (o il suo default): non deve ereditare
+      // MOCKXY_DELAY da un eventuale .env nella directory da cui è stato lanciato Electron.
+      globalDelayMs: globalDelayMs ?? WORKSPACE_SETTING_DEFAULTS.globalDelayMs,
+      delayAllRequests: delayAllRequests ?? WORKSPACE_SETTING_DEFAULTS.delayAllRequests,
       requestTimeoutMs,
       monitorDumpIntervalMs,
       monitorDumpThreshold,

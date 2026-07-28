@@ -45,6 +45,8 @@ describe("desktop-server (avvio del motore per l'app desktop)", () => {
         mocksDir: "/ws/mocks",
         uiDistDir: "/ui/dist",
         monitorDumpDir: "/ws/.local/dump",
+        globalDelayMs: 0,
+        delayAllRequests: false,
         adminApiEnabled: true,
       })
     );

@@ -123,11 +123,15 @@ cd mockxy
 
 npm install              # server dependencies
 npm run install:frontend # web UI dependencies
-cp .env.example .env     # starting configuration
+cp .env.example .env     # recommended: starting local configuration
 
 npm run dev:backend      # server on http://localhost:3000
 npm run dev:frontend     # web UI on http://localhost:4207 (in a second terminal)
 ```
+
+The `.env` file is technically optional, but **recommended for any real headless use**:
+before starting, review at least `BACKEND_URL` and `PORT`. Without configuration Mockxy
+listens on port `3000` and, with no real backend, runs in mock-only mode.
 
 The repository ships a demo workspace with a few ready-made mocks, so you can check right away that everything works:
 
@@ -370,14 +374,16 @@ All configuration goes through environment variables (or a `.env` file; start fr
 | `MONITOR_DUMP_MAX_FILE_BYTES`  | `52428800`                     | Maximum size of each archive file (50 MB, then rotation)                                                                                               |
 | `MONITOR_DUMP_MAX_TOTAL_BYTES` | `1073741824`                   | Cap on the archive folder total (1 GB): beyond it, oldest files are deleted; `0` = never                                                               |
 
-To simulate a slow network there are two launch options:
+To simulate a slow network, use the `.env` file:
 
 ```bash
-npm run dev:backend -- --delay=500     # 500 ms on every mock without its own delayMs
-npm run dev:backend -- --delay-all     # apply the delay to proxied requests too
+MOCKXY_DELAY=500
+MOCKXY_DELAY_ALL=true
 ```
 
-(In Docker Compose the same options are controlled with `MOCKXY_DELAY` and `MOCKXY_DELAY_ALL`; levels, precedence and details in [docs/en/RITARDI.md](docs/en/RITARDI.md).)
+or the `--delay=500` and `--delay-all` launch arguments, which take precedence over `.env`.
+On desktop, the same values are stored per-workspace settings. See
+[docs/en/RITARDI.md](docs/en/RITARDI.md) for levels, precedence and details.
 
 **CORS.** By default Mockxy doesn't handle CORS, and in the recommended setup (dev-server proxy, non-browser clients) you never need it. `CORS_ENABLED=true` (the «Automatic CORS» switch in the workspace dialog) is for when a browser frontend calls Mockxy **directly from another origin** — even just `localhost:4200` towards `localhost:3000`, because the port counts for the origin. When enabled, the CORS policy of everything leaving Mockxy is Mockxy's own: preflights handled automatically, origin reflected with credentials allowed, overriding CORS headers saved in captured mocks and on proxied responses as well. Details in [docs/en/CORS.md](docs/en/CORS.md).
 

@@ -277,6 +277,9 @@ function loadConfig(overrides = {}) {
   );
   const uiDistDir = normalizeString(overrides.uiDistDir ?? process.env.UI_DIST_DIR);
   const host = normalizeString(overrides.host ?? process.env.HOST) || DEFAULT_HOST;
+  // Gli override espliciti (CLI o chiamanti embedded come Electron) vincono sul file .env.
+  const globalDelayValue = overrides.globalDelayMs ?? process.env.MOCKXY_DELAY;
+  const delayAllRequestsValue = overrides.delayAllRequests ?? process.env.MOCKXY_DELAY_ALL;
 
   const config = {
     nodeEnv,
@@ -312,13 +315,13 @@ function loadConfig(overrides = {}) {
       nodeEnv,
     }),
     delayAllRequests: parseBoolean(
-      overrides.delayAllRequests,
+      delayAllRequestsValue,
       DEFAULT_DELAY_ALL_REQUESTS
     ),
     globalDelayMs:
-      overrides.globalDelayMs == null
+      globalDelayValue == null
         ? DEFAULT_GLOBAL_DELAY_MS
-        : parseDelayValue(overrides.globalDelayMs),
+        : parseDelayValue(globalDelayValue),
     requestTimeoutMs: parseNumber(
       overrides.requestTimeoutMs ?? process.env.REQUEST_TIMEOUT_MS,
       DEFAULT_TIMEOUT_MS

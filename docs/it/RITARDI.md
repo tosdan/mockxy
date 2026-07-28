@@ -29,9 +29,11 @@ vedrà un utente su una rete vera.
 
 - **App desktop**: impostazioni del workspace, voci «Ritardo globale (ms)» e «Ritardo anche sul
   proxy» (per-workspace, il motore riparte al cambio).
+- **File `.env`**: `MOCKXY_DELAY=500` e `MOCKXY_DELAY_ALL=true`.
 - **Riga di comando**: flag `--delay=<ms>` e `--delay-all`
-  (`node index.js --delay=500 --delay-all`, oppure `npm run dev:backend -- --delay=500`).
-- **Docker Compose**: variabili `MOCKXY_DELAY` e `MOCKXY_DELAY_ALL`, che il compose traduce nei
-  flag di lancio — il motore da solo non le legge.
+  (`node index.js --delay=500 --delay-all`, oppure `npm run dev:backend -- --delay=500`);
+  hanno precedenza sul file `.env`.
+- **Docker Compose**: usa direttamente le stesse variabili `MOCKXY_DELAY` e
+  `MOCKXY_DELAY_ALL` del file `.env`.
 
 Il censimento completo, con i default, è in [CONFIGURAZIONI.md](CONFIGURAZIONI.md).
