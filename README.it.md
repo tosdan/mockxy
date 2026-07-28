@@ -328,7 +328,7 @@ I middleware sono pensati per payload di dimensioni ragionevoli, tipicamente JSO
 
 ## Import da OpenAPI
 
-Se hai una specifica **OpenAPI 3.0/3.1 o Swagger 2.0** (JSON o YAML), Mockxy può generare un mock per ogni endpoint dichiarato: percorso convertito nel formato interno, primo status 2xx come risposta, body ricavato dagli esempi della specifica o campionato dagli schemi. Regole di generazione, import incrementale e anteprima sono in [docs/it/OPENAPI.md](docs/it/OPENAPI.md).
+Se hai una specifica **OpenAPI 3.0/3.1 o Swagger 2.0** (JSON o YAML), Mockxy può generare un mock per ogni endpoint dichiarato: percorso convertito nel formato interno, primo status 2xx come risposta, body ricavato dagli esempi della specifica o campionato dagli schemi. Puoi anche anteporre un **prefisso** a tutti i percorsi importati (es. `/be`), proposto in automatico dal percorso dei `servers` della specifica. Regole di generazione, import incrementale, prefisso e anteprima sono in [docs/it/OPENAPI.md](docs/it/OPENAPI.md).
 
 L'import è pensato per darti **una base di lavoro completa in pochi secondi**, non mock perfetti: dopo l'import rifinisci i dati che contano davvero dall'editor. Dall'interfaccia hai un'anteprima di ciò che verrà creato prima di confermare (via API, `?dryRun=true`).
 

@@ -328,7 +328,7 @@ Middleware is meant for reasonably sized payloads, typically JSON: the response 
 
 ## OpenAPI import
 
-If you have an **OpenAPI 3.0/3.1 or Swagger 2.0** spec (JSON or YAML), Mockxy can generate a mock for every declared endpoint: path converted to the internal format, first 2xx status as the response, body derived from the spec's examples or sampled from the schemas. Generation rules, incremental import and preview are in [docs/en/OPENAPI.md](docs/en/OPENAPI.md).
+If you have an **OpenAPI 3.0/3.1 or Swagger 2.0** spec (JSON or YAML), Mockxy can generate a mock for every declared endpoint: path converted to the internal format, first 2xx status as the response, body derived from the spec's examples or sampled from the schemas. You can also prepend a **prefix** to every imported path (e.g. `/be`), suggested automatically from the path of the spec's `servers`. Generation rules, incremental import, prefix and preview are in [docs/en/OPENAPI.md](docs/en/OPENAPI.md).
 
 The import is designed to give you **a complete working base in seconds**, not perfect mocks: after importing, refine the data that really matters from the editor. The UI shows a preview of what will be created before you confirm (via API, `?dryRun=true`).
 

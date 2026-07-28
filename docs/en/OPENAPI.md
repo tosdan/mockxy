@@ -37,6 +37,23 @@ From the UI (top bar) the import always starts with a **preview**: the complete 
 would be created, what would be skipped because it already exists, with the counts — without
 writing anything. Via API it's `POST /_admin/api/mocks/import/openapi?dryRun=true`.
 
+## Path prefix
+
+The wizard's **Prefix (optional)** field prepends a root to **every** imported path: with `/be`,
+`/users/{id}` becomes `/be/users/:id`. It's for when the front-end calls the API under a context
+the spec doesn't declare in its paths.
+
+- If the spec's `servers` declare a path after host and port (e.g.
+  `https://api.example.com/be/v1`), the one from the **first server that has one** is pre-filled
+  — it stays a suggestion: confirm it, change it, or clear the field.
+- The field shows up **once the document is loaded**, below the _All / To create / Skipped_
+  filters. Every change recomputes the plan, so the list shows the final paths and the counts
+  stay true: with a different prefix the same endpoint is a new mock, not a duplicate of the
+  existing one.
+- Via API it's the `prefix` parameter (`?prefix=/be`), valid with `dryRun` too. A missing leading
+  slash or an extra trailing one is normalized; a value that can't produce valid paths (spaces,
+  `?`, `#`, the reserved `^` character) is rejected with `400`.
+
 ## Limits and notes
 
 - Document up to **12 MB**.

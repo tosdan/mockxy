@@ -75,6 +75,7 @@ state between tests, pipelines that import an updated spec.
 |---|---|
 | `POST /mocks/import/openapi` | imports the spec (raw JSON/YAML body, up to 12 MB) — [generation rules](OPENAPI.md) |
 | `POST /mocks/import/openapi?dryRun=true` | just the plan with the counts, without writing anything |
+| `POST /mocks/import/openapi?prefix=/be` | prepends `/be` to every imported path (works with `dryRun` too); the plan reports the applied `prefix` and the `suggestedPrefix` derived from `servers` |
 
 ## Data files
 
