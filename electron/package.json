@@ -4,6 +4,15 @@
   "private": true,
   "license": "GPL-3.0-or-later",
   "description": "Guscio Electron dell'app desktop di Mockxy Mock Server",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tosdan/mockxy.git",
+    "directory": "electron"
+  },
+  "homepage": "https://github.com/tosdan/mockxy#readme",
+  "bugs": {
+    "url": "https://github.com/tosdan/mockxy/issues"
+  },
   "main": "main.js",
   "scripts": {
     "start": "electron .",

@@ -118,7 +118,7 @@ Two global switches change the behavior on the fly, no restart: **full proxy** (
 Requirements: [Node.js](https://nodejs.org) 24 or later (the current LTS; the desktop and Docker distributions ship their own runtime and don't depend on the system Node).
 
 ```bash
-git clone https://github.com/<your-user>/mockxy.git
+git clone https://github.com/tosdan/mockxy.git
 cd mockxy
 
 npm install              # server dependencies

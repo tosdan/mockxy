@@ -118,7 +118,7 @@ Due interruttori globali cambiano il comportamento al volo, senza riavviare: **p
 Requisiti: [Node.js](https://nodejs.org) 24 o superiore (la LTS corrente; le distribuzioni desktop e Docker portano con sé il proprio runtime e non dipendono dal Node di sistema).
 
 ```bash
-git clone https://github.com/<tuo-utente>/mockxy.git
+git clone https://github.com/tosdan/mockxy.git
 cd mockxy
 
 npm install              # dipendenze del server

@@ -27,6 +27,8 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
+      - run: npm run check:versions
+        if: matrix.os == 'ubuntu-latest'
       - run: npm test
         if: matrix.os == 'ubuntu-latest'
       # Il leg Windows esiste per la classe di bug del backend (watcher/libuv): le suite

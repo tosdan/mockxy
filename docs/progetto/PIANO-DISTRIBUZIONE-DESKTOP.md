@@ -1,7 +1,7 @@
 # Piano operativo: aggiornamenti e distribuzione desktop
 
 Stato del piano: **attivo**
-Ultimo aggiornamento: 28 luglio 2026
+Ultimo aggiornamento: 29 luglio 2026
 
 Questo documento è la checklist operativa per introdurre, nell'ordine:
 
@@ -28,7 +28,7 @@ sempre lo stato reale dell'implementazione.
 | Ordine | Obiettivo | Stato | Dipende da |
 |---:|---|---|---|
 | 0 | Fondamenta della pubblicazione | In corso | — |
-| 1 | Notifica di un aggiornamento disponibile | Da iniziare | obiettivo 0 |
+| 1 | Notifica di un aggiornamento disponibile | In corso | obiettivo 0 |
 | 2 | Build e pubblicazione Microsoft Store | Da iniziare | obiettivi 0 e 1 |
 | 3 | Altre build Windows e Linux | Da iniziare | obiettivo 0; preferibilmente 1 e 2 |
 | 4 | Aggiornamenti automatici e formati aggiuntivi | Da iniziare | artefatti della fase 3 |
@@ -57,17 +57,17 @@ l'app a un servizio remoto.
 - [x] Confermare l'URL pubblico che l'app potrà aprire per mostrare una release:
       `https://github.com/tosdan/mockxy/releases`.
 - [x] Decidere se `tosdan/mockxy` è il repository definitivo o un riferimento temporaneo.
-- [ ] Aggiungere i metadati `repository`, `homepage`, `bugs` e `author` ai `package.json`
-      pertinenti.
-- [ ] Usare inizialmente un solo canale, `stable`.
-- [ ] Stabilire la convenzione dei tag, proposta: `v<major>.<minor>.<patch>`.
-- [ ] Stabilire che draft e prerelease GitHub non siano proposti agli utenti `stable`.
+- [x] Aggiungere i metadati `repository`, `homepage` e `bugs` ai `package.json` pertinenti.
+- [ ] Decidere il valore pubblico del metadato `author`.
+- [x] Usare inizialmente un solo canale, `stable`.
+- [x] Stabilire la convenzione dei tag: `v<major>.<minor>.<patch>`.
+- [x] Stabilire che draft e prerelease GitHub non siano proposti agli utenti `stable`.
 
 ### 0.2 Versione unica
 
-- [ ] Verificare che lo script di bump aggiorni tutte le copie della versione usate da
+- [x] Verificare che lo script di bump aggiorni tutte le copie della versione usate da
       backend, UI ed Electron.
-- [ ] Aggiungere un controllo CI che fallisca se le versioni divergono.
+- [x] Aggiungere un controllo CI che fallisca se le versioni divergono.
 - [ ] Fare in modo che la versione mostrata nell'app provenga da `app.getVersion()`.
 - [ ] Definire la conversione per i pacchetti Windows a quattro componenti
       (`1.2.3` → `1.2.3.0`).
@@ -101,9 +101,9 @@ implementazione deve funzionare anche con la portable.
 
 ### 1.1 Contratto del controllo aggiornamenti
 
-- [ ] Creare nel main process un modulo isolato per il controllo delle release.
-- [ ] Evitare che renderer e UI conoscano direttamente GitHub o il formato della sua API.
-- [ ] Definire un risultato stabile con almeno:
+- [x] Creare per il main process un modulo isolato per il controllo delle release.
+- [x] Evitare che renderer e UI conoscano direttamente GitHub o il formato della sua API.
+- [x] Definire un risultato stabile con almeno:
   - versione corrente;
   - ultima versione stabile;
   - disponibilità dell'aggiornamento;
@@ -111,13 +111,13 @@ implementazione deve funzionare anche con la portable.
   - titolo o sintesi delle note;
   - data di pubblicazione;
   - eventuale errore classificato.
-- [ ] Confrontare le versioni come SemVer, non come semplici stringhe.
-- [ ] Ignorare draft, prerelease e release con versione non valida.
-- [ ] Non proporre downgrade se la versione installata è più nuova.
-- [ ] Impostare timeout brevi e non bloccare mai l'avvio dell'app.
-- [ ] Trattare assenza di rete, timeout e rate limit come condizioni non fatali.
+- [x] Confrontare le versioni come SemVer, non come semplici stringhe.
+- [x] Ignorare draft, prerelease e release con versione non valida.
+- [x] Non proporre downgrade se la versione installata è più nuova.
+- [x] Impostare timeout brevi nel modulo di rete.
+- [x] Trattare assenza di rete, timeout e rate limit come condizioni non fatali.
 - [ ] Non effettuare controlli automatici in sviluppo o durante i test.
-- [ ] Rendere configurabile l'origine delle release in fase di build, evitando URL sparsi nel
+- [x] Rendere configurabile l'origine delle release in fase di build, evitando URL sparsi nel
       codice.
 
 ### 1.2 Frequenza e preferenze
@@ -158,11 +158,11 @@ implementazione deve funzionare anche con la portable.
 
 ### 1.5 Test
 
-- [ ] Testare versione più nuova, uguale, più vecchia e non valida.
-- [ ] Testare draft e prerelease ignorate.
-- [ ] Testare risposta vuota o malformata.
-- [ ] Testare timeout, DNS/rete assente, HTTP 403/404/429 e HTTP 5xx.
-- [ ] Testare la scadenza delle 24 ore.
+- [x] Testare versione più nuova, uguale, più vecchia e non valida.
+- [x] Testare draft e prerelease ignorate.
+- [x] Testare risposta vuota o malformata.
+- [x] Testare timeout, DNS/rete assente, HTTP 403/404/429 e HTTP 5xx.
+- [x] Testare la regola di scadenza delle 24 ore.
 - [ ] Testare «Ignora questa versione» e la comparsa di una versione ancora successiva.
 - [ ] Testare che il controllo automatico non parta in sviluppo o nei test.
 - [ ] Testare la validazione dell'URL aperto esternamente.
@@ -453,20 +453,21 @@ Questa fase non deve ritardare la notifica dell'obiettivo 1 né la prima pubblic
 | 28 lug 2026 | MSIX rinviato | Il target di electron-builder 27 è ancora beta in una major alpha |
 | 28 lug 2026 | Auto-update distinto dalla semplice notifica | La portable e lo Store richiedono strategie diverse dagli installer diretti |
 | 28 lug 2026 | `tosdan/mockxy` è il repository canonico delle release | Codice, release e manifest degli aggiornamenti rimangono nello stesso repository |
+| 29 lug 2026 | Checker GitHub isolato da Electron e UI | Consente test locali, nessuna credenziale nel client e futura integrazione con updater diversi |
 
 ## Prossimo incremento consigliato
 
-Il primo incremento implementabile deve limitarsi all'obiettivo 1. Repository e URL delle
-release sono stati confermati; rimangono da completare le fondamenta su versione, tag e
-workflow minimo.
+Il contratto del release checker, i metadati del repository e il controllo delle versioni sono
+stati implementati. Il prossimo incremento deve collegare il checker al ciclo di vita
+Electron, alle preferenze globali e alla UI, senza introdurre ancora il download automatico.
 
-Sequenza proposta per il primo ciclo:
+Sequenza proposta per il prossimo ciclo:
 
-1. confermare la convenzione dei tag e uniformare i metadati di versione;
-2. creare il workflow di release minimo;
-3. scrivere il contratto e i test del release checker;
-4. implementare il controllo nel main process con timeout e cache;
-5. esporre IPC/preload;
-6. aggiungere notifica e controllo manuale alla UI;
-7. provare il flusso con una draft/release di test;
-8. aggiornare documentazione e spuntare l'obiettivo 1.
+1. leggere la versione da `app.getVersion()` e saltare i controlli automatici in sviluppo;
+2. salvare ultimo controllo riuscito e versione ignorata nelle preferenze globali;
+3. avviare il controllo ritardato senza bloccare la finestra;
+4. esporre IPC/preload per controllo manuale, stato e apertura sicura della release;
+5. aggiungere notifica e controllo manuale alla UI;
+6. creare il workflow di release minimo;
+7. provare il flusso con una release di test;
+8. aggiornare documentazione utente e completare l'obiettivo 1.
