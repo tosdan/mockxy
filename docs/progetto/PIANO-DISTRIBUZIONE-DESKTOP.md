@@ -167,7 +167,7 @@ implementazione deve funzionare anche con la portable.
 - [x] Testare che il controllo automatico non parta in sviluppo o nei test.
 - [x] Testare la validazione dell'URL aperto esternamente.
 - [x] Aggiungere un test d'integrazione IPC senza dipendere dalla rete reale.
-- [ ] Eseguire un collaudo manuale sulla portable Windows e sull'AppImage Linux.
+- [x] Eseguire un collaudo manuale sulla portable Windows e sull'AppImage Linux.
 
 ### 1.6 Documentazione e rilascio
 
@@ -175,16 +175,19 @@ implementazione deve funzionare anche con la portable.
 - [x] Documentare frequenza, dati richiesti e modalità per disattivarlo, se presente.
 - [x] Specificare che la prima versione notifica soltanto e non installa.
 - [ ] Inserire la funzionalità nelle note di rilascio.
-- [ ] Pubblicare una release di prova più nuova e verificare il flusso end-to-end.
+- [x] Pubblicare la prima release stabile che include il checker (`v1.2.0`) e verificare che
+      riconosca la versione pubblicata come corrente.
+- [ ] Verificare il flusso end-to-end «aggiornamento disponibile» da `v1.2.0` alla prima
+      release stabile successiva.
 
 ### Criteri di accettazione dell'obiettivo 1
 
 - [ ] Una build precedente rileva una release stabile successiva e mostra la notifica.
-- [ ] Il percorso funziona senza un server Mockxy dedicato.
+- [x] Il percorso funziona senza un server Mockxy dedicato.
 - [ ] L'app parte normalmente con rete assente o servizio remoto non disponibile.
 - [ ] La portable apre la pagina corretta per scaricare la nuova versione.
 - [ ] L'utente può ignorare una versione senza ignorare tutte quelle future.
-- [ ] Test e documentazione bilingue sono aggiornati.
+- [x] Test e documentazione bilingue sono aggiornati.
 
 ---
 
@@ -463,19 +466,20 @@ Questa fase non deve ritardare la notifica dell'obiettivo 1 né la prima pubblic
 
 | Data | Versione | Risultato | Passo successivo |
 |---|---|---|---|
-| 29 lug 2026 | `v1.2.0` | [Run 30410754736](https://github.com/tosdan/mockxy/actions/runs/30410754736) completato: test, portable Windows, AppImage Linux, checksum e draft release riusciti | Verificare i checksum, collaudare entrambi gli artefatti e pubblicare manualmente la draft |
+| 29 lug 2026 | `v1.2.0` | [Run 30410754736](https://github.com/tosdan/mockxy/actions/runs/30410754736) completato; checksum verificati; portable Windows e AppImage Linux collaudate; [release stabile](https://github.com/tosdan/mockxy/releases/tag/v1.2.0) pubblicata; il controllo manuale riconosce `v1.2.0` come versione corrente | Integrare nelle note le funzionalità escluse dalla generazione automatica e provare la notifica da `v1.2.0` alla prossima release stabile |
 
 ## Prossimo incremento consigliato
 
-Il primo run reale da tag ha prodotto correttamente la draft `v1.2.0`. La release rimane
-intenzionalmente non pubblica finché non sono stati collaudati gli artefatti.
+La `v1.2.0` è pubblicata e collaudata su Windows e Linux. Il checker raggiunge il canale
+stabile reale e riconosce correttamente che non esiste una versione più nuova. La prova della
+notifica «aggiornamento disponibile» resta differita alla prima release successiva, perché
+`v1.1.0` non conteneva ancora il checker.
 
 Sequenza proposta per il prossimo ciclo:
 
-1. scaricare dalla draft la portable Windows e l'AppImage Linux;
-2. verificare entrambi i file con i checksum SHA-256 pubblicati;
-3. collaudare avvio, apertura workspace e controllo aggiornamenti su entrambi i formati;
-4. verificare che gli artefatti non contengano credenziali;
-5. pubblicare manualmente la draft soltanto dopo il collaudo;
-6. provare con `v1.1.0` il rilevamento della release stabile `v1.2.0`;
-7. completare criteri di accettazione e note di rilascio dell'obiettivo 1.
+1. integrare manualmente le note della `v1.2.0`, nelle quali GitHub ha incluso soltanto le
+   modifiche provenienti da pull request;
+2. conservare per la prossima release la prova reale `v1.2.0` → versione successiva;
+3. definire in Partner Center identità e metadati del prodotto;
+4. aggiungere una build AppX locale separata dalle build portable;
+5. verificare manifest, firma di sviluppo e Windows App Certification Kit.
