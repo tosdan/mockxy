@@ -76,13 +76,20 @@ function prefsConfigDir() {
   return app.getPath("userData");
 }
 
-// Log degli errori su file: cartella logs/ accanto all'artefatto eseguito (AppImage, exe
-// portabile, eseguibile installato; in sviluppo electron/), con ripiego sulla cartella dati
-// utente se quella posizione non è scrivibile. Creato subito, non in whenReady: deve esserci
-// già per gli errori d'avvio.
+// Log degli errori su file: la build Store usa subito userData; le altre usano logs/ accanto
+// all'artefatto eseguito (AppImage, exe portabile, eseguibile installato; in sviluppo
+// electron/), con ripiego sulla cartella dati utente se quella posizione non è scrivibile.
+// Creato subito, non in whenReady: deve esserci già per gli errori d'avvio.
+const windowsStore = process.windowsStore === true;
+const userDataDir = app.getPath("userData");
 const errorLog = createErrorFileLog({
-  baseDir: resolveLogsBaseDir({ isPackaged: app.isPackaged, devDir: __dirname }),
-  fallbackBaseDir: app.getPath("userData"),
+  baseDir: resolveLogsBaseDir({
+    isPackaged: app.isPackaged,
+    devDir: __dirname,
+    windowsStore,
+    userDataDir,
+  }),
+  fallbackBaseDir: userDataDir,
   // Preferenza dell'utente (globale): spegnibile dalla dialog App Preferences, vedi prefs:set.
   enabled: getErrorLogEnabled(prefsConfigDir()),
 });
@@ -92,7 +99,7 @@ const errorLog = createErrorFileLog({
 // mai da sviluppo o test.
 const distributionChannel = detectDistributionChannel({
   isPackaged: app.isPackaged,
-  windowsStore: process.windowsStore === true,
+  windowsStore,
 });
 const checksEnabled = distributionChannel !== "store";
 const automaticChecksEnabled =

@@ -69,7 +69,7 @@ l'app a un servizio remoto.
       backend, UI ed Electron.
 - [x] Aggiungere un controllo CI che fallisca se le versioni divergono.
 - [x] Fare in modo che la versione mostrata nell'app provenga da `app.getVersion()`.
-- [ ] Definire la conversione per i pacchetti Windows a quattro componenti
+- [x] Definire la conversione per i pacchetti Windows a quattro componenti
       (`1.2.3` → `1.2.3.0`).
 
 ### 0.3 Workflow di release minimo
@@ -207,29 +207,31 @@ mantenendo disponibili gli altri formati.
   - publisher;
   - publisher display name;
   - product identity.
-- [ ] Non salvare nel repository credenziali Partner Center.
+- [x] Non salvare nel repository credenziali Partner Center.
 - [ ] Definire contatto di supporto e URL pubblici richiesti dalla scheda.
-- [ ] Verificare se serve un'informativa privacy e pubblicarla prima dell'invio.
+- [x] Verificare se serve un'informativa privacy.
+- [ ] Pubblicare l'informativa privacy prima dell'invio.
 
 ### 2.2 Strategia del pacchetto
 
-- [ ] Usare inizialmente il target AppX di `electron-builder 26`.
-- [ ] Non rendere `electron-builder 27` alpha una dipendenza della release stabile.
-- [ ] Mantenere AppX e portable come target separati, senza sovrascrivere artefatti.
-- [ ] Definire nomi artefatto e numerazione a quattro componenti.
+- [x] Usare inizialmente il target AppX di `electron-builder 26`.
+- [x] Non rendere `electron-builder 27` alpha una dipendenza della release stabile.
+- [x] Mantenere AppX e portable come target separati, senza sovrascrivere artefatti.
+- [x] Definire nomi artefatto e numerazione a quattro componenti.
 - [ ] Configurare l'identità esatta ricevuta da Partner Center.
-- [ ] Preparare tutte le immagini richieste dal manifest e dalla scheda Store.
-- [ ] Dichiarare soltanto le capability necessarie.
+- [x] Preparare le immagini richieste dal manifest AppX.
+- [ ] Preparare screenshot e immagini promozionali richiesti dalla scheda Store.
+- [x] Dichiarare soltanto le capability necessarie.
 - [ ] Motivare `runFullTrust` nelle note di certificazione.
-- [ ] Verificare il manifest generato invece di considerarlo corretto per costruzione.
+- [x] Verificare il manifest generato invece di considerarlo corretto per costruzione.
 
 ### 2.3 Comportamento specifico della build Store
 
-- [ ] Identificare a runtime la build Store in modo affidabile.
-- [ ] Disattivare il controllo GitHub e qualsiasi futuro `electron-updater` nella build Store.
+- [x] Identificare a runtime la build Store in modo affidabile.
+- [x] Disattivare il controllo GitHub e qualsiasi futuro `electron-updater` nella build Store.
 - [ ] Mostrare, se necessario, «Aggiornamenti gestiti da Microsoft Store».
-- [ ] Scrivere preferenze e log esclusivamente in directory consentite e persistenti.
-- [ ] Non tentare scritture nella directory di installazione protetta.
+- [x] Scrivere preferenze e log esclusivamente in directory consentite e persistenti.
+- [x] Non tentare scritture nella directory di installazione protetta.
 - [ ] Verificare l'accesso a workspace scelti fuori dal pacchetto.
 - [ ] Verificare file watching, handler e middleware JavaScript.
 - [ ] Verificare l'avvio dei server locali e l'accesso tramite loopback.
@@ -461,12 +463,14 @@ Questa fase non deve ritardare la notifica dell'obiettivo 1 né la prima pubblic
 | 29 lug 2026 | Build Store esclusa dal checker GitHub | Lo Store resta l'unica autorità per gli aggiornamenti del proprio pacchetto |
 | 29 lug 2026 | La workflow crea soltanto release draft | Test, smoke test e revisione delle note restano una barriera esplicita prima della visibilità pubblica |
 | 29 lug 2026 | `GITHUB_TOKEN` con scrittura soltanto nel job finale | Applica il minimo privilegio e non richiede credenziali permanenti di pubblicazione |
+| 29 lug 2026 | Primo AppX x64 con baseline Windows 11 (`10.0.22000.0`) | Evita di dichiarare compatibilità con Windows 10 non collaudata; la portable resta disponibile e un eventuale supporto LTSC/ESU richiederà test dedicati |
 
 ## Registro esecuzioni
 
 | Data | Versione | Risultato | Passo successivo |
 |---|---|---|---|
 | 29 lug 2026 | `v1.2.0` | [Run 30410754736](https://github.com/tosdan/mockxy/actions/runs/30410754736) completato; checksum verificati; portable Windows e AppImage Linux collaudate; [release stabile](https://github.com/tosdan/mockxy/releases/tag/v1.2.0) pubblicata; il controllo manuale riconosce `v1.2.0` come versione corrente | Integrare nelle note le funzionalità escluse dalla generazione automatica e provare la notifica da `v1.2.0` alla prossima release stabile |
+| 29 lug 2026 | `1.2.0` AppX locale | Prototipo x64 non firmato creato con identità `Mockxy.LocalTest`; manifest ispezionato: versione `1.2.0.0`, Windows 11+, asset Mockxy, `runFullTrust` e `privateNetworkClientServer`; nessuna configurazione Store inclusa nel pacchetto | Riservare il prodotto in Partner Center, usare l'identità reale, firmare per il test locale ed eseguire WACK |
 
 ## Prossimo incremento consigliato
 
@@ -480,6 +484,9 @@ Sequenza proposta per il prossimo ciclo:
 1. integrare manualmente le note della `v1.2.0`, nelle quali GitHub ha incluso soltanto le
    modifiche provenienti da pull request;
 2. conservare per la prossima release la prova reale `v1.2.0` → versione successiva;
-3. definire in Partner Center identità e metadati del prodotto;
-4. aggiungere una build AppX locale separata dalle build portable;
-5. verificare manifest, firma di sviluppo e Windows App Certification Kit.
+3. scegliere il tipo di account, riservare `Mockxy` in Partner Center e copiare l'identità
+   assegnata nella configurazione locale;
+4. pubblicare privacy policy e contatto di supporto;
+5. creare un certificato di sviluppo coerente con il publisher;
+6. installare e collaudare l'AppX, quindi eseguire Windows App Certification Kit;
+7. aggiungere il job CI AppX soltanto dopo avere validato il pacchetto candidato.

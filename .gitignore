@@ -23,6 +23,7 @@ workspace-test/.run/
 .env.*
 !.env.example
 !.env.*.example
+electron/store-identity.json
 
 # Chiavi e certificati privati
 *.key

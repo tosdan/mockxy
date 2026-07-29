@@ -48,6 +48,18 @@ describe("error-log (log errori su file dell'app desktop)", () => {
       expect(dir).toBe("/opt/Mockxy");
     });
 
+    test("pacchetto Store: usa direttamente la directory dati utente", () => {
+      const dir = resolveLogsBaseDir({
+        env: {},
+        execPath: "C:\\Program Files\\WindowsApps\\Mockxy\\Mockxy.exe",
+        isPackaged: true,
+        devDir: "/repo/electron",
+        windowsStore: true,
+        userDataDir: "C:\\Users\\x\\AppData\\Roaming\\Mockxy",
+      });
+      expect(dir).toBe("C:\\Users\\x\\AppData\\Roaming\\Mockxy");
+    });
+
     test("sviluppo (non impacchettato): la cartella electron/ del repo", () => {
       const dir = resolveLogsBaseDir({
         env: {},
@@ -85,15 +97,15 @@ describe("error-log (log errori su file dell'app desktop)", () => {
 
     test("posizione primaria non scrivibile: ripiega sulla cartella di fallback", async () => {
       const fallback = await createTempDir("mockxy-errlog-fb-");
-      const readOnly = await createTempDir("mockxy-errlog-ro-");
+      const blockedParent = await createTempDir("mockxy-errlog-blocked-");
+      const blocked = path.join(blockedParent, "non-e-una-directory");
       try {
-        await fs.promises.chmod(readOnly, 0o555);
-        const log = createErrorFileLog({ baseDir: readOnly, fallbackBaseDir: fallback });
+        await fs.promises.writeFile(blocked, "file");
+        const log = createErrorFileLog({ baseDir: blocked, fallbackBaseDir: fallback });
         expect(log.logsDir).toBe(path.join(fallback, LOGS_DIR_NAME));
         expect(log.logError("startup", new Error("boom"))).toBe(true);
       } finally {
-        await fs.promises.chmod(readOnly, 0o755);
-        await removeDir(readOnly);
+        await removeDir(blockedParent);
         await removeDir(fallback);
       }
     });
@@ -119,15 +131,15 @@ describe("error-log (log errori su file dell'app desktop)", () => {
     });
 
     test("nessuna posizione scrivibile: il log si disattiva senza lanciare", async () => {
-      const readOnly = await createTempDir("mockxy-errlog-ro2-");
+      const blockedParent = await createTempDir("mockxy-errlog-blocked2-");
+      const blocked = path.join(blockedParent, "non-e-una-directory");
       try {
-        await fs.promises.chmod(readOnly, 0o555);
-        const log = createErrorFileLog({ baseDir: readOnly, fallbackBaseDir: readOnly });
+        await fs.promises.writeFile(blocked, "file");
+        const log = createErrorFileLog({ baseDir: blocked, fallbackBaseDir: blocked });
         expect(log.logsDir).toBeNull();
         expect(log.logError("startup", new Error("boom"))).toBe(false);
       } finally {
-        await fs.promises.chmod(readOnly, 0o755);
-        await removeDir(readOnly);
+        await removeDir(blockedParent);
       }
     });
   });
