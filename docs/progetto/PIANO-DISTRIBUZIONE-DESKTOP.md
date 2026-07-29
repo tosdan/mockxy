@@ -86,10 +86,10 @@ l'app a un servizio remoto.
 
 ### Criteri di accettazione dell'obiettivo 0
 
-- [ ] Un tag di prova produce una draft release completa senza operazioni locali non
+- [x] Un tag di prova produce una draft release completa senza operazioni locali non
       documentate.
-- [ ] Versione, tag e versione mostrata dall'app coincidono.
-- [ ] Una release incompleta non diventa visibile ai client.
+- [x] Versione, tag e versione mostrata dall'app coincidono.
+- [x] Una release incompleta non diventa visibile ai client.
 - [ ] Nessuna credenziale è presente negli artefatti.
 
 ---
@@ -459,17 +459,23 @@ Questa fase non deve ritardare la notifica dell'obiettivo 1 né la prima pubblic
 | 29 lug 2026 | La workflow crea soltanto release draft | Test, smoke test e revisione delle note restano una barriera esplicita prima della visibilità pubblica |
 | 29 lug 2026 | `GITHUB_TOKEN` con scrittura soltanto nel job finale | Applica il minimo privilegio e non richiede credenziali permanenti di pubblicazione |
 
+## Registro esecuzioni
+
+| Data | Versione | Risultato | Passo successivo |
+|---|---|---|---|
+| 29 lug 2026 | `v1.2.0` | [Run 30410754736](https://github.com/tosdan/mockxy/actions/runs/30410754736) completato: test, portable Windows, AppImage Linux, checksum e draft release riusciti | Verificare i checksum, collaudare entrambi gli artefatti e pubblicare manualmente la draft |
+
 ## Prossimo incremento consigliato
 
-Il checker è collegato al ciclo di vita Electron e la workflow di release draft è definita.
-Restano il primo run reale da tag e il collaudo degli artefatti prima di chiudere l'obiettivo 1.
+Il primo run reale da tag ha prodotto correttamente la draft `v1.2.0`. La release rimane
+intenzionalmente non pubblica finché non sono stati collaudati gli artefatti.
 
 Sequenza proposta per il prossimo ciclo:
 
-1. scegliere e applicare la prossima versione stabile;
-2. committare il workflow con working tree pulita;
-3. creare e pubblicare il tag corrispondente;
-4. verificare che il run produca la draft con entrambi gli artefatti e i checksum;
-5. provare il controllo aggiornamenti tra due versioni reali;
-6. collaudare la notifica su portable Windows e AppImage Linux;
+1. scaricare dalla draft la portable Windows e l'AppImage Linux;
+2. verificare entrambi i file con i checksum SHA-256 pubblicati;
+3. collaudare avvio, apertura workspace e controllo aggiornamenti su entrambi i formati;
+4. verificare che gli artefatti non contengano credenziali;
+5. pubblicare manualmente la draft soltanto dopo il collaudo;
+6. provare con `v1.1.0` il rilevamento della release stabile `v1.2.0`;
 7. completare criteri di accettazione e note di rilascio dell'obiettivo 1.
