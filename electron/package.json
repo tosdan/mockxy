@@ -59,6 +59,14 @@
     },
     "portable": {
       "artifactName": "Mockxy-${version}-portable.exe"
+    },
+    "linux": {
+      "target": "AppImage",
+      "icon": "build/icon.png",
+      "category": "Development"
+    },
+    "appImage": {
+      "artifactName": "Mockxy-${version}-x86_64.AppImage"
     }
   }
 }

@@ -1,0 +1,177 @@
+name: Desktop release draft
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+concurrency:
+  group: desktop-release-${{ github.ref }}
+  cancel-in-progress: false
+
+# Tutti i job partono in sola lettura. Soltanto quello finale, dopo test e build, ottiene
+# contents: write per creare la bozza della release con il GITHUB_TOKEN effimero del run.
+permissions:
+  contents: read
+
+jobs:
+  engine:
+    name: Engine + Electron tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Verifica versione e tag
+        run: npm run check:release-tag -- "${GITHUB_REF_NAME}"
+      - run: npm test
+
+  ui-e2e:
+    name: UI tests + E2E
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            mockxy-ui/package-lock.json
+      - run: npm ci
+      - run: npm --prefix mockxy-ui ci
+      - run: npm --prefix mockxy-ui test -- --watch=false
+      - name: Installa Chromium per gli E2E
+        run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e
+      - name: Report E2E (solo su fallimento)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-e2e-report
+          path: |
+            test-results/
+            playwright-report/
+          if-no-files-found: ignore
+          retention-days: 14
+
+  windows-portable:
+    name: Windows portable x64
+    needs: [engine, ui-e2e]
+    runs-on: windows-latest
+    timeout-minutes: 25
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: "false"
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: |
+            mockxy-ui/package-lock.json
+            electron/package-lock.json
+      - run: npm --prefix mockxy-ui ci
+      - run: npm --prefix electron ci
+      - name: Costruisci la portable
+        run: npm run dist:electron:win
+      - name: Conserva la portable
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-portable
+          path: electron/dist/Mockxy-*-portable.exe
+          if-no-files-found: error
+          retention-days: 14
+
+  linux-appimage:
+    name: Linux AppImage x64
+    needs: [engine, ui-e2e]
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: "false"
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: |
+            mockxy-ui/package-lock.json
+            electron/package-lock.json
+      - run: npm --prefix mockxy-ui ci
+      - run: npm --prefix electron ci
+      - name: Costruisci l'AppImage
+        run: npm run dist:electron:linux
+      - name: Conserva l'AppImage
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-appimage
+          path: electron/dist/Mockxy-*-x86_64.AppImage
+          if-no-files-found: error
+          retention-days: 14
+
+  draft-release:
+    name: Create draft release
+    needs: [windows-portable, linux-appimage]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - name: Scarica la portable
+        uses: actions/download-artifact@v5
+        with:
+          name: windows-portable
+          path: release-assets
+      - name: Scarica l'AppImage
+        uses: actions/download-artifact@v5
+        with:
+          name: linux-appimage
+          path: release-assets
+      - name: Verifica artefatti e genera SHA-256
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          windows="release-assets/Mockxy-${version}-portable.exe"
+          linux="release-assets/Mockxy-${version}-x86_64.AppImage"
+          test -f "${windows}"
+          test -f "${linux}"
+          (
+            cd release-assets
+            sha256sum \
+              "Mockxy-${version}-portable.exe" \
+              "Mockxy-${version}-x86_64.AppImage" \
+              > SHA256SUMS.txt
+          )
+      - name: Conserva il bundle finale
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-assets-${{ github.ref_name }}
+          path: release-assets/
+          if-no-files-found: error
+          retention-days: 30
+      - name: Crea la GitHub Release in bozza
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          gh release create "${GITHUB_REF_NAME}" \
+            "release-assets/Mockxy-${version}-portable.exe#Windows portable x64" \
+            "release-assets/Mockxy-${version}-x86_64.AppImage#Linux AppImage x64" \
+            "release-assets/SHA256SUMS.txt#SHA-256 checksums" \
+            --draft \
+            --generate-notes \
+            --title "Mockxy ${version}" \
+            --verify-tag

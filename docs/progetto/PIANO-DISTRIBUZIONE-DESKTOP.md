@@ -74,15 +74,15 @@ l'app a un servizio remoto.
 
 ### 0.3 Workflow di release minimo
 
-- [ ] Creare una workflow avviata da un tag di versione.
-- [ ] Eseguire test backend, Electron, frontend ed E2E prima della pubblicazione.
-- [ ] Costruire almeno gli artefatti già distribuiti oggi.
-- [ ] Creare inizialmente la GitHub Release come bozza.
-- [ ] Caricare artefatti, checksum e note di rilascio.
-- [ ] Rendere pubblica la release soltanto dopo il completamento di tutti i job obbligatori.
-- [ ] Conservare token e credenziali esclusivamente nei secret della CI.
-- [ ] Verificare che nessun token venga incluso in `app.asar`, manifest o artefatti.
-- [ ] Documentare una procedura manuale di annullamento o ritiro di una release difettosa.
+- [x] Creare una workflow avviata da un tag di versione.
+- [x] Eseguire test backend, Electron, frontend ed E2E prima della pubblicazione.
+- [x] Costruire almeno gli artefatti già distribuiti oggi.
+- [x] Creare inizialmente la GitHub Release come bozza.
+- [x] Caricare artefatti, checksum e note di rilascio.
+- [x] Rendere pubblica la release soltanto dopo il completamento di tutti i job obbligatori.
+- [x] Conservare token e credenziali esclusivamente nei secret della CI.
+- [x] Verificare che nessun token venga incluso in `app.asar`, manifest o artefatti.
+- [x] Documentare una procedura manuale di annullamento o ritiro di una release difettosa.
 
 ### Criteri di accettazione dell'obiettivo 0
 
@@ -456,18 +456,20 @@ Questa fase non deve ritardare la notifica dell'obiettivo 1 né la prima pubblic
 | 29 lug 2026 | Checker GitHub isolato da Electron e UI | Consente test locali, nessuna credenziale nel client e futura integrazione con updater diversi |
 | 29 lug 2026 | Controllo automatico dopo 5 secondi, massimo ogni 24 ore | Non rallenta l'avvio e limita le richieste remote; il controllo manuale resta sempre esplicito |
 | 29 lug 2026 | Build Store esclusa dal checker GitHub | Lo Store resta l'unica autorità per gli aggiornamenti del proprio pacchetto |
+| 29 lug 2026 | La workflow crea soltanto release draft | Test, smoke test e revisione delle note restano una barriera esplicita prima della visibilità pubblica |
+| 29 lug 2026 | `GITHUB_TOKEN` con scrittura soltanto nel job finale | Applica il minimo privilegio e non richiede credenziali permanenti di pubblicazione |
 
 ## Prossimo incremento consigliato
 
-Il checker è ora collegato al ciclo di vita Electron, alle preferenze globali, a IPC/preload
-e alla UI bilingue, senza download automatico. Restano il collaudo sugli artefatti reali e il
-workflow di pubblicazione necessario per provare il percorso completo.
+Il checker è collegato al ciclo di vita Electron e la workflow di release draft è definita.
+Restano il primo run reale da tag e il collaudo degli artefatti prima di chiudere l'obiettivo 1.
 
 Sequenza proposta per il prossimo ciclo:
 
-1. creare il workflow di release minimo avviato da un tag;
-2. eseguire test e build prima di creare una draft release;
-3. allegare artefatti e checksum alla draft;
-4. provare il controllo aggiornamenti tra due versioni reali;
-5. collaudare la notifica su portable Windows e AppImage Linux;
-6. completare criteri di accettazione e note di rilascio dell'obiettivo 1.
+1. scegliere e applicare la prossima versione stabile;
+2. committare il workflow con working tree pulita;
+3. creare e pubblicare il tag corrispondente;
+4. verificare che il run produca la draft con entrambi gli artefatti e i checksum;
+5. provare il controllo aggiornamenti tra due versioni reali;
+6. collaudare la notifica su portable Windows e AppImage Linux;
+7. completare criteri di accettazione e note di rilascio dell'obiettivo 1.
