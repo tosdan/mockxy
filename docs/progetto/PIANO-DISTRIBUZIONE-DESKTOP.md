@@ -1,13 +1,15 @@
 # Piano operativo: aggiornamenti e distribuzione desktop
 
 Stato del piano: **attivo**
-Ultimo aggiornamento: 29 luglio 2026
+Ultimo aggiornamento: 1 agosto 2026
 
-Questo documento è la checklist operativa per introdurre, nell'ordine:
+Questo documento è la checklist operativa per:
 
-1. la notifica della disponibilità di una nuova versione;
-2. la distribuzione tramite Microsoft Store;
-3. le restanti build Windows e Linux e, dove appropriato, il loro aggiornamento automatico.
+1. mantenere affidabile la notifica della disponibilità di una nuova versione;
+2. aggiungere le distribuzioni installabili dirette Windows e Linux;
+3. introdurre, dove appropriato, il loro aggiornamento automatico;
+4. riprendere infine la pubblicazione tramite Microsoft Store, oggi in pausa in attesa
+   dell'account Partner Center.
 
 La ricerca tecnica e le motivazioni delle scelte sono raccolte in
 [DISTRIBUZIONE-DESKTOP.md](DISTRIBUZIONE-DESKTOP.md). Questo file deve invece descrivere
@@ -29,9 +31,84 @@ sempre lo stato reale dell'implementazione.
 |---:|---|---|---|
 | 0 | Fondamenta della pubblicazione | In corso | — |
 | 1 | Notifica di un aggiornamento disponibile | In corso | obiettivo 0 |
-| 2 | Build e pubblicazione Microsoft Store | Da iniziare | obiettivi 0 e 1 |
-| 3 | Altre build Windows e Linux | Da iniziare | obiettivo 0; preferibilmente 1 e 2 |
+| 2 | Build e pubblicazione Microsoft Store | In pausa dopo il prototipo AppX | account Partner Center |
+| 3 | Altre build Windows e Linux | Prossimo obiettivo | obiettivi 0 e 1 |
 | 4 | Aggiornamenti automatici e formati aggiuntivi | Da iniziare | artefatti della fase 3 |
+
+## Sequenza operativa attiva
+
+Questa è la fonte dell'ordine di esecuzione. Le sezioni «Obiettivo 0–4» restano le checklist
+tecniche di dettaglio: un punto di questa sequenza si chiude soltanto quando sono soddisfatte
+anche le relative verifiche dettagliate.
+
+### A. Mettere in pausa Microsoft Store a un checkpoint sicuro
+
+- [x] Conservare il prototipo AppX x64, gli asset e la configurazione parametrizzata già
+      verificati.
+- [x] Impedire che una build candidata usi l'identità locale di test.
+- [x] Registrare che account, identità Partner Center, privacy policy, firma di test, WACK e
+      invio restano sospesi, non cancellati.
+- [x] Stabilire che la portable e le build dirette possono avanzare senza dipendere dallo
+      Store.
+
+### B. Aggiungere l'installer Windows NSIS
+
+- [ ] Completare le scelte e l'implementazione della sezione 3.3.
+- [ ] Mantenere portable e NSIS come artefatti distinti e coesistenti.
+- [ ] Collaudare installazione, primo avvio, upgrade, disinstallazione e conservazione dei dati
+      utente.
+- [ ] Documentare firma assente, possibile avviso SmartScreen e aggiornamento inizialmente
+      manuale.
+- [ ] Committare il checkpoint NSIS prima di iniziare i pacchetti Linux.
+
+### C. Aggiungere i pacchetti Linux deb e rpm
+
+- [ ] Stabilizzare prima il target deb completando la sezione 3.5.
+- [ ] Aggiungere rpm soltanto dopo il collaudo deb, completando la sezione 3.6.
+- [ ] Verificare installazione, menu applicazioni, rimozione, workspace, server locali, log e
+      preferenze sulle distribuzioni dichiarate.
+- [ ] Documentare che i file pubblicati su GitHub non costituiscono repository APT o RPM.
+- [ ] Committare separatamente i checkpoint deb e rpm.
+
+### D. Estendere CI e GitHub Release a tutti gli artefatti
+
+- [ ] Completare la matrice della sezione 3.7 per portable, NSIS, AppImage, deb e rpm.
+- [ ] Generare e verificare checksum SHA-256 per ogni artefatto.
+- [ ] Creare sempre una draft release e impedirne la pubblicazione se un job obbligatorio
+      fallisce.
+- [ ] Eseguire smoke test manuali su almeno una macchina Windows e una Linux prima della
+      pubblicazione.
+
+### E. Pubblicare la release successiva e chiudere la prova della notifica
+
+- [ ] Scegliere la nuova versione in base alle modifiche effettive; `v1.3.0` è la candidata se
+      introduce le nuove distribuzioni.
+- [ ] Integrare note di rilascio e tabella comparativa dei formati.
+- [ ] Pubblicare la release soltanto dopo il collaudo della draft.
+- [ ] Avviare la `v1.2.0` e verificare che proponga la nuova release stabile.
+- [ ] Verificare apertura della pagina corretta e «Ignora questa versione».
+- [ ] Chiudere i criteri ancora aperti dell'obiettivo 1.
+
+### F. Introdurre gli aggiornamenti automatici compatibili
+
+- [ ] Completare prima NSIS N → N+1 secondo la sezione 4.1.
+- [ ] Valutare e collaudare separatamente AppImage N → N+1 da posizione scrivibile.
+- [ ] Lasciare portable, deb e rpm in aggiornamento manuale finché non esiste un meccanismo
+      specifico verificato.
+- [ ] Garantire consenso, possibilità di rimandare il riavvio e conservazione di workspace e
+      preferenze.
+- [ ] Non attivare mai l'updater GitHub nella futura build Store.
+
+### G. Riprendere la pubblicazione Microsoft Store
+
+- [ ] Creare e verificare l'account Partner Center.
+- [ ] Riservare il prodotto `Mockxy` e copiare l'identità assegnata.
+- [ ] Pubblicare privacy policy e contatto di supporto.
+- [ ] Generare il candidato AppX con identità reale e firmarne una copia per il test locale.
+- [ ] Collaudare workspace, loopback, handler, sessione e aggiornamento sulla build installata.
+- [ ] Eseguire WACK, preparare listing e note per i certificatori.
+- [ ] Caricare manualmente il primo pacchetto mantenendo sospesa la pubblicazione fino al
+      completamento della certificazione e del collaudo Store.
 
 ## Attività già concluse
 
@@ -41,7 +118,8 @@ sempre lo stato reale dell'implementazione.
 - [x] Analizzata la fattibilità delle build AppX/MSIX, NSIS, AppImage, deb e rpm.
 - [x] Verificato che il Microsoft Store accetta ancora AppX.
 - [x] Verificato che firma e onboarding Store possono essere gratuiti usando il nuovo flusso.
-- [x] Scelto l'ordine di lavoro: notifica, Store, altre build.
+- [x] Riorganizzato l'ordine operativo dopo il prototipo AppX: build dirette e aggiornamenti,
+      poi ripresa Store.
 
 ---
 
@@ -196,6 +274,9 @@ implementazione deve funzionare anche con la portable.
 Scopo: distribuire una build installabile, certificata e aggiornata dal Microsoft Store,
 mantenendo disponibili gli altri formati.
 
+> **Stato:** in pausa al checkpoint del prototipo AppX. Riprendere soltanto nella fase G della
+> sequenza operativa, dopo la creazione dell'account Partner Center.
+
 ### 2.1 Account e identità
 
 - [ ] Scegliere consapevolmente account Partner Center `Individual` o `Company`.
@@ -278,6 +359,8 @@ mantenendo disponibili gli altri formati.
 ## Obiettivo 3 — Restanti build dirette Windows e Linux
 
 Scopo: offrire libertà di scelta senza moltiplicare configurazioni e comportamenti incoerenti.
+
+> **Stato:** obiettivo attivo. Il primo incremento è Windows NSIS (fase B).
 
 ### 3.1 Configurazione comune
 
@@ -464,6 +547,7 @@ Questa fase non deve ritardare la notifica dell'obiettivo 1 né la prima pubblic
 | 29 lug 2026 | La workflow crea soltanto release draft | Test, smoke test e revisione delle note restano una barriera esplicita prima della visibilità pubblica |
 | 29 lug 2026 | `GITHUB_TOKEN` con scrittura soltanto nel job finale | Applica il minimo privilegio e non richiede credenziali permanenti di pubblicazione |
 | 29 lug 2026 | Primo AppX x64 con baseline Windows 11 (`10.0.22000.0`) | Evita di dichiarare compatibilità con Windows 10 non collaudata; la portable resta disponibile e un eventuale supporto LTSC/ESU richiederà test dedicati |
+| 1 ago 2026 | Microsoft Store in pausa; build dirette come percorso attivo | L'AppX è a un checkpoint riutilizzabile, mentre account e identità Partner Center sono un blocco esterno che non deve fermare NSIS, deb e rpm |
 
 ## Registro esecuzioni
 
@@ -474,19 +558,7 @@ Questa fase non deve ritardare la notifica dell'obiettivo 1 né la prima pubblic
 
 ## Prossimo incremento consigliato
 
-La `v1.2.0` è pubblicata e collaudata su Windows e Linux. Il checker raggiunge il canale
-stabile reale e riconosce correttamente che non esiste una versione più nuova. La prova della
-notifica «aggiornamento disponibile» resta differita alla prima release successiva, perché
-`v1.1.0` non conteneva ancora il checker.
-
-Sequenza proposta per il prossimo ciclo:
-
-1. integrare manualmente le note della `v1.2.0`, nelle quali GitHub ha incluso soltanto le
-   modifiche provenienti da pull request;
-2. conservare per la prossima release la prova reale `v1.2.0` → versione successiva;
-3. scegliere il tipo di account, riservare `Mockxy` in Partner Center e copiare l'identità
-   assegnata nella configurazione locale;
-4. pubblicare privacy policy e contatto di supporto;
-5. creare un certificato di sviluppo coerente con il publisher;
-6. installare e collaudare l'AppX, quindi eseguire Windows App Certification Kit;
-7. aggiungere il job CI AppX soltanto dopo avere validato il pacchetto candidato.
+Implementare esclusivamente la fase B: installer Windows NSIS. Prima di modificare il codice
+vanno chiuse le scelte one-click/assistito, installazione per utente, directory selezionabile,
+collegamenti e comportamento dell'uninstaller. Portable, AppX e workflow di release non devono
+essere modificati nello stesso checkpoint salvo quanto strettamente necessario alla coesistenza.
