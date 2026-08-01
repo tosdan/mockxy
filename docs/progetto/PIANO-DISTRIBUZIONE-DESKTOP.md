@@ -54,12 +54,14 @@ anche le relative verifiche dettagliate.
 ### B. Aggiungere l'installer Windows NSIS
 
 - [ ] Completare le scelte e l'implementazione della sezione 3.3.
-- [ ] Mantenere portable e NSIS come artefatti distinti e coesistenti.
-- [ ] Collaudare installazione, primo avvio, upgrade, disinstallazione e conservazione dei dati
-      utente.
-- [ ] Documentare firma assente, possibile avviso SmartScreen e aggiornamento inizialmente
+- [x] Mantenere portable e NSIS come artefatti distinti e coesistenti nella configurazione di
+      build.
+- [x] Collaudare installazione, primo avvio, reinstallazione, disinstallazione e conservazione dei
+      dati utente.
+- [ ] Collaudare un vero upgrade N → N+1 alla prossima versione.
+- [x] Documentare firma assente, possibile avviso SmartScreen e aggiornamento inizialmente
       manuale.
-- [ ] Committare il checkpoint NSIS prima di iniziare i pacchetti Linux.
+- [x] Committare il checkpoint NSIS prima di iniziare i pacchetti Linux.
 
 ### C. Aggiungere i pacchetti Linux deb e rpm
 
@@ -364,11 +366,11 @@ Scopo: offrire libertà di scelta senza moltiplicare configurazioni e comportame
 
 ### 3.1 Configurazione comune
 
-- [ ] Separare configurazione condivisa e configurazioni specifiche dei target.
-- [ ] Produrre tutti gli artefatti dalla stessa sorgente e versione.
-- [ ] Inserire in ogni build un identificatore non ambiguo del formato.
-- [ ] Normalizzare nome prodotto, icone, copyright, licenza e metadati.
-- [ ] Decidere inizialmente l'architettura supportata; proposta: x64.
+- [x] Separare configurazione condivisa e configurazioni specifiche dei target.
+- [x] Produrre tutti gli artefatti dalla stessa sorgente e versione.
+- [x] Inserire in ogni build un identificatore non ambiguo del formato.
+- [x] Normalizzare nome prodotto, icone, copyright, licenza e metadati.
+- [x] Decidere inizialmente l'architettura supportata: x64.
 - [ ] Pubblicare checksum SHA-256 per tutti gli artefatti diretti.
 - [ ] Generare una distinta degli artefatti attesi e fallire la CI se ne manca uno.
 - [ ] Pubblicare una tabella che spieghi installazione, firma e aggiornamenti di ogni formato.
@@ -385,15 +387,23 @@ Scopo: offrire libertà di scelta senza moltiplicare configurazioni e comportame
 
 ### 3.3 Windows NSIS
 
-- [ ] Aggiungere un target NSIS per utente senza privilegi amministrativi.
-- [ ] Decidere installer one-click oppure assistito.
-- [ ] Definire collegamenti Start/Desktop e comportamento dell'uninstaller.
-- [ ] Non cancellare dati utente per impostazione predefinita durante la disinstallazione.
-- [ ] Verificare installazione pulita, reinstallazione, upgrade e disinstallazione.
+- [x] Aggiungere un target NSIS per utente senza privilegi amministrativi.
+- [x] Decidere installer one-click oppure assistito: one-click.
+- [x] Definire collegamenti Start/Desktop e comportamento dell'uninstaller: collegamento Start,
+      collegamento Start di recupero con `--no-restore-workspaces`, nessun collegamento desktop,
+      avvio al termine e dati utente conservati.
+- [x] Chiedere conferma prima di ogni installazione interattiva, senza bloccare future esecuzioni
+      silenziose.
+- [x] Non cancellare dati utente per impostazione predefinita durante la disinstallazione.
+- [x] Verificare installazione pulita, reinstallazione e disinstallazione.
+- [x] Verificare conferma, annullamento, visibilità delle due voci nel menu Start moderno,
+      funzionamento dell'avvio di recupero e rimozione dei collegamenti.
+- [ ] Verificare un vero upgrade N → N+1.
 - [ ] Verificare coesistenza con portable e Store.
-- [ ] Integrare la notifica realizzata nell'obiettivo 1.
-- [ ] Documentare l'assenza di firma per la distribuzione diretta.
-- [ ] Decidere separatamente se consentire auto-update NSIS prima di disporre di una firma.
+- [x] Integrare la notifica realizzata nell'obiettivo 1.
+- [x] Documentare l'assenza di firma per la distribuzione diretta.
+- [x] Decidere separatamente se consentire auto-update NSIS prima di disporre di una firma:
+      inizialmente no, download e installazione restano manuali.
 
 ### 3.4 Linux AppImage
 
@@ -548,6 +558,7 @@ Questa fase non deve ritardare la notifica dell'obiettivo 1 né la prima pubblic
 | 29 lug 2026 | `GITHUB_TOKEN` con scrittura soltanto nel job finale | Applica il minimo privilegio e non richiede credenziali permanenti di pubblicazione |
 | 29 lug 2026 | Primo AppX x64 con baseline Windows 11 (`10.0.22000.0`) | Evita di dichiarare compatibilità con Windows 10 non collaudata; la portable resta disponibile e un eventuale supporto LTSC/ESU richiederà test dedicati |
 | 1 ago 2026 | Microsoft Store in pausa; build dirette come percorso attivo | L'AppX è a un checkpoint riutilizzabile, mentre account e identità Partner Center sono un blocco esterno che non deve fermare NSIS, deb e rpm |
+| 1 ago 2026 | NSIS one-click x64 per utente, autore `Mockxy` | Non richiede amministratore; chiede conferma prima dell'installazione interattiva, crea collegamenti Start normale e di recupero, conserva `userData` alla disinstallazione e rimanda firma e auto-update a incrementi dedicati |
 
 ## Registro esecuzioni
 
@@ -555,10 +566,10 @@ Questa fase non deve ritardare la notifica dell'obiettivo 1 né la prima pubblic
 |---|---|---|---|
 | 29 lug 2026 | `v1.2.0` | [Run 30410754736](https://github.com/tosdan/mockxy/actions/runs/30410754736) completato; checksum verificati; portable Windows e AppImage Linux collaudate; [release stabile](https://github.com/tosdan/mockxy/releases/tag/v1.2.0) pubblicata; il controllo manuale riconosce `v1.2.0` come versione corrente | Integrare nelle note le funzionalità escluse dalla generazione automatica e provare la notifica da `v1.2.0` alla prossima release stabile |
 | 29 lug 2026 | `1.2.0` AppX locale | Prototipo x64 non firmato creato con identità `Mockxy.LocalTest`; manifest ispezionato: versione `1.2.0.0`, Windows 11+, asset Mockxy, `runFullTrust` e `privateNetworkClientServer`; nessuna configurazione Store inclusa nel pacchetto | Riservare il prodotto in Partner Center, usare l'identità reale, firmare per il test locale ed eseguire WACK |
+| 1 ago 2026 | `1.2.0` NSIS locale | Creato `Mockxy-1.2.0-setup-x64.exe` one-click per utente; collaudati installazione, primo avvio, multi-workspace, ripristino sessione, reinstallazione, disinstallazione con conservazione dei dati, `--no-restore-workspaces`, conferma/annullamento e rimozione dei collegamenti. Dopo che Windows 11 aveva deduplicato le due voci Start, al collegamento di recupero è stato assegnato l'AppUserModelID distinto `com.mockxy.desktop.recovery`: visibilità e funzionamento nel menu moderno verificati (SHA-256 `AD0713675F8B6EB9B122459A1DEBA0448155DA58CA99167A665A493B3372A2DD`); 123 test Electron superati | Stabilizzare il target Linux deb; l'upgrade reale NSIS N → N+1 resta rinviato alla prossima versione |
 
 ## Prossimo incremento consigliato
 
-Implementare esclusivamente la fase B: installer Windows NSIS. Prima di modificare il codice
-vanno chiuse le scelte one-click/assistito, installazione per utente, directory selezionabile,
-collegamenti e comportamento dell'uninstaller. Portable, AppX e workflow di release non devono
-essere modificati nello stesso checkpoint salvo quanto strettamente necessario alla coesistenza.
+Iniziare la fase C stabilizzando esclusivamente il pacchetto Linux deb: chiudere prima le decisioni
+su metadati, dipendenze e distribuzioni da collaudare, senza introdurre rpm nello stesso checkpoint.
+L'upgrade reale NSIS N → N+1 resta una verifica differita alla prossima versione.

@@ -92,7 +92,8 @@ editable from the same dialog.
 
 Cross-workspace user preferences, saved in Electron's user data directory
 (`electron/global-prefs.js`); in the Windows portable build they are instead next to the executable.
-Not per-workspace.
+The installed NSIS build uses the user data directory and does not automatically import portable
+preferences. Not per-workspace.
 
 - `recentWorkspaces` — list of recently opened workspaces (most recent first).
 - `window` — size/position/state of the last window, to reopen it as it was.

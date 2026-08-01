@@ -1,8 +1,9 @@
 # The desktop app
 
-The Windows desktop app is a single **portable** executable: no installation, engine and UI
-built in, preferences that travel next to the executable. It's the quickest way to use
-Mockxy — and the only one that offers **multiple workspaces in parallel**.
+The Windows desktop app is available as a **portable** executable and as a **per-user NSIS
+installer**. Both include the engine and UI and offer **multiple workspaces in parallel**. The
+portable build needs no installation and keeps preferences next to the executable; the installer
+creates a Start menu entry and keeps data in the Windows user data folder.
 
 The UI is always served by the engine itself, in development too: this way every workspace is
 self-sufficient and behaves the same in every context.
@@ -36,6 +37,17 @@ For a recovery launch without opening any workspace, use the one-shot
 .\Mockxy-<version>-portable.exe --no-restore-workspaces
 ```
 
+For the installed build, the same option can be passed to `Mockxy.exe` in the installation
+folder. With the current one-click installer, the complete command is:
+
+```powershell
+& "$env:LOCALAPPDATA\Programs\mockxy-desktop\Mockxy.exe" --no-restore-workspaces
+```
+
+The installer also creates a **Mockxy - start without workspaces** Start menu entry that runs
+this command directly. Dragging the normal Start entry may instead create a
+`com.mockxy.desktop` application reference without an editable Target field.
+
 ```bash
 ./Mockxy-<version>.AppImage --no-restore-workspaces
 ```
@@ -66,11 +78,12 @@ configured through environment variables only.
 
 ## The error log (`logs/`)
 
-Errors are also written to files, in a **`logs/`** subfolder next to whatever you launched:
-the AppImage on Linux, the portable exe on Windows, the installed executable elsewhere
-(in development: `electron/logs/`, git-ignored). If that location is not writable, the
-fallback is the user data folder. One file per day (`errors-YYYY-MM-DD.log`), created only
-when there is something to write.
+Errors are also written to files, in a **`logs/`** subfolder. For the Windows portable and Linux
+AppImage builds it lives next to the launched artifact; for an NSIS installation it lives in the
+user data folder, so it survives upgrades and uninstalls. Development uses `electron/logs/`,
+which is git-ignored. If the primary location is not writable, the fallback is the user data
+folder. One file per day (`errors-YYYY-MM-DD.log`) is created only when there is something to
+write.
 
 It collects both app failures (startup errors, a workspace that won't open, unexpected
 exceptions) and the **error lines of the engines** of the open workspaces — for example the
@@ -83,7 +96,7 @@ re-enable it without a restart; the global `errorLogEnabled` choice is stored in
 
 ## Update notifications
 
-Packaged desktop builds, including Windows portable and AppImage, check for a newer stable
+Packaged desktop builds, including Windows portable, NSIS and AppImage, check for a newer stable
 release on `tosdan/mockxy`. The first check starts about five seconds after the window opens
 and is not repeated automatically more than once every 24 hours. Local development performs
 no automatic checks; future Microsoft Store builds leave updates entirely to the Store.
@@ -106,17 +119,34 @@ chooses the artifact on the release page and remains in control of the update.
 
 The gear menu separates settings for the active **workspace** from **App preferences**.
 Global preferences — language, window geometry, workspace session, list of recents, error
-logging and update state — live next to the Windows executable in portable format, so
-everything travels with the exe; on Linux they use the user data folder. To build:
+logging and update state — live next to the Windows executable in portable format, so everything
+travels with the exe. The NSIS and Linux builds use the user data folder instead. Portable
+preferences are not imported automatically into an installation, while workspace folders remain
+independent and can be opened from either build.
+
+The NSIS installer is one-click, x64 and limited to the current user: it asks for explicit
+confirmation before installing, needs no administrator privileges, creates both the normal and
+recovery Start menu entries but no desktop shortcuts, and launches Mockxy when it finishes.
+Uninstalling removes both entries and the app but preserves preferences, session and logs; it
+never deletes workspaces. To upgrade, manually download and run the newer setup.
+
+To build each artifact:
 
 ```bash
 npm run install:all
-npm run dist:electron
-# output in electron/dist/Mockxy-<version>-portable.exe
+npm run dist:electron:win
+# electron/dist/Mockxy-<version>-portable.exe
+
+npm run dist:electron:nsis
+# electron/dist/Mockxy-<version>-setup-x64.exe
+
+npm run dist:electron:linux
+# electron/dist/Mockxy-<version>-x86_64.AppImage
 ```
 
-The executable is not signed: on first launch SmartScreen may ask for confirmation
-("More info" → "Run anyway").
+The directly downloaded portable and installer are not signed, so SmartScreen may ask for
+confirmation ("More info" → "Run anyway"). Code signing and automatic updates will be evaluated
+separately.
 
 For UI **development** you use the browser (`npm run dev:backend` +
 `npm run dev:frontend`, with automatic reload); the desktop app uses the compiled UI, which

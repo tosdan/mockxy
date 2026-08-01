@@ -1,8 +1,9 @@
 # L'app desktop
 
-L'app desktop per Windows è un singolo eseguibile **portable**: nessuna installazione, motore e
-interfaccia integrati, preferenze che viaggiano accanto all'eseguibile. È il modo più rapido di
-usare Mockxy — e l'unico che offre **più workspace in parallelo**.
+L'app desktop per Windows è disponibile come eseguibile **portable** e come installer **NSIS per
+utente**. Entrambi contengono motore e interfaccia e offrono **più workspace in parallelo**. La
+portable non richiede installazione e conserva le preferenze accanto all'eseguibile; l'installer
+crea invece una voce nel menu Start e conserva i dati nella directory utente di Windows.
 
 L'interfaccia è sempre servita dal motore stesso, anche in sviluppo: così ogni workspace è
 autosufficiente e si comporta allo stesso modo in ogni contesto.
@@ -36,6 +37,17 @@ Per un avvio di recupero, senza riaprire alcun workspace, si può usare il flag 
 .\Mockxy-<versione>-portable.exe --no-restore-workspaces
 ```
 
+Con la versione installata, lo stesso flag può essere passato a `Mockxy.exe` dalla cartella di
+installazione. Con l'attuale installer one-click il comando completo è:
+
+```powershell
+& "$env:LOCALAPPDATA\Programs\mockxy-desktop\Mockxy.exe" --no-restore-workspaces
+```
+
+L'installer crea anche la voce **Mockxy - avvio senza workspace** nel menu Start, che esegue
+direttamente questo comando. La voce normale trascinata dal menu Start può invece diventare un
+riferimento applicativo `com.mockxy.desktop`, senza un campo Destinazione modificabile.
+
 ```bash
 ./Mockxy-<versione>.AppImage --no-restore-workspaces
 ```
@@ -67,10 +79,11 @@ configura solo con variabili d'ambiente.
 
 ## Il log degli errori (`logs/`)
 
-Gli errori finiscono anche su file, in una sottocartella **`logs/`** accanto a ciò che hai
-lanciato: l'AppImage su Linux, l'exe portabile su Windows, l'eseguibile installato altrove
-(in sviluppo: `electron/logs/`, ignorata da git). Se quella posizione non è scrivibile, il
-ripiego è la cartella dati utente. Un file al giorno (`errors-AAAA-MM-GG.log`), creato solo
+Gli errori finiscono anche su file, in una sottocartella **`logs/`**. Per la portable Windows e
+l'AppImage Linux si trova accanto all'artefatto avviato; per l'installazione NSIS si trova nella
+directory dati utente, così sopravvive ad aggiornamenti e disinstallazioni. In sviluppo viene
+usata `electron/logs/`, ignorata da git. Se la posizione primaria non è scrivibile, il ripiego è
+la directory dati utente. Viene creato un file al giorno (`errors-AAAA-MM-GG.log`), soltanto
 quando c'è qualcosa da scrivere.
 
 Ci trovi sia i guasti dell'app (avvio fallito, workspace che non si apre, eccezioni
@@ -84,7 +97,7 @@ viene salvata in `mockxy-prefs.json` ([configurazioni](CONFIGURAZIONI.md)).
 
 ## Notifica degli aggiornamenti
 
-Le build desktop pacchettizzate, portable Windows e AppImage comprese, controllano se esiste
+Le build desktop pacchettizzate, portable, NSIS e AppImage comprese, controllano se esiste
 una nuova release stabile su `tosdan/mockxy`. Il primo controllo parte circa cinque secondi
 dopo l'apertura della finestra e non viene ripetuto automaticamente più di una volta ogni
 24 ore. Lo sviluppo locale non esegue controlli automatici; le future build Microsoft Store
@@ -111,17 +124,35 @@ dell'aggiornamento.
 L'ingranaggio distingue le **impostazioni del workspace** attivo dalle **Preferenze app**.
 Le preferenze globali — lingua, geometria della finestra, sessione dei workspace, elenco dei
 recenti, log errori e stato degli aggiornamenti — vivono accanto all'eseguibile Windows in
-formato portable, così tutto viaggia insieme all'exe; su Linux usano la cartella dati utente.
-Per compilare:
+formato portable, così tutto viaggia insieme all'exe. La versione NSIS e Linux usano invece la
+directory dati utente. Le preferenze della portable non vengono importate automaticamente
+nell'installazione, mentre le cartelle dei workspace restano indipendenti e possono essere aperte
+da entrambe.
+
+L'installer NSIS è one-click, x64 e limitato all'utente corrente: prima di installare chiede una
+conferma esplicita, non richiede privilegi amministrativi, crea nel menu Start il collegamento
+normale e quello di recupero ma non collegamenti sul desktop, quindi avvia Mockxy al termine. La
+disinstallazione rimuove entrambi i collegamenti e l'app, ma conserva preferenze, sessione e log;
+non elimina mai i workspace. Per aggiornare si scarica ed esegue manualmente il setup della nuova
+versione.
+
+Per compilare i singoli artefatti:
 
 ```bash
 npm run install:all
-npm run dist:electron
-# risultato in electron/dist/Mockxy-<versione>-portable.exe
+npm run dist:electron:win
+# electron/dist/Mockxy-<versione>-portable.exe
+
+npm run dist:electron:nsis
+# electron/dist/Mockxy-<versione>-setup-x64.exe
+
+npm run dist:electron:linux
+# electron/dist/Mockxy-<versione>-x86_64.AppImage
 ```
 
-L'eseguibile non è firmato: al primo avvio SmartScreen può chiedere conferma («Ulteriori
-informazioni» → «Esegui comunque»).
+La portable e l'installer scaricati direttamente non sono firmati: SmartScreen può chiedere
+conferma («Ulteriori informazioni» → «Esegui comunque»). La firma e l'aggiornamento automatico
+verranno valutati separatamente.
 
 Per lo **sviluppo** dell'interfaccia si usa il browser (`npm run dev:backend` +
 `npm run dev:frontend`, con ricaricamento automatico); l'app desktop usa la UI compilata, che

@@ -13,10 +13,12 @@
   "bugs": {
     "url": "https://github.com/tosdan/mockxy/issues"
   },
+  "author": "Mockxy",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
     "dist": "electron-builder",
+    "dist:nsis": "electron-builder --config scripts/electron-builder.nsis.js --win nsis --x64 --publish never",
     "dist:appx:test": "electron-builder --config scripts/electron-builder.appx-test.js --win appx --x64 --publish never",
     "dist:appx:store": "electron-builder --config scripts/electron-builder.appx-store.js --win appx --x64 --publish never"
   },

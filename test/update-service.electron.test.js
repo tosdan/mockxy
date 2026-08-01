@@ -67,6 +67,14 @@ describe("desktop update service", () => {
       }),
     ).toBe("appimage");
     expect(detectDistributionChannel({ isPackaged: true, windowsStore: true })).toBe("store");
+    expect(
+      detectDistributionChannel({
+        isPackaged: true,
+        platform: "win32",
+        env: {},
+        packageChannel: "nsis",
+      }),
+    ).toBe("nsis");
   });
 
   test("uses app version and persists a successful manual check", async () => {

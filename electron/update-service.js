@@ -23,11 +23,13 @@ function detectDistributionChannel({
   platform = process.platform,
   env = process.env,
   windowsStore = process.windowsStore === true,
+  packageChannel,
 } = {}) {
   if (windowsStore) return "store";
   if (!isPackaged) return "development";
   if (platform === "win32" && env.PORTABLE_EXECUTABLE_DIR) return "portable";
   if (platform === "linux" && env.APPIMAGE) return "appimage";
+  if (packageChannel === "nsis") return "nsis";
   if (platform === "win32") return "windows";
   if (platform === "linux") return "linux";
   return "packaged";

@@ -27,6 +27,7 @@
     "dist:electron:linux": "npm run build:frontend:desktop && npm --prefix electron run dist -- --linux AppImage --x64 --publish never",
     "dist:electron:appx:test": "npm run build:frontend:desktop && npm --prefix electron run dist:appx:test",
     "dist:electron:appx:store": "npm run build:frontend:desktop && npm --prefix electron run dist:appx:store",
+    "dist:electron:nsis": "npm run build:frontend:desktop && npm --prefix electron run dist:nsis",
     "version:patch": "node scripts/bump-version.js patch",
     "version:minor": "node scripts/bump-version.js minor",
     "version:major": "node scripts/bump-version.js major",
@@ -51,7 +52,7 @@
     "api",
     "proxy"
   ],
-  "author": "",
+  "author": "Mockxy",
   "license": "GPL-3.0-or-later",
   "engines": {
     "node": ">=24"

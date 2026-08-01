@@ -13,8 +13,8 @@ const path = require("path");
 // Cartella BASE accanto all'artefatto eseguito, nell'ordine più specifico prima:
 // - AppImage Linux: accanto al file .AppImage (execPath punta dentro lo squashfs, read-only);
 // - build Windows portabile: accanto all'exe (stessa scelta delle preferenze globali);
-// - pacchetto Store: direttamente nella directory dati utente, senza tentare scritture nella
-//   directory d'installazione protetta;
+// - pacchetto Store o installer NSIS: direttamente nella directory dati utente, per sopravvivere
+//   ad aggiornamenti e disinstallazioni e non dipendere dalla scrivibilità dell'installazione;
 // - altro pacchetto installato: accanto all'eseguibile;
 // - sviluppo (non impacchettato): devDir (la cartella electron/ del repo).
 function resolveLogsBaseDir({
@@ -23,9 +23,10 @@ function resolveLogsBaseDir({
   isPackaged,
   devDir,
   windowsStore = process.windowsStore === true,
+  distributionChannel,
   userDataDir,
 }) {
-  if (windowsStore) {
+  if (windowsStore || distributionChannel === "store" || distributionChannel === "nsis") {
     return userDataDir;
   }
   if (env.APPIMAGE) {

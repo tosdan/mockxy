@@ -1,7 +1,7 @@
 # Distribuzione installabile dell'app desktop
 
-Stato: esplorazione tecnica del 28 luglio 2026. Questo documento non rappresenta ancora una
-decisione di rilascio e non modifica il packaging corrente.
+Stato: ricerca tecnica avviata il 28 luglio 2026. Alcune decisioni sono ormai entrate nel
+packaging; la checklist seguente rimane il riferimento autorevole per lo stato corrente.
 
 La checklist di implementazione e lo stato di avanzamento sono mantenuti separatamente in
 [PIANO-DISTRIBUZIONE-DESKTOP.md](PIANO-DISTRIBUZIONE-DESKTOP.md).
@@ -29,7 +29,7 @@ e non si applica a un EXE/MSI tradizionale semplicemente elencato nello Store.
 
 ### Portable
 
-È il formato corrente. Non richiede installazione, può tenere le preferenze accanto
+È uno dei formati correnti. Non richiede installazione, può tenere le preferenze accanto
 all'eseguibile e rimane utile per chi vuole una copia autonoma su disco o chiavetta.
 
 Svantaggi:
@@ -41,10 +41,9 @@ Svantaggi:
 
 ### Installer NSIS
 
-È il target consigliato da `electron-builder` per un normale installer Windows. Può installare
-per il solo utente senza privilegi amministrativi, creare collegamenti e una voce di
-disinstallazione. In una prima versione conviene usare l'installazione per utente e mantenere
-anche la portable.
+È il target adottato per il normale installer Windows. La prima configurazione è x64, one-click
+e limitata all'utente corrente: non richiede privilegi amministrativi, crea la voce nel menu
+Start ma non un collegamento desktop, e mantiene disponibile anche la portable.
 
 La pubblicazione diretta di un installer NSIS non eredita la firma dello Store. Per evitare
 «Autore sconosciuto» e ridurre gli avvisi SmartScreen occorre firmarlo separatamente con un
@@ -162,15 +161,16 @@ installata usa invece la directory `userData` di Electron. Di conseguenza:
 - NSIS e AppX/MSIX possono avere directory dati o identità differenti e vanno provati anche
   quando convivono sulla stessa macchina.
 
-Prima di pubblicare un installer bisogna scegliere fra:
+Per la prima versione è stata scelta la prima possibilità:
 
 1. documentare che la versione installata parte con preferenze nuove;
 2. offrire un'importazione esplicita dalla portable;
 3. realizzare una migrazione automatica, solo se è possibile individuare senza ambiguità la
    vecchia directory.
 
-L'importazione esplicita è probabilmente la soluzione più prevedibile; una scansione
-automatica del disco alla ricerca di copie portable sarebbe fragile.
+L'installazione parte quindi con preferenze nuove. Un'eventuale importazione esplicita rimane
+una possibile funzione futura; una scansione automatica del disco alla ricerca di copie portable
+sarebbe fragile.
 
 ## Linux
 

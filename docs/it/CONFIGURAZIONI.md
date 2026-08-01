@@ -91,8 +91,9 @@ editabile dalla stessa dialog.
 ## 3. Preferenze globali dell'app (`mockxy-prefs.json`)
 
 Preferenze utente cross-workspace, salvate nella directory dati utente di Electron
-(`electron/global-prefs.js`); nella build Windows portabile sono invece accanto all'eseguibile. Non
-per-workspace.
+(`electron/global-prefs.js`); nella build Windows portabile sono invece accanto all'eseguibile. La
+build installata NSIS usa la directory dati utente e non importa automaticamente le preferenze
+della portable. Non per-workspace.
 
 - `recentWorkspaces` — elenco dei workspace aperti di recente (l'ultimo in cima).
 - `window` — dimensione/posizione/stato dell'ultima finestra, per riaprirla com'era.

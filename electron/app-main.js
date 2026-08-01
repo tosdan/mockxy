@@ -76,17 +76,24 @@ function prefsConfigDir() {
   return app.getPath("userData");
 }
 
-// Log degli errori su file: la build Store usa subito userData; le altre usano logs/ accanto
-// all'artefatto eseguito (AppImage, exe portabile, eseguibile installato; in sviluppo
-// electron/), con ripiego sulla cartella dati utente se quella posizione non è scrivibile.
-// Creato subito, non in whenReady: deve esserci già per gli errori d'avvio.
 const windowsStore = process.windowsStore === true;
+const packageDistributionChannel = require("./package.json").mockxyDistributionChannel;
+const distributionChannel = detectDistributionChannel({
+  isPackaged: app.isPackaged,
+  windowsStore,
+  packageChannel: packageDistributionChannel,
+});
+
+// Log degli errori su file: Store e NSIS usano subito userData; portable e AppImage usano
+// logs/ accanto all'artefatto, con ripiego sulla cartella dati utente se la posizione non è
+// scrivibile. Creato subito, non in whenReady: deve esserci già per gli errori d'avvio.
 const userDataDir = app.getPath("userData");
 const errorLog = createErrorFileLog({
   baseDir: resolveLogsBaseDir({
     isPackaged: app.isPackaged,
     devDir: __dirname,
     windowsStore,
+    distributionChannel,
     userDataDir,
   }),
   fallbackBaseDir: userDataDir,
@@ -97,10 +104,6 @@ const errorLog = createErrorFileLog({
 // Lo Store gestisce i propri aggiornamenti e non deve contattare GitHub. Nelle altre build il
 // controllo manuale resta disponibile; quello automatico parte soltanto da un'app pacchettizzata,
 // mai da sviluppo o test.
-const distributionChannel = detectDistributionChannel({
-  isPackaged: app.isPackaged,
-  windowsStore,
-});
 const checksEnabled = distributionChannel !== "store";
 const automaticChecksEnabled =
   checksEnabled && app.isPackaged && process.env.NODE_ENV !== "test";

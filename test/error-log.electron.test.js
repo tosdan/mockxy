@@ -60,6 +60,18 @@ describe("error-log (log errori su file dell'app desktop)", () => {
       expect(dir).toBe("C:\\Users\\x\\AppData\\Roaming\\Mockxy");
     });
 
+    test("installer NSIS: usa direttamente la directory dati utente", () => {
+      const dir = resolveLogsBaseDir({
+        env: {},
+        execPath: "C:\\Users\\x\\AppData\\Local\\Programs\\Mockxy\\Mockxy.exe",
+        isPackaged: true,
+        devDir: "/repo/electron",
+        distributionChannel: "nsis",
+        userDataDir: "C:\\Users\\x\\AppData\\Roaming\\Mockxy",
+      });
+      expect(dir).toBe("C:\\Users\\x\\AppData\\Roaming\\Mockxy");
+    });
+
     test("sviluppo (non impacchettato): la cartella electron/ del repo", () => {
       const dir = resolveLogsBaseDir({
         env: {},
