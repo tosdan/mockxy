@@ -5,6 +5,10 @@ installer**. Both include the engine and UI and offer **multiple workspaces in p
 portable build needs no installation and keeps preferences next to the executable; the installer
 creates a Start menu entry and keeps data in the Windows user data folder.
 
+On Linux, Mockxy is planned both as a **portable AppImage** and as an installable **x64 deb**
+package for Debian and Ubuntu. The deb package integrates with the application menu and package
+manager, while the AppImage remains available for users who prefer a single uninstalled file.
+
 The UI is always served by the engine itself, in development too: this way every workspace is
 self-sufficient and behaves the same in every context.
 
@@ -52,6 +56,15 @@ this command directly. Dragging the normal Start entry may instead create a
 ./Mockxy-<version>.AppImage --no-restore-workspaces
 ```
 
+With the deb package installed, the same recovery launch is available from a terminal:
+
+```bash
+mockxy --no-restore-workspaces
+```
+
+The Linux launcher also exposes a **Start without workspaces** context action on desktop
+environments that support Desktop Actions.
+
 Command-line arguments reach the Electron app normally in both formats. On Linux the AppImage
 must be executable; if Mockxy is launched from a `.desktop` entry, the option can temporarily
 be added to its `Exec` line, or the terminal can be used.
@@ -84,6 +97,9 @@ user data folder, so it survives upgrades and uninstalls. Development uses `elec
 which is git-ignored. If the primary location is not writable, the fallback is the user data
 folder. One file per day (`errors-YYYY-MM-DD.log`) is created only when there is something to
 write.
+
+The deb package uses the user data folder directly, avoiding writes under `/opt`; logs and
+preferences survive package removal.
 
 It collects both app failures (startup errors, a workspace that won't open, unexpected
 exceptions) and the **error lines of the engines** of the open workspaces — for example the
@@ -130,6 +146,19 @@ recovery Start menu entries but no desktop shortcuts, and launches Mockxy when i
 Uninstalling removes both entries and the app but preserves preferences, session and logs; it
 never deletes workspaces. To upgrade, manually download and run the newer setup.
 
+The x64 deb package installs the application under `/opt/Mockxy`, exposes `/usr/bin/mockxy`, and
+creates `mockxy.desktop` in the application menu. The recommended installation command uses
+`apt`, which displays the package summary, resolves dependencies, and requests administrator
+authentication:
+
+```bash
+sudo apt install ./mockxy_<version>_amd64.deb
+```
+
+Use `sudo apt remove mockxy` to remove the app. Removal does not delete workspaces, preferences,
+or logs from users' home folders. A file downloaded from GitHub Releases is not an APT repository:
+to upgrade, download the new deb and install it manually.
+
 To build each artifact:
 
 ```bash
@@ -142,6 +171,9 @@ npm run dist:electron:nsis
 
 npm run dist:electron:linux
 # electron/dist/Mockxy-<version>-x86_64.AppImage
+
+npm run dist:electron:deb
+# electron/dist/mockxy_<version>_amd64.deb
 ```
 
 The directly downloaded portable and installer are not signed, so SmartScreen may ask for

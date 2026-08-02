@@ -29,7 +29,7 @@ function detectDistributionChannel({
   if (!isPackaged) return "development";
   if (platform === "win32" && env.PORTABLE_EXECUTABLE_DIR) return "portable";
   if (platform === "linux" && env.APPIMAGE) return "appimage";
-  if (packageChannel === "nsis") return "nsis";
+  if (packageChannel) return packageChannel;
   if (platform === "win32") return "windows";
   if (platform === "linux") return "linux";
   return "packaged";

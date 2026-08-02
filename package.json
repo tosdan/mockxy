@@ -25,6 +25,7 @@
     "dist:electron": "npm run build:frontend:desktop && npm --prefix electron run dist",
     "dist:electron:win": "npm run build:frontend:desktop && npm --prefix electron run dist -- --win portable --x64 --publish never",
     "dist:electron:linux": "npm run build:frontend:desktop && npm --prefix electron run dist -- --linux AppImage --x64 --publish never",
+    "dist:electron:deb": "npm run build:frontend:desktop && npm --prefix electron run dist:deb",
     "dist:electron:appx:test": "npm run build:frontend:desktop && npm --prefix electron run dist:appx:test",
     "dist:electron:appx:store": "npm run build:frontend:desktop && npm --prefix electron run dist:appx:store",
     "dist:electron:nsis": "npm run build:frontend:desktop && npm --prefix electron run dist:nsis",

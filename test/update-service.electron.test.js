@@ -75,6 +75,14 @@ describe("desktop update service", () => {
         packageChannel: "nsis",
       }),
     ).toBe("nsis");
+    expect(
+      detectDistributionChannel({
+        isPackaged: true,
+        platform: "linux",
+        env: {},
+        packageChannel: "deb",
+      }),
+    ).toBe("deb");
   });
 
   test("uses app version and persists a successful manual check", async () => {

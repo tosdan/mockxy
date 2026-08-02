@@ -32,7 +32,7 @@ sempre lo stato reale dell'implementazione.
 | 0 | Fondamenta della pubblicazione | In corso | — |
 | 1 | Notifica di un aggiornamento disponibile | In corso | obiettivo 0 |
 | 2 | Build e pubblicazione Microsoft Store | In pausa dopo il prototipo AppX | account Partner Center |
-| 3 | Altre build Windows e Linux | Prossimo obiettivo | obiettivi 0 e 1 |
+| 3 | Altre build Windows e Linux | In corso: NSIS collaudato, deb configurato | obiettivi 0 e 1 |
 | 4 | Aggiornamenti automatici e formati aggiuntivi | Da iniziare | artefatti della fase 3 |
 
 ## Sequenza operativa attiva
@@ -362,7 +362,7 @@ mantenendo disponibili gli altri formati.
 
 Scopo: offrire libertà di scelta senza moltiplicare configurazioni e comportamenti incoerenti.
 
-> **Stato:** obiettivo attivo. Il primo incremento è Windows NSIS (fase B).
+> **Stato:** obiettivo attivo. NSIS è collaudato; il pacchetto deb è in configurazione e collaudo.
 
 ### 3.1 Configurazione comune
 
@@ -418,15 +418,15 @@ Scopo: offrire libertà di scelta senza moltiplicare configurazioni e comportame
 
 ### 3.5 Linux deb
 
-- [ ] Aggiungere il target deb.
-- [ ] Compilare package name, maintainer, homepage, categoria e dipendenze.
+- [x] Aggiungere il target deb.
+- [x] Compilare package name, maintainer, homepage, categoria e dipendenze.
 - [ ] Verificare installazione e rimozione su Debian e Ubuntu supportati.
 - [ ] Verificare voce nel menu applicazioni e icona.
 - [ ] Verificare workspace, server locali, log e preferenze.
-- [ ] Integrare la notifica realizzata nell'obiettivo 1.
-- [ ] Spiegare che un `.deb` su GitHub Releases non costituisce un repository APT.
-- [ ] Decidere se gli aggiornamenti deb saranno manuali, applicativi o tramite futuro
-      repository APT.
+- [x] Integrare la notifica realizzata nell'obiettivo 1.
+- [x] Spiegare che un `.deb` su GitHub Releases non costituisce un repository APT.
+- [x] Decidere se gli aggiornamenti deb saranno manuali, applicativi o tramite futuro
+      repository APT: inizialmente manuali, senza metadati `electron-updater` incorporati.
 
 ### 3.6 Linux rpm
 
@@ -559,6 +559,7 @@ Questa fase non deve ritardare la notifica dell'obiettivo 1 né la prima pubblic
 | 29 lug 2026 | Primo AppX x64 con baseline Windows 11 (`10.0.22000.0`) | Evita di dichiarare compatibilità con Windows 10 non collaudata; la portable resta disponibile e un eventuale supporto LTSC/ESU richiederà test dedicati |
 | 1 ago 2026 | Microsoft Store in pausa; build dirette come percorso attivo | L'AppX è a un checkpoint riutilizzabile, mentre account e identità Partner Center sono un blocco esterno che non deve fermare NSIS, deb e rpm |
 | 1 ago 2026 | NSIS one-click x64 per utente, autore `Mockxy` | Non richiede amministratore; chiede conferma prima dell'installazione interattiva, crea collegamenti Start normale e di recupero, conserva `userData` alla disinstallazione e rimanda firma e auto-update a incrementi dedicati |
+| 1 ago 2026 | deb x64 `mockxy`, maintainer temporaneo GitHub noreply | Usa i metadati e le dipendenze predefinite della toolchain bloccata, integra un'azione desktop di recupero e mantiene gli aggiornamenti manuali; il TODO richiede un futuro indirizzo pubblico dedicato al progetto |
 
 ## Registro esecuzioni
 
@@ -570,6 +571,7 @@ Questa fase non deve ritardare la notifica dell'obiettivo 1 né la prima pubblic
 
 ## Prossimo incremento consigliato
 
-Iniziare la fase C stabilizzando esclusivamente il pacchetto Linux deb: chiudere prima le decisioni
-su metadati, dipendenze e distribuzioni da collaudare, senza introdurre rpm nello stesso checkpoint.
-L'upgrade reale NSIS N → N+1 resta una verifica differita alla prossima versione.
+Generare il pacchetto deb su Linux, ispezionarne control file, contenuto e launcher, quindi
+collaudare installazione, menu, recupero, workspace, server, log, preferenze e rimozione su Ubuntu
+24.04 LTS e Debian 13. Non introdurre rpm nello stesso checkpoint. L'upgrade reale NSIS N → N+1
+resta una verifica differita alla prossima versione.

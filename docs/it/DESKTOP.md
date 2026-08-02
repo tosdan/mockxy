@@ -5,6 +5,10 @@ utente**. Entrambi contengono motore e interfaccia e offrono **più workspace in
 portable non richiede installazione e conserva le preferenze accanto all'eseguibile; l'installer
 crea invece una voce nel menu Start e conserva i dati nella directory utente di Windows.
 
+Su Linux sono previsti sia l'**AppImage portabile** sia il pacchetto installabile **deb x64**
+per Debian e Ubuntu. Il pacchetto deb integra Mockxy nel menu applicazioni e nel package manager;
+l'AppImage resta disponibile per chi preferisce un singolo file senza installazione.
+
 L'interfaccia è sempre servita dal motore stesso, anche in sviluppo: così ogni workspace è
 autosufficiente e si comporta allo stesso modo in ogni contesto.
 
@@ -52,6 +56,15 @@ riferimento applicativo `com.mockxy.desktop`, senza un campo Destinazione modifi
 ./Mockxy-<versione>.AppImage --no-restore-workspaces
 ```
 
+Con il pacchetto deb installato lo stesso avvio di recupero è disponibile da terminale:
+
+```bash
+mockxy --no-restore-workspaces
+```
+
+Il launcher Linux espone inoltre l'azione contestuale **Avvio senza workspace** negli ambienti
+desktop che supportano le Desktop Actions.
+
 Gli argomenti da riga di comando arrivano normalmente all'app Electron in entrambi i formati.
 Su Linux il file AppImage deve essere eseguibile; se Mockxy viene lanciato da una voce
 `.desktop`, il flag può essere aggiunto temporaneamente alla sua riga `Exec`, oppure si può
@@ -85,6 +98,9 @@ directory dati utente, così sopravvive ad aggiornamenti e disinstallazioni. In 
 usata `electron/logs/`, ignorata da git. Se la posizione primaria non è scrivibile, il ripiego è
 la directory dati utente. Viene creato un file al giorno (`errors-AAAA-MM-GG.log`), soltanto
 quando c'è qualcosa da scrivere.
+
+Il pacchetto deb usa direttamente la directory dati utente, evitando tentativi di scrittura
+sotto `/opt`; log e preferenze sopravvivono alla rimozione del pacchetto.
 
 Ci trovi sia i guasti dell'app (avvio fallito, workspace che non si apre, eccezioni
 impreviste) sia le **righe error dei motori** dei workspace aperti — ad esempio il dettaglio
@@ -136,6 +152,18 @@ disinstallazione rimuove entrambi i collegamenti e l'app, ma conserva preferenze
 non elimina mai i workspace. Per aggiornare si scarica ed esegue manualmente il setup della nuova
 versione.
 
+Il pacchetto deb x64 installa l'applicazione sotto `/opt/Mockxy`, espone il comando
+`/usr/bin/mockxy` e crea `mockxy.desktop` nel menu applicazioni. L'installazione consigliata usa
+`apt`, che mostra il riepilogo, risolve le dipendenze e richiede l'autenticazione amministrativa:
+
+```bash
+sudo apt install ./mockxy_<versione>_amd64.deb
+```
+
+Per rimuovere l'app si usa `sudo apt remove mockxy`. La rimozione non cancella i workspace e non
+elimina preferenze o log nelle home degli utenti. Il file scaricato da GitHub Releases non
+costituisce un repository APT: per aggiornare si scarica il nuovo deb e lo si installa manualmente.
+
 Per compilare i singoli artefatti:
 
 ```bash
@@ -148,6 +176,9 @@ npm run dist:electron:nsis
 
 npm run dist:electron:linux
 # electron/dist/Mockxy-<versione>-x86_64.AppImage
+
+npm run dist:electron:deb
+# electron/dist/mockxy_<versione>_amd64.deb
 ```
 
 La portable e l'installer scaricati direttamente non sono firmati: SmartScreen può chiedere

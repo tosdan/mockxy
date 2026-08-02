@@ -72,6 +72,18 @@ describe("error-log (log errori su file dell'app desktop)", () => {
       expect(dir).toBe("C:\\Users\\x\\AppData\\Roaming\\Mockxy");
     });
 
+    test("pacchetto deb: usa direttamente la directory dati utente", () => {
+      const dir = resolveLogsBaseDir({
+        env: {},
+        execPath: "/opt/Mockxy/mockxy",
+        isPackaged: true,
+        devDir: "/repo/electron",
+        distributionChannel: "deb",
+        userDataDir: "/home/utente/.config/mockxy-desktop",
+      });
+      expect(dir).toBe("/home/utente/.config/mockxy-desktop");
+    });
+
     test("sviluppo (non impacchettato): la cartella electron/ del repo", () => {
       const dir = resolveLogsBaseDir({
         env: {},

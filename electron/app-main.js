@@ -84,7 +84,7 @@ const distributionChannel = detectDistributionChannel({
   packageChannel: packageDistributionChannel,
 });
 
-// Log degli errori su file: Store e NSIS usano subito userData; portable e AppImage usano
+// Log degli errori su file: Store, NSIS e deb usano subito userData; portable e AppImage usano
 // logs/ accanto all'artefatto, con ripiego sulla cartella dati utente se la posizione non è
 // scrivibile. Creato subito, non in whenReady: deve esserci già per gli errori d'avvio.
 const userDataDir = app.getPath("userData");
