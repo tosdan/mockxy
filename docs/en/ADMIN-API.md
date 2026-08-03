@@ -22,7 +22,8 @@ state between tests, pipelines that import an updated spec.
 - An endpoint's **`:id`** is the endpoint file's relative path encoded base64url: you obtain
   it from the lists and treat it as **opaque**.
 - **Errors** are JSON `{ error, message, details? }` with the appropriate status
-  (`400` invalid input, `404` not found, `415` media type, `500`).
+  (`400` invalid input, `403` unexpected `Host` header, `404` not found, `409` conflict,
+  `415` unsupported media type, `500` unexpected failure).
 - Catalog mutations **reload the runtime immediately**: the change is served from the next
   request on, without restarts. Data files reload nothing ([`data()`
   re-reads on every call](DATI.md)), with one exception: the rename with reference rewriting
@@ -42,7 +43,7 @@ state between tests, pipelines that import an updated spec.
 | `GET /mocks/:id/sse/connections` | SSE console state: open connections (with script position) and history of sent messages |
 | `POST /mocks/:id/ws/push` | manual push of the [WS](RESPONSE.md) console: body `{ data }`, broadcast to every open connection — responds `{ delivered, connections }` |
 | `GET /mocks/:id/ws/connections` | WS console state: open connections (with script position) and the bidirectional transcript (sent and received) |
-| `PUT /mocks/:id/endpoint` | updates method, path, description |
+| `PUT /mocks/:id/endpoint` | updates **only** `description` and `enabled` (any other field is a `400`): method and path are fixed at creation — the path determines the files' folder — and are changed with `POST /mocks/:id/copy` |
 | `POST /mocks/:id/copy` | duplicates onto a new method+path — body `{ method, path, copyResponses }` |
 | `PUT /mocks/:id/collection` | assigns the endpoint to a collection |
 | `DELETE /mocks/:id` | deletes endpoint and variants |
@@ -129,6 +130,12 @@ curl -s -X PATCH http://localhost:3000/_admin/api/monitoring/dump \
 curl -s -X POST http://localhost:3000/_admin/api/monitoring/dump/flush
 ```
 
-For the exact structure of the create and update bodies, the most reliable source is the UI
-itself: every one of its actions is a call to these routes, observable from the browser's
-developer tools.
+## The machine-readable description
+
+For the exact structure of every request and response body there is an OpenAPI 3.1 description
+of this API: [`docs/admin-api.openapi.yaml`](../admin-api.openapi.yaml). It documents the
+schemas, the status codes and the payload variants route by route, and it can be loaded into a
+client generator, a request tool, or an agent that needs to drive Mockxy on its own.
+
+The second reliable source stays the UI itself: every one of its actions is a call to these
+routes, observable from the browser's developer tools.

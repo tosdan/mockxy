@@ -1,0 +1,2474 @@
+# Mockxy Admin API — OpenAPI description.
+#
+# Hand-written from the route table in src/admin/admin-api.js and the operations it delegates to.
+# When a route changes, this file changes with it: it is the machine-readable twin of
+# docs/{it,en}/ADMIN-API.md, which stays the prose reference.
+openapi: 3.1.0
+
+info:
+  title: Mockxy Admin API
+  version: 1.2.0
+  summary: Control surface of a running Mockxy mock server — catalog, response variants, collections, data files, traffic monitor and runtime switches.
+  description: |
+    Every action of the Mockxy UI is a call to this API: there is nothing the interface can do
+    that a script or an agent cannot. Typical uses are seeding a workspace, resetting state
+    between e2e tests, importing an updated OpenAPI spec in CI, or inspecting captured traffic.
+
+    ## Mental model
+
+    A Mockxy workspace is a folder tree of files, and this API is a typed editor for it:
+
+    - An **endpoint** is one HTTP method on one route path. On disk it is a
+      `METHOD.endpoint.json` file; its route path is derived from the folder that contains it and
+      is therefore **immutable after creation** (copy the endpoint to move it).
+    - An endpoint owns one or more **response variants** (`NNN.response.json` inside
+      `METHOD.responses/`). Exactly one is *selected* and answers requests, unless a
+      **sequence** is defined — a policy that walks the variants request after request.
+    - A variant has a `type` that decides how the endpoint answers:
+      `mock` (static payload, optionally templated or file-backed), `handler` (JS module that
+      computes the response), `middleware` (JS module that transforms a proxied backend
+      response), `sse` (Server-Sent Events script) or `ws` (WebSocket script + rules).
+    - **Collections** are a presentation tree over endpoints (labels, nesting, ordering); they
+      live in `.collections.json` and never change how a request is served — except for the bulk
+      enable/disable operation, which rewrites the endpoints themselves.
+    - **Data files** are reusable JSON documents that handlers and middleware read through the
+      `data("name")` accessor.
+
+    ## Conventions
+
+    - **Base path**: every route below is relative to `/_admin/api`.
+    - **Endpoint `id`**: the endpoint file path, relative to the mocks folder, base64url-encoded.
+      Obtain it from a listing and treat it as **opaque**; it changes when the endpoint moves.
+    - **Errors**: JSON `{ error, message, details? }` with a matching status —
+      `400` invalid input, `403` host guard, `404` not found, `409` conflict,
+      `415` unsupported media type, `500` unexpected failure.
+    - **Reload semantics**: catalog mutations reload the runtime *before responding*, so the
+      change is live for the very next request — no restart. A mutation that leaves the runtime
+      unable to load is rolled back on disk and reported as an error. Data-file writes reload
+      nothing (`data()` re-reads on every call), with one exception: a rename that rewrites
+      `data()` references in handler sources does reload.
+    - **Mutation results**: most endpoint and variant mutations answer with the **full
+      `MockDetail`** of the affected endpoint, so a client never needs a follow-up GET.
+    - **Body limits**: JSON bodies are capped at 2 MB, raw uploads at 12 MB (response assets,
+      OpenAPI documents) and 25 MB (data files).
+
+    ## Security
+
+    There is **no authentication**. This API writes files and executes JavaScript, so it is a
+    development tool for a trusted machine, not a public surface:
+
+    - It is enabled by `ADMIN_API_ENABLED` (default: on outside production). When disabled,
+      every route answers `404` with an explicit message.
+    - When the server is bound to loopback (the default) a **DNS-rebinding guard** rejects
+      requests whose `Host` header is not a loopback name — additional names go in
+      `ADMIN_ALLOWED_HOSTS`. Requests to the mocks themselves are never filtered.
+    - Mutations require an explicit JSON content type, which is also the CSRF defense: a
+      cross-origin request carrying `application/json` triggers a preflight and dies there. The
+      OpenAPI import accepts YAML too but rejects `text/plain` with `415` for the same reason.
+
+    ## What this document does not cover
+
+    The **mocked traffic itself**. Everything outside `/_admin/api` (and `/_admin/ui`, the
+    compiled interface) is matched against the catalog: a hit is served by the matching variant,
+    a miss falls through to the configured backend, or answers `404` when proxy fallback is off.
+    Those routes are defined by the workspace, not by Mockxy, so they cannot be described here.
+    Responses carry an `x-mock-source` header telling you which branch answered — see
+    `MonitorEntry.source` for the possible values.
+  license:
+    name: GPL-3.0-or-later
+    identifier: GPL-3.0-or-later
+  contact:
+    name: Mockxy
+    url: https://github.com/tosdan/mockxy
+
+externalDocs:
+  description: Prose reference for this API (Italian and English)
+  url: https://github.com/tosdan/mockxy/blob/main/docs/en/ADMIN-API.md
+
+servers:
+  - url: http://{host}:{port}/_admin/api
+    description: A running Mockxy server (loopback by default)
+    variables:
+      host:
+        default: localhost
+      port:
+        default: "3000"
+
+tags:
+  - name: Catalog
+    description: Read the endpoint catalog and resolve a concrete request to the endpoint that covers it.
+  - name: Endpoints
+    description: Create, update, copy and delete endpoints, plus their runtime actions (sequence reset, SSE/WS consoles).
+  - name: Response variants
+    description: Add, edit and remove the response variants an endpoint can serve.
+  - name: Collections
+    description: The presentation tree over endpoints — labels, nesting, ordering, bulk enable/disable.
+  - name: OpenAPI import
+    description: Turn an OpenAPI document into mock endpoints, with a dry-run planning mode.
+  - name: Data files
+    description: Reusable JSON documents that handlers and middleware read through `data("name")`.
+  - name: Monitoring
+    description: Live request feed, its durable NDJSON archive, and mock creation from captured traffic.
+  - name: Server state
+    description: Runtime switches that decide whether mocks are used at all.
+
+paths:
+  # ───────────────────────────────── Catalog ─────────────────────────────────
+  /mocks:
+    get:
+      tags: [Catalog]
+      operationId: listMocks
+      summary: The whole catalog
+      description: |
+        Returns every endpoint with a summary of its **selected** variant, the collection tree,
+        the unified child ordering used to render it, and the endpoints that could not be read.
+
+        An unreadable endpoint file (invalid JSON, missing selected variant) never fails the
+        request: it is skipped and reported in `loadErrors`, exactly as the runtime loader does.
+      responses:
+        "200":
+          description: The catalog
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, collections, childOrder, loadErrors]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/MockSummary" }
+                    description: Endpoints, ordered as the UI shows them.
+                  collections:
+                    type: array
+                    items: { $ref: "#/components/schemas/CollectionSummary" }
+                    description: Persisted collections in depth-first display order.
+                  childOrder: { $ref: "#/components/schemas/ChildOrder" }
+                  loadErrors:
+                    type: array
+                    description: Endpoint files that could not be read, and why.
+                    items:
+                      type: object
+                      required: [configFilePath, message]
+                      properties:
+                        configFilePath:
+                          type: string
+                          description: Path of the endpoint file, relative to the mocks folder.
+                        message: { type: string }
+        "404": { $ref: "#/components/responses/AdminApiDisabled" }
+    post:
+      tags: [Endpoints]
+      operationId: createMock
+      summary: Create an endpoint
+      description: |
+        Creates an endpoint together with its first variant. The route path determines the
+        folder the files land in, so **method + path must be free**: an existing endpoint answers
+        `409` and reports its id in `details.existingMockId`, which lets a client offer "add this
+        as a variant of the existing endpoint" instead.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateMockRequest" }
+            examples:
+              staticMock:
+                summary: Static JSON mock
+                value:
+                  config:
+                    method: GET
+                    path: /api/users
+                    status: 200
+                    headers: { content-type: application/json }
+                    delayMs: 0
+                  body:
+                    - { id: 1, name: Ada }
+                    - { id: 2, name: Linus }
+              handler:
+                summary: Dynamic handler (source omitted → template scaffold)
+                value:
+                  type: handler
+                  definition: { method: POST, path: /api/login }
+      responses:
+        "201":
+          description: The created endpoint
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MockDetail" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "409":
+          description: An endpoint already exists for this method and path.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+              example:
+                error: Conflict
+                message: An endpoint already exists for this folder and method.
+                details: { existingMockId: bW9ja3MvYXBpL3VzZXJzL0dFVC5lbmRwb2ludC5qc29u }
+
+  /mocks/resolve:
+    get:
+      tags: [Catalog]
+      operationId: resolveMock
+      summary: Which endpoint would cover this request
+      description: |
+        Answers "if this concrete request arrived now, which catalog entry would it belong to?".
+        The matching mirrors the serving semantics (exact routes before dynamic ones,
+        specificity, declared query parameters) but runs over the **whole** catalog, disabled
+        endpoints included — the use case is "take me to the mock", not "who would answer".
+
+        A derived fact, computed on the fly and never persisted: the monitor entry stays the
+        pure historical record.
+      parameters:
+        - name: method
+          in: query
+          required: true
+          schema: { $ref: "#/components/schemas/HttpMethod" }
+        - name: path
+          in: query
+          required: true
+          description: Absolute request path; a query string may be included and is used by routes that declare query parameters.
+          schema: { type: string }
+          example: /api/users/42?expand=true
+      responses:
+        "200":
+          description: The covering endpoint, or `null` when none matches.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [mock]
+                properties:
+                  mock:
+                    oneOf:
+                      - { $ref: "#/components/schemas/MockSummary" }
+                      - { type: "null" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+
+  # ─────────────────────────────── Collections ───────────────────────────────
+  /mocks/collections:
+    post:
+      tags: [Collections]
+      operationId: createCollection
+      summary: Create a collection
+      description: |
+        Creates a collection, optionally nested under another one. Labels are compared
+        case- and accent-insensitively among siblings, and the reserved label of the virtual
+        `Unsorted` bucket is rejected. New sub-collections land at the top of their parent;
+        new top-level collections are appended.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [label]
+              properties:
+                label: { type: string }
+                parentId:
+                  type: string
+                  description: Parent collection id; omit for a top-level collection. `unsorted` is not a valid parent.
+            example: { label: Authentication }
+      responses:
+        "201":
+          description: The created collection
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CollectionSummary" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404":
+          description: Parent collection not found.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: The label is reserved, or already used by a sibling.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /mocks/collections/order:
+    patch:
+      tags: [Collections]
+      operationId: reorderCollections
+      summary: Reorder sibling collections
+      description: Sets the order of the collections that share one parent. The list must contain each sibling **exactly once**.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [collectionIds]
+              properties:
+                collectionIds:
+                  type: array
+                  items: { type: string }
+                  description: Persisted collection ids, in the desired order.
+                parentId:
+                  type: string
+                  description: Scope of the reordering; omit for the top level.
+      responses:
+        "200": { $ref: "#/components/responses/CollectionList" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/CollectionNotFound" }
+
+  /mocks/collections/{id}/parent:
+    parameters:
+      - $ref: "#/components/parameters/CollectionId"
+    patch:
+      tags: [Collections]
+      operationId: reparentCollection
+      summary: Move a collection in the tree
+      description: |
+        Re-parents a collection (omit `parentId` to move it to the top level) and optionally
+        places it at a given index among its new siblings. Cycles are rejected: a collection
+        cannot become a child of itself or of one of its descendants.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                parentId:
+                  type: [string, "null"]
+                  description: New parent; `null`/absent means top level. `unsorted` is not a valid parent.
+                targetIndex:
+                  type: integer
+                  minimum: 0
+                  description: Position among the new siblings; appended when absent.
+      responses:
+        "200": { $ref: "#/components/responses/CollectionList" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/CollectionNotFound" }
+        "409":
+          description: A sibling already uses this label.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /mocks/collections/{id}/items/order:
+    parameters:
+      - $ref: "#/components/parameters/CollectionIdWithUnsorted"
+    patch:
+      tags: [Collections]
+      operationId: reorderCollectionItems
+      summary: Reorder the endpoints of a collection
+      description: Sets the order of the endpoints inside one collection. The list must contain each endpoint of that collection **exactly once**.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [itemIds]
+              properties:
+                itemIds:
+                  type: array
+                  items: { type: string }
+                  description: Endpoint ids, in the desired order.
+      responses:
+        "200": { $ref: "#/components/responses/MockItemList" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/CollectionNotFound" }
+
+  /mocks/collections/{parentKey}/children/order:
+    parameters:
+      - name: parentKey
+        in: path
+        required: true
+        description: "`root`, `unsorted`, or a collection id."
+        schema: { type: string }
+    patch:
+      tags: [Collections]
+      operationId: reorderCollectionChildren
+      summary: Reorder the interleaved children of a parent
+      description: |
+        Sets the unified order of everything directly under one parent — endpoints **and**
+        sub-collections, interleaved as the tree shows them. `childRefs` mixes endpoint ids and
+        collection ids and must contain each child of that parent exactly once.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [childRefs]
+              properties:
+                childRefs:
+                  type: array
+                  items: { type: string }
+                  description: Endpoint ids and/or collection ids, in the desired order.
+      responses:
+        "200": { $ref: "#/components/responses/MockItemList" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/CollectionNotFound" }
+
+  /mocks/collections/{id}/enabled:
+    parameters:
+      - $ref: "#/components/parameters/CollectionId"
+    patch:
+      tags: [Collections]
+      operationId: setCollectionEnabled
+      summary: Enable or disable a whole subtree
+      description: |
+        Rewrites the `enabled` flag of every endpoint in the collection **and its
+        descendants** — the one collection operation that changes how requests are served.
+        Endpoints already in the requested state are left untouched. The whole batch shares a
+        single rollback and a single runtime reload.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [enabled]
+              properties:
+                enabled: { type: boolean }
+      responses:
+        "200":
+          description: The refreshed catalog
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, collections, childOrder]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/MockSummary" }
+                  collections:
+                    type: array
+                    items: { $ref: "#/components/schemas/CollectionSummary" }
+                  childOrder: { $ref: "#/components/schemas/ChildOrder" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/CollectionNotFound" }
+
+  /mocks/collections/{id}:
+    parameters:
+      - $ref: "#/components/parameters/CollectionId"
+    delete:
+      tags: [Collections]
+      operationId: deleteCollection
+      summary: Dissolve a collection subtree
+      description: |
+        Removes the collection and its descendants **without deleting endpoints**: every
+        endpoint they contained moves back to the virtual `Unsorted` bucket. To delete the
+        endpoints too, use `DELETE /mocks/collections/{id}/contents`.
+      responses:
+        "204": { description: Dissolved. }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/CollectionNotFound" }
+
+  /mocks/collections/{id}/contents:
+    parameters:
+      - $ref: "#/components/parameters/CollectionIdWithUnsorted"
+    delete:
+      tags: [Collections]
+      operationId: eraseCollection
+      summary: Delete a subtree and every endpoint in it
+      description: |
+        Permanently deletes the collection subtree **and all the endpoints it contains**, files
+        included. With `id=unsorted` it deletes exactly the endpoints that belong to no
+        collection. One shared rollback, one runtime reload.
+      responses:
+        "200":
+          description: How many endpoints were deleted.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [deleted]
+                properties:
+                  deleted: { type: integer }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/CollectionNotFound" }
+
+  # ──────────────────────────────── Endpoints ────────────────────────────────
+  /mocks/{id}:
+    parameters:
+      - $ref: "#/components/parameters/MockId"
+    get:
+      tags: [Endpoints]
+      operationId: getMock
+      summary: Endpoint detail
+      description: |
+        The endpoint definition, the list of its variants, and the fully normalized **selected**
+        variant — including the payload body (or file metadata), the handler source, or the
+        SSE/WS script. When a sequence is defined, `sequenceState` reports the live cursor.
+      responses:
+        "200":
+          description: Endpoint detail
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MockDetail" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/MockNotFound" }
+    put:
+      tags: [Endpoints]
+      operationId: updateMock
+      summary: Update the endpoint (selection, sequence, or selected variant)
+      description: |
+        One route, three payload shapes, checked in this order:
+
+        1. `{ sequence }` — replaces the sequence policy; `null` removes it. Steps must
+           reference variants listed in `responseFiles`, and only `mock` and `handler` variants
+           can take part.
+        2. `{ selectedResponseFile }` — switches which variant answers.
+        3. `{ config, body }` or `{ type: handler|middleware, definition, source }` — rewrites
+           the **selected** variant together with the endpoint's `enabled` flag.
+
+        In shape 3 the route path is echoed back for validation but **cannot change**
+        (`400` otherwise), and an `sse`/`ws` selected variant is rejected: edit those through
+        `PUT /mocks/{id}/responses/{responseFileName}`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateMockRequest" }
+            examples:
+              selectVariant:
+                summary: Switch the answering variant
+                value: { selectedResponseFile: 002.response.json }
+              sequence:
+                summary: Serve 3 × 202, then 200 forever
+                value:
+                  sequence:
+                    enabled: true
+                    onEnd: stay
+                    steps:
+                      - { response: 001.response.json, times: 3 }
+                      - { response: 002.response.json }
+              removeSequence:
+                summary: Back to plain selection
+                value: { sequence: null }
+              editMock:
+                summary: Rewrite the selected mock variant
+                value:
+                  config:
+                    method: GET
+                    path: /api/users
+                    status: 503
+                    disabled: false
+                    headers: { content-type: application/json }
+                    delayMs: 1500
+                  body: { error: maintenance }
+      responses:
+        "200":
+          description: The updated endpoint
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MockDetail" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/MockNotFound" }
+    delete:
+      tags: [Endpoints]
+      operationId: deleteMock
+      summary: Delete the endpoint
+      description: Deletes the endpoint file, all its variants and their assets, and prunes the folders left empty.
+      responses:
+        "204": { description: Deleted. }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/MockNotFound" }
+
+  /mocks/{id}/endpoint:
+    parameters:
+      - $ref: "#/components/parameters/MockId"
+    put:
+      tags: [Endpoints]
+      operationId: updateEndpointMetadata
+      summary: Update description and enabled flag
+      description: |
+        Updates endpoint metadata. **Only `description` and `enabled` are accepted** — any other
+        field is a `400`. Method and path are fixed at creation time; use
+        `POST /mocks/{id}/copy` to produce the same endpoint on a different method or path.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                description:
+                  type: [string, "null"]
+                  description: "`null` clears it."
+                enabled: { type: boolean }
+              additionalProperties: false
+            example: { description: Returns the paginated user list, enabled: true }
+      responses:
+        "200":
+          description: The updated endpoint
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MockDetail" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/MockNotFound" }
+
+  /mocks/{id}/copy:
+    parameters:
+      - $ref: "#/components/parameters/MockId"
+    post:
+      tags: [Endpoints]
+      operationId: copyEndpoint
+      summary: Duplicate the endpoint onto another method and path
+      description: |
+        Copies the endpoint to a new method + path, inheriting description and enabled flag.
+        By default only the **selected** variant is copied, so the duplicate stays valid and of
+        the same type; `copyResponses: true` copies every variant with its assets and preserves
+        the selection. Since the path defines the folder, this is also how you "move" an
+        endpoint: copy, then delete the original.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [method, path]
+              properties:
+                method: { $ref: "#/components/schemas/HttpMethod" }
+                path: { $ref: "#/components/schemas/RoutePath" }
+                copyResponses:
+                  type: boolean
+                  default: false
+            example: { method: GET, path: /api/v2/users, copyResponses: true }
+      responses:
+        "201":
+          description: The new endpoint
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MockDetail" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/MockNotFound" }
+        "409":
+          description: An endpoint already exists at the destination.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /mocks/{id}/collection:
+    parameters:
+      - $ref: "#/components/parameters/MockId"
+    put:
+      tags: [Endpoints]
+      operationId: assignCollection
+      summary: Assign the endpoint to a collection
+      description: Moves the endpoint into a collection, optionally at a given position. A `null` `collectionId` moves it back to the virtual `Unsorted` bucket.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                collectionId:
+                  type: [string, "null"]
+                  description: "`null`/absent → Unsorted."
+                targetIndex:
+                  type: integer
+                  minimum: 0
+                  description: Position inside the target collection; appended when absent.
+            example: { collectionId: authentication, targetIndex: 0 }
+      responses:
+        "200":
+          description: The updated endpoint
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MockDetail" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404":
+          description: Endpoint or collection not found.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /mocks/{id}/sequence/reset:
+    parameters:
+      - $ref: "#/components/parameters/MockId"
+    post:
+      tags: [Endpoints]
+      operationId: resetSequence
+      summary: Restart the sequence from its first step
+      description: |
+        Runtime action, no file touched: the next request starts over from the first step.
+        It also clears the endpoint's **handler memory** (`state`, `callCount`,
+        `firstRequestAt`), otherwise a handler step would resume mid-story.
+      responses:
+        "200":
+          description: The reset cursor
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  sequenceState:
+                    oneOf:
+                      - { $ref: "#/components/schemas/SequenceState" }
+                      - { type: "null" }
+        "400":
+          description: The endpoint has no sequence to reset.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404": { $ref: "#/components/responses/MockNotFound" }
+
+  /mocks/{id}/sse/push:
+    parameters:
+      - $ref: "#/components/parameters/MockId"
+    post:
+      tags: [Endpoints]
+      operationId: pushSseMessage
+      summary: Broadcast an SSE message to the open connections
+      description: |
+        Sends one message to **every** connection currently open on this endpoint, on top of
+        whatever its script is doing. Requires the selected variant to be of type `sse`.
+        The message is recorded in the console history even when nobody is listening.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SseMessage" }
+            example: { event: order-updated, data: { id: 42, status: shipped } }
+      responses:
+        "200": { $ref: "#/components/responses/PushResult" }
+        "400":
+          description: Invalid message, or the selected variant is not an `sse` one.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404": { $ref: "#/components/responses/MockNotFound" }
+
+  /mocks/{id}/sse/connections:
+    parameters:
+      - $ref: "#/components/parameters/MockId"
+    get:
+      tags: [Endpoints]
+      operationId: listSseState
+      summary: SSE console state
+      description: Open connections (with their position in the script) and the history of messages sent out, scripted and manual alike. Requires the selected variant to be of type `sse`.
+      responses:
+        "200":
+          description: Console state
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [connections, history]
+                properties:
+                  connections:
+                    type: array
+                    items: { $ref: "#/components/schemas/SseConnection" }
+                  history:
+                    type: array
+                    description: Oldest first, capped to the most recent messages.
+                    items: { $ref: "#/components/schemas/SseHistoryEntry" }
+        "400":
+          description: The selected variant is not an `sse` one.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404": { $ref: "#/components/responses/MockNotFound" }
+
+  /mocks/{id}/ws/push:
+    parameters:
+      - $ref: "#/components/parameters/MockId"
+    post:
+      tags: [Endpoints]
+      operationId: pushWsMessage
+      summary: Broadcast a WebSocket message to the open connections
+      description: Sends `data` to every open connection of this endpoint. Requires the selected variant to be of type `ws`. Non-string `data` travels as JSON on the wire.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/WsMessage" }
+            example: { data: { type: tick, value: 12 } }
+      responses:
+        "200": { $ref: "#/components/responses/PushResult" }
+        "400":
+          description: Invalid message, or the selected variant is not a `ws` one.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404": { $ref: "#/components/responses/MockNotFound" }
+
+  /mocks/{id}/ws/connections:
+    parameters:
+      - $ref: "#/components/parameters/MockId"
+    get:
+      tags: [Endpoints]
+      operationId: listWsState
+      summary: WebSocket console state
+      description: Open connections and the **bidirectional** transcript (messages sent and received). Requires the selected variant to be of type `ws`.
+      responses:
+        "200":
+          description: Console state
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [connections, transcript]
+                properties:
+                  connections:
+                    type: array
+                    items: { $ref: "#/components/schemas/WsConnection" }
+                  transcript:
+                    type: array
+                    description: Oldest first, capped to the most recent messages.
+                    items: { $ref: "#/components/schemas/WsTranscriptEntry" }
+        "400":
+          description: The selected variant is not a `ws` one.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404": { $ref: "#/components/responses/MockNotFound" }
+
+  # ───────────────────────────── Response variants ────────────────────────────
+  /mocks/{id}/responses:
+    parameters:
+      - $ref: "#/components/parameters/MockId"
+    post:
+      tags: [Response variants]
+      operationId: createResponse
+      summary: Add a response variant
+      description: |
+        Adds a variant and **selects it**. The new file name is the next free `NNN.response.json`.
+
+        - With no body (or only `title`), the currently selected variant is **cloned**, assets
+          included (the copy gets its own asset files).
+        - With a `type` different from the selected one, a fresh variant of that type is built
+          from its defaults — this is how an endpoint ends up with mixed variant types.
+        - With other fields and the same type, the payload is merged onto the clone.
+
+        For `handler`/`middleware`, omitting `source` writes a working scaffold; the source is
+        compiled before the change is committed, and a source that fails to load rolls the whole
+        operation back.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateResponseRequest" }
+            examples:
+              clone:
+                summary: Clone the selected variant
+                value: { title: Error case }
+              newMock:
+                summary: New mock variant
+                value: { type: mock, title: Not found, status: 404, body: { error: not found } }
+              newSse:
+                summary: New SSE variant with a script
+                value:
+                  type: sse
+                  title: Order stream
+                  onEnd: keep-open
+                  script:
+                    - { afterMs: 0, event: hello, data: { ok: true } }
+                    - { afterMs: 1000, data: { tick: 1 } }
+      responses:
+        "201":
+          description: The endpoint, with the new variant selected
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MockDetail" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/MockNotFound" }
+        "409":
+          description: The generated file or asset name is already taken.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /mocks/{id}/responses/{responseFileName}:
+    parameters:
+      - $ref: "#/components/parameters/MockId"
+      - $ref: "#/components/parameters/ResponseFileName"
+    put:
+      tags: [Response variants]
+      operationId: updateResponse
+      summary: Update a response variant
+      description: |
+        Partial update of one variant: absent fields keep their current value. The variant
+        **type cannot change** (`400`).
+
+        - `mock`: `status`, `headers`, `delayMs`, `title`, `templated`, and `body`. Sending an
+          explicit `body` on a file-backed variant switches it back to an inline payload and
+          drops the orphaned asset; `templated` is not supported on file payloads.
+        - `sse` / `ws`: the payload is merged onto the current script/rules/presets and then
+          validated exactly as the runtime loader would.
+        - `handler` / `middleware`: `title`, and `source` to rewrite the module (validated by
+          compiling it; a failure rolls back).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateResponseRequest" }
+            examples:
+              mock:
+                summary: Slow down one variant
+                value: { delayMs: 2000, status: 200 }
+              templated:
+                summary: Enable placeholder rendering
+                value: { templated: true, body: { id: "{{params.id}}", q: "{{query.q}}" } }
+              handler:
+                summary: Rewrite a handler source
+                value:
+                  source: |
+                    module.exports = {
+                      async resolveResponse({ params }) {
+                        return { status: 200, jsonBody: { id: params.id } };
+                      }
+                    };
+      responses:
+        "200":
+          description: The updated endpoint
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MockDetail" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/MockNotFound" }
+    delete:
+      tags: [Response variants]
+      operationId: deleteResponse
+      summary: Delete a response variant
+      description: |
+        Deletes the variant and its asset, unless another variant still references that asset.
+        The **last** variant of an endpoint cannot be deleted (`400`) — delete the endpoint
+        instead. If the deleted variant was selected, the one immediately before it takes over.
+      responses:
+        "200":
+          description: The updated endpoint
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MockDetail" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/MockNotFound" }
+
+  /mocks/{id}/responses/{responseFileName}/file:
+    parameters:
+      - $ref: "#/components/parameters/MockId"
+      - $ref: "#/components/parameters/ResponseFileName"
+    put:
+      tags: [Response variants]
+      operationId: setResponseFile
+      summary: Make a variant file-backed by uploading its bytes
+      description: |
+        Uploads the raw payload of a `mock` variant. The bytes are stored next to the variant and
+        served **streamed from disk**, so a large payload never sits in memory. The variant
+        switches from `body` to `file`, and the uploaded MIME becomes its `content-type` header
+        (you can override it later with an explicit header).
+
+        The bytes travel as the raw request body — MIME type and file name go in the query
+        string, so that the router's JSON parser does not intercept them. Max 12 MB. To go back
+        to an inline payload, send an explicit `body` to
+        `PUT /mocks/{id}/responses/{responseFileName}`.
+      parameters:
+        - name: filename
+          in: query
+          description: Original file name; only its extension is kept, to name the stored asset.
+          schema: { type: string }
+          example: report.pdf
+        - name: contentType
+          in: query
+          description: MIME type to store as the variant's `content-type` header.
+          schema: { type: string }
+          example: application/pdf
+      requestBody:
+        required: true
+        description: The raw bytes. Any content type is accepted; `application/octet-stream` is the intended one.
+        content:
+          application/octet-stream:
+            schema: { type: string, format: binary }
+      responses:
+        "200":
+          description: The updated endpoint
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MockDetail" }
+        "400":
+          description: Empty upload, or the variant is not a `mock` one.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404": { $ref: "#/components/responses/MockNotFound" }
+
+  # ─────────────────────────────── OpenAPI import ─────────────────────────────
+  /mocks/import/openapi:
+    post:
+      tags: [OpenAPI import]
+      operationId: importOpenapi
+      summary: Create mock endpoints from an OpenAPI document
+      description: |
+        Takes an OpenAPI document as the **raw request body** (JSON or YAML, up to 12 MB) and
+        creates one mock endpoint per operation, with a body sampled from the first successful
+        response schema. Operation tags become collections, reusing existing ones by label;
+        endpoints that already exist are skipped rather than overwritten.
+
+        With `dryRun=true` nothing is written and the response is the **plan** — every operation
+        with the action that would be taken — so a wizard can show it before committing. The
+        plan omits the sampled bodies, which can be large.
+
+        `text/plain` is rejected with `415` on purpose: it is the one content type a browser can
+        post cross-origin without a preflight, and this is the only mutating route that does not
+        require JSON.
+      parameters:
+        - name: dryRun
+          in: query
+          description: Plan only, write nothing.
+          schema: { type: boolean, default: false }
+        - name: prefix
+          in: query
+          description: Prefix prepended to every imported path (e.g. `/be`). Applies to dry runs too.
+          schema: { type: string }
+          example: /be
+      requestBody:
+        required: true
+        description: The OpenAPI document, verbatim.
+        content:
+          application/json:
+            schema: { type: string }
+          application/yaml:
+            schema: { type: string }
+          application/x-yaml:
+            schema: { type: string }
+          text/yaml:
+            schema: { type: string }
+      responses:
+        "200":
+          description: The plan (`dryRun=true` only — nothing was written).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OpenapiImportPlan" }
+        "201":
+          description: Import summary.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OpenapiImportResult" }
+        "400":
+          description: The document could not be parsed.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "415":
+          description: Unsupported content type (notably `text/plain`).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  # ───────────────────────────────── Data files ───────────────────────────────
+  /files:
+    get:
+      tags: [Data files]
+      operationId: listDataFiles
+      summary: List the data files
+      description: |
+        Every data file with its metadata and `usedBy`, the endpoints whose handler or middleware
+        source references it through `data("name")`. The reverse index is built by scanning
+        sources for **literal** references: an empty `usedBy` means "no direct reference found",
+        not "certainly unused".
+      responses:
+        "200":
+          description: The data files
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/DataFileSummary" }
+        "500":
+          description: The data files folder is not configured.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /files/{name}:
+    parameters:
+      - $ref: "#/components/parameters/DataFileName"
+    get:
+      tags: [Data files]
+      operationId: readDataFile
+      summary: Read a data file
+      description: Metadata plus the file content, as raw text (so the caller sees the exact formatting on disk).
+      responses:
+        "200":
+          description: The data file
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DataFileDetail" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/DataFileNotFound" }
+    put:
+      tags: [Data files]
+      operationId: putDataFile
+      summary: Create or replace a data file
+      description: |
+        Uploads the raw bytes of a JSON file (up to 25 MB). The content is **parsed before
+        anything is written**: invalid JSON is a `400` and the file on disk is untouched. The
+        write itself is atomic (temp file + rename), and the folder is created on first upload.
+
+        Answers `201` when the file did not exist, `200` when it was replaced. No runtime reload
+        is needed: `data()` re-reads on every call.
+      requestBody:
+        required: true
+        description: The JSON file bytes.
+        content:
+          application/octet-stream:
+            schema: { type: string, format: binary }
+          application/json:
+            schema: {}
+      responses:
+        "200":
+          description: Replaced.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DataFileSummary" }
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DataFileSummary" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+    patch:
+      tags: [Data files]
+      operationId: renameDataFile
+      summary: Rename a data file
+      description: |
+        Renames to the canonical (lowercase) form of `name`; an existing target is a `409`.
+        With `rewriteReferences: true` the literal `data("old")` occurrences in handler and
+        middleware sources are rewritten too — atomically, with rollback — and the runtime is
+        reloaded so the already-compiled modules point at the new name. Dynamic references
+        cannot be found and are left alone.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:
+                  type: string
+                  description: New name (normalized to lowercase, extension optional).
+                rewriteReferences:
+                  type: boolean
+                  default: false
+            example: { name: users-v2, rewriteReferences: true }
+      responses:
+        "200":
+          description: The renamed file, plus what the rewrite touched.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DataFileRenameResult" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/DataFileNotFound" }
+        "409":
+          description: A data file with the target name already exists.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+    delete:
+      tags: [Data files]
+      operationId: deleteDataFile
+      summary: Delete a data file
+      description: Deletes the file. Handlers still calling `data("name")` will fail at request time — check `usedBy` first.
+      responses:
+        "204": { description: Deleted. }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/DataFileNotFound" }
+
+  # ──────────────────────────────── Monitoring ────────────────────────────────
+  /monitoring/requests:
+    get:
+      tags: [Monitoring]
+      operationId: listMonitorEntries
+      summary: The live request feed
+      description: |
+        The in-memory history of served requests, **most recent first**, capped to the last few
+        hundred entries. Requests to `/_admin/api` are never recorded, and automatic CORS
+        preflights are filtered out as browser plumbing. Sensitive headers (`authorization`,
+        `cookie`, `set-cookie`, …) are masked as `***`; bodies are captured up to ~156 KB and
+        flagged as truncated beyond that.
+      responses:
+        "200":
+          description: The entries
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/MonitorEntry" }
+    delete:
+      tags: [Monitoring]
+      operationId: clearMonitorEntries
+      summary: Clear the live feed
+      description: Empties the in-memory view and notifies live subscribers with a `clear` event. **Durable dumps on disk are not touched.**
+      responses:
+        "204": { description: Cleared. }
+
+  /monitoring/requests/stream:
+    get:
+      tags: [Monitoring]
+      operationId: streamMonitorEntries
+      summary: Live event stream (SSE)
+      description: |
+        A Server-Sent Events stream of monitoring events. The first event is always a `snapshot`
+        with the current entries, then one `request` event per served request, and a `clear`
+        event when the feed is emptied. A `: keep-alive` comment every 15 s keeps proxies from
+        closing the connection.
+
+        Each event is a single `data:` line containing JSON.
+      responses:
+        "200":
+          description: The event stream
+          content:
+            text/event-stream:
+              schema: { $ref: "#/components/schemas/MonitorStreamEvent" }
+              examples:
+                snapshot:
+                  summary: First event
+                  value: { type: snapshot, items: [] }
+                request:
+                  summary: A request was served
+                  value: { type: request, item: { id: "12", method: GET, path: /api/users, status: 200, source: mock } }
+                clear:
+                  summary: The feed was emptied
+                  value: { type: clear }
+
+  /monitoring/dump:
+    get:
+      tags: [Monitoring]
+      operationId: getDumpStatus
+      summary: Durable capture status
+      description: Whether traffic is being written to disk, with the current cadence, thresholds and active file. Answers with `enabled` false and nothing else when the runtime has no dump writer.
+      responses:
+        "200":
+          description: The status
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DumpStatus" }
+    patch:
+      tags: [Monitoring]
+      operationId: setDumpConfig
+      summary: Start, stop or tune the durable capture
+      description: |
+        Turns the NDJSON capture on or off and adjusts its cadence at runtime. Unlike the live
+        feed, the dump buffers **every** request — its retention is the disk, not the 250-entry
+        window. Files rotate per session and by size; old files are pruned when the folder
+        exceeds its total cap.
+
+        Changing `intervalMs`/`threshold` while running re-arms the timer without rotating the
+        current file. Stopping performs a final flush.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                enabled: { type: boolean }
+                intervalMs:
+                  type: number
+                  exclusiveMinimum: 0
+                  description: Flush cadence.
+                threshold:
+                  type: integer
+                  exclusiveMinimum: 0
+                  description: Buffered entries that trigger an early flush.
+            example: { enabled: true, intervalMs: 5000, threshold: 50 }
+      responses:
+        "200":
+          description: The resulting status
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DumpStatus" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+
+  /monitoring/dump/flush:
+    post:
+      tags: [Monitoring]
+      operationId: flushDump
+      summary: Flush the buffered entries now
+      description: Writes whatever is buffered and waits for the write queue to drain — the way to make captured traffic readable immediately (e.g. in a test).
+      responses:
+        "200":
+          description: How many entries were taken in, plus the current status.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - type: object
+                    required: [flushed]
+                    properties:
+                      flushed: { type: integer }
+                  - { $ref: "#/components/schemas/DumpStatus" }
+
+  /monitoring/dumps:
+    get:
+      tags: [Monitoring]
+      operationId: listDumpFiles
+      summary: List the dump files
+      description: The NDJSON files in the dump folder, in chronological order (their names carry the session timestamp).
+      responses:
+        "200":
+          description: The files
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [files]
+                properties:
+                  files:
+                    type: array
+                    items: { $ref: "#/components/schemas/DumpFile" }
+
+  /monitoring/dumps/read:
+    get:
+      tags: [Monitoring]
+      operationId: readDumpPage
+      summary: Read the archive, page by page
+      description: |
+        Forward cursor pagination across **all** dump files in chronological order, built for
+        virtual scrolling. Reading is streamed, so a file is never loaded whole into memory, and
+        no total is computed: keep requesting until `done` is `true`, passing back `nextCursor`.
+
+        Each item is a monitor entry plus a `dumpKey` (`<file>#<lineIndex>`), stable because the
+        files are append-only — that key is what `create-mocks` selects on.
+      parameters:
+        - name: fileIndex
+          in: query
+          description: Cursor — index of the file to resume from.
+          schema: { type: integer, minimum: 0, default: 0 }
+        - name: lineIndex
+          in: query
+          description: Cursor — line to resume from inside that file.
+          schema: { type: integer, minimum: 0, default: 0 }
+        - name: limit
+          in: query
+          description: Page size.
+          schema: { type: integer, minimum: 1, default: 300 }
+      responses:
+        "200":
+          description: One page
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, nextCursor, done]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/DumpEntry" }
+                  nextCursor:
+                    oneOf:
+                      - type: object
+                        required: [fileIndex, lineIndex]
+                        properties:
+                          fileIndex: { type: integer }
+                          lineIndex: { type: integer }
+                      - { type: "null" }
+                  done:
+                    type: boolean
+                    description: True when the archive has been fully read.
+
+  /monitoring/dumps/create-mocks:
+    post:
+      tags: [Monitoring]
+      operationId: createMocksFromDump
+      summary: Turn captured traffic into mock endpoints
+      description: |
+        Bulk-creates mocks from archived entries, either a whole file or a selected set of
+        `dumpKey`s. Each entry becomes a mock on its matched route path, with the captured status
+        and the safe response headers (computed ones such as `content-length` and masked values
+        are dropped).
+
+        Degrades per entry instead of failing the batch: an endpoint that already exists is
+        counted as skipped, and an entry whose body was binary or truncated produces a
+        **skeleton** — empty body, description marked as to be completed. One runtime reload at
+        the end.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - type: object
+                  title: Whole file
+                  required: [file]
+                  properties:
+                    file:
+                      type: string
+                      pattern: '^dump-[A-Za-z0-9._-]+\.ndjson$'
+                - type: object
+                  title: Selected entries
+                  required: [keys]
+                  properties:
+                    keys:
+                      type: array
+                      items: { type: string }
+                      description: "`dumpKey` values (`<file>#<lineIndex>`)."
+            examples:
+              wholeFile:
+                value: { file: dump-2026-08-03T09-12-44-321Z.ndjson }
+              selection:
+                value: { keys: ["dump-2026-08-03T09-12-44-321Z.ndjson#0", "dump-2026-08-03T09-12-44-321Z.ndjson#7"] }
+      responses:
+        "201":
+          description: Counts of what happened.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [created, createdEmpty, skippedExisting, failed]
+                properties:
+                  created:
+                    type: integer
+                    description: Mocks created with a usable captured body.
+                  createdEmpty:
+                    type: integer
+                    description: Skeletons created (body was binary or truncated).
+                  skippedExisting:
+                    type: integer
+                    description: Endpoints that already existed.
+                  failed:
+                    type: integer
+        "400": { $ref: "#/components/responses/BadRequest" }
+
+  /monitoring/dumps/{file}:
+    parameters:
+      - name: file
+        in: path
+        required: true
+        description: Dump file name; must match the dump naming pattern (path traversal guard).
+        schema: { type: string, pattern: '^dump-[A-Za-z0-9._-]+\.ndjson$' }
+    delete:
+      tags: [Monitoring]
+      operationId: deleteDumpFile
+      summary: Delete a dump file
+      responses:
+        "204": { description: Deleted (also when the file was already gone). }
+        "400":
+          description: Invalid dump file name.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  # ─────────────────────────────── Server state ───────────────────────────────
+  /server:
+    get:
+      tags: [Server state]
+      operationId: getServerState
+      summary: Runtime switches
+      description: |
+        Two booleans that combine into three modes:
+
+        | `serverEnabled` | `proxyAll` | Behaviour |
+        |---|---|---|
+        | `true` | `false` | **Active** — mocks, handlers and middleware serve; traffic is monitored. |
+        | `true` | `true` | **Proxy all** — everything goes straight to the backend, but traffic is still monitored. |
+        | `false` | any | **Off** — everything goes straight to the backend and nothing is monitored. |
+
+        Deliberately **not persisted**: a restart returns to `active`. It is an operational
+        switch, not catalog data.
+      responses:
+        "200": { $ref: "#/components/responses/ServerState" }
+    patch:
+      tags: [Server state]
+      operationId: setServerState
+      summary: Update the runtime switches
+      description: Partial update; absent fields keep their value. Non-boolean values are rejected with `400`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                serverEnabled: { type: boolean }
+                proxyAll: { type: boolean }
+            example: { proxyAll: true }
+      responses:
+        "200": { $ref: "#/components/responses/ServerState" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+
+components:
+  parameters:
+    MockId:
+      name: id
+      in: path
+      required: true
+      description: |
+        Opaque endpoint id: the endpoint file path relative to the mocks folder, base64url-encoded
+        (e.g. `mocks/api/users/GET.endpoint.json`). Read it from a listing; do not build it by hand.
+      schema: { type: string }
+      example: YXBpL3VzZXJzL0dFVC5lbmRwb2ludC5qc29u
+    ResponseFileName:
+      name: responseFileName
+      in: path
+      required: true
+      description: Variant file name, as listed in `endpoint.responseFiles`. Must be a bare file name ending in `.response.json`.
+      schema: { type: string, pattern: '\.response\.json$' }
+      example: 001.response.json
+    CollectionId:
+      name: id
+      in: path
+      required: true
+      description: Persisted collection id. The virtual `unsorted` bucket is **not** accepted here.
+      schema: { type: string }
+    CollectionIdWithUnsorted:
+      name: id
+      in: path
+      required: true
+      description: Collection id, or `unsorted` for the virtual bucket of unassigned endpoints.
+      schema: { type: string }
+    DataFileName:
+      name: name
+      in: path
+      required: true
+      description: |
+        Data file name. Normalized to the canonical form: lowercase, and the `.json` extension is
+        optional (`Users.json`, `users.json` and `users` all address the same file).
+      schema: { type: string }
+      example: users
+
+  responses:
+    BadRequest:
+      description: Invalid input.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    MockNotFound:
+      description: Endpoint (or one of its files) not found.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    CollectionNotFound:
+      description: Collection not found.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    DataFileNotFound:
+      description: Data file not found.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    AdminApiDisabled:
+      description: |
+        The admin API is disabled for this runtime (`ADMIN_API_ENABLED`). **Every** route answers
+        this way when it is off — it is listed once here rather than repeated on each operation.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+          example:
+            error: Admin API disabled
+            message: The local mock administration API is disabled for this runtime.
+    CollectionList:
+      description: The collections after the change.
+      content:
+        application/json:
+          schema:
+            type: array
+            items: { $ref: "#/components/schemas/CollectionSummary" }
+    MockItemList:
+      description: The endpoints after the change.
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [items]
+            properties:
+              items:
+                type: array
+                items: { $ref: "#/components/schemas/MockSummary" }
+    PushResult:
+      description: How many connections received the message.
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [delivered, connections]
+            properties:
+              delivered:
+                type: integer
+                description: Connections the message was written to.
+              connections:
+                type: integer
+                description: Connections currently open on the endpoint.
+    ServerState:
+      description: The current switches.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ServerState" }
+
+  schemas:
+    # ── Shared primitives ────────────────────────────────────────────────────
+    Error:
+      type: object
+      description: The uniform error shape of the whole admin API.
+      required: [error, message]
+      properties:
+        error:
+          type: string
+          description: Short label, e.g. `Bad Request`.
+        message:
+          type: string
+          description: Human-readable explanation, safe to show in a UI.
+        details:
+          type: object
+          description: Extra machine-readable context, when the failure has any (e.g. `existingMockId` on a `409` from `POST /mocks`).
+      example:
+        error: Bad Request
+        message: config.status must be an integer HTTP status code.
+
+    HttpMethod:
+      type: string
+      enum: [GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS]
+
+    RoutePath:
+      type: string
+      description: |
+        Absolute route path. Dynamic segments use the `:param` form (`/api/users/:id`), and a
+        path may declare required query parameters. The path determines the folder the endpoint
+        files live in, which is why it is immutable after creation.
+      example: /api/users/:id
+
+    Headers:
+      type: object
+      description: Response headers. Values are strings, numbers, booleans, or arrays of strings.
+      additionalProperties:
+        oneOf:
+          - { type: string }
+          - { type: number }
+          - { type: boolean }
+          - { type: array, items: { type: string } }
+
+    ResponseType:
+      type: string
+      enum: [mock, handler, middleware, sse, ws]
+      description: |
+        How a variant answers:
+        `mock` static payload · `handler` JS module computing the response ·
+        `middleware` JS module transforming a proxied backend response ·
+        `sse` Server-Sent Events script · `ws` WebSocket script and rules.
+
+    # ── Catalog ──────────────────────────────────────────────────────────────
+    MockSummary:
+      type: object
+      description: One endpoint as it appears in the catalog, summarized through its **selected** variant.
+      required: [id, type, configFilePath, method, path, disabled, payloadType, selectedResponseFile, responseTitle, responseCount, sequenceActive]
+      properties:
+        id:
+          type: string
+          description: Opaque endpoint id (see the `id` path parameter).
+        type: { $ref: "#/components/schemas/ResponseType" }
+        configFilePath:
+          type: string
+          description: Endpoint file path relative to the mocks folder (POSIX separators).
+          example: api/users/GET.endpoint.json
+        method: { $ref: "#/components/schemas/HttpMethod" }
+        path: { $ref: "#/components/schemas/RoutePath" }
+        status:
+          type: [integer, "null"]
+          description: Status of the selected variant; `null` for non-`mock` types.
+        disabled:
+          type: boolean
+          description: True when the endpoint is switched off (it is then ignored by the runtime).
+        payloadType:
+          type: string
+          enum: [json, text, file, none]
+          description: Shape of the selected mock payload — `none` for non-`mock` types.
+        file:
+          type: string
+          description: Asset file name, when the selected variant is file-backed.
+        delayMs:
+          type: integer
+          description: Artificial delay of the selected variant (`mock` only).
+        selectedResponseFile: { type: string }
+        responseTitle:
+          type: string
+          description: Title of the selected variant (empty string when unnamed).
+        responseCount:
+          type: integer
+          description: How many variants the endpoint owns.
+        sequenceActive:
+          type: boolean
+          description: True when a sequence is defined **and** enabled — the endpoint is walking its variants rather than serving the selected one.
+        collectionId:
+          type: string
+          description: Present only when the endpoint belongs to a collection; absent means the virtual `Unsorted` bucket.
+
+    CollectionSummary:
+      type: object
+      required: [id, label, itemCount]
+      properties:
+        id: { type: string }
+        label: { type: string }
+        itemCount:
+          type: integer
+          description: Endpoints assigned **directly** to this collection.
+        parentId:
+          type: string
+          description: Present only for nested collections.
+
+    ChildOrder:
+      type: object
+      description: |
+        Display order of each parent's children, endpoints and sub-collections interleaved.
+        Keys are `root` (the top-level collections), `unsorted` (endpoints in no collection) or a
+        collection id; values are ordered lists of endpoint ids and collection ids.
+      additionalProperties:
+        type: array
+        items: { type: string }
+      example:
+        root: [authentication, billing]
+        authentication: ["YXBpL2xvZ2luL1BPU1QuZW5kcG9pbnQuanNvbg", nested-collection-id]
+        unsorted: ["YXBpL3BpbmcvR0VULmVuZHBvaW50Lmpzb24"]
+
+    # ── Endpoint detail ──────────────────────────────────────────────────────
+    EndpointConfig:
+      type: object
+      description: The endpoint file as stored on disk, normalized.
+      required: [method, path, description, enabled, responseFiles, selectedResponseFile]
+      properties:
+        method: { $ref: "#/components/schemas/HttpMethod" }
+        path: { $ref: "#/components/schemas/RoutePath" }
+        description: { type: string }
+        enabled: { type: boolean }
+        responseFiles:
+          type: array
+          items: { type: string }
+          description: Variant file names, in creation order.
+        selectedResponseFile: { type: string }
+        sequence:
+          $ref: "#/components/schemas/SequenceConfig"
+
+    ResponseVariantSummary:
+      type: object
+      required: [fileName]
+      properties:
+        fileName: { type: string }
+        missing:
+          type: boolean
+          description: Present and `true` when the file listed in `responseFiles` is not on disk; all other fields are then absent.
+        type: { $ref: "#/components/schemas/ResponseType" }
+        title: { type: string }
+        sourceFile:
+          type: string
+          description: Module file name (`handler`/`middleware` only).
+        status: { type: [integer, "null"] }
+        templated:
+          type: boolean
+          description: "`mock` only: whether placeholders in the payload are rendered per request."
+        selected: { type: boolean }
+
+    MockDetail:
+      type: object
+      description: |
+        Everything about one endpoint: its catalog summary, the definition, the list of variants,
+        and the fully expanded **selected** variant. Which of the type-specific groups is present
+        depends on `type`:
+
+        - `mock` → `config`, plus `body` (inline payload) **or** `fileInfo` (file-backed);
+        - `handler` / `middleware` → `definition`, `source`, `sourceFilePath`;
+        - `sse` → `sse`;
+        - `ws` → `ws`.
+
+        Path fields ending in `FilePath` are **absolute paths on the server machine**, useful for
+        local tooling and log correlation; `configFilePath` stays workspace-relative.
+      allOf:
+        - $ref: "#/components/schemas/MockSummary"
+        - type: object
+          required: [editable, definitionFilePath, responseFilePath, responses, endpoint, response]
+          properties:
+            editable:
+              type: boolean
+              description: Always `true`; kept so a client can render read-only sources uniformly.
+            definitionFilePath:
+              type: string
+              description: Absolute path of the endpoint file.
+            responseFilePath:
+              type: string
+              description: Absolute path of the selected variant file.
+            payloadFilePath:
+              type: string
+              description: Absolute path of what actually carries the payload — the asset, the module source, or the variant file itself.
+            responses:
+              type: array
+              items: { $ref: "#/components/schemas/ResponseVariantSummary" }
+            endpoint: { $ref: "#/components/schemas/EndpointConfig" }
+            response:
+              type: object
+              description: The selected variant, normalized. Its fields depend on `type`.
+              additionalProperties: true
+            sequenceState:
+              $ref: "#/components/schemas/SequenceState"
+            config:
+              type: object
+              description: "`mock` only: the editable configuration of the selected variant."
+              properties:
+                method: { $ref: "#/components/schemas/HttpMethod" }
+                path: { $ref: "#/components/schemas/RoutePath" }
+                status: { type: integer }
+                disabled: { type: boolean }
+                headers: { $ref: "#/components/schemas/Headers" }
+                delayMs: { type: integer }
+                templated: { type: boolean }
+            body:
+              description: "`mock` only, inline payloads: the payload itself (any JSON value, or a string for text payloads)."
+            fileInfo:
+              type: object
+              description: "`mock` only, file-backed payloads."
+              required: [name, size]
+              properties:
+                name: { type: string }
+                size: { type: integer, description: Size in bytes. }
+            definition:
+              type: object
+              description: "`handler`/`middleware` only."
+              properties:
+                method: { $ref: "#/components/schemas/HttpMethod" }
+                path: { $ref: "#/components/schemas/RoutePath" }
+                disabled: { type: boolean }
+            source:
+              type: string
+              description: "`handler`/`middleware` only: the module source code."
+            sourceFilePath:
+              type: string
+              description: "`handler`/`middleware` only: absolute path of the module."
+            sse: { $ref: "#/components/schemas/SseConfig" }
+            ws: { $ref: "#/components/schemas/WsConfig" }
+
+    # ── Sequences ────────────────────────────────────────────────────────────
+    SequenceConfig:
+      type: object
+      description: |
+        A selection policy layered over the existing variants: it orders them and says how long
+        each one answers. A step advances after `times` requests or after `forMs` milliseconds
+        from its first request — exactly one of the two, except the last step under `onEnd: stay`,
+        where no criterion means "stay here forever". At least 2 steps (with one, a sequence would
+        just be the plain selection). Only `mock` and `handler` variants can be steps.
+      required: [steps]
+      properties:
+        enabled:
+          type: boolean
+          default: true
+          description: A disabled sequence is kept on disk but ignored — the selected variant answers.
+        steps:
+          type: array
+          minItems: 2
+          items:
+            type: object
+            required: [response]
+            properties:
+              response:
+                type: string
+                description: A file name listed in `endpoint.responseFiles`.
+              times:
+                type: integer
+                minimum: 1
+                description: Advance after this many requests.
+              forMs:
+                type: integer
+                minimum: 1
+                description: Advance this long after the step's first request.
+        onEnd:
+          type: string
+          enum: [stay, loop]
+          default: stay
+        resetAfterMs:
+          type: [integer, "null"]
+          description: Idle time after which the cursor restarts from the first step.
+
+    SequenceState:
+      type: object
+      description: Live cursor of a sequence. Virgin values (step 0, nothing served) when the endpoint has never been called or the definition changed.
+      required: [stepIndex, servedInStep, stepStartedAt, lastRequestAt]
+      properties:
+        stepIndex:
+          type: integer
+          description: Step that will answer the **next** request.
+        servedInStep: { type: integer }
+        stepStartedAt: { type: [integer, "null"], description: Epoch milliseconds. }
+        lastRequestAt: { type: [integer, "null"], description: Epoch milliseconds. }
+
+    # ── SSE ──────────────────────────────────────────────────────────────────
+    SseMessage:
+      type: object
+      description: One Server-Sent Event. `data` is required and may be any JSON value or a string.
+      required: [data]
+      properties:
+        data: {}
+        event: { type: string, description: Event name; omit for the default `message`. }
+        id: { type: string }
+
+    SseConfig:
+      type: object
+      description: |
+        The script an `sse` variant plays for every connection. `afterMs` is relative to the
+        **previous** message. An empty script is legitimate: the endpoint stays silent and is
+        driven entirely from the console. Under `onEnd: loop` the script must be non-empty and
+        contain at least one positive `afterMs`, so the loop cannot spin.
+      required: [script, onEnd, presets]
+      properties:
+        retryMs:
+          type: [integer, "null"]
+          description: Reconnection hint sent to the client as the SSE `retry:` field.
+        script:
+          type: array
+          items:
+            allOf:
+              - type: object
+                required: [afterMs]
+                properties:
+                  afterMs: { type: integer, minimum: 0 }
+              - $ref: "#/components/schemas/SseMessage"
+        onEnd:
+          type: string
+          enum: [keep-open, close, loop]
+          default: keep-open
+          description: What happens once the script is exhausted.
+        presets:
+          type: array
+          description: Ready-made messages the console offers for manual pushes.
+          items:
+            allOf:
+              - type: object
+                properties:
+                  label: { type: string }
+              - $ref: "#/components/schemas/SseMessage"
+
+    SseConnection:
+      type: object
+      required: [id, startedAt, eventsSent, scriptIndex, scriptLength]
+      properties:
+        id: { type: string }
+        startedAt: { type: integer, description: Epoch milliseconds. }
+        eventsSent: { type: integer }
+        scriptIndex: { type: integer, description: Position reached in the script. }
+        scriptLength: { type: integer }
+
+    SseHistoryEntry:
+      type: object
+      required: [at, origin, data]
+      properties:
+        at: { type: integer, description: Epoch milliseconds. }
+        origin:
+          type: string
+          enum: [script, manual]
+        connectionId:
+          type: string
+          description: Absent for broadcasts that were not tied to one connection.
+        event: { type: string }
+        id: { type: string }
+        data: {}
+
+    # ── WebSocket ────────────────────────────────────────────────────────────
+    WsMessage:
+      type: object
+      description: One WebSocket message. Only `data` — `event`/`id` are SSE concepts. Non-string values travel as JSON on the wire.
+      required: [data]
+      properties:
+        data: {}
+
+    WsConfig:
+      type: object
+      description: |
+        What a `ws` variant does: an outgoing script, declarative replies to incoming messages,
+        and console presets. An empty script is legitimate (rules and console only). A rule
+        matches on exactly one of `equals`, `contains` or `json` (a first-level subset match, no
+        logic — when you need more, the right step up is a handler). Unmatched incoming messages
+        get no reply; they only appear in the transcript.
+      required: [script, onEnd, rules, presets]
+      properties:
+        script:
+          type: array
+          items:
+            type: object
+            required: [afterMs, data]
+            properties:
+              afterMs: { type: integer, minimum: 0, description: Relative to the previous message. }
+              data: {}
+        onEnd:
+          type: string
+          enum: [keep-open, close, loop]
+          default: keep-open
+        closeCode:
+          type: [integer, "null"]
+          description: Only when `onEnd` is `close`. Must be 1000 or in the 3000–4999 application range.
+        closeReason:
+          type: [string, "null"]
+          maxLength: 123
+          description: Only when `onEnd` is `close` (the protocol caps the close payload at 125 bytes).
+        rules:
+          type: array
+          items:
+            type: object
+            required: [match, reply]
+            properties:
+              match:
+                type: object
+                description: Exactly one of `equals`, `contains`, `json`.
+                properties:
+                  equals: { type: string }
+                  contains: { type: string }
+                  json: { type: object }
+              reply:
+                type: array
+                minItems: 1
+                items:
+                  type: object
+                  required: [afterMs, data]
+                  properties:
+                    afterMs: { type: integer, minimum: 0 }
+                    data: {}
+        presets:
+          type: array
+          items:
+            type: object
+            required: [data]
+            properties:
+              label: { type: string }
+              data: {}
+
+    WsConnection:
+      type: object
+      required: [id, startedAt, messagesSent, messagesReceived, scriptIndex, scriptLength]
+      properties:
+        id: { type: string }
+        startedAt: { type: integer, description: Epoch milliseconds. }
+        messagesSent: { type: integer }
+        messagesReceived: { type: integer }
+        scriptIndex: { type: integer }
+        scriptLength: { type: integer }
+
+    WsTranscriptEntry:
+      type: object
+      required: [at, direction, origin, data]
+      properties:
+        at: { type: integer, description: Epoch milliseconds. }
+        direction:
+          type: string
+          enum: [out, in]
+        origin:
+          type: string
+          enum: [script, rule, manual, received]
+        connectionId: { type: string }
+        data: {}
+
+    # ── Request bodies ───────────────────────────────────────────────────────
+    CreateMockRequest:
+      oneOf:
+        - type: object
+          title: Static mock
+          description: |
+            Creates a `mock` endpoint whose first variant carries an inline payload. The payload
+            is stored in the variant file, so `config.bodyFile`/`config.file` are ignored if sent
+            — upload a file payload afterwards with
+            `PUT /mocks/{id}/responses/{responseFileName}/file`.
+          required: [config]
+          properties:
+            type:
+              type: string
+              const: mock
+              description: Optional; anything other than `handler`/`middleware` creates a mock.
+            config:
+              type: object
+              required: [method, path, status]
+              properties:
+                method: { $ref: "#/components/schemas/HttpMethod" }
+                path: { $ref: "#/components/schemas/RoutePath" }
+                status: { type: integer }
+                disabled: { type: boolean, default: false }
+                headers: { $ref: "#/components/schemas/Headers" }
+                delayMs: { type: integer, minimum: 0, default: 0 }
+            body:
+              description: The payload — any JSON value; a string produces a text payload. Defaults to an empty object.
+            description:
+              type: string
+              description: Endpoint description.
+        - type: object
+          title: Handler or middleware
+          description: Creates a script endpoint. Omitting `source` writes a working scaffold; the module is compiled before the change is committed.
+          required: [type, definition]
+          properties:
+            type:
+              type: string
+              enum: [handler, middleware]
+            definition:
+              type: object
+              required: [method, path]
+              properties:
+                method: { $ref: "#/components/schemas/HttpMethod" }
+                path: { $ref: "#/components/schemas/RoutePath" }
+                disabled: { type: boolean, default: false }
+            source:
+              type: string
+              description: |
+                CommonJS module source. A `handler` must export `resolveResponse`, a `middleware`
+                must export `transformResponse`. Metadata (`method`, `path`, `disabled`) must
+                **not** be exported: it lives in the endpoint file.
+
+    UpdateMockRequest:
+      oneOf:
+        - type: object
+          title: Set or remove the sequence
+          required: [sequence]
+          properties:
+            sequence:
+              oneOf:
+                - { $ref: "#/components/schemas/SequenceConfig" }
+                - { type: "null" }
+        - type: object
+          title: Select the answering variant
+          required: [selectedResponseFile]
+          properties:
+            selectedResponseFile:
+              type: string
+              description: Must be listed in `endpoint.responseFiles`.
+        - type: object
+          title: Rewrite the selected mock variant
+          required: [config]
+          properties:
+            type: { type: string, const: mock }
+            config:
+              type: object
+              required: [method, path, status]
+              properties:
+                method: { $ref: "#/components/schemas/HttpMethod" }
+                path:
+                  allOf: [{ $ref: "#/components/schemas/RoutePath" }]
+                  description: Must equal the current path — it cannot be changed.
+                status: { type: integer }
+                disabled:
+                  type: boolean
+                  description: Mirrors the endpoint's `enabled` flag.
+                headers: { $ref: "#/components/schemas/Headers" }
+                delayMs: { type: integer, minimum: 0 }
+                templated: { type: boolean }
+            body:
+              description: New payload; the current one is kept when absent.
+        - type: object
+          title: Rewrite the selected script variant
+          required: [type, definition]
+          properties:
+            type: { type: string, enum: [handler, middleware] }
+            definition:
+              type: object
+              required: [method, path]
+              properties:
+                method: { $ref: "#/components/schemas/HttpMethod" }
+                path:
+                  allOf: [{ $ref: "#/components/schemas/RoutePath" }]
+                  description: Must equal the current path.
+                disabled: { type: boolean }
+            source:
+              type: string
+              description: New module source; a scaffold is written when absent.
+
+    CreateResponseRequest:
+      description: |
+        Omit the body (or send only `title`) to clone the selected variant. Send `type` to build a
+        fresh variant of that type instead.
+      oneOf:
+        - type: object
+          title: Clone the selected variant
+          properties:
+            title: { type: string }
+        - type: object
+          title: New mock variant
+          required: [type]
+          properties:
+            type: { type: string, const: mock }
+            title: { type: string }
+            status: { type: integer, default: 200 }
+            headers: { $ref: "#/components/schemas/Headers" }
+            delayMs: { type: integer, minimum: 0, default: 0 }
+            templated: { type: boolean }
+            body:
+              description: The payload — any JSON value. Defaults to an empty object.
+        - type: object
+          title: New handler or middleware variant
+          required: [type]
+          properties:
+            type: { type: string, enum: [handler, middleware] }
+            title: { type: string }
+            source: { type: string, description: A scaffold is written when absent. }
+        - type: object
+          title: New SSE variant
+          required: [type]
+          properties:
+            type: { type: string, const: sse }
+            title: { type: string }
+            retryMs: { type: integer, minimum: 0 }
+            script: { $ref: "#/components/schemas/SseConfig/properties/script" }
+            onEnd: { type: string, enum: [keep-open, close, loop] }
+            presets: { $ref: "#/components/schemas/SseConfig/properties/presets" }
+        - type: object
+          title: New WebSocket variant
+          required: [type]
+          properties:
+            type: { type: string, const: ws }
+            title: { type: string }
+            script: { $ref: "#/components/schemas/WsConfig/properties/script" }
+            onEnd: { type: string, enum: [keep-open, close, loop] }
+            closeCode: { type: integer }
+            closeReason: { type: string, maxLength: 123 }
+            rules: { $ref: "#/components/schemas/WsConfig/properties/rules" }
+            presets: { $ref: "#/components/schemas/WsConfig/properties/presets" }
+
+    UpdateResponseRequest:
+      type: object
+      description: |
+        Partial update of one variant; absent fields keep their value. The set of meaningful
+        fields depends on the variant type — sending a `type` different from the current one is
+        rejected.
+      properties:
+        type: { $ref: "#/components/schemas/ResponseType" }
+        title: { type: [string, "null"], description: "`null` clears it." }
+        status: { type: integer, description: "`mock` only." }
+        headers: { allOf: [{ $ref: "#/components/schemas/Headers" }], description: "`mock` only — replaces the whole map." }
+        delayMs: { type: integer, minimum: 0, description: "`mock` only." }
+        templated: { type: boolean, description: "`mock` only; not supported on file payloads." }
+        body: { description: "`mock` only. Sending it turns a file-backed variant back into an inline one." }
+        source: { type: string, description: "`handler`/`middleware` only: the new module source." }
+        retryMs: { type: [integer, "null"], description: "`sse` only." }
+        script: { type: array, items: {}, description: "`sse`/`ws` only — replaces the whole script." }
+        onEnd: { type: string, enum: [keep-open, close, loop], description: "`sse`/`ws` only." }
+        presets: { type: array, items: {}, description: "`sse`/`ws` only." }
+        closeCode: { type: [integer, "null"], description: "`ws` only; requires `onEnd: close`." }
+        closeReason: { type: [string, "null"], description: "`ws` only; requires `onEnd: close`." }
+        rules: { type: array, items: {}, description: "`ws` only." }
+
+    # ── OpenAPI import ───────────────────────────────────────────────────────
+    OpenapiImportPlan:
+      type: object
+      description: What a real import would do (`dryRun=true`). Sampled response bodies are omitted from the items.
+      required: [items, total, create, skip, collections, prefix]
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+            required: [method, path, status, action]
+            properties:
+              method: { $ref: "#/components/schemas/HttpMethod" }
+              path: { $ref: "#/components/schemas/RoutePath" }
+              status:
+                type: integer
+                description: First successful status declared by the operation.
+              collection:
+                type: string
+                description: First tag of the operation, if any — it becomes the collection.
+              action:
+                type: string
+                enum: [create, skip]
+                description: "`skip` when an endpoint with the same method and path already exists."
+        total: { type: integer }
+        create: { type: integer }
+        skip: { type: integer }
+        collections:
+          type: integer
+          description: Distinct tags among the operations that would be created.
+        prefix:
+          type: string
+          description: Prefix actually applied (from the `prefix` query parameter).
+        suggestedPrefix:
+          type: string
+          description: Prefix inferred from the document's `servers`, offered to the user by the wizard.
+
+    OpenapiImportResult:
+      type: object
+      required: [created, skipped, failed, total, collections, prefix]
+      properties:
+        created: { type: integer }
+        skipped:
+          type: integer
+          description: Operations whose endpoint already existed.
+        failed:
+          type: integer
+          description: Operations that could not be created — the import does not abort on them.
+        total: { type: integer }
+        collections:
+          type: integer
+          description: Collections resolved or created from tags.
+        prefix: { type: string }
+
+    # ── Data files ───────────────────────────────────────────────────────────
+    DataFileSummary:
+      type: object
+      required: [name, fileName, sizeBytes, updatedAt, usedBy]
+      properties:
+        name:
+          type: string
+          description: Canonical name, without extension — the argument of `data("…")`.
+        fileName: { type: string }
+        sizeBytes: { type: integer }
+        updatedAt: { type: string, format: date-time }
+        usedBy:
+          type: array
+          description: Endpoints whose source contains a literal `data("name")`. Best effort — see the route description.
+          items:
+            type: object
+            required: [id, method, path, type]
+            properties:
+              id: { type: string }
+              method: { $ref: "#/components/schemas/HttpMethod" }
+              path: { $ref: "#/components/schemas/RoutePath" }
+              type: { type: string, enum: [handler, middleware] }
+
+    DataFileDetail:
+      allOf:
+        - $ref: "#/components/schemas/DataFileSummary"
+        - type: object
+          required: [content]
+          properties:
+            content:
+              type: string
+              description: The file content as raw text, exactly as stored.
+
+    DataFileRenameResult:
+      type: object
+      description: The renamed file (without `usedBy`) plus what the reference rewrite touched.
+      required: [name, fileName, sizeBytes, updatedAt, referencesRewritten, referencingEndpoints]
+      properties:
+        name: { type: string }
+        fileName: { type: string }
+        sizeBytes: { type: integer }
+        updatedAt: { type: string, format: date-time }
+        referencesRewritten:
+          type: integer
+          description: Literal occurrences rewritten across handler and middleware sources.
+        referencingEndpoints:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: string }
+              method: { $ref: "#/components/schemas/HttpMethod" }
+              path: { $ref: "#/components/schemas/RoutePath" }
+              type: { type: string, enum: [handler, middleware] }
+
+    # ── Monitoring ───────────────────────────────────────────────────────────
+    MonitorEntry:
+      type: object
+      description: One served request, as captured by the monitor.
+      required: [id, timestamp, method, path, status, latencyMs, source]
+      properties:
+        id: { type: string, description: Sequential id within the process lifetime. }
+        timestamp: { type: string, format: date-time, description: When the request started. }
+        method: { $ref: "#/components/schemas/HttpMethod" }
+        path: { type: string, description: Request path, without query string. }
+        originalUrl: { type: string, description: Path with query string. }
+        status: { type: integer }
+        latencyMs: { type: integer }
+        source:
+          type: string
+          enum: [mock, handler, sse, ws, middleware, backend, mock-only, backend-unconfigured, cors-preflight, proxy]
+          description: |
+            Which branch answered — the same value the response carries in `x-mock-source`.
+            `backend` a plain proxied response · `middleware` a proxied response transformed by a
+            middleware · `mock-only` a miss with proxy fallback disabled ·
+            `backend-unconfigured` a request that needed the backend while `BACKEND_URL` is unset.
+        matchedRoutePath:
+          type: string
+          description: Route path of the endpoint that matched, when one did (it can differ from `path` for dynamic routes).
+        sequenceStep:
+          type: object
+          description: Present only for endpoints serving a sequence — which step answered.
+          properties:
+            index: { type: integer }
+            count: { type: integer }
+            responseFile: { type: string }
+            responseTitle: { type: string }
+        middlewareRoutePath: { type: string }
+        middlewareFilePath: { type: string }
+        requestHeaders:
+          type: object
+          description: Sensitive headers are masked as `***`.
+          additionalProperties: true
+        requestBody:
+          type: string
+          description: |
+            Readable preview: JSON is pretty-printed, compressed payloads are inflated when
+            possible, binary ones are described rather than dumped. Absent when there was no body.
+        requestBodyBytes: { type: integer, description: Real size, even when the preview is truncated. }
+        requestBodyTruncated: { type: boolean }
+        responseHeaders:
+          type: object
+          additionalProperties: true
+        responseBody: { type: string }
+        responseBodyBytes: { type: integer }
+        responseBodyTruncated: { type: boolean }
+
+    MonitorStreamEvent:
+      oneOf:
+        - type: object
+          title: snapshot
+          description: Sent once, right after the stream opens.
+          required: [type, items]
+          properties:
+            type: { type: string, const: snapshot }
+            items:
+              type: array
+              items: { $ref: "#/components/schemas/MonitorEntry" }
+        - type: object
+          title: request
+          description: A request was served.
+          required: [type, item]
+          properties:
+            type: { type: string, const: request }
+            item: { $ref: "#/components/schemas/MonitorEntry" }
+        - type: object
+          title: clear
+          description: The live feed was emptied.
+          required: [type]
+          properties:
+            type: { type: string, const: clear }
+
+    DumpStatus:
+      type: object
+      required: [enabled]
+      properties:
+        enabled: { type: boolean }
+        intervalMs: { type: number, description: Flush cadence. }
+        threshold: { type: integer, description: Buffered entries that trigger an early flush. }
+        maxTotalBytes:
+          type: integer
+          description: Size cap of the dump folder; older files are pruned above it. `0` disables pruning.
+        currentFile:
+          type: [string, "null"]
+          description: File being appended to, `null` when the capture is off.
+        pendingCount: { type: integer, description: Entries buffered and not yet written. }
+
+    DumpFile:
+      type: object
+      required: [name, size, mtime]
+      properties:
+        name: { type: string }
+        size: { type: integer, description: Size in bytes. }
+        mtime: { type: number, description: Last modification, epoch milliseconds. }
+
+    DumpEntry:
+      allOf:
+        - $ref: "#/components/schemas/MonitorEntry"
+        - type: object
+          required: [dumpKey]
+          properties:
+            dumpKey:
+              type: string
+              description: "Stable archive key, `<file>#<lineIndex>` — what `create-mocks` selects on."
+              example: dump-2026-08-03T09-12-44-321Z.ndjson#42
+
+    # ── Server state ─────────────────────────────────────────────────────────
+    ServerState:
+      type: object
+      required: [serverEnabled, proxyAll]
+      properties:
+        serverEnabled:
+          type: boolean
+          description: When `false` every request is proxied to the backend and nothing is monitored.
+        proxyAll:
+          type: boolean
+          description: When `true` mocks are bypassed but traffic is still monitored.

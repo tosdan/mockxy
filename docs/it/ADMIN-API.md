@@ -22,7 +22,8 @@ resettano lo stato tra i test, pipeline che importano una specifica aggiornata.
 - **`:id`** degli endpoint è il percorso relativo del file endpoint codificato base64url: si
   ottiene dalle liste e si tratta come **opaco**.
 - Gli **errori** sono JSON `{ error, message, details? }` con lo status appropriato
-  (`400` input invalido, `404` non trovato, `415` media type, `500`).
+  (`400` input invalido, `403` header `Host` inatteso, `404` non trovato, `409` conflitto,
+  `415` media type non supportato, `500` fallimento imprevisto).
 - Le mutazioni sul catalogo **ricaricano il runtime immediatamente**: la modifica è servita
   dalla richiesta successiva, senza riavvii. I file dati non ricaricano nulla ([`data()`
   rilegge a ogni chiamata](DATI.md)), con un'eccezione: la rinomina con riscrittura dei
@@ -42,7 +43,7 @@ resettano lo stato tra i test, pipeline che importano una specifica aggiornata.
 | `GET /mocks/:id/sse/connections` | stato della console SSE: connessioni aperte (con posizione nel copione) e storico dei messaggi usciti |
 | `POST /mocks/:id/ws/push` | push manuale della console [WS](RESPONSE.md): body `{ data }`, broadcast a tutte le connessioni aperte — risponde `{ delivered, connections }` |
 | `GET /mocks/:id/ws/connections` | stato della console WS: connessioni aperte (con posizione nel copione) e transcript bidirezionale (usciti e ricevuti) |
-| `PUT /mocks/:id/endpoint` | aggiorna metodo, percorso, descrizione |
+| `PUT /mocks/:id/endpoint` | aggiorna **solo** `description` ed `enabled` (qualunque altro campo è `400`): metodo e percorso sono fissati alla creazione — il percorso determina la cartella dei file — e si cambiano con `POST /mocks/:id/copy` |
 | `POST /mocks/:id/copy` | duplica su nuovo metodo+percorso — body `{ method, path, copyResponses }` |
 | `PUT /mocks/:id/collection` | assegna l'endpoint a una collezione |
 | `DELETE /mocks/:id` | elimina endpoint e varianti |
@@ -129,6 +130,12 @@ curl -s -X PATCH http://localhost:3000/_admin/api/monitoring/dump \
 curl -s -X POST http://localhost:3000/_admin/api/monitoring/dump/flush
 ```
 
-Per la struttura esatta dei body di creazione e aggiornamento, la fonte più affidabile è
-l'interfaccia stessa: ogni sua azione è una chiamata a queste rotte, osservabile dagli
-strumenti di sviluppo del browser.
+## La descrizione leggibile dalle macchine
+
+Per la struttura esatta di ogni body di richiesta e risposta esiste una descrizione OpenAPI 3.1
+di questa API: [`docs/admin-api.openapi.yaml`](../admin-api.openapi.yaml). Documenta rotta per
+rotta gli schemi, gli status e le varianti di payload, e si può caricare in un generatore di
+client, in uno strumento per le richieste, o darla a un agente che deve pilotare Mockxy da solo.
+
+La seconda fonte affidabile resta l'interfaccia stessa: ogni sua azione è una chiamata a queste
+rotte, osservabile dagli strumenti di sviluppo del browser.
