@@ -1,4 +1,5 @@
-export type MockType = 'mock' | 'middleware' | 'handler' | 'sse' | 'ws';
+export type MockType = 'mock' | 'middleware' | 'handler' | 'sse' | 'ws' | 'sequence';
+export type EndpointCreateType = 'mock' | 'middleware' | 'handler';
 
 /** Un messaggio SSE: data obbligatorio (JSON o stringa), event/id facoltativi. */
 export interface SseMessage {
@@ -158,9 +159,8 @@ export interface SequenceStep {
   forMs?: number;
 }
 
-/** Sequenza di varianti dell'endpoint: politica di selezione sopra le varianti esistenti. */
-export interface SequenceConfig {
-  enabled: boolean;
+/** Variante sequence normalizzata: selezionarla è l'unico modo per attivarla. */
+export interface SequenceVariantConfig {
   steps: SequenceStep[];
   /** Esaurito l'ultimo step: 'stay' resta lì, 'loop' riparte dal primo. */
   onEnd: 'stay' | 'loop';
@@ -176,6 +176,11 @@ export interface SequenceState {
   lastRequestAt: number | null;
 }
 
+export interface SequenceStateResponse {
+  sequenceFile: string;
+  sequenceState: SequenceState | null;
+}
+
 export interface EndpointConfig {
   method: string;
   path: string;
@@ -183,8 +188,6 @@ export interface EndpointConfig {
   enabled: boolean;
   responseFiles: string[];
   selectedResponseFile: string;
-  /** Sequenza di varianti, quando definita (anche spenta: enabled false). */
-  sequence?: SequenceConfig;
 }
 
 export interface ResponseSummary {
@@ -240,7 +243,9 @@ export interface MockDetail extends MockSummary {
     disabled: boolean;
   };
   source?: string;
-  /** Cursore runtime della sequenza; presente solo quando l'endpoint ne ha una (GET dettaglio). */
+  /** Definizione della variante sequence selezionata. */
+  sequence?: SequenceVariantConfig;
+  /** Cursore runtime; presente solo quando la variante selezionata è sequence. */
   sequenceState?: SequenceState;
   /** Definizione della variante sse selezionata (copione, onEnd, presets). */
   sse?: SseVariantConfig;
@@ -349,9 +354,29 @@ export interface ResponseWsUpdateRequest {
   presets?: WsPreset[];
 }
 
-export type ResponseUpdateRequest = ResponseMockUpdateRequest | ResponseScriptUpdateRequest | ResponseSseUpdateRequest | ResponseWsUpdateRequest;
+export interface ResponseSequenceUpdateRequest {
+  type: 'sequence';
+  title?: string;
+  steps?: SequenceStep[];
+  onEnd?: 'stay' | 'loop';
+  resetAfterMs?: number | null;
+}
 
-export type CreateResponseRequest = ResponseUpdateRequest | { title?: string };
+export interface ResponseSequenceCreateRequest extends Omit<ResponseSequenceUpdateRequest, 'steps'> {
+  steps: SequenceStep[];
+}
+
+export type ResponseUpdateRequest =
+  | ResponseMockUpdateRequest
+  | ResponseScriptUpdateRequest
+  | ResponseSseUpdateRequest
+  | ResponseWsUpdateRequest
+  | ResponseSequenceUpdateRequest;
+
+export type CreateResponseRequest =
+  | Exclude<ResponseUpdateRequest, ResponseSequenceUpdateRequest>
+  | ResponseSequenceCreateRequest
+  | { title?: string };
 
 export interface CollectionReorderRequest {
   collectionIds: string[];

@@ -37,8 +37,9 @@ import {
   DumpCreateMocksResult,
   ResponseUpdateRequest,
   SelectResponseRequest,
-  SequenceConfig,
-  SequenceState,
+  ResponseSequenceCreateRequest,
+  ResponseSequenceUpdateRequest,
+  SequenceStateResponse,
   SseMessage,
   SsePushResult,
   SseStateResponse,
@@ -208,14 +209,30 @@ export class MockAdminApiService {
     return this.http.put<MockDetail>(`${this.baseUrl}/mocks/${encodeURIComponent(id)}`, request);
   }
 
-  /** Imposta (o rimuove, con null) la sequenza di varianti di un endpoint. */
-  updateSequence(id: string, sequence: SequenceConfig | null): Observable<MockDetail> {
-    return this.http.put<MockDetail>(`${this.baseUrl}/mocks/${encodeURIComponent(id)}`, { sequence });
+  /** Crea una variante sequence e la seleziona. */
+  createSequence(id: string, sequence: ResponseSequenceCreateRequest): Observable<MockDetail> {
+    return this.createResponse(id, sequence);
+  }
+
+  /** Aggiorna la variante sequence selezionata per filename. */
+  updateSequence(
+    id: string,
+    responseFileName: string,
+    sequence: ResponseSequenceUpdateRequest,
+  ): Observable<MockDetail> {
+    return this.updateResponse(id, responseFileName, sequence);
+  }
+
+  /** Legge il cursore live della variante sequence selezionata. */
+  getSequenceState(id: string): Observable<SequenceStateResponse> {
+    return this.http.get<SequenceStateResponse>(
+      `${this.baseUrl}/mocks/${encodeURIComponent(id)}/sequence/state`,
+    );
   }
 
   /** Azzera il cursore della sequenza: la prossima richiesta riparte dal primo step. */
-  resetSequence(id: string): Observable<{ sequenceState: SequenceState }> {
-    return this.http.post<{ sequenceState: SequenceState }>(
+  resetSequence(id: string): Observable<SequenceStateResponse> {
+    return this.http.post<SequenceStateResponse>(
       `${this.baseUrl}/mocks/${encodeURIComponent(id)}/sequence/reset`,
       {},
     );

@@ -63,6 +63,8 @@ function makeApiStub() {
       selectResponse: vi.fn((id: string) => of(detail(id))),
       updateResponse: vi.fn((id: string) => of(detail(id))),
       createResponse: vi.fn((id: string) => of(detail(id))),
+      createSequence: vi.fn((id: string) => of(detail(id))),
+      updateSequence: vi.fn((id: string) => of(detail(id))),
       deleteResponse: vi.fn((id: string) => of(detail(id))),
       uploadResponseFile: vi.fn((id: string) => of(detail(id))),
       deleteMock: vi.fn(() => of(undefined)),
@@ -310,6 +312,25 @@ describe('MocksStore', () => {
   });
 
   describe('mutazioni del dettaglio (runDetailMutation)', () => {
+    it('crea e aggiorna sequence usando le operazioni response dedicate', () => {
+      const store = create();
+      store.selected.set(detail('e1', { selectedResponseFile: '003.response.json' }));
+      const payload = {
+        type: 'sequence' as const,
+        title: 'Polling',
+        steps: [{ response: '001.response.json', times: 2 }, { response: '002.response.json' }],
+        onEnd: 'stay' as const,
+        resetAfterMs: null,
+      };
+
+      store.createSequence(payload);
+      expect(api.createSequence).toHaveBeenCalledWith('e1', payload);
+
+      store.selected.set(detail('e1', { selectedResponseFile: '003.response.json' }));
+      store.updateSequence(payload);
+      expect(api.updateSequence).toHaveBeenCalledWith('e1', '003.response.json', payload);
+    });
+
     it('a successo risincronizza dettaglio+catalogo e chiama onSuccess', () => {
       const store = create();
       store.selected.set(detail('e1'));

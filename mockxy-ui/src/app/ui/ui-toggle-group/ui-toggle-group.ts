@@ -16,11 +16,13 @@ import { cn } from '../cn';
   template: '<ng-content />',
   host: {
     role: 'group',
+    '[attr.aria-label]': 'ariaLabel()',
     class: 'inline-flex items-center rounded-lg border border-input bg-black/30 p-0.5 text-[11px] font-semibold',
   },
 })
 export class UiToggleGroup<T = string> {
   readonly value = model<T | null>(null);
+  readonly ariaLabel = input<string | null>(null);
 }
 
 /** Singola opzione del toggle group. */

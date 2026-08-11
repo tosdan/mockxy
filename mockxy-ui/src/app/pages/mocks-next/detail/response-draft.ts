@@ -9,7 +9,7 @@ import {
   type ResponsePreset,
 } from '../response-presets';
 import { scriptTemplate } from '../script-templates';
-import type { CreateResponseRequest, MockType, ResponseUpdateRequest } from '../../../mock-admin-api.types';
+import type { CreateResponseRequest, EndpointCreateType, ResponseUpdateRequest } from '../../../mock-admin-api.types';
 
 export type DraftPayloadType = 'json' | 'text' | 'file';
 export type DraftScriptType = 'handler' | 'middleware' | null;
@@ -88,7 +88,7 @@ export class ResponseDraft {
    * Semina la bozza per una NUOVA response del tipo scelto: script = template (o sorgente seminata
    * dal mock corrente), mock = body JSON con content-type esplicito.
    */
-  seedForCreate(type: MockType, seededSource?: string): void {
+  seedForCreate(type: EndpointCreateType, seededSource?: string): void {
     this.title.set('');
     this.status.set(200);
     this.delay.set(0);

@@ -25,7 +25,7 @@ import { MocksNextSseConsole } from '../sse/mocks-next-sse-console';
 import { MocksNextWsConsole } from '../ws/mocks-next-ws-console';
 import { MocksNextResponseForm } from './response-form';
 import { ResponseDraft, type DraftPayloadType, type DraftScriptType } from './response-draft';
-import type { MockType } from '../../../mock-admin-api.types';
+import type { EndpointCreateType } from '../../../mock-admin-api.types';
 
 const METHOD_TONES: ReadonlySet<string> = new Set(['get', 'post', 'put', 'delete', 'patch']);
 
@@ -156,7 +156,9 @@ const METHOD_TONES: ReadonlySet<string> = new Set(['get', 'post', 'put', 'delete
             />
             @if (d.editable) {
             <button ui-button variant="outline" size="icon" [cdkMenuTriggerFor]="addResponseMenu" [disabled]="busy()" [uiTooltip]="'detail.addResponseTip' | transloco"><ng-icon name="lucidePlus" size="0.95rem" /></button>
-            @if (responseEditable()) {
+            @if (d.type === 'sequence') {
+            <button ui-button variant="outline" size="icon" (click)="openSequence('edit')" [uiTooltip]="'detail.editSelectedResponseTip' | transloco"><ng-icon name="lucidePencil" size="0.95rem" /></button>
+            } @else if (responseEditable()) {
             <button ui-button variant="outline" size="icon" (click)="startEditResponse()" [uiTooltip]="'detail.editSelectedResponseTip' | transloco"><ng-icon name="lucidePencil" size="0.95rem" /></button>
             }
             <button ui-button variant="destructive" size="icon" (click)="askDeleteResponse()" [disabled]="(d.responses?.length ?? 0) <= 1" [uiTooltip]="((d.responses?.length ?? 0) <= 1 ? 'detail.atLeastOneResponseTip' : 'detail.deleteSelectedResponseTip') | transloco"><ng-icon name="lucideTrash2" size="0.95rem" /></button>
@@ -164,13 +166,20 @@ const METHOD_TONES: ReadonlySet<string> = new Set(['get', 'post', 'put', 'delete
           </div>
 
           <div class="ml-auto flex flex-wrap items-center gap-2">
-            @if (selectedStatus() !== null) {
+            @if (d.type === 'sequence' && d.sequence; as sequence) {
+            <ui-chip>
+              <span class="font-semibold text-sequence">SEQ</span>
+              <span class="font-mono font-semibold tabular-nums text-foreground">{{ sequence.steps.length }} {{ 'sequenceDialog.steps' | transloco }}</span>
+            </ui-chip>
+            } @else if (selectedStatus() !== null) {
             <mocks-next-status-combobox [value]="selectedStatus()" [readOnly]="true" />
             }
+            @if (d.type !== 'sequence') {
             <ui-chip>
               <span class="text-[10px] font-semibold uppercase tracking-wide">delay</span>
               <span class="font-mono font-semibold tabular-nums text-foreground">{{ d.config?.delayMs ?? 0 }} ms</span>
             </ui-chip>
+            }
           </div>
           }
         </div>
@@ -199,6 +208,10 @@ const METHOD_TONES: ReadonlySet<string> = new Set(['get', 'post', 'put', 'delete
               <ng-icon name="lucideCable" size="0.9rem" class="text-brand" />
               <span class="flex-1">{{ 'detail.newResponseWs' | transloco }}</span>
             </button>
+            <button ui-menu-item (click)="openSequence('create')">
+              <ng-icon name="lucideListOrdered" size="0.9rem" class="text-sequence" />
+              <span class="flex-1">{{ 'detail.newResponseSequence' | transloco }}</span>
+            </button>
             @if (isMockSelected()) {
             <div class="mx-1 my-1 h-px bg-border"></div>
             <button ui-menu-item (click)="createResponseOfType('handler', 'clone')">
@@ -226,6 +239,31 @@ const METHOD_TONES: ReadonlySet<string> = new Set(['get', 'post', 'put', 'delete
         } @else if (d.type === 'ws') {
         <!-- Variante WS: console con transcript bidirezionale (regia manuale). -->
         <mocks-next-ws-console [detail]="d" />
+        } @else if (d.type === 'sequence' && d.sequence; as sequence) {
+        <div class="min-h-0 flex-1 overflow-y-auto px-6 py-5 mx-scroll">
+          <div class="mx-auto flex max-w-3xl flex-col gap-4">
+            <div class="flex flex-wrap items-center gap-2">
+              <ui-badge tone="neutral">{{ sequence.onEnd === 'loop' ? ('sequenceDialog.onEndLoop' | transloco) : ('sequenceDialog.onEndStay' | transloco) }}</ui-badge>
+              <ui-chip>
+                <span class="text-[10px] font-semibold uppercase tracking-wide">{{ 'sequenceDialog.autoReset' | transloco }}</span>
+                <span class="font-mono font-semibold text-foreground">{{ sequence.resetAfterMs == null ? ('sequenceDialog.autoResetNever' | transloco) : sequence.resetAfterMs + ' ms' }}</span>
+              </ui-chip>
+            </div>
+            <ol class="flex flex-col gap-2" [attr.aria-label]="'sequenceDialog.steps' | transloco">
+              @for (step of sequence.steps; track $index) {
+              <li class="flex items-center gap-3 rounded-lg border border-border bg-black/20 px-3 py-2.5">
+                <span class="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-[color-mix(in_srgb,var(--sequence)_16%,transparent)] font-mono text-[11px] font-bold text-sequence">{{ $index + 1 }}</span>
+                <span class="min-w-0 flex-1 truncate font-mono text-[12px] text-foreground">{{ step.response }}</span>
+                <span class="text-[12px] text-muted-foreground">
+                  @if (step.times != null) { {{ step.times }} {{ 'sequenceDialog.unitTimes' | transloco }} }
+                  @else if (step.forMs != null) { {{ step.forMs }} ms }
+                  @else { {{ 'sequenceDialog.finalStep' | transloco }} }
+                </span>
+              </li>
+              }
+            </ol>
+          </div>
+        </div>
         } @else {
         @if (headerEntries().length) {
         <div class="shrink-0 border-b border-border">
@@ -323,11 +361,11 @@ export class MocksNextDetail {
   protected readonly newResponseLabel = computed(() =>
     this.transloco.translate('detail.newResponseTitle', { type: this.draft.scriptType() ?? 'mock' }));
 
-  /** La response selezionata e' modificabile in posto? (no payload binari, no sse: il copione si edita da file/API). */
+  /** La response selezionata usa il form generico? SSE/WS/sequence hanno editor dedicati. */
   protected readonly responseEditable = computed(() => {
     const d = this.detail();
     if (!d || !d.editable) return false;
-    if (d.type === 'sse' || d.type === 'ws') return false;
+    if (d.type === 'sse' || d.type === 'ws' || d.type === 'sequence') return false;
     if (d.type === 'handler' || d.type === 'middleware') return d.source != null;
     return d.payloadType === 'json' || d.payloadType === 'text' || d.payloadType === 'file' || d.payloadType == null;
   });
@@ -348,7 +386,7 @@ export class MocksNextDetail {
       return {
         value: r.fileName,
         label: `${r.title || r.fileName} · ${type}`,
-        accent: `var(--type-${type})`,
+        accent: type === 'sequence' ? 'var(--sequence)' : `var(--type-${type}, var(--brand))`,
       };
     }),
   );
@@ -481,7 +519,7 @@ export class MocksNextDetail {
   // --- crea response (C2): apre il form su una BOZZA del tipo scelto (anche diverso dall'attuale).
   //     Niente create lato backend qui: avviene solo a "Salva" (createDraftResponse). "Annulla" scarta.
   //     seed='clone' semina lo script dalla response mock attuale; 'vanilla' usa il template. ---
-  protected createResponseOfType(type: Exclude<MockType, 'sse' | 'ws'>, seed: 'clone' | 'vanilla' = 'vanilla'): void {
+  protected createResponseOfType(type: EndpointCreateType, seed: 'clone' | 'vanilla' = 'vanilla'): void {
     const d = this.detail();
     if (this.busy() || !d?.editable) return;
     this.resetEditState();
@@ -528,13 +566,14 @@ export class MocksNextDetail {
    * server: è il GET dettaglio a portare sequenceState (il cursore runtime), che nello stato
    * in store può mancare o essere stantio dopo altre mutazioni.
    */
-  protected openSequence(): void {
+  protected openSequence(mode?: 'create' | 'edit'): void {
     const d = this.detail();
     if (!d) return;
     this.api.getMock(d.id).subscribe({
       next: (detail) => {
+        const resolvedMode = mode ?? (detail.type === 'sequence' ? 'edit' : 'create');
         this.dialog.open(MocksNextSequenceDialog, {
-          data: { detail } satisfies SequenceDialogData,
+          data: { detail, mode: resolvedMode } satisfies SequenceDialogData,
           viewContainerRef: this.vcr,
           autoFocus: 'dialog',
         });
