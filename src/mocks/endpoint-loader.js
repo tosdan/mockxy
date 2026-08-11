@@ -12,7 +12,7 @@ const {
   loadScriptModule,
   collectLocalDependencyFiles,
 } = require("./script-loader");
-const { normalizeSequenceConfig } = require("./sequence-config");
+const { normalizeSequenceResponse } = require("./sequence-config");
 const { templateReferencesRequestBody } = require("./mock-template");
 const { normalizeSseConfig } = require("./sse-config");
 const { normalizeWsConfig } = require("./ws-config");
@@ -168,8 +168,9 @@ function validateEndpointConfig(endpoint, filePath) {
     errors.push("selectedResponseFile must be listed in responseFiles");
   }
 
-  const sequenceResult = normalizeSequenceConfig(endpoint.sequence, responseFiles);
-  errors.push(...sequenceResult.errors);
+  if (Object.prototype.hasOwnProperty.call(endpoint, "sequence")) {
+    errors.push("endpoint.sequence is no longer supported; migrate it to a response with type sequence");
+  }
 
   if (errors.length > 0) {
     throw new Error(`Invalid endpoint ${filePath}: ${formatValidationErrors(errors)}`);
@@ -182,7 +183,6 @@ function validateEndpointConfig(endpoint, filePath) {
     enabled: endpoint.enabled,
     responseFiles: [...responseFiles],
     selectedResponseFile: endpoint.selectedResponseFile,
-    sequence: sequenceResult.sequence,
   };
 }
 
@@ -333,8 +333,22 @@ async function loadResponseByName(endpoint, endpointFilePath, responseFileName, 
   }
 
   const type = response.type;
-  if (type !== "mock" && type !== "handler" && type !== "middleware" && type !== "sse" && type !== "ws") {
-    throw new Error(`Invalid response ${responsePath}: type must be mock, handler, middleware, sse or ws`);
+  if (type !== "mock" && type !== "handler" && type !== "middleware" && type !== "sse" && type !== "ws" && type !== "sequence") {
+    throw new Error(`Invalid response ${responsePath}: type must be mock, handler, middleware, sse, ws or sequence`);
+  }
+
+  if (type === "sequence") {
+    const { errors, sequence } = normalizeSequenceResponse(response, endpoint.responseFiles);
+    if (errors.length > 0) {
+      throw new Error(`Invalid response ${responsePath}: ${errors.join("; ")}`);
+    }
+    return {
+      type,
+      title: response.title || "",
+      sequence,
+      responseFilePath: responsePath,
+      responseFileName,
+    };
   }
 
   if (type === "ws") {
@@ -427,11 +441,11 @@ async function loadSelectedResponse(endpoint, endpointFilePath) {
 // variante a request-time, quindi al load si caricano (e validano) TUTTE — stessa filosofia
 // della selezionata: uno step rotto degrada l'endpoint. I passi middleware sono esclusi in v1:
 // la loro esecuzione vive nel percorso proxy, non nel serving locale.
-async function loadSequenceSteps(endpoint, endpointFilePath) {
+async function loadSequenceSteps(endpoint, endpointFilePath, sequence) {
   const steps = [];
-  for (const step of endpoint.sequence.steps) {
+  for (const step of sequence.steps) {
     const response = await loadResponseByName(endpoint, endpointFilePath, step.response, "sequence step response");
-    if (response.type === "middleware" || response.type === "sse" || response.type === "ws") {
+    if (response.type !== "mock" && response.type !== "handler") {
       throw new Error(
         `Invalid endpoint ${endpointFilePath}: sequence steps must reference mock or handler responses (${step.response} is a ${response.type})`
       );
@@ -523,22 +537,21 @@ async function loadEndpointRouteGroups(mocksDir) {
         continue;
       }
 
-      // Sequenza attiva: l'endpoint serve gli step (scelti a request-time dal registry), non la
-      // variante selezionata — che resta l'ancora del comportamento classico a sequenza spenta.
-      if (endpoint.sequence != null && endpoint.sequence.enabled) {
-        const steps = await loadSequenceSteps(endpoint, filePath);
+      const response = await loadSelectedResponse(endpoint, filePath);
+      if (response.type === "sequence") {
+        const steps = await loadSequenceSteps(endpoint, filePath, response.sequence);
         const group = createRouteGroup(sequenceRouteGroups, endpoint, filePath);
         group.methods.set(endpoint.method, {
           method: endpoint.method,
           path: endpoint.path,
           configFilePath: filePath,
-          sequence: endpoint.sequence,
+          sequenceFileName: response.responseFileName,
+          sequence: response.sequence,
           steps,
         });
         continue;
       }
 
-      const response = await loadSelectedResponse(endpoint, filePath);
       if (response.type === "mock") {
         const group = createRouteGroup(mockRouteGroups, endpoint, filePath);
         group.methods.set(endpoint.method, {
@@ -640,6 +653,8 @@ module.exports = {
   RESPONSE_SUFFIX,
   RESPONSES_DIR_SUFFIX,
   extractMethodFromEndpointFileName,
+  loadResponseByName,
+  loadSequenceSteps,
   loadEndpointRouteGroups,
   listEndpointFiles,
 };

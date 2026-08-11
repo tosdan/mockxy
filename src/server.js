@@ -45,17 +45,11 @@ function graftPreviousRoutes(nextRouteGroups, previousRouteGroups, erroredFilePa
   return grafted ? sortRouteGroups(Array.from(groupsByPath.values())) : nextRouteGroups;
 }
 
-function createReloadHandler({ mocksDir, registry, proxyMiddlewareRegistry, logger, sseConnections, wsConnections }) {
-  let reloadInProgress = false;
-  let reloadQueued = false;
+function createReloadHandler({ mocksDir, registry, proxyMiddlewareRegistry, logger, handlerStates, sseConnections, wsConnections }) {
+  let drainPromise = null;
+  let queuedWaiters = [];
 
-  const reload = async () => {
-    if (reloadInProgress) {
-      reloadQueued = true;
-      return;
-    }
-
-    reloadInProgress = true;
+  const performReload = async () => {
     try {
       const { mockRouteGroups, handlerRouteGroups, proxyMiddlewareRouteGroups, sequenceRouteGroups, sseRouteGroups, wsRouteGroups, loadErrors } =
         await loadEndpointRouteGroups(mocksDir);
@@ -82,8 +76,11 @@ function createReloadHandler({ mocksDir, registry, proxyMiddlewareRegistry, logg
           });
         }
       }
-      registry.setRouteGroups(routeGroups);
+      const changedSequenceKeys = registry.setRouteGroups(routeGroups);
       proxyMiddlewareRegistry.setRouteGroups(middlewareRouteGroups);
+      for (const key of changedSequenceKeys) {
+        handlerStates?.reset(key);
+      }
       // Le connessioni SSE/WS aperte vanno chiuse: stanno servendo copioni della configurazione
       // precedente. Il client riconnette da solo e il copione (eventualmente nuovo) riparte
       // — "riconnessione = reset" è la semantica documentata.
@@ -94,20 +91,36 @@ function createReloadHandler({ mocksDir, registry, proxyMiddlewareRegistry, logg
         proxyMiddlewareCount: middlewareRouteGroups.length,
         endpointLoadErrors: loadErrors.length,
       });
+      return { applied: true, loadErrors, fatalError: null };
     } catch (error) {
       logger.error("Runtime reload failed. Keeping previous configuration.", {
         error: error.message,
       });
-    } finally {
-      reloadInProgress = false;
-      if (reloadQueued) {
-        reloadQueued = false;
-        await reload();
-      }
+      return { applied: false, loadErrors: [], fatalError: error };
     }
   };
 
-  return reload;
+  // Ogni chiamante attende un giro iniziato dopo la propria richiesta. Le chiamate durante un
+  // giro vengono aggregate nel successivo, ma non risolte prematuramente col risultato del giro
+  // già in corso: le mutazioni admin possono così sapere che la loro scrittura è stata vista.
+  const drainReloadQueue = async () => {
+    while (queuedWaiters.length > 0) {
+      const waiters = queuedWaiters;
+      queuedWaiters = [];
+      const outcome = await performReload();
+      for (const resolve of waiters) {
+        resolve(outcome);
+      }
+    }
+    drainPromise = null;
+  };
+
+  return () => new Promise((resolve) => {
+    queuedWaiters.push(resolve);
+    if (drainPromise == null) {
+      drainPromise = drainReloadQueue();
+    }
+  });
 }
 
 // Canonicalizza il percorso da osservare (alias corti 8.3 di Windows, symlink) prima di
@@ -229,6 +242,7 @@ async function createServerRuntime({ configOverrides = {}, logger: extLogger } =
     registry,
     proxyMiddlewareRegistry,
     logger,
+    handlerStates,
     sseConnections,
     wsConnections,
   });
@@ -393,6 +407,7 @@ async function startServer(options = {}) {
 }
 
 module.exports = {
+  createReloadHandler,
   createServerRuntime,
   startServer,
   startMockWatcher,

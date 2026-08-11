@@ -1,11 +1,12 @@
 const { SequenceStateStore } = require("../src/mocks/sequence-state");
-const { normalizeSequenceConfig } = require("../src/mocks/sequence-config");
+const { normalizeSequenceResponse } = require("../src/mocks/sequence-config");
 
 const RESPONSES = ["a.response.json", "b.response.json", "c.response.json"];
 const KEY = "GET /api/operazioni/1";
+const SEQUENCE_FILE = "sequence.response.json";
 
 function sequenceOf(config) {
-  const { errors, sequence } = normalizeSequenceConfig(config, RESPONSES);
+  const { errors, sequence } = normalizeSequenceResponse(config, RESPONSES);
   expect(errors).toEqual([]);
   return sequence;
 }
@@ -13,9 +14,16 @@ function sequenceOf(config) {
 // Orologio controllabile: i test di forMs/resetAfterMs muovono il tempo a mano.
 function createStore(startMs = 1000) {
   let currentMs = startMs;
-  const store = new SequenceStateStore({ now: () => currentMs });
+  const rawStore = new SequenceStateStore({ now: () => currentMs });
+  const store = {
+    resolveStep: (key, sequence) => rawStore.resolveStep(key, SEQUENCE_FILE, sequence),
+    getState: (key, sequence) => rawStore.getState(key, SEQUENCE_FILE, sequence),
+    reset: (key) => rawStore.reset(key),
+    reconcile: (active) => rawStore.reconcile(active),
+  };
   return {
     store,
+    rawStore,
     tick: (ms) => {
       currentMs += ms;
     },
@@ -217,5 +225,41 @@ describe("SequenceStateStore (cursore runtime delle sequenze)", () => {
     expect(store.resolveStep(KEY, sequence)).toBe(1);
     tick(1);
     expect(store.resolveStep(KEY, sequence)).toBe(2);
+  });
+
+  test("reconcile conserva lo stato a firma uguale e lo azzera al cambio di variante", () => {
+    const { store } = createStore();
+    const sequence = sequenceOf({
+      steps: [
+        { response: "a.response.json", times: 1 },
+        { response: "b.response.json" },
+      ],
+    });
+    const active = (fileName) => new Map([[KEY, { sequenceFileName: fileName, sequence }]]);
+
+    expect(store.reconcile(active(SEQUENCE_FILE))).toEqual(new Set([KEY]));
+    expect(store.resolveStep(KEY, sequence)).toBe(0);
+    expect(store.resolveStep(KEY, sequence)).toBe(1);
+
+    expect(store.reconcile(active(SEQUENCE_FILE))).toEqual(new Set());
+    expect(store.resolveStep(KEY, sequence)).toBe(1);
+
+    expect(store.reconcile(active("other.response.json"))).toEqual(new Set([KEY]));
+    // Il wrapper usa SEQUENCE_FILE: la firma diversa forza comunque uno stato vergine.
+    expect(store.resolveStep(KEY, sequence)).toBe(0);
+  });
+
+  test("reconcile rimuove lo stato quando l'endpoint non serve più una sequence", () => {
+    const { store } = createStore();
+    const sequence = sequenceOf({
+      steps: [
+        { response: "a.response.json", times: 1 },
+        { response: "b.response.json" },
+      ],
+    });
+    store.reconcile(new Map([[KEY, { sequenceFileName: SEQUENCE_FILE, sequence }]]));
+    store.resolveStep(KEY, sequence);
+    expect(store.reconcile(new Map())).toEqual(new Set([KEY]));
+    expect(store.getState(KEY, sequence).servedInStep).toBe(0);
   });
 });

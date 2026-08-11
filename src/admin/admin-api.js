@@ -16,6 +16,7 @@ const {
   updateAdminMock,
   updateAdminResponse,
   setAdminResponseFile,
+  getAdminSequenceState,
   resetAdminSequence,
   pushAdminSseMessage,
   listAdminSseState,
@@ -271,15 +272,20 @@ function createAdminApiRouter({ config, reloadRuntime, requestMonitor, serverSta
 
   router.get("/mocks/:id", async (req, res) => {
     const detail = await getAdminMockDetail(config.mocksDir, req.params.id);
-    // Stato runtime della sequenza (cursore): la UI mostra lo step corrente accanto alla
-    // definizione (che sta in detail.endpoint.sequence). Presente solo se una sequenza esiste.
-    if (sequenceStates != null && detail.endpoint?.sequence != null) {
+    // Stato runtime presente solo quando la response selezionata è una sequence.
+    if (sequenceStates != null && detail.sequence != null) {
       detail.sequenceState = sequenceStates.getState(
         `${detail.method} ${detail.path}`,
-        detail.endpoint.sequence
+        detail.selectedResponseFile,
+        detail.sequence
       );
     }
     sendJson(res, 200, detail);
+  });
+
+  router.get("/mocks/:id/sequence/state", async (req, res) => {
+    const result = await getAdminSequenceState(config.mocksDir, req.params.id, sequenceStates);
+    sendJson(res, 200, result);
   });
 
   // Reset del cursore della sequenza (e della memoria handler dell'endpoint): azione runtime

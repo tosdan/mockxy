@@ -104,4 +104,26 @@ describe("commitWithRollback", () => {
     expect(fs.existsSync(filePath)).toBe(false);
     expect(reloadRuntime).toHaveBeenCalledTimes(2);
   });
+
+  test("valida l'esito restituito dal reload e fa rollback quando l'ack viene rifiutato", async () => {
+    await writeFileAtomic(filePath, "originale", "utf8");
+    const backups = [await readBackup(filePath)];
+    await writeFileAtomic(filePath, "nuovo", "utf8");
+    const firstOutcome = { applied: true, loadErrors: [{ filePath, message: "endpoint rotto" }] };
+    const reloadRuntime = jest.fn().mockResolvedValueOnce(firstOutcome).mockResolvedValueOnce({ applied: true });
+    const validateReloadResult = jest.fn(() => {
+      throw new Error("endpoint rotto");
+    });
+
+    await expect(commitWithRollback({
+      backups,
+      reloadRuntime,
+      rejectionLabel: "Operazione rejected",
+      validateReloadResult,
+    })).rejects.toMatchObject({ status: 400, message: "Operazione rejected: endpoint rotto" });
+
+    expect(validateReloadResult).toHaveBeenCalledWith(firstOutcome);
+    expect(reloadRuntime).toHaveBeenCalledTimes(2);
+    expect(await fs.promises.readFile(filePath, "utf8")).toBe("originale");
+  });
 });

@@ -6,12 +6,12 @@ const { computeSequenceSignature } = require("./sequence-config");
 // definizione della sequenza cambia (confronto di firma — così una modifica all'endpoint che NON
 // tocca la sequenza, es. la descrizione, non falsa un giro di polling in corso).
 //
-// Le voci di endpoint spariti restano nella mappa fino al riavvio: sono poche decine di byte
-// l'una e potare a ogni reload non vale l'accoppiamento col loader.
+// Il registry riconcilia le firme a ogni reload e pota gli endpoint che escono dallo scenario.
 
 class SequenceStateStore {
   constructor({ now = () => Date.now() } = {}) {
     this.entries = new Map();
+    this.activeSignatures = new Map();
     this.now = now;
   }
 
@@ -52,9 +52,9 @@ class SequenceStateStore {
    * quando la quota è esaurita. `key` identifica l'endpoint ("METHOD path"); `sequence` è la
    * definizione normalizzata. Restituisce l'indice dello step servito.
    */
-  resolveStep(key, sequence) {
+  resolveStep(key, sequenceFileName, sequence) {
     const now = this.now();
-    const signature = computeSequenceSignature(sequence);
+    const signature = computeSequenceSignature(sequenceFileName, sequence);
     let entry = this.entries.get(key);
     if (entry == null || entry.signature !== signature) {
       entry = this.createEntry(signature);
@@ -99,9 +99,9 @@ class SequenceStateStore {
   }
 
   /** Stato corrente per l'admin API; vergine (primo step, nessuna richiesta) se mai servito o firma cambiata. */
-  getState(key, sequence) {
+  getState(key, sequenceFileName, sequence) {
     const entry = this.entries.get(key);
-    if (entry == null || entry.signature !== computeSequenceSignature(sequence)) {
+    if (entry == null || entry.signature !== computeSequenceSignature(sequenceFileName, sequence)) {
       return { stepIndex: 0, servedInStep: 0, stepStartedAt: null, lastRequestAt: null };
     }
     return {
@@ -115,6 +115,30 @@ class SequenceStateStore {
   /** Riparte dal primo step alla prossima richiesta (reset manuale dall'admin API / UI). */
   reset(key) {
     this.entries.delete(key);
+  }
+
+  /**
+   * Allinea gli scenari attivi alle route che verranno realmente installate. Restituisce le
+   * chiavi il cui scenario è entrato, uscito o cambiato: il runtime usa l'insieme per azzerare
+   * anche HandlerStateStore sugli stessi confini.
+   */
+  reconcile(activeSequencesByEndpoint) {
+    const nextSignatures = new Map();
+    for (const [key, active] of activeSequencesByEndpoint.entries()) {
+      nextSignatures.set(key, computeSequenceSignature(active.sequenceFileName, active.sequence));
+    }
+
+    const changedKeys = new Set();
+    const keys = new Set([...this.activeSignatures.keys(), ...nextSignatures.keys()]);
+    for (const key of keys) {
+      if (this.activeSignatures.get(key) === nextSignatures.get(key)) {
+        continue;
+      }
+      this.entries.delete(key);
+      changedKeys.add(key);
+    }
+    this.activeSignatures = nextSignatures;
+    return changedKeys;
   }
 }
 

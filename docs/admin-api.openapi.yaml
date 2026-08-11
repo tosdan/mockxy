@@ -22,12 +22,14 @@ info:
       `METHOD.endpoint.json` file; its route path is derived from the folder that contains it and
       is therefore **immutable after creation** (copy the endpoint to move it).
     - An endpoint owns one or more **response variants** (`NNN.response.json` inside
-      `METHOD.responses/`). Exactly one is *selected* and answers requests, unless a
-      **sequence** is defined — a policy that walks the variants request after request.
+      `METHOD.responses/`). Exactly one is *selected* and answers requests. A `sequence`
+      variant walks other variants request after request; selecting it is the only way to
+      activate that scenario.
     - A variant has a `type` that decides how the endpoint answers:
       `mock` (static payload, optionally templated or file-backed), `handler` (JS module that
       computes the response), `middleware` (JS module that transforms a proxied backend
-      response), `sse` (Server-Sent Events script) or `ws` (WebSocket script + rules).
+      response), `sse` (Server-Sent Events script), `ws` (WebSocket script + rules), or
+      `sequence` (an ordered scenario of `mock`/`handler` variants).
     - **Collections** are a presentation tree over endpoints (labels, nesting, ordering); they
       live in `.collections.json` and never change how a request is served — except for the bulk
       enable/disable operation, which rewrites the endpoints themselves.
@@ -494,7 +496,8 @@ paths:
       description: |
         The endpoint definition, the list of its variants, and the fully normalized **selected**
         variant — including the payload body (or file metadata), the handler source, or the
-        SSE/WS script. When a sequence is defined, `sequenceState` reports the live cursor.
+        SSE/WS script or sequence definition. When the selected variant is a sequence,
+        `sequenceState` reports its live cursor.
       responses:
         "200":
           description: Endpoint detail
@@ -506,20 +509,19 @@ paths:
     put:
       tags: [Endpoints]
       operationId: updateMock
-      summary: Update the endpoint (selection, sequence, or selected variant)
+      summary: Update the endpoint selection or selected ordinary variant
       description: |
-        One route, three payload shapes, checked in this order:
+        Two payload shapes are accepted:
 
-        1. `{ sequence }` — replaces the sequence policy; `null` removes it. Steps must
-           reference variants listed in `responseFiles`, and only `mock` and `handler` variants
-           can take part.
-        2. `{ selectedResponseFile }` — switches which variant answers.
-        3. `{ config, body }` or `{ type: handler|middleware, definition, source }` — rewrites
+        1. `{ selectedResponseFile }` — switches which variant answers. Selecting a `sequence`
+           validates its complete graph before committing.
+        2. `{ config, body }` or `{ type: handler|middleware, definition, source }` — rewrites
            the **selected** variant together with the endpoint's `enabled` flag.
 
-        In shape 3 the route path is echoed back for validation but **cannot change**
-        (`400` otherwise), and an `sse`/`ws` selected variant is rejected: edit those through
-        `PUT /mocks/{id}/responses/{responseFileName}`.
+        In shape 2 the route path is echoed back for validation but **cannot change**
+        (`400` otherwise). A selected `sse`, `ws`, or `sequence` variant is rejected: edit it
+        through `PUT /mocks/{id}/responses/{responseFileName}`. The legacy `{ sequence }`
+        endpoint payload is rejected.
       requestBody:
         required: true
         content:
@@ -529,18 +531,6 @@ paths:
               selectVariant:
                 summary: Switch the answering variant
                 value: { selectedResponseFile: 002.response.json }
-              sequence:
-                summary: Serve 3 × 202, then 200 forever
-                value:
-                  sequence:
-                    enabled: true
-                    onEnd: stay
-                    steps:
-                      - { response: 001.response.json, times: 3 }
-                      - { response: 002.response.json }
-              removeSequence:
-                summary: Back to plain selection
-                value: { sequence: null }
               editMock:
                 summary: Rewrite the selected mock variant
                 value:
@@ -612,9 +602,10 @@ paths:
       summary: Duplicate the endpoint onto another method and path
       description: |
         Copies the endpoint to a new method + path, inheriting description and enabled flag.
-        By default only the **selected** variant is copied, so the duplicate stays valid and of
-        the same type; `copyResponses: true` copies every variant with its assets and preserves
-        the selection. Since the path defines the folder, this is also how you "move" an
+        By default only the **selected** variant is copied. If it is a `sequence`, its referenced
+        step variants and their assets are copied too, forming the minimum executable closure.
+        `copyResponses: true` copies every variant with its assets and preserves the selection.
+        Since the path defines the folder, this is also how you "move" an
         endpoint: copy, then delete the original.
       requestBody:
         required: true
@@ -680,6 +671,26 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
 
+  /mocks/{id}/sequence/state:
+    parameters:
+      - $ref: "#/components/parameters/MockId"
+    get:
+      tags: [Endpoints]
+      operationId: getSequenceState
+      summary: Read the live cursor of the selected sequence
+      responses:
+        "200":
+          description: Selected sequence file and live cursor
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SequenceStateResponse" }
+        "400":
+          description: The selected response is not a sequence.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404": { $ref: "#/components/responses/MockNotFound" }
+
   /mocks/{id}/sequence/reset:
     parameters:
       - $ref: "#/components/parameters/MockId"
@@ -696,15 +707,9 @@ paths:
           description: The reset cursor
           content:
             application/json:
-              schema:
-                type: object
-                properties:
-                  sequenceState:
-                    oneOf:
-                      - { $ref: "#/components/schemas/SequenceState" }
-                      - { type: "null" }
+              schema: { $ref: "#/components/schemas/SequenceStateResponse" }
         "400":
-          description: The endpoint has no sequence to reset.
+          description: The selected response is not a sequence.
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
@@ -838,6 +843,9 @@ paths:
           from its defaults — this is how an endpoint ends up with mixed variant types.
         - With other fields and the same type, the payload is merged onto the clone.
 
+        A new `sequence` requires at least two steps. Every referenced variant is resolved with
+        the runtime loader before success; only `mock` and `handler` variants are allowed.
+
         For `handler`/`middleware`, omitting `source` writes a working scaffold; the source is
         compiled before the change is committed, and a source that fails to load rolls the whole
         operation back.
@@ -862,6 +870,15 @@ paths:
                   script:
                     - { afterMs: 0, event: hello, data: { ok: true } }
                     - { afterMs: 1000, data: { tick: 1 } }
+              newSequence:
+                summary: Serve processing twice, then completed forever
+                value:
+                  type: sequence
+                  title: Polling operation
+                  onEnd: stay
+                  steps:
+                    - { response: 001.response.json, times: 2 }
+                    - { response: 002.response.json }
       responses:
         "201":
           description: The endpoint, with the new variant selected
@@ -895,6 +912,8 @@ paths:
           validated exactly as the runtime loader would.
         - `handler` / `middleware`: `title`, and `source` to rewrite the module (validated by
           compiling it; a failure rolls back).
+        - `sequence`: `title`, `steps`, `onEnd`, and `resetAfterMs`; the complete result graph is
+          validated before committing.
       requestBody:
         required: true
         content:
@@ -931,7 +950,9 @@ paths:
       description: |
         Deletes the variant and its asset, unless another variant still references that asset.
         The **last** variant of an endpoint cannot be deleted (`400`) — delete the endpoint
-        instead. If the deleted variant was selected, the one immediately before it takes over.
+        instead. A variant referenced by any sequence cannot be deleted (`409`, with
+        `details.referencedBy`). If the deleted variant was selected, the one immediately before
+        it takes over.
       responses:
         "200":
           description: The updated endpoint
@@ -940,6 +961,11 @@ paths:
               schema: { $ref: "#/components/schemas/MockDetail" }
         "400": { $ref: "#/components/responses/BadRequest" }
         "404": { $ref: "#/components/responses/MockNotFound" }
+        "409":
+          description: The response is referenced by one or more sequence variants.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
 
   /mocks/{id}/responses/{responseFileName}/file:
     parameters:
@@ -1646,12 +1672,13 @@ components:
 
     ResponseType:
       type: string
-      enum: [mock, handler, middleware, sse, ws]
+      enum: [mock, handler, middleware, sse, ws, sequence]
       description: |
         How a variant answers:
         `mock` static payload · `handler` JS module computing the response ·
         `middleware` JS module transforming a proxied backend response ·
-        `sse` Server-Sent Events script · `ws` WebSocket script and rules.
+        `sse` Server-Sent Events script · `ws` WebSocket script and rules ·
+        `sequence` ordered scenario of mock/handler variants.
 
     # ── Catalog ──────────────────────────────────────────────────────────────
     MockSummary:
@@ -1694,7 +1721,9 @@ components:
           description: How many variants the endpoint owns.
         sequenceActive:
           type: boolean
-          description: True when a sequence is defined **and** enabled — the endpoint is walking its variants rather than serving the selected one.
+          description: >-
+            True exactly when the selected response variant has `type: sequence`; endpoint
+            disablement is exposed separately.
         collectionId:
           type: string
           description: Present only when the endpoint belongs to a collection; absent means the virtual `Unsorted` bucket.
@@ -1741,8 +1770,6 @@ components:
           items: { type: string }
           description: Variant file names, in creation order.
         selectedResponseFile: { type: string }
-        sequence:
-          $ref: "#/components/schemas/SequenceConfig"
 
     ResponseVariantSummary:
       type: object
@@ -1773,7 +1800,8 @@ components:
         - `mock` → `config`, plus `body` (inline payload) **or** `fileInfo` (file-backed);
         - `handler` / `middleware` → `definition`, `source`, `sourceFilePath`;
         - `sse` → `sse`;
-        - `ws` → `ws`.
+        - `ws` → `ws`;
+        - `sequence` → `sequence` and `sequenceState`.
 
         Path fields ending in `FilePath` are **absolute paths on the server machine**, useful for
         local tooling and log correlation; `configFilePath` stays workspace-relative.
@@ -1804,6 +1832,7 @@ components:
               additionalProperties: true
             sequenceState:
               $ref: "#/components/schemas/SequenceState"
+            sequence: { $ref: "#/components/schemas/SequenceVariantConfig" }
             config:
               type: object
               description: "`mock` only: the editable configuration of the selected variant."
@@ -1841,20 +1870,16 @@ components:
             ws: { $ref: "#/components/schemas/WsConfig" }
 
     # ── Sequences ────────────────────────────────────────────────────────────
-    SequenceConfig:
+    SequenceVariantConfig:
       type: object
       description: |
-        A selection policy layered over the existing variants: it orders them and says how long
-        each one answers. A step advances after `times` requests or after `forMs` milliseconds
+        A response variant that orders other variants and says how long each one answers.
+        Selecting its response file activates it. A step advances after `times` requests or after `forMs` milliseconds
         from its first request — exactly one of the two, except the last step under `onEnd: stay`,
         where no criterion means "stay here forever". At least 2 steps (with one, a sequence would
         just be the plain selection). Only `mock` and `handler` variants can be steps.
-      required: [steps]
+      required: [steps, onEnd]
       properties:
-        enabled:
-          type: boolean
-          default: true
-          description: A disabled sequence is kept on disk but ignored — the selected variant answers.
         steps:
           type: array
           minItems: 2
@@ -1879,6 +1904,7 @@ components:
           default: stay
         resetAfterMs:
           type: [integer, "null"]
+          minimum: 1
           description: Idle time after which the cursor restarts from the first step.
 
     SequenceState:
@@ -1892,6 +1918,18 @@ components:
         servedInStep: { type: integer }
         stepStartedAt: { type: [integer, "null"], description: Epoch milliseconds. }
         lastRequestAt: { type: [integer, "null"], description: Epoch milliseconds. }
+
+    SequenceStateResponse:
+      type: object
+      required: [sequenceFile, sequenceState]
+      properties:
+        sequenceFile:
+          type: string
+          description: The selected sequence response filename.
+        sequenceState:
+          oneOf:
+            - { $ref: "#/components/schemas/SequenceState" }
+            - { type: "null" }
 
     # ── SSE ──────────────────────────────────────────────────────────────────
     SseMessage:
@@ -2113,14 +2151,6 @@ components:
     UpdateMockRequest:
       oneOf:
         - type: object
-          title: Set or remove the sequence
-          required: [sequence]
-          properties:
-            sequence:
-              oneOf:
-                - { $ref: "#/components/schemas/SequenceConfig" }
-                - { type: "null" }
-        - type: object
           title: Select the answering variant
           required: [selectedResponseFile]
           properties:
@@ -2217,6 +2247,15 @@ components:
             closeReason: { type: string, maxLength: 123 }
             rules: { $ref: "#/components/schemas/WsConfig/properties/rules" }
             presets: { $ref: "#/components/schemas/WsConfig/properties/presets" }
+        - type: object
+          title: New sequence variant
+          required: [type, steps]
+          properties:
+            type: { type: string, const: sequence }
+            title: { type: string }
+            steps: { $ref: "#/components/schemas/SequenceVariantConfig/properties/steps" }
+            onEnd: { type: string, enum: [stay, loop], default: stay }
+            resetAfterMs: { type: [integer, "null"], minimum: 1 }
 
     UpdateResponseRequest:
       type: object
@@ -2235,11 +2274,13 @@ components:
         source: { type: string, description: "`handler`/`middleware` only: the new module source." }
         retryMs: { type: [integer, "null"], description: "`sse` only." }
         script: { type: array, items: {}, description: "`sse`/`ws` only — replaces the whole script." }
-        onEnd: { type: string, enum: [keep-open, close, loop], description: "`sse`/`ws` only." }
+        onEnd: { type: string, enum: [keep-open, close, loop, stay], description: "`sse`/`ws`/`sequence` only." }
         presets: { type: array, items: {}, description: "`sse`/`ws` only." }
         closeCode: { type: [integer, "null"], description: "`ws` only; requires `onEnd: close`." }
         closeReason: { type: [string, "null"], description: "`ws` only; requires `onEnd: close`." }
         rules: { type: array, items: {}, description: "`ws` only." }
+        steps: { $ref: "#/components/schemas/SequenceVariantConfig/properties/steps" }
+        resetAfterMs: { type: [integer, "null"], minimum: 1, description: "`sequence` only; null disables idle reset." }
 
     # ── OpenAPI import ───────────────────────────────────────────────────────
     OpenapiImportPlan:

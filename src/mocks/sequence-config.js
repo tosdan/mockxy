@@ -1,6 +1,5 @@
-// Validazione e normalizzazione del campo `sequence` del file endpoint (vedi
-// docs/progetto/DESIGN-SEQUENZE.md): la sequenza è una politica di selezione sopra le varianti
-// esistenti — ordina le response e decide quanto a lungo servirle (times = numero di richieste,
+// Validazione e normalizzazione delle response `type: "sequence"`: la response ordina altre
+// varianti dello stesso endpoint e decide quanto a lungo servirle (times = numero di richieste,
 // forMs = millisecondi dalla prima richiesta dello step).
 //
 // Modulo condiviso tra il loader runtime (endpoint-loader) e l'admin API (endpoint-files):
@@ -19,27 +18,21 @@ function isPositiveInteger(value) {
 const SEQUENCE_ON_END_VALUES = new Set(["stay", "loop"]);
 
 /**
- * Valida e normalizza `sequence` rispetto all'elenco varianti dell'endpoint. `sequence` assente
- * (null/undefined) è legittimo: endpoint senza sequenza, si restituisce { errors: [], sequence: null }.
+ * Valida e normalizza una response sequence rispetto all'elenco varianti dell'endpoint.
  *
  * Forma normalizzata:
- *   { enabled, steps: [{ response, times?, forMs? }], onEnd, resetAfterMs }
- * con enabled default true, onEnd default "stay", resetAfterMs null quando assente.
+ *   { steps: [{ response, times?, forMs? }], onEnd, resetAfterMs }
+ * con onEnd default "stay" e resetAfterMs null quando assente.
  */
-function normalizeSequenceConfig(sequence, responseFiles) {
-  if (sequence == null) {
-    return { errors: [], sequence: null };
-  }
-
+function normalizeSequenceResponse(sequence, responseFiles) {
   const errors = [];
   if (!isPlainObject(sequence)) {
-    return { errors: ["sequence must be an object"], sequence: null };
+    return { errors: ["sequence response must be an object"], sequence: null };
   }
 
-  if (sequence.enabled != null && typeof sequence.enabled !== "boolean") {
-    errors.push("sequence.enabled must be a boolean");
+  if (Object.prototype.hasOwnProperty.call(sequence, "enabled")) {
+    errors.push("sequence.enabled is not supported; select the sequence response to activate it");
   }
-  const enabled = sequence.enabled !== false;
 
   const onEnd = sequence.onEnd == null ? "stay" : sequence.onEnd;
   if (!SEQUENCE_ON_END_VALUES.has(onEnd)) {
@@ -114,18 +107,19 @@ function normalizeSequenceConfig(sequence, responseFiles) {
 
   return {
     errors: [],
-    sequence: { enabled, steps, onEnd, resetAfterMs },
+    sequence: { steps, onEnd, resetAfterMs },
   };
 }
 
 /**
  * Firma della definizione di sequenza, per far sopravvivere il cursore alle ricariche a caldo
  * che non la toccano (es. modifica della sola descrizione dell'endpoint): firma uguale = cursore
- * conservato, firma diversa = si riparte dal primo step. `enabled` non partecipa: da spenta la
- * sequenza non serve richieste, e riaccenderla non deve falsare un giro a metà.
+ * conservato, firma diversa = si riparte dal primo step. Il filename distingue due varianti
+ * sequence semanticamente identiche dello stesso endpoint.
  */
-function computeSequenceSignature(sequence) {
+function computeSequenceSignature(sequenceFileName, sequence) {
   return JSON.stringify({
+    sequenceFileName,
     steps: sequence.steps,
     onEnd: sequence.onEnd,
     resetAfterMs: sequence.resetAfterMs,
@@ -133,6 +127,6 @@ function computeSequenceSignature(sequence) {
 }
 
 module.exports = {
-  normalizeSequenceConfig,
+  normalizeSequenceResponse,
   computeSequenceSignature,
 };
