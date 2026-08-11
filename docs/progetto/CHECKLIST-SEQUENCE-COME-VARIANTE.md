@@ -92,17 +92,17 @@ completato soltanto quando codice e test pertinenti sono entrambi verdi.
 
 ## 7. Acceptance test esterni
 
-- [ ] Creare `test/sequence-response-variant` in `mockxy-acceptance-tests`.
-- [ ] Inventariare i test legacy della vecchia gestione sequence.
-- [ ] Rimuovere o riscrivere i test obsoleti.
-- [ ] Aggiungere scenari di creazione/selezione/avanzamento/reset/disattivazione.
-- [ ] Aggiungere scenari con più sequence e protezione dei riferimenti, se adatti al livello acceptance.
-- [ ] Eseguire la suite acceptance pertinente.
-- [ ] Committare le modifiche nel branch acceptance dedicato.
+- [x] Creare `test/sequence-response-variant` in `mockxy-acceptance-tests`.
+- [x] Inventariare i test legacy della vecchia gestione sequence.
+- [x] Rimuovere o riscrivere i test obsoleti.
+- [x] Aggiungere scenari di creazione/selezione/avanzamento/reset/disattivazione.
+- [x] Aggiungere scenari con più sequence e protezione dei riferimenti.
+- [x] Eseguire la suite acceptance pertinente e completa (160 passati, 18 skip intenzionali).
+- [x] Committare le modifiche nel branch acceptance dedicato (`c96c72c`).
 
 ## 8. Chiusura
 
-- [ ] Aggiornare questa checklist con tutti i punti completati.
-- [ ] Committare integralmente implementazione e test nel feature branch.
-- [ ] Lasciare il piano nel branch per la code review.
-- [ ] Riportare branch, commit, test eseguiti e rischi residui.
+- [x] Aggiornare questa checklist con tutti i punti completati.
+- [x] Committare integralmente implementazione e test nel feature branch.
+- [x] Lasciare il piano nel branch per la code review.
+- [x] Riportare branch, commit, test eseguiti e rischi residui.
