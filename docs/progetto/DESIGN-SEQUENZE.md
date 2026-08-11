@@ -1,274 +1,137 @@
-# Design — Sequenze di varianti
+# Design — Sequence come variante di response
 
-Stato: **MVP implementato** (luglio 2026) — validazione e serving nel motore, cursore runtime,
-reset, admin API, dialog UI, badge nel catalogo e tracciamento dello step nel monitor.
+Stato: **implementato** (agosto 2026).
 
-## Il problema
+Documento decisionale dettagliato: `ANALISI-SEQUENCE-COME-VARIANTE.md`.
 
-Un client fa polling su un endpoint e si aspetta che **dopo un po' la risposta cambi**: prima
-`{"status":"processing"}`, poi `{"status":"completed"}`. Oggi le strade sono due, entrambe
-insoddisfacenti:
+## Principio
 
-- **cambio variante a mano** mentre il client polla: funziona ed è già un pattern legittimo, ma
-  richiede presenza e tempismo, e non è riproducibile né condivisibile;
-- **handler con l'orologio** (`new Date().getSeconds() > 50`): un accrocchio — gli handler non
-  hanno memoria tra le chiamate né nozione di "prima richiesta", quindi l'unico tempo
-  disponibile è quello assoluto.
+Una sequence è una normale response con `type: "sequence"`. Il file endpoint non contiene
+configurazione sequence e `selectedResponseFile` è l'unico meccanismo di attivazione. Questo
+elimina lo stato ambiguo «response selezionata + sequence separatamente abilitata» e permette
+di possedere, clonare e alternare più scenari sullo stesso endpoint.
 
-Il modello attuale è pensato per risposte stabili nel tempo: manca un modo dichiarativo di dire
-«questo endpoint evolve».
+Il vecchio `endpoint.sequence` e il vecchio `PUT /mocks/:id { sequence: ... }` non sono
+retrocompatibili: vengono rifiutati esplicitamente.
 
-## Il principio
+## Formato
 
-**La sequenza è una politica di selezione sopra le varianti esistenti, non un nuovo tipo di
-risposta.** «processing» e «completed» sono normali varianti in `<METODO>.responses/`; la
-sequenza dice solo in che ordine e per quanto servirle. Ne discendono le proprietà chiave:
-
-- la **definizione** sta nel file endpoint → condivisa in git col team, come tutto il resto;
-- il **cursore** (a che punto siamo) è stato runtime in-memory, effimero per natura;
-- i contenuti non si duplicano: la sequenza referenzia varianti che esistono già e restano
-  utilizzabili anche nella selezione classica.
-
-## Formato nel file endpoint
+`GET.endpoint.json`:
 
 ```json
 {
   "method": "GET",
   "path": "/api/operazioni/:id",
+  "description": "",
   "enabled": true,
-  "responseFiles": ["001.response.json", "002.response.json"],
-  "selectedResponseFile": "001.response.json",
-  "sequence": {
-    "enabled": true,
-    "steps": [
-      { "response": "001.response.json", "times": 3 },
-      { "response": "002.response.json" }
-    ],
-    "onEnd": "stay",
-    "resetAfterMs": 30000
-  }
+  "responseFiles": [
+    "001.response.json",
+    "002.response.json",
+    "003.response.json",
+    "900.response.json"
+  ],
+  "selectedResponseFile": "900.response.json"
 }
 ```
 
-- **`sequence`** — facoltativo; assente = comportamento attuale, nessun impatto sui workspace
-  esistenti.
-- **`sequence.enabled`** — la sequenza si può spegnere **senza perderne la definizione**: a
-  `false` (o con `sequence` assente) vale la selezione classica (`selectedResponseFile`). È il
-  toggle che la UI mostra accanto alla selezione varianti.
-- **`steps`** — almeno 2 voci (con 1 sola equivale alla selezione classica: rifiutata in
-  validazione per non avere due modi di dire la stessa cosa). Ogni step:
-  - **`response`** — nome file di una variante elencata in `responseFiles` (stessa variante
-    riusabile in più step);
-  - **criterio di avanzamento**, al più uno dei due:
-    - **`times`** — intero ≥ 1: lo step risponde a N richieste, poi si avanza;
-    - **`forMs`** — intero ≥ 1: lo step risponde per N millisecondi **a partire dalla sua prima
-      richiesta** (non da quando è diventato corrente): il timer di «processing dura 15s» parte
-      quando il client inizia a chiedere, che è la semantica del caso d'uso;
-  - l'**ultimo step può non avere criterio**: è lo stato terminale (con `onEnd: "stay"`).
-    Gli step non terminali **devono** averne uno.
-- **`onEnd`** — `"stay"` (default): esaurito l'ultimo step ci si ferma lì; `"loop"`: si riparte
-  dal primo (per demo cicliche). Con `loop`, anche l'ultimo step deve avere un criterio.
-- **`resetAfterMs`** — facoltativo, default assente (= mai): con un valore, se non arrivano
-  richieste per quel tempo il cursore riparte dal primo step. È il tassello ergonomico del caso
-  d'uso: il polling si ferma quando il client vede «completed», e alla sessione di prova
-  successiva la sequenza riparte da sola, zero clic. La UI lo propone precompilato (30s) alla
-  creazione della sequenza.
+`GET.responses/900.response.json`:
 
-`selectedResponseFile` resta obbligatorio e valido anche con sequenza attiva: è ciò che si serve
-quando la si spegne, e l'ancora del comportamento classico.
-
-### Validazione
-
-Al caricamento (stessa degradazione per-endpoint di oggi: endpoint saltato con warning, alla
-ricarica a caldo resta l'ultima versione valida):
-
-- ogni `steps[].response` è elencato in `responseFiles`;
-- `times`/`forMs` mutuamente esclusivi, interi nei range; step non terminali con criterio;
-- `onEnd` riconosciuto; con `loop` criterio anche sull'ultimo step;
-- **tutte le varianti referenziate dagli step vengono caricate e validate** come oggi si valida
-  la selezionata (la sequenza le rende tutte "selezionabili a runtime"). Una variante rotta in
-  uno step = endpoint degradato, coerente con la filosofia attuale.
-
-Gli step possono referenziare varianti **mock e handler, anche miste**: «processing» statico e
-«completed» calcolato da un handler è una combinazione legittima e utile. Gli step
-**middleware sono esclusi in v1**: la loro esecuzione vive nel percorso proxy (registry
-separato, richiesta inoltrata al backend), e attraversarlo dal serving locale non vale la
-complessità finché non emerge il bisogno. Uno step middleware è un errore di validazione.
-
-## Semantica runtime
-
-### Il cursore
-
-Per ogni endpoint con sequenza attiva il motore tiene in memoria:
-
+```json
+{
+  "type": "sequence",
+  "title": "Polling operazione",
+  "steps": [
+    { "response": "001.response.json", "times": 3 },
+    { "response": "002.response.json", "forMs": 5000 },
+    { "response": "003.response.json" }
+  ],
+  "onEnd": "stay",
+  "resetAfterMs": 30000
+}
 ```
+
+- `steps`: almeno due; ogni target deve essere elencato nell'endpoint.
+- target ammessi: soltanto `mock` e `handler`.
+- `times` e `forMs` sono mutuamente esclusivi, interi positivi e scelti per singolo step.
+- ogni step non terminale deve avere un criterio; con `onEnd: loop` anche l'ultimo.
+- `onEnd`: `stay` oppure `loop`, default normalizzato `stay`.
+- `resetAfterMs`: intero positivo facoltativo; assente significa mai.
+- `enabled` non è ammesso. Per disattivare lo scenario si seleziona un'altra response.
+
+## Validazione del grafo
+
+Quando una mutazione admin crea, modifica, seleziona o copia una sequence, non basta validare
+il JSON. Il server usa lo stesso resolver del runtime per caricare tutti gli step, inclusi file
+payload, sorgenti handler e dipendenze. Sequence annidate, middleware, SSE e WS sono errori.
+
+La mutazione attende un reload iniziato dopo la propria scrittura. Se il reload riporta il file
+endpoint in `loadErrors`, i backup vengono ripristinati e si esegue un secondo reload. In questo
+modo una risposta `2xx` garantisce che lo scenario sia realmente servibile.
+
+La cancellazione di un target referenziato risponde `409` con:
+
+```json
+{ "details": { "referencedBy": ["900.response.json"] } }
+```
+
+La copia con `copyResponses: false`, se la selezionata è una sequence, copia la chiusura minima:
+file sequence, response degli step e relativi asset. `copyResponses: true` copia tutto.
+
+## Runtime e identità
+
+Il cursore è globale per endpoint e in-memory:
+
+```text
 { stepIndex, servedInStep, stepStartedAt, lastRequestAt }
 ```
 
-A ogni richiesta servita dall'endpoint: prima si applica l'eventuale auto-reset
-(`lastRequestAt` più vecchio di `resetAfterMs` → cursore azzerato — controllo pigro alla
-richiesta, nessun timer), poi si fa avanzare il cursore oltre gli step `forMs` scaduti, si serve
-la variante dello step corrente e si aggiornano i contatori. Tutto sincrono dentro il registry
-(processo singolo): niente corse tra richieste concorrenti.
+La firma dello scenario comprende:
 
-### Cosa azzera il cursore
+```text
+sequenceFileName + steps normalizzati + onEnd + resetAfterMs
+```
 
-1. **riavvio del motore** (stato in-memory);
-2. **reset manuale** — pulsante in UI / admin API (sotto);
-3. **auto-reset per inattività** (`resetAfterMs`);
-4. **modifica della definizione della sequenza**. Nota di design: la ricarica a caldo
-   ricostruisce il registry, quindi l'implementazione ingenua azzererebbe il cursore a *ogni*
-   modifica del file endpoint (anche solo la descrizione, o il salvataggio di tutt'altro campo
-   dalla UI). Proposta: il cursore sopravvive alla ricarica se la **firma della sequenza**
-   (steps + onEnd + resetAfterMs, normalizzati) non è cambiata; cambia la firma → reset. Così
-   ritoccare la descrizione non falsa un test di polling in corso.
+Perciò:
 
-### Cursore condiviso
+- un cambio di titolo o un reload estraneo conserva cursore e memoria handler;
+- cambiare filename selezionato o definizione azzera entrambi;
+- passare sequence → response ordinaria → stessa sequence riparte da zero;
+- disable/enable dell'endpoint sequence riparte da zero;
+- il reset manuale azzera cursore e `HandlerStateStore`;
+- l'auto-reset per inattività azzera solo il cursore.
 
-Il cursore è **globale per endpoint**, non per client: due client che pollano insieme fanno
-avanzare la stessa sequenza. È la semantica giusta per il caso d'uso (l'operazione schedulata è
-una) ed è semplice da spiegare; sequenze per-client (chiave da header/query) sono un'estensione
-futura esplicitamente fuori scope.
-
-## Impatto sul motore
-
-Il punto architetturale: oggi `loadSelectedResponse` carica **solo** la variante selezionata e
-la rotta viene registrata con quella risposta già risolta. Con la sequenza:
-
-- il loader carica le risposte di **tutti gli step** (array di risposte risolte, stessa
-  pipeline di validazione di oggi) e monta nel route group una **funzione di scelta** invece
-  della risposta singola;
-- il registry ospita i cursori, con le firme delle sequenze per la sopravvivenza alla ricarica;
-- il percorso senza sequenza resta identico a oggi (risposta singola, zero overhead).
-
-Le risposte servite da uno step seguono le regole della loro natura (ritardi, paginazione e
-filtri automatici sui body array, no-cache degli handler, ecc.): la sequenza decide *quale*
-variante risponde, non *come*.
+Il timer `forMs` parte dalla prima richiesta servita dallo step. Con `times`, lo stato esposto
+dall'admin indica sempre lo step che risponderà alla prossima richiesta.
 
 ## Admin API
 
-| Metodo e percorso | Cosa fa |
+| Metodo | Semantica |
 |---|---|
-| `GET /mocks/:id` | il dettaglio include `sequence` (definizione) e `sequenceState` runtime: `{ stepIndex, servedInStep, stepStartedAt }`, o `null` se spenta |
-| `PUT /mocks/:id` | aggiorna anche `sequence` (è un campo della definizione, come oggi `selectedResponseFile`) |
-| `POST /mocks/:id/sequence/reset` | azzera il cursore; risponde con lo stato azzerato. Utile anche per script di test |
-| `GET /mocks` | ogni endpoint espone un flag sintetico (es. `sequenceActive`) per il badge di catalogo |
+| `POST /mocks/:id/responses` | crea e seleziona una sequence; `steps` obbligatorio |
+| `PUT /mocks/:id/responses/:file` | modifica la sequence indicata |
+| `PUT /mocks/:id` | seleziona la response; una sequence viene validata integralmente |
+| `GET /mocks/:id` | espone `sequence` e `sequenceState` soltanto se la selezionata è sequence |
+| `GET /mocks/:id/sequence/state` | restituisce `{ sequenceFile, sequenceState }` |
+| `POST /mocks/:id/sequence/reset` | resetta cursore e memoria handler |
 
-## Monitor
-
-Ogni voce del monitor relativa a un endpoint con sequenza registra **variante servita e
-posizione** (es. `step 1/2 — 001.response.json "Processing"`): la progressione si deve *vedere*,
-altrimenti il debugging di una sequenza è cieco. Nessun header aggiuntivo sulla risposta di
-default (non inquinare il contratto osservato dal client); un header diagnostico opzionale
-`x-mock-sequence-step` può essere valutato a parte.
+`GET /mocks` definisce `sequenceActive` come `response.type === "sequence"`; il flag è
+indipendente da `endpoint.enabled`, già rappresentato da `disabled`.
 
 ## Interfaccia
 
-### Punto d'ingresso
+La sequence appare nel menu delle response e nel pulsante scorciatoia. La dialog ha modalità
+create/edit, titolo, `onEnd`, reset per inattività e una scelta `times`/`forMs` indipendente su
+ogni riga. I target sono filtrati con allow-list `mock|handler`.
 
-Nella scheda dell'endpoint, un pulsante **«Sequenza»** a destra del pulsante «Copia», con
-icona di stato leggibile a colpo d'occhio (tinta `brand` quando la sequenza è attiva, neutra
-quando è spenta). Apre la dialog. Nel **catalogo**, badge (es. «SEQ») sulle righe con sequenza
-attiva, per vedere lo stato senza aprire la scheda.
+In edit della sequence selezionata la UI mostra uno snapshot del cursore, lo aggiorna tramite
+polling leggero su `/sequence/state`, cancella il polling alla chiusura e offre il reset. Il
+dettaglio mostra un riepilogo degli step invece del form generico.
 
-### La dialog
+## Limiti intenzionali
 
-```
-┌ Sequenza — GET /api/operazioni/:id ──────────────────────────────┐
-│ [◉] Sequenza attiva                                              │
-│ Modalità: (per richieste | a tempo)   Alla fine: (resta | loop)  │
-│ Auto-reset dopo [30000] ms senza richieste (vuoto = mai)         │
-│ ────────────────────────────────────────────────────────────────│
-│ ▶ 1  [Processing — 001.response.json ▾]  [ 3 ] volte   [↑][↓][🗑]│
-│   2  [Completed  — 002.response.json ▾]  ( finale )    [↑][↓][🗑]│
-│ [+ Aggiungi step]                                                │
-│ ── stato ────────────────────────────────────────────────────────│
-│ Step corrente: 1 · 2/3 richieste servite   [Riparti dall'inizio] │
-│                                            [Annulla]  [Salva]   │
-└──────────────────────────────────────────────────────────────────┘
-```
-
-- **Toggle «Sequenza attiva»** (mappa `sequence.enabled`): da spento, tutti i controlli di
-  modifica sono disabilitati (la definizione resta visibile, non si perde).
-- **Modalità times/forMs globale** per la sequenza: un solo toggle in testata, niente scelta
-  per-step — più semplice da capire, copre il caso d'uso. Il **formato file resta per-step**
-  (`times` o `forMs` su ogni step): la UI v1 scrive sequenze uniformi, il formato regge il caso
-  misto futuro senza migrazione.
-- **«Alla fine»** (`onEnd`): resta sull'ultimo / ricomincia. Con «resta», l'input valore
-  dell'ultimo step è disabilitato e mostra «finale»; con «ricomincia» torna obbligatorio.
-- **Auto-reset** (`resetAfterMs`): campo opzionale, vuoto = mai; precompilato a 30s alla prima
-  attivazione della sequenza.
-- **Righe step**: dropdown della variante (titolo + nome file, scelte tra le varianti esistenti
-  dell'endpoint; la stessa variante può comparire in più step), input del valore (ms o volte a
-  seconda della modalità), pulsanti sposta su/giù ed elimina. **«Aggiungi step»** in coda.
-- **Sezione stato (runtime)**, separata visivamente dalla definizione: indicatore dello step
-  corrente (riga evidenziata + contatore «2/3 richieste» o tempo trascorso) e pulsante
-  **«Riparti dall'inizio»** (`POST /mocks/:id/sequence/reset`). Il reset è un'azione immediata;
-  il resto della dialog si applica col Salva — la separazione visiva comunica la differenza.
-- **Footer Annulla/Salva** come la dialog impostazioni workspace: Salva abilitato solo con una
-  modifica valida (almeno 2 step, variante su ogni step, valori ≥ 1 dove richiesti), errori
-  inline sotto i campi.
-- **Caso limite**: endpoint con una sola variante → controlli disabilitati e hint «crea almeno
-  un'altra variante per usare le sequenze».
-
-Il flusso di creazione non cambia: prima si creano le varianti (come oggi), poi le si ordina in
-sequenza. Niente wizard dedicato in prima battuta.
-
-## Complementare: memoria per gli handler
-
-Primitive minime nel contesto di `resolveResponse` (indipendenti dalla sequenza, ma stessa
-famiglia di bisogni — e aprono casi che la sequenza non copre: esiti dipendenti dal body,
-macchine a stati per-risorsa):
-
-- **`state`** — oggetto mutabile **per endpoint**, persistente tra le chiamate (in-memory),
-  condiviso tra le varianti dell'endpoint; azzerato da riavvio del motore e dal reset manuale
-  della sequenza (il "Riparti dall'inizio" azzera cursore E memoria handler). **Non** si azzera
-  alla ricarica a caldo: il reload non distingue in modo affidabile quale endpoint è cambiato
-  (e con quale profondità), e uno stato che sopravvive mentre si itera sullo script è più utile
-  che sorprendente — scelta presa in implementazione, documentata in HANDLER.md;
-- **`callCount`** — numero progressivo di invocazioni dell'handler per questo endpoint;
-- **`firstRequestAt`** — timestamp (ms epoch) della prima invocazione dal reset: `Date.now() -
-  firstRequestAt` è l'`elapsed` senza accrocchi d'orologio.
-
-L'esempio del polling scritto a mano diventa:
-
-```js
-module.exports = {
-  resolveResponse({ firstRequestAt }) {
-    const elapsed = Date.now() - firstRequestAt;
-    if (elapsed < 15000) return { status: 200, jsonBody: { status: "processing" } };
-    return { status: 200, jsonBody: { status: "completed" } };
-  },
-};
-```
-
-Documentazione con avvertenza esplicita: lo stato è effimero e locale al motore — non è un
-database, e un reload lo azzera.
-
-## Non-obiettivi (per ora)
-
-- sequenze **per-client** (chiave da header/query);
-- **persistenza del cursore** tra riavvii;
-- scheduling assoluto («dopo X secondi dall'avvio del server»): il tempo parte dalla prima
-  chiamata, non dall'orologio di sistema;
-- `type: "sequence"` come tipo di variante: la sequenza sta *sopra* le varianti, non dentro.
-
-## Fasi di implementazione proposte
-
-1. **Motore**: formato + validazione, loader multi-variante, cursore/reset/firma, admin API;
-2. **UI**: editor sequenza nel dettaglio endpoint, badge catalogo, indicatore live + reset;
-3. **Monitor**: variante/step nelle voci;
-4. **Handler state** (`state`, `callCount`, `firstRequestAt`): indipendente, può procedere in
-   parallelo o dopo.
-
-## Questioni aperte
-
-1. `resetAfterMs`: default assente (proposto, prevedibile) o default 30s (ergonomico ma
-   magico)?
-2. Cursore che sopravvive alla ricarica a firma invariata: vale la complessità della firma, o
-   per la v1 basta «ogni reload azzera» documentato?
-3. `sequenceState` nel `GET /mocks/:id`: la UI lo mostra live — serve un polling dedicato
-   della UI o si appoggia a refresh esistenti?
-4. Header diagnostico `x-mock-sequence-step`: utile o rumore?
-5. `state` degli handler condiviso tra varianti dello stesso endpoint (proposto) o per singola
-   variante?
+- cursore globale per endpoint, non per client;
+- nessuna persistenza del cursore tra riavvii;
+- nessuna sequence annidata;
+- nessun target middleware/SSE/WS;
+- nessun adapter di compatibilità per il formato precedente;
+- nessun migratore automatico incluso in questa implementazione.

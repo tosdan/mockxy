@@ -14,7 +14,7 @@ la pagina pertinente nello stesso giro del codice.
   ricarica a caldo, inclusa la sequenza di varianti e il suo cursore runtime.
 - [Il file di risposta](RESPONSE.md) — le varianti: risposte statiche (status, header, body
   JSON o testuale, payload da file in streaming, ritardo e templating), handler e middleware
-  come collegamenti a script, stream SSE e canali WebSocket mockati.
+  come collegamenti a script, sequence selezionabili, stream SSE e canali WebSocket mockati.
 - [La convenzione dei path](PATH.md) — come viene scelto l'endpoint che risponde: parametri
   nominati, query dichiarata (uguaglianza esatta), regole di specificità, verifica del metodo
   dopo la scelta della rotta e diagnosi dei mancati match.

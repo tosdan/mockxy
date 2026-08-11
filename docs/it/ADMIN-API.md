@@ -24,8 +24,9 @@ resettano lo stato tra i test, pipeline che importano una specifica aggiornata.
 - Gli **errori** sono JSON `{ error, message, details? }` con lo status appropriato
   (`400` input invalido, `403` header `Host` inatteso, `404` non trovato, `409` conflitto,
   `415` media type non supportato, `500` fallimento imprevisto).
-- Le mutazioni sul catalogo **ricaricano il runtime immediatamente**: la modifica è servita
-  dalla richiesta successiva, senza riavvii. I file dati non ricaricano nulla ([`data()`
+- Le mutazioni sul catalogo **attendono il giro di reload che contiene la scrittura**: la
+  modifica è servita dalla richiesta successiva; un errore di caricamento sul file mutato
+  provoca rollback e risposta non-`2xx`. I file dati non ricaricano nulla ([`data()`
   rilegge a ogni chiamata](DATI.md)), con un'eccezione: la rinomina con riscrittura dei
   riferimenti ricarica, perché ha toccato i sorgenti degli handler.
 
@@ -36,9 +37,10 @@ resettano lo stato tra i test, pipeline che importano una specifica aggiornata.
 | `GET /mocks` | l'intero catalogo: endpoint, collezioni e ordinamenti; ogni endpoint espone anche `sequenceActive` per il badge SEQ. Un file endpoint illeggibile (JSON invalido, variante selezionata mancante) non fa fallire la richiesta: quell'endpoint viene saltato e segnalato in `loadErrors` (`[{ configFilePath, message }]`), come fa il runtime al caricamento |
 | `GET /mocks/resolve?method&path` | l'endpoint che oggi coprirebbe una richiesta concreta (path con eventuale query), disabilitati inclusi; `{ mock: null }` se nessuno. Fatto derivato col matching del serving, usato dal monitor per "vai al mock" |
 | `POST /mocks` | crea un endpoint (mock statico, o handler/middleware con sorgente); se per rotta+metodo esiste già risponde `409` con `details.existingMockId`, così il client può proporre l'aggiunta di una variante a quell'endpoint |
-| `GET /mocks/:id` | dettaglio di un endpoint con le sue varianti: `endpoint.sequence` e `sequenceState`, flag `templated` dei mock e configurazioni normalizzate `sse`/`ws` della variante selezionata |
-| `PUT /mocks/:id` | aggiorna la definizione (inclusi `enabled`, variante selezionata e — con body `{ sequence }`, `null` per rimuoverla — la [sequenza di varianti](ENDPOINT.md)) |
-| `POST /mocks/:id/sequence/reset` | azzera il cursore della sequenza: la prossima richiesta riparte dal primo step. Risponde con lo stato azzerato (`sequenceState`) |
+| `GET /mocks/:id` | dettaglio con varianti e configurazione normalizzata della response selezionata; con `type: sequence` espone `sequence` e `sequenceState`, mai `endpoint.sequence` |
+| `PUT /mocks/:id` | seleziona una response con `{ selectedResponseFile }`, oppure aggiorna la response ordinaria selezionata; il vecchio body `{ sequence }` è rifiutato |
+| `GET /mocks/:id/sequence/state` | stato live leggero della sequence selezionata: `{ sequenceFile, sequenceState }`; `400` su un altro tipo |
+| `POST /mocks/:id/sequence/reset` | azzera cursore e memoria handler della sequence selezionata; risponde `{ sequenceFile, sequenceState }` |
 | `POST /mocks/:id/sse/push` | push manuale della console [SSE](RESPONSE.md): body `{ data, event?, id? }`, broadcast a tutte le connessioni aperte — risponde `{ delivered, connections }` |
 | `GET /mocks/:id/sse/connections` | stato della console SSE: connessioni aperte (con posizione nel copione) e storico dei messaggi usciti |
 | `POST /mocks/:id/ws/push` | push manuale della console [WS](RESPONSE.md): body `{ data }`, broadcast a tutte le connessioni aperte — risponde `{ delivered, connections }` |
@@ -52,10 +54,10 @@ resettano lo stato tra i test, pipeline che importano una specifica aggiornata.
 
 | Metodo e percorso | Cosa fa |
 |---|---|
-| `POST /mocks/:id/responses` | aggiunge una variante di tipo `mock`, `handler`, `middleware`, `sse` o `ws`; a parità di tipo clona la selezionata, altrimenti usa i default del tipo richiesto |
-| `PUT /mocks/:id/responses/:file` | aggiorna una variante, inclusi `templated` per i mock e copione/regole/preset per SSE e WebSocket |
+| `POST /mocks/:id/responses` | aggiunge e seleziona una variante `mock`, `handler`, `middleware`, `sse`, `ws` o `sequence`; il clone generico vale anche per sequence |
+| `PUT /mocks/:id/responses/:file` | aggiorna una variante; per sequence modifica titolo/step/fine/reset e valida tutto il grafo |
 | `PUT /mocks/:id/responses/:file/file` | carica i byte grezzi che rendono la variante [file-backed](RESPONSE.md) — body `application/octet-stream` (fino a 12 MB), MIME e nome in query (`?contentType=…&filename=…`) |
-| `DELETE /mocks/:id/responses/:file` | elimina una variante |
+| `DELETE /mocks/:id/responses/:file` | elimina una variante; risponde `409` con `details.referencedBy` se è usata da una sequence |
 
 ## Collezioni
 

@@ -27,9 +27,9 @@ Three semantics to know:
   write: re-enabling the collection re-enables everything, including what had been
   individually disabled before.
 
-The list narrows down with free-text search and filters by method, active variant type
-(`mock`, `handler`, `middleware`, `sse`, `ws`) and state. A **SEQ** badge identifies endpoints
-with an active [variant sequence](ENDPOINT.md).
+The list narrows down with free-text search and filters by method, selected variant type
+(`mock`, `handler`, `middleware`, `sse`, `ws`, `sequence`) and state. A **SEQ** badge identifies
+endpoints whose selected variant is a [sequence](RESPONSE.md).
 
 ## Endpoints
 
@@ -44,9 +44,9 @@ right shape. Each endpoint can then be:
 - **enabled/disabled**: when off, its requests follow the [fallback](PROXY.md);
 - **deleted**, along with its variants.
 
-The **Sequence** button opens the setup for steps, request-count or duration criteria, end
-behavior and inactivity reset. The same dialog shows the current runtime step and can reset
-the cursor immediately.
+The **Sequence** button creates a sequence variant or edits the selected one. The dialog sets a
+request-count or duration criterion independently for each step, end behavior and inactivity
+reset; in edit mode it also shows live state and can reset the cursor immediately.
 
 ## Variants and the editor
 

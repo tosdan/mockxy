@@ -6,7 +6,7 @@ quando quella variante è selezionata. Le varianti permettono di tenere pronti p
 per lo stesso endpoint — il caso pieno, la lista vuota, l'errore — e di passare dall'uno
 all'altro cambiando solo la variante selezionata, senza toccare i contenuti.
 
-Il campo `type` distingue cinque nature di risposta:
+Il campo `type` distingue sei nature di risposta:
 
 - **`mock`** — risposta statica descritta nel file stesso (status, header, body o payload da file);
 - **`handler`** — risposta calcolata da uno script JavaScript locale;
@@ -15,6 +15,8 @@ Il campo `type` distingue cinque nature di risposta:
   secondo un copione (o dalla regia manuale della console).
 - **`ws`** — canale WebSocket mockato: l'handshake di upgrade viene accettato localmente e i
   messaggi escono secondo un copione, rispondono a regole dichiarative o partono dalla console.
+- **`sequence`** — scenario ordinato che serve altre varianti `mock`/`handler` per numero di
+  richieste o durata.
 
 L'interfaccia crea i file con nomi progressivi (`001.response.json`, `002.response.json`, …),
 ma qualunque nome che termini in `.response.json` è valido, purché sia un semplice nome di file
@@ -220,6 +222,39 @@ dai client), con re-invio a un clic — via API: `POST /mocks/:id/ws/push` e
 `GET /mocks/:id/ws/connections`. Una variante `ws` non può essere lo step di una
 [sequenza](ENDPOINT.md).
 
+## Risposta `sequence`
+
+```json
+{
+  "type": "sequence",
+  "title": "Polling operazione",
+  "steps": [
+    { "response": "001.response.json", "times": 3 },
+    { "response": "002.response.json", "forMs": 5000 },
+    { "response": "003.response.json" }
+  ],
+  "onEnd": "stay",
+  "resetAfterMs": 30000
+}
+```
+
+Se è selezionata, la sequence decide quale response serve ogni richiesta. Non contiene
+`enabled`: per spegnerla si seleziona un'altra variante.
+
+- **`steps`** — almeno due voci. `response` deve essere elencata nell'endpoint e deve avere
+  tipo `mock` o `handler`; sequence annidate, middleware, SSE e WS non sono ammessi. Ogni step
+  usa al massimo un criterio: `times` (numero di richieste) oppure `forMs` (millisecondi dalla
+  prima richiesta allo step). Con `onEnd: stay` l'ultimo può non averne; tutti gli altri devono
+  averne uno. I criteri possono essere misti tra step.
+- **`onEnd`** — `stay` resta sull'ultimo step; `loop` ricomincia e richiede un criterio anche
+  sull'ultimo.
+- **`resetAfterMs`** — facoltativo; dopo questa inattività il cursore riparte pigramente alla
+  richiesta successiva. Assente significa mai.
+
+Il cursore è globale per endpoint e non viene persistito. La UI espone stato e reset; l'admin
+API offre `GET /mocks/:id/sequence/state` e `POST /mocks/:id/sequence/reset`. Non si può
+cancellare una response referenziata: l'API risponde `409` indicando le sequence dipendenti.
+
 ## Validazione ed errori
 
 Il file della variante **selezionata** viene validato al caricamento dell'endpoint: `type`
@@ -229,5 +264,6 @@ esistente su disco. Un errore in questi controlli non abbatte il server: vale la
 per-endpoint descritta nella [pagina sul file endpoint](ENDPOINT.md) — l'endpoint viene saltato
 con un warning, e alla ricarica a caldo resta in vigore l'ultima versione valida.
 
-Le varianti **non selezionate** non vengono validate finché non diventano quella attiva: un file
-di variante incompleto può convivere nel workspace senza effetti, finché nessuno lo seleziona.
+Le varianti **non selezionate** vengono normalmente validate solo quando diventano attive. Le
+mutazioni admin di una sequence fanno eccezione: risolvono subito l'intero grafo degli step e
+fanno rollback se una response o un asset non è realmente caricabile.
