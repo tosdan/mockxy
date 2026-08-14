@@ -269,7 +269,20 @@ async function readEndpointResponseSummaries(endpointFilePath, endpoint) {
       continue;
     }
 
-    const response = await readEndpointResponse(responseFilePath, endpoint);
+    // Una variante illeggibile è un dato dell'elenco, non un errore dell'elenco: farla
+    // sollevare renderebbe indiagnosticabile l'intero endpoint proprio quando serve aprirlo
+    // per capire cosa sistemare. Stessa filosofia del ramo `missing` qui sopra.
+    let response;
+    try {
+      response = await readEndpointResponse(responseFilePath, endpoint);
+    } catch (error) {
+      summaries.push({
+        fileName: responseFile,
+        invalid: true,
+        error: error.message,
+      });
+      continue;
+    }
     summaries.push({
       fileName: responseFile,
       type: response.type,

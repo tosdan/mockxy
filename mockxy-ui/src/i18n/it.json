@@ -380,7 +380,11 @@
     "fileHint": "Content-type dal file (sovrascrivibile via header) · max 12 MB",
     "filePrefix": "File:",
     "noBody": "Nessun body.",
-    "selectEndpoint": "Seleziona un endpoint dal catalogo."
+    "selectEndpoint": "Seleziona un endpoint dal catalogo.",
+    "unreadableTitle": "Modifica applicata, dettaglio non leggibile",
+    "unreadableHint": "La modifica è salvata su disco. La sua descrizione non è mostrabile finché il file del workspace qui sotto non torna leggibile.",
+    "unreadableRetry": "Rileggi",
+    "variantInvalid": "non leggibile"
   },
   "createDialog": {
     "title": "Nuovo {{type}}",

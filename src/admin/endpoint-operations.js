@@ -54,7 +54,7 @@ const {
   removeRefFromChildOrder,
   serializedByWorkspace,
 } = require("./collections-state");
-const { getAdminMockDetail } = require("./mock-catalog");
+const { getAdminMockDetailAfterCommit } = require("./mock-catalog");
 const { normalizeSequenceResponse } = require("../mocks/sequence-config");
 const { normalizeSseConfig, validateSseMessage } = require("../mocks/sse-config");
 const { normalizeWsConfig, validateWsMessage } = require("../mocks/ws-config");
@@ -120,7 +120,7 @@ async function createAdminEndpointFromMock(mocksDir, payload, reloadRuntime) {
     validateReloadResult: validateEndpointReload(endpointPath),
   });
 
-  return getAdminMockDetail(mocksDir, encodeMockId(relativePath));
+  return getAdminMockDetailAfterCommit(mocksDir, encodeMockId(relativePath));
 }
 
 async function createAdminEndpointFromScript(mocksDir, payload, reloadRuntime, type) {
@@ -172,7 +172,7 @@ async function createAdminEndpointFromScript(mocksDir, payload, reloadRuntime, t
     validateReloadResult: validateEndpointReload(endpointPath),
   });
 
-  return getAdminMockDetail(mocksDir, encodeMockId(relativePath));
+  return getAdminMockDetailAfterCommit(mocksDir, encodeMockId(relativePath));
 }
 
 async function createAdminMock(mocksDir, payload, reloadRuntime) {
@@ -627,7 +627,7 @@ async function createAdminResponse(mocksDir, id, payload, reloadRuntime) {
     validateReloadResult: validateEndpointReload(endpointPath),
   });
 
-  return getAdminMockDetail(mocksDir, id);
+  return getAdminMockDetailAfterCommit(mocksDir, id);
 }
 
 async function updateAdminResponse(mocksDir, id, responseFileName, payload, reloadRuntime) {
@@ -683,7 +683,7 @@ async function updateAdminResponse(mocksDir, id, responseFileName, payload, relo
     }
   }
 
-  return getAdminMockDetail(mocksDir, id);
+  return getAdminMockDetailAfterCommit(mocksDir, id);
 }
 
 function sanitizeUploadExtension(filename) {
@@ -764,7 +764,7 @@ async function setAdminResponseFile(mocksDir, id, responseFileName, fileBuffer, 
     }
   }
 
-  return getAdminMockDetail(mocksDir, id);
+  return getAdminMockDetailAfterCommit(mocksDir, id);
 }
 
 async function deleteAdminResponse(mocksDir, id, responseFileName, reloadRuntime) {
@@ -828,7 +828,7 @@ async function deleteAdminResponse(mocksDir, id, responseFileName, reloadRuntime
     validateReloadResult: validateEndpointReload(endpointPath),
   });
 
-  return getAdminMockDetail(mocksDir, id);
+  return getAdminMockDetailAfterCommit(mocksDir, id);
 }
 
 function buildUpdatedEndpointConfig(endpoint, payload) {
@@ -888,7 +888,7 @@ async function updateAdminEndpoint(mocksDir, id, payload, reloadRuntime) {
     validateReloadResult: validateEndpointReload(endpointPath),
   });
 
-  return getAdminMockDetail(mocksDir, id);
+  return getAdminMockDetailAfterCommit(mocksDir, id);
 }
 
 async function updateAdminMock(mocksDir, id, payload, reloadRuntime) {
@@ -929,7 +929,7 @@ async function updateAdminMock(mocksDir, id, payload, reloadRuntime) {
       validateReloadResult: validateEndpointReload(endpointPath),
     });
 
-    return getAdminMockDetail(mocksDir, id);
+    return getAdminMockDetailAfterCommit(mocksDir, id);
   }
 
   const { endpoint, response, responseFilePath, responseDir } = await readEndpointSelectedResponse(endpointPath);
@@ -1009,7 +1009,7 @@ async function updateAdminMock(mocksDir, id, payload, reloadRuntime) {
     validateReloadResult: validateEndpointReload(endpointPath),
   });
 
-  return getAdminMockDetail(mocksDir, id);
+  return getAdminMockDetailAfterCommit(mocksDir, id);
 }
 
 // Reset del cursore runtime di una sequenza: la prossima richiesta riparte dal primo step.
@@ -1331,7 +1331,7 @@ async function copyAdminEndpoint(mocksDir, id, payload, reloadRuntime) {
     validateReloadResult: validateEndpointReload(targetEndpointPath),
   });
 
-  return getAdminMockDetail(mocksDir, encodeMockId(relativePath));
+  return getAdminMockDetailAfterCommit(mocksDir, encodeMockId(relativePath));
 }
 
 module.exports = {

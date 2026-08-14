@@ -3,6 +3,21 @@ import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { MockAdminApiService } from './mock-admin-api.service';
+import {
+  isDetailUnavailable,
+  type MockDetail,
+  type MockDetailAfterMutation,
+} from './mock-admin-api.types';
+
+// Le mutazioni rispondono con MockDetail oppure col motivo per cui il dettaglio non è
+// componibile. Le fixture qui sotto sono dettagli completi: si restringe una volta sola, e se
+// una fixture cambiasse forma il test lo direbbe invece di asserire su `undefined`.
+function asDetail(response: MockDetailAfterMutation): MockDetail {
+  if (isDetailUnavailable(response)) {
+    throw new Error(`fixture inattesa: ${response.detailUnavailable.message}`);
+  }
+  return response;
+}
 
 describe('MockAdminApiService', () => {
   let service: MockAdminApiService;
@@ -146,7 +161,7 @@ describe('MockAdminApiService', () => {
         enabled: false,
       })
       .subscribe((response) => {
-        expect(response.endpoint?.description).toBe('Descrizione aggiornata');
+        expect(asDetail(response).endpoint?.description).toBe('Descrizione aggiornata');
       });
 
     const request = http.expectOne('/_admin/api/mocks/abc%2F123/endpoint');
@@ -188,7 +203,7 @@ describe('MockAdminApiService', () => {
         source: 'module.exports = { async transformResponse() { return undefined; } };',
       })
       .subscribe((response) => {
-        expect(response.type).toBe('middleware');
+        expect(asDetail(response).type).toBe('middleware');
       });
 
     const request = http.expectOne('/_admin/api/mocks');
@@ -220,7 +235,7 @@ describe('MockAdminApiService', () => {
         selectedResponseFile: '002.response.json',
       })
       .subscribe((response) => {
-        expect(response.selectedResponseFile).toBe('002.response.json');
+        expect(asDetail(response).selectedResponseFile).toBe('002.response.json');
       });
 
     const request = http.expectOne('/_admin/api/mocks/abc%2F123');
@@ -244,7 +259,7 @@ describe('MockAdminApiService', () => {
 
   it('should create an endpoint response', () => {
     service.createResponse('abc/123').subscribe((response) => {
-      expect(response.selectedResponseFile).toBe('002.response.json');
+      expect(asDetail(response).selectedResponseFile).toBe('002.response.json');
     });
 
     const request = http.expectOne('/_admin/api/mocks/abc%2F123/responses');
@@ -310,7 +325,7 @@ describe('MockAdminApiService', () => {
         error: true,
       },
     }).subscribe((response) => {
-      expect(response.selectedResponseFile).toBe('002.response.json');
+      expect(asDetail(response).selectedResponseFile).toBe('002.response.json');
     });
 
     const request = http.expectOne('/_admin/api/mocks/abc%2F123/responses');
@@ -356,7 +371,7 @@ describe('MockAdminApiService', () => {
         },
       })
       .subscribe((response) => {
-        expect(response.selectedResponseFile).toBe('001.response.json');
+        expect(asDetail(response).selectedResponseFile).toBe('001.response.json');
       });
 
     const request = http.expectOne('/_admin/api/mocks/abc%2F123/responses/001.response.json');
@@ -389,7 +404,7 @@ describe('MockAdminApiService', () => {
 
   it('should delete an endpoint response file', () => {
     service.deleteResponse('abc/123', '002.response.json').subscribe((response) => {
-      expect(response.selectedResponseFile).toBe('001.response.json');
+      expect(asDetail(response).selectedResponseFile).toBe('001.response.json');
     });
 
     const request = http.expectOne('/_admin/api/mocks/abc%2F123/responses/002.response.json');
@@ -414,7 +429,7 @@ describe('MockAdminApiService', () => {
         collectionId: 'collection-archived',
       })
       .subscribe((response) => {
-        expect(response.collectionId).toBe('collection-archived');
+        expect(asDetail(response).collectionId).toBe('collection-archived');
       });
 
     const request = http.expectOne('/_admin/api/mocks/abc%2F123/collection');

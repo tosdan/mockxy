@@ -198,7 +198,7 @@ export class MocksNextSequenceDialog {
     : '';
 
   protected readonly variantOptions: readonly UiSelectOption<string>[] = (this.data.detail.responses ?? [])
-    .filter((response) => !response.missing && (response.type === 'mock' || response.type === 'handler'))
+    .filter((response) => !response.missing && !response.invalid && (response.type === 'mock' || response.type === 'handler'))
     .map((response) => ({
       value: response.fileName,
       label: response.title ? `${response.title} — ${response.fileName}` : response.fileName,

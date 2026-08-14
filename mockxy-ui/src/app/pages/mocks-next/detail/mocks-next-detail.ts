@@ -2,7 +2,7 @@ import { ChangeDetectionStrategy, Component, computed, effect, inject, signal, V
 import { CdkMenuTrigger } from '@angular/cdk/menu';
 import { NgIcon, provideIcons } from '@ng-icons/core';
 import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
-import { lucideCable, lucideCheck, lucideCog, lucideCopy, lucideFile, lucideFileCode, lucideLayers, lucideListOrdered, lucideMessageSquare, lucidePencil, lucidePlus, lucideRadio, lucideTrash2, lucideX } from '@ng-icons/lucide';
+import { lucideCable, lucideCheck, lucideCog, lucideCopy, lucideFile, lucideFileCode, lucideLayers, lucideListOrdered, lucideMessageSquare, lucidePencil, lucidePlus, lucideRadio, lucideTrash2, lucideTriangleAlert, lucideX } from '@ng-icons/lucide';
 import { UiBadge, type BadgeTone } from '../../../ui/ui-badge/ui-badge';
 import { UiButton } from '../../../ui/ui-button/ui-button';
 import { UiChip } from '../../../ui/ui-chip/ui-chip';
@@ -39,13 +39,27 @@ const METHOD_TONES: ReadonlySet<string> = new Set(['get', 'post', 'put', 'delete
 @Component({
   selector: 'mocks-next-detail',
   imports: [CdkMenuTrigger, NgIcon, StatusCombobox, TranslocoPipe, UiBadge, UiButton, UiChip, UiCode, UiCollapsible, UiInput, UiMenu, UiMenuItem, UiSelect, UiSkeleton, UiSwitch, UiTable, UiTooltip, MocksNextResponseForm, MocksNextSseConsole, MocksNextWsConsole],
-  providers: [provideIcons({ lucideCable, lucideCheck, lucideCog, lucideCopy, lucideFile, lucideFileCode, lucideLayers, lucideListOrdered, lucideMessageSquare, lucidePencil, lucidePlus, lucideRadio, lucideTrash2, lucideX })],
+  providers: [provideIcons({ lucideCable, lucideCheck, lucideCog, lucideCopy, lucideFile, lucideFileCode, lucideLayers, lucideListOrdered, lucideMessageSquare, lucidePencil, lucidePlus, lucideRadio, lucideTrash2, lucideTriangleAlert, lucideX })],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { class: 'relative flex min-w-0 flex-1 flex-col overflow-hidden bg-muted' },
   template: `
     <div class="mx-glow"></div>
 
-    @if (detail(); as d) {
+    @if (detailUnavailable(); as reason) {
+    <!-- La modifica È avvenuta: qui manca solo la sua descrizione. Mostrare il dettaglio
+         precedente sarebbe stato stantio spacciato per aggiornato. -->
+    <div class="relative z-10 grid flex-1 place-items-center p-6">
+      <div class="flex max-w-lg flex-col items-center gap-3 text-center">
+        <ng-icon name="lucideTriangleAlert" size="1.5rem" class="text-[color:var(--status-4xx)]" />
+        <p class="text-sm font-medium text-foreground">{{ 'detail.unreadableTitle' | transloco }}</p>
+        <p class="text-sm text-muted-foreground">{{ 'detail.unreadableHint' | transloco }}</p>
+        <p class="w-full whitespace-pre-line break-words rounded-md bg-muted-foreground/10 p-3 text-left font-mono text-xs text-muted-foreground">{{ reason }}</p>
+        <button ui-button variant="outline" size="sm" [disabled]="loading()" (click)="store.reloadSelectedDetail()">
+          {{ 'detail.unreadableRetry' | transloco }}
+        </button>
+      </div>
+    </div>
+    } @else if (detail(); as d) {
     <!-- HEADER ENDPOINT -->
     <div class="relative z-10 shrink-0 border-b border-border px-6 pb-4 pt-4">
       <div class="flex flex-wrap items-start gap-x-4 gap-y-3">
@@ -328,6 +342,7 @@ export class MocksNextDetail {
   /** Alias dei signal dello store (componente smart). */
   protected readonly detail = this.store.selected;
   protected readonly loading = this.store.detailLoading;
+  protected readonly detailUnavailable = this.store.detailUnavailable;
 
   // --- stato modifica (Fase C) ---
   protected readonly editingResponse = signal(false);
@@ -382,6 +397,16 @@ export class MocksNextDetail {
 
   protected readonly responseOptions = computed<readonly UiSelectOption<string>[]>(() =>
     (this.detail()?.responses ?? []).map((r) => {
+      // Una variante illeggibile è elencata (esiste su disco e il file endpoint la dichiara) ma
+      // non selezionabile: attivarla fallirebbe, e spacciarla per un mock sarebbe una bugia.
+      if (r.invalid) {
+        return {
+          value: r.fileName,
+          label: `${r.fileName} · ${this.transloco.translate('detail.variantInvalid')}`,
+          disabled: true,
+          accent: 'var(--status-4xx)',
+        };
+      }
       const type = r.type ?? 'mock';
       return {
         value: r.fileName,

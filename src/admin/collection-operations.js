@@ -27,7 +27,7 @@ const {
   serializedByWorkspace,
   createCollectionSummary,
 } = require("./collections-state");
-const { listAdminMocks, listAdminCollections, getAdminMockDetail } = require("./mock-catalog");
+const { listAdminMocks, listAdminCollections, getAdminMockDetailAfterCommit } = require("./mock-catalog");
 const { deleteAdminMocksUnlocked } = require("./endpoint-operations");
 
 // Operazioni admin sulle collection: CRUD, riordini, assegnazione degli endpoint e
@@ -354,7 +354,7 @@ async function assignAdminCollectionUnlocked(mocksDir, id, payload) {
   insertRefIntoChildOrder(collectionState, relativePath, readCollectionOrderKey(collectionId), targetIndex);
 
   await writeCollectionsState(mocksDir, collectionState);
-  return getAdminMockDetail(mocksDir, id);
+  return getAdminMockDetailAfterCommit(mocksDir, id);
 }
 
 function normalizeRequestedEndpointIds(itemIds) {

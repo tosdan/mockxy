@@ -50,7 +50,11 @@ info:
       nothing (`data()` re-reads on every call), with one exception: a rename that rewrites
       `data()` references in handler sources does reload.
     - **Mutation results**: most endpoint and variant mutations answer with the **full
-      `MockDetail`** of the affected endpoint, so a client never needs a follow-up GET.
+      `MockDetail`** of the affected endpoint, so a client never needs a follow-up GET. Composing
+      that detail happens *after* the change is committed, so when it fails for an unrelated
+      reason (unreadable selected variant, asset removed by hand) the mutation is **not** undone
+      and **not** reported as an error: the answer is `MockDetailUnavailable`, a success carrying
+      the reason instead of the description.
     - **Body limits**: JSON bodies are capped at 2 MB, raw uploads at 12 MB (response assets,
       OpenAPI documents) and 25 MB (data files).
 
@@ -194,7 +198,7 @@ paths:
           description: The created endpoint
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/MockDetail" }
+              schema: { $ref: "#/components/schemas/MockDetailAfterMutation" }
         "400": { $ref: "#/components/responses/BadRequest" }
         "409":
           description: An endpoint already exists for this method and path.
@@ -547,7 +551,7 @@ paths:
           description: The updated endpoint
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/MockDetail" }
+              schema: { $ref: "#/components/schemas/MockDetailAfterMutation" }
         "400": { $ref: "#/components/responses/BadRequest" }
         "404": { $ref: "#/components/responses/MockNotFound" }
     delete:
@@ -589,7 +593,7 @@ paths:
           description: The updated endpoint
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/MockDetail" }
+              schema: { $ref: "#/components/schemas/MockDetailAfterMutation" }
         "400": { $ref: "#/components/responses/BadRequest" }
         "404": { $ref: "#/components/responses/MockNotFound" }
 
@@ -626,7 +630,7 @@ paths:
           description: The new endpoint
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/MockDetail" }
+              schema: { $ref: "#/components/schemas/MockDetailAfterMutation" }
         "400": { $ref: "#/components/responses/BadRequest" }
         "404": { $ref: "#/components/responses/MockNotFound" }
         "409":
@@ -663,7 +667,7 @@ paths:
           description: The updated endpoint
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/MockDetail" }
+              schema: { $ref: "#/components/schemas/MockDetailAfterMutation" }
         "400": { $ref: "#/components/responses/BadRequest" }
         "404":
           description: Endpoint or collection not found.
@@ -884,7 +888,7 @@ paths:
           description: The endpoint, with the new variant selected
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/MockDetail" }
+              schema: { $ref: "#/components/schemas/MockDetailAfterMutation" }
         "400": { $ref: "#/components/responses/BadRequest" }
         "404": { $ref: "#/components/responses/MockNotFound" }
         "409":
@@ -940,7 +944,7 @@ paths:
           description: The updated endpoint
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/MockDetail" }
+              schema: { $ref: "#/components/schemas/MockDetailAfterMutation" }
         "400": { $ref: "#/components/responses/BadRequest" }
         "404": { $ref: "#/components/responses/MockNotFound" }
     delete:
@@ -958,7 +962,7 @@ paths:
           description: The updated endpoint
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/MockDetail" }
+              schema: { $ref: "#/components/schemas/MockDetailAfterMutation" }
         "400": { $ref: "#/components/responses/BadRequest" }
         "404": { $ref: "#/components/responses/MockNotFound" }
         "409":
@@ -1007,7 +1011,7 @@ paths:
           description: The updated endpoint
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/MockDetail" }
+              schema: { $ref: "#/components/schemas/MockDetailAfterMutation" }
         "400":
           description: Empty upload, or the variant is not a `mock` one.
           content:
@@ -1779,6 +1783,15 @@ components:
         missing:
           type: boolean
           description: Present and `true` when the file listed in `responseFiles` is not on disk; all other fields are then absent.
+        invalid:
+          type: boolean
+          description: >
+            Present and `true` when the file is on disk but cannot be read as a response
+            definition. `error` carries the reason and all other fields are then absent: one
+            unreadable variant must not make the whole endpoint undiagnosable.
+        error:
+          type: string
+          description: Why the variant could not be read. Present only alongside `invalid`.
         type: { $ref: "#/components/schemas/ResponseType" }
         title: { type: string }
         sourceFile:
@@ -1789,6 +1802,37 @@ components:
           type: boolean
           description: "`mock` only: whether placeholders in the payload are rendered per request."
         selected: { type: boolean }
+
+    MockDetailUnavailable:
+      type: object
+      description: >
+        Returned in place of `MockDetail` when a mutation succeeded but its detail could not be
+        composed afterwards — the selected variant is unreadable, or an asset or handler source
+        was removed by hand. The mutation is committed and the status stays a success status:
+        only the description of the result is missing. Re-read the endpoint once it is readable
+        again. This shape never comes back from `GET /mocks/{id}`, where an unreadable endpoint
+        is a genuine error.
+      required: [id, detailUnavailable]
+      properties:
+        id:
+          type: string
+          description: Id of the endpoint the mutation was applied to.
+        detailUnavailable:
+          type: object
+          required: [message]
+          properties:
+            message:
+              type: string
+              description: Why the detail could not be composed.
+
+    MockDetailAfterMutation:
+      description: >
+        The affected endpoint's `MockDetail`, or `MockDetailUnavailable` when the mutation
+        succeeded but its detail could not be composed. Tell them apart by the presence of
+        `detailUnavailable`.
+      oneOf:
+        - $ref: "#/components/schemas/MockDetail"
+        - $ref: "#/components/schemas/MockDetailUnavailable"
 
     MockDetail:
       type: object
