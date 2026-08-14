@@ -229,6 +229,20 @@ async function getAdminMockDetail(mocksDir, id) {
   return detail;
 }
 
+// Il dettaglio come CORPO della risposta di una mutazione già scritta su disco e già oltre la
+// finestra di rollback. Comporlo può fallire per ragioni che non c'entrano con la mutazione
+// (variante selezionata illeggibile, asset o sorgente spariti a mano): a quel punto l'operazione
+// è riuscita per definizione, e riportarla come errore lascerebbe il client convinto del
+// contrario, con lo stato a schermo ormai stantio. Lo status resta di successo, e il corpo dice
+// perché il dettaglio non c'è; sta al client rileggerlo quando l'endpoint torna leggibile.
+async function getAdminMockDetailAfterCommit(mocksDir, id) {
+  try {
+    return await getAdminMockDetail(mocksDir, id);
+  } catch (error) {
+    return { id, detailUnavailable: { message: error.message } };
+  }
+}
+
 /**
  * Risolve una richiesta concreta (metodo + path con eventuale query, es. una entry del
  * monitor) nell'endpoint del catalogo che OGGI la coprirebbe. È un fatto derivato,
@@ -283,5 +297,6 @@ module.exports = {
   listAdminCollections,
   listAdminChildOrder,
   getAdminMockDetail,
+  getAdminMockDetailAfterCommit,
   resolveAdminMockForRequest,
 };
