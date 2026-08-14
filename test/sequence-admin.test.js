@@ -88,9 +88,14 @@ describe("sequence response admin API", () => {
     return JSON.parse(await fs.promises.readFile(path.join(responseDir, fileName), "utf8"));
   }
 
-  async function buildApp({ overrideReloadResult } = {}) {
+  async function buildApp({ overrideReloadResult, skipReloadRounds = 0 } = {}) {
     const sequenceStates = new SequenceStateStore();
     const handlerStates = new HandlerStateStore();
+    // `skipReloadRounds` modella l'aggregazione del motore: le chiamate arrivate mentre un giro
+    // e' in corso vengono servite dal giro SUCCESSIVO (vedi createReloadHandler), quindi due
+    // mutazioni ravvicinate possono condividere una sola riconciliazione. Saltare il giro della
+    // prima mutazione riproduce esattamente quella condizione, in modo deterministico.
+    let roundsToSkip = skipReloadRounds;
     const load = async () => {
       const loaded = await loadEndpointRouteGroups(mocksDir);
       return {
@@ -103,6 +108,10 @@ describe("sequence response admin API", () => {
     const registry = new MockRegistry(initial.routeGroups, sequenceStates);
     const proxyMiddlewareRegistry = new ProxyMiddlewareRegistry(initial.proxyMiddlewareRouteGroups);
     const reloadRuntime = async () => {
+      if (roundsToSkip > 0) {
+        roundsToSkip -= 1;
+        return { applied: true, loadErrors: [], fatalError: null };
+      }
       const next = await load();
       const changedSequenceKeys = registry.setRouteGroups(next.routeGroups);
       proxyMiddlewareRegistry.setRouteGroups(next.proxyMiddlewareRouteGroups);
@@ -331,6 +340,37 @@ describe("sequence response admin API", () => {
 
     expect(result.status).toBe(409);
     expect(result.body.details).toEqual({ referencedBy: ["003.response.json"] });
+  });
+
+  test("uscire da una sequence e rientrarci azzera lo scenario anche se i reload vengono aggregati", async () => {
+    // La riconciliazione confronta due scansioni: se i due cambi di selezione finiscono nello
+    // stesso giro, vede la stessa firma da entrambi i lati e conclude che nulla e' cambiato. Ad
+    // accorgersene puo' essere solo la mutazione, che sa di aver attraversato lo stato intermedio.
+    await writeEndpointWithVariants({ withSequence: true });
+    const { app } = await buildApp({ skipReloadRounds: 1 });
+
+    await request(app).get("/api/operazioni");
+    const served = await request(app).get(`/_admin/api/mocks/${MOCK_ID}/sequence/state`);
+    expect(served.body.sequenceState).toMatchObject({ stepIndex: 0, servedInStep: 1 });
+
+    // Esce dalla sequence e ci rientra: per il disco la selezione finale e' quella di partenza.
+    await request(app).put(`/_admin/api/mocks/${MOCK_ID}`).send({ selectedResponseFile: "001.response.json" });
+    await request(app).put(`/_admin/api/mocks/${MOCK_ID}`).send({ selectedResponseFile: "003.response.json" });
+
+    const state = await request(app).get(`/_admin/api/mocks/${MOCK_ID}/sequence/state`);
+    expect(state.status).toBe(200);
+    expect(state.body.sequenceState).toMatchObject({ stepIndex: 0, servedInStep: 0 });
+  });
+
+  test("riselezionare la stessa variante è un no-op e conserva il cursore", async () => {
+    await writeEndpointWithVariants({ withSequence: true });
+    const { app } = await buildApp();
+
+    await request(app).get("/api/operazioni");
+    await request(app).put(`/_admin/api/mocks/${MOCK_ID}`).send({ selectedResponseFile: "003.response.json" });
+
+    const state = await request(app).get(`/_admin/api/mocks/${MOCK_ID}/sequence/state`);
+    expect(state.body.sequenceState).toMatchObject({ stepIndex: 0, servedInStep: 1 });
   });
 
   test("clona una sequence come nuova variante con una nuova identità", async () => {

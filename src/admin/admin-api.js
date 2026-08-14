@@ -63,6 +63,9 @@ function sendJson(res, status, payload) {
 
 function createAdminApiRouter({ config, reloadRuntime, requestMonitor, serverState, monitorDump, sequenceStates, handlerStates, sseConnections, wsConnections }) {
   const router = express.Router();
+  // Store dello scenario runtime, passati alle mutazioni che possono invalidarlo: il reload da
+  // solo non basta, perche' aggrega piu' scritture in un giro unico (vedi invalidateScenario).
+  const scenarioStates = { sequenceStates, handlerStates };
 
   router.use(express.json({ limit: "2mb" }));
 
@@ -385,7 +388,8 @@ function createAdminApiRouter({ config, reloadRuntime, requestMonitor, serverSta
       config.mocksDir,
       req.params.id,
       req.body,
-      reloadRuntime
+      reloadRuntime,
+      scenarioStates
     );
     sendJson(res, 201, detail);
   });
@@ -396,7 +400,8 @@ function createAdminApiRouter({ config, reloadRuntime, requestMonitor, serverSta
       req.params.id,
       req.params.responseFileName,
       req.body,
-      reloadRuntime
+      reloadRuntime,
+      scenarioStates
     );
     sendJson(res, 200, detail);
   });
@@ -425,7 +430,8 @@ function createAdminApiRouter({ config, reloadRuntime, requestMonitor, serverSta
       config.mocksDir,
       req.params.id,
       req.params.responseFileName,
-      reloadRuntime
+      reloadRuntime,
+      scenarioStates
     );
     sendJson(res, 200, detail);
   });
@@ -435,7 +441,8 @@ function createAdminApiRouter({ config, reloadRuntime, requestMonitor, serverSta
       config.mocksDir,
       req.params.id,
       req.body,
-      reloadRuntime
+      reloadRuntime,
+      scenarioStates
     );
     sendJson(res, 200, detail);
   });

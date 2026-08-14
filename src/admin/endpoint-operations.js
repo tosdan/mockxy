@@ -55,7 +55,7 @@ const {
   serializedByWorkspace,
 } = require("./collections-state");
 const { getAdminMockDetailAfterCommit } = require("./mock-catalog");
-const { normalizeSequenceResponse } = require("../mocks/sequence-config");
+const { normalizeSequenceResponse, computeSequenceSignature } = require("../mocks/sequence-config");
 const { normalizeSseConfig, validateSseMessage } = require("../mocks/sse-config");
 const { normalizeWsConfig, validateWsMessage } = require("../mocks/ws-config");
 
@@ -543,7 +543,7 @@ function validateEndpointReload(endpointPath) {
   };
 }
 
-async function createAdminResponse(mocksDir, id, payload, reloadRuntime) {
+async function createAdminResponse(mocksDir, id, payload, reloadRuntime, scenarioStates) {
   const endpointPath = resolveAdminFilePath(mocksDir, id);
   if (!fs.existsSync(endpointPath)) {
     throw createAdminError(404, "Endpoint definition not found.");
@@ -627,10 +627,13 @@ async function createAdminResponse(mocksDir, id, payload, reloadRuntime) {
     validateReloadResult: validateEndpointReload(endpointPath),
   });
 
+  // La variante creata diventa la selezionata: lo scenario precedente non vale piu'.
+  invalidateScenario(scenarioStates, endpoint.method, endpoint.path);
+
   return getAdminMockDetailAfterCommit(mocksDir, id);
 }
 
-async function updateAdminResponse(mocksDir, id, responseFileName, payload, reloadRuntime) {
+async function updateAdminResponse(mocksDir, id, responseFileName, payload, reloadRuntime, scenarioStates) {
   const endpointPath = resolveAdminFilePath(mocksDir, id);
   if (!fs.existsSync(endpointPath)) {
     throw createAdminError(404, "Endpoint definition not found.");
@@ -764,10 +767,21 @@ async function setAdminResponseFile(mocksDir, id, responseFileName, fileBuffer, 
     }
   }
 
+  // Cambiare steps/onEnd/resetAfterMs azzera lo scenario; cambiare solo il titolo no — la firma
+  // esclude il titolo apposta. Il confronto e' fra il PRIMA e il DOPO di questa mutazione, non
+  // fra due scansioni: cosi' regge anche quando due reload vengono aggregati in uno.
+  if (
+    responseFileName === endpoint.selectedResponseFile
+    && (response.type === "sequence" || nextResponse.type === "sequence")
+    && sequenceSignatureOf(responseFileName, response) !== sequenceSignatureOf(responseFileName, nextResponse)
+  ) {
+    invalidateScenario(scenarioStates, endpoint.method, endpoint.path);
+  }
+
   return getAdminMockDetailAfterCommit(mocksDir, id);
 }
 
-async function deleteAdminResponse(mocksDir, id, responseFileName, reloadRuntime) {
+async function deleteAdminResponse(mocksDir, id, responseFileName, reloadRuntime, scenarioStates) {
   const endpointPath = resolveAdminFilePath(mocksDir, id);
   if (!fs.existsSync(endpointPath)) {
     throw createAdminError(404, "Endpoint definition not found.");
@@ -827,6 +841,11 @@ async function deleteAdminResponse(mocksDir, id, responseFileName, reloadRuntime
     rejectionLabel: "Endpoint response delete rejected",
     validateReloadResult: validateEndpointReload(endpointPath),
   });
+
+  // Cancellare la variante selezionata ne promuove un'altra: e' un cambio di selezione.
+  if (endpoint.selectedResponseFile !== nextEndpoint.selectedResponseFile) {
+    invalidateScenario(scenarioStates, endpoint.method, endpoint.path);
+  }
 
   return getAdminMockDetailAfterCommit(mocksDir, id);
 }
@@ -891,7 +910,30 @@ async function updateAdminEndpoint(mocksDir, id, payload, reloadRuntime) {
   return getAdminMockDetailAfterCommit(mocksDir, id);
 }
 
-async function updateAdminMock(mocksDir, id, payload, reloadRuntime) {
+/**
+ * Azzera lo scenario runtime di un endpoint perché una mutazione lo ha invalidato.
+ *
+ * Serve perché il reload NON può dedurlo da solo: le chiamate arrivate mentre un giro è in corso
+ * vengono aggregate nel successivo (vedi createReloadHandler), quindi due cambi di selezione
+ * ravvicinati che tornano al punto di partenza producono una sola riconciliazione, che confronta
+ * due firme identiche e conclude — correttamente, per quel che vede — che nulla è cambiato. Lo
+ * stato intermedio non è mai esistito su disco al momento della scansione. La mutazione invece
+ * sa di averlo attraversato, ed è l'unica a saperlo.
+ */
+function sequenceSignatureOf(responseFileName, response) {
+  return response?.type === "sequence" ? computeSequenceSignature(responseFileName, response) : null;
+}
+
+function invalidateScenario(scenarioStates, method, routePath) {
+  if (scenarioStates == null) {
+    return;
+  }
+  const key = `${method} ${routePath}`;
+  scenarioStates.sequenceStates?.reset(key);
+  scenarioStates.handlerStates?.reset(key);
+}
+
+async function updateAdminMock(mocksDir, id, payload, reloadRuntime, scenarioStates) {
   const endpointPath = resolveAdminFilePath(mocksDir, id);
   if (!fs.existsSync(endpointPath)) {
     throw createAdminError(404, "Endpoint definition not found.");
@@ -928,6 +970,12 @@ async function updateAdminMock(mocksDir, id, payload, reloadRuntime) {
       rejectionLabel: "Endpoint response selection rejected",
       validateReloadResult: validateEndpointReload(endpointPath),
     });
+
+    // Entrare in una sequence, uscirne o passare a un'altra azzera lo scenario; riselezionare la
+    // stessa variante è un no-op idempotente e lo conserva (vedi ANALISI-SEQUENCE-COME-VARIANTE).
+    if (endpoint.selectedResponseFile !== selectedResponseFile) {
+      invalidateScenario(scenarioStates, endpoint.method, endpoint.path);
+    }
 
     return getAdminMockDetailAfterCommit(mocksDir, id);
   }
