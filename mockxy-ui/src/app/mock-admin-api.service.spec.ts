@@ -7,6 +7,7 @@ import {
   isDetailUnavailable,
   type MockDetail,
   type MockDetailAfterMutation,
+  type MockListResponse,
 } from './mock-admin-api.types';
 
 // Le mutazioni rispondono con MockDetail oppure col motivo per cui il dettaglio non è
@@ -81,6 +82,33 @@ describe('MockAdminApiService', () => {
         },
       ],
     });
+  });
+
+  // Nota: qui la risposta viene catturata e asserita nel CORPO del test, non dentro il callback
+  // di subscribe. Un expect che fallisce dentro il callback viene inghiottito da RxJS e il test
+  // passa lo stesso — e passerebbe anche se il callback non girasse affatto.
+  it('propaga le definizioni scartate dal caricamento', () => {
+    const loadErrors = [
+      { configFilePath: 'legacy/GET.endpoint.json', message: 'endpoint.sequence is no longer supported' },
+    ];
+    let received: MockListResponse | undefined;
+    service.listMocks().subscribe((response) => (received = response));
+
+    http.expectOne('/_admin/api/mocks').flush({ items: [], loadErrors });
+
+    expect(received?.loadErrors).toEqual(loadErrors);
+  });
+
+  it('senza loadErrors nella risposta espone una lista vuota, non undefined', () => {
+    // Il catalogo distingue "nessuna definizione scartata" da "questa risposta non lo dice":
+    // la GET del catalogo rifà sempre la scansione, quindi qui l'assenza significa zero.
+    let received: MockListResponse | undefined;
+    service.listMocks().subscribe((response) => (received = response));
+
+    http.expectOne('/_admin/api/mocks').flush({ items: [] });
+
+    expect(received).toBeDefined();
+    expect(received?.loadErrors).toEqual([]);
   });
 
   it('should resolve a concrete request to the covering mock', () => {

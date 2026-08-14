@@ -238,6 +238,33 @@ describe('MocksStore', () => {
       expect(store.selected()?.id).toBe('e1');
     });
 
+    it('espone le definizioni scartate dal caricamento invece di buttarle via', () => {
+      const loadErrors = [
+        { configFilePath: 'legacy/GET.endpoint.json', message: 'endpoint.sequence is no longer supported' },
+      ];
+      api.listMocks.mockReturnValueOnce(of({ ...listResponse([summary('e1')]), loadErrors }));
+      const store = create();
+
+      store.loadCatalog();
+
+      expect(store.loadErrors()).toEqual(loadErrors);
+    });
+
+    it('una risposta che non le riporta conserva le segnalazioni note, non le azzera', () => {
+      // Alcune mutazioni rispondono senza rifare la scansione da disco (es. PATCH
+      // collections/:id/enabled): lì l'assenza significa "non lo so", non "nessuna".
+      const store = create();
+      const loadErrors = [{ configFilePath: 'legacy/GET.endpoint.json', message: 'rifiutato' }];
+      api.listMocks.mockReturnValueOnce(of({ ...listResponse([summary('e1')]), loadErrors }));
+      store.loadCatalog();
+      expect(store.loadErrors()).toEqual(loadErrors);
+
+      api.updateCollectionEnabled.mockReturnValueOnce(of(listResponse([summary('e1')])));
+      store.setCollectionEnabled('c1', false);
+
+      expect(store.loadErrors()).toEqual(loadErrors);
+    });
+
     it('il preselect del monitor vince sull’id persistito', () => {
       viewState.write('mocks-selected', 'e1');
       const store = create();
