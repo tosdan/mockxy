@@ -234,6 +234,52 @@ describe('MocksNextSequenceDialog', () => {
     );
   });
 
+  it('conserva il criterio legale dell’ultimo step con onEnd stay invece di scartarlo', () => {
+    // Combinazione ammessa dal formato (il criterio è inerte a runtime, non lo si mostra):
+    // aprendo il dialog non deve risultare già modificato, e il Save non deve perderlo.
+    const detail = editDetail({
+      sequence: {
+        steps: [
+          { response: '001.response.json', times: 2 },
+          { response: '002.response.json', times: 3 },
+        ],
+        onEnd: 'stay',
+        resetAfterMs: 30000,
+      },
+    });
+    const { c } = create(detail, 'edit');
+
+    expect(c.isTerminalStep(1)).toBe(true);
+    expect(c.canSave()).toBe(false);
+
+    store.updateSequence.mockImplementation((_sequence: unknown, onSuccess: () => void) => onSuccess());
+    c.title.set('Polling v2');
+    c.save();
+    expect(store.updateSequence).toHaveBeenCalledWith(
+      expect.objectContaining({
+        steps: [
+          { response: '001.response.json', times: 2 },
+          { response: '002.response.json', times: 3 },
+        ],
+        onEnd: 'stay',
+      }),
+      expect.any(Function),
+    );
+  });
+
+  it('un errore del poll di stato non propaga e riporta lo stato a sconosciuto', () => {
+    const { c } = create(editDetail(), 'edit');
+    expect(c.sequenceState().stepIndex).toBe(1);
+
+    // L'endpoint cambia sotto i piedi (variante deselezionata altrove, backend riavviato):
+    // il tick non deve sollevare nel global handler di Angular.
+    api.getSequenceState.mockReturnValueOnce(throwError(() => new Error('boom')));
+    c.refreshState();
+
+    expect(c.sequenceState()).toBeNull();
+    expect(c.stateStepLabel()).toBe('-');
+  });
+
   it('aggiunge, sposta ed elimina step mantenendone criterio e valore', () => {
     const { c } = create(detailWith(), 'create');
     c.addStep();

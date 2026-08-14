@@ -283,6 +283,56 @@ describe("sequence response admin API", () => {
     expect((await readEndpointFromDisk()).responseFiles).toContain("001.response.json");
   });
 
+  test("una sequence auto-referenziante scritta a mano resta cancellabile", async () => {
+    // L'admin API non produce mai un auto-riferimento, ma il file si può scrivere a mano: i
+    // riferimenti della sequence spariscono insieme al file, quindi non devono bloccarla.
+    const { responseDir } = await writeEndpointWithVariants({
+      withSequence: true,
+      selectedResponseFile: "001.response.json",
+    });
+    await fs.promises.writeFile(
+      path.join(responseDir, "003.response.json"),
+      `${JSON.stringify(
+        {
+          type: "sequence",
+          title: "Auto",
+          steps: [{ response: "001.response.json", times: 1 }, { response: "003.response.json" }],
+          onEnd: "stay",
+        },
+        null,
+        2
+      )}\n`,
+      "utf8"
+    );
+    const { app } = await buildApp();
+
+    const result = await request(app).delete(`/_admin/api/mocks/${MOCK_ID}/responses/003.response.json`);
+
+    expect(result.status).toBe(200);
+    expect((await readEndpointFromDisk()).responseFiles).toEqual(["001.response.json", "002.response.json"]);
+    expect(fs.existsSync(path.join(responseDir, "003.response.json"))).toBe(false);
+  });
+
+  test("una variante corrotta viene saltata dall'indice dei riferimenti, non fatta esplodere", async () => {
+    // Una variante illeggibile non dichiara riferimenti validi: la guardia della delete deve
+    // continuare a rispondere sui riferimenti REALI, non fallire sul parsing della vicina rotta.
+    const { responseDir } = await writeEndpointWithVariants({ withSequence: true });
+    await fs.promises.writeFile(path.join(responseDir, "004.response.json"), "{ invalid json", "utf8");
+    const endpoint = await readEndpointFromDisk();
+    endpoint.responseFiles.push("004.response.json");
+    await fs.promises.writeFile(
+      path.join(mocksDir, "operazioni", "GET.endpoint.json"),
+      `${JSON.stringify(endpoint, null, 2)}\n`,
+      "utf8"
+    );
+    const { app } = await buildApp();
+
+    const result = await request(app).delete(`/_admin/api/mocks/${MOCK_ID}/responses/001.response.json`);
+
+    expect(result.status).toBe(409);
+    expect(result.body.details).toEqual({ referencedBy: ["003.response.json"] });
+  });
+
   test("clona una sequence come nuova variante con una nuova identità", async () => {
     await writeEndpointWithVariants({ withSequence: true });
     const { app } = await buildApp();
