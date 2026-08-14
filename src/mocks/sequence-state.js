@@ -7,6 +7,12 @@ const { computeSequenceSignature } = require("./sequence-config");
 // tocca la sequenza, es. la descrizione, non falsa un giro di polling in corso).
 //
 // Il registry riconcilia le firme a ogni reload e pota gli endpoint che escono dallo scenario.
+//
+// Attenzione: la riconciliazione confronta due SCANSIONI, quindi non vede gli stati intermedi che
+// non sono mai esistiti su disco al momento della scansione — i reload si aggregano. Per questo
+// l'azzeramento dovuto a una mutazione admin lo decide la mutazione stessa (invalidateScenario in
+// admin/endpoint-operations.js), non questo confronto. Resta un limite noto sulle mutazioni a
+// raffica: vedi docs/progetto/DESIGN-SEQUENZE.md, "Limite noto".
 
 class SequenceStateStore {
   constructor({ now = () => Date.now() } = {}) {
