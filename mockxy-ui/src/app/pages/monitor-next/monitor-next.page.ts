@@ -29,6 +29,7 @@ import { MockAdminApiService } from '../../mock-admin-api.service';
 import { ViewSwitcher } from '../../shared/view-switcher';
 import { MonitorStreamStore } from '../../shared/monitor-stream.store';
 import type { MockCreateRequest, MockSummary, RequestMonitorEntry } from '../../mock-admin-api.types';
+import { isDetailUnavailable } from '../../mock-admin-api.types';
 import { MOCK_METHODS } from '../../mock-admin-ui.constants';
 
 interface SourceMeta {
@@ -606,13 +607,18 @@ export class MonitorNextPage {
             tone: 'success',
             // Scorciatoia al mock appena creato: stato effimero del flusso (l'id/rotta arrivano
             // dalla risposta della POST), la entry del monitor non viene toccata.
+            // La scorciatoia usa metodo e path RICHIESTI, non quelli riletti dalla risposta:
+            // la creazione è riuscita comunque, anche quando il dettaglio non è componibile.
             action: {
               label: this.transloco.translate('monitor.toastOpenCreatedMock'),
-              run: () => this.router.navigate(['/mocks'], { queryParams: { m: created.method, p: created.path } }),
+              run: () => this.router.navigate(['/mocks'], { queryParams: { m: entry.method, p: request.config.path } }),
             },
           });
           // La entry selezionata ora è coperta: aggiorna subito la scorciatoia nel dettaglio.
-          if (this.coveringMockEntryId === entry.id) this.coveringMock.set(created);
+          // Senza dettaglio non c'è nulla di affidabile da mostrare lì: si lascia com'era.
+          if (this.coveringMockEntryId === entry.id && !isDetailUnavailable(created)) {
+            this.coveringMock.set(created);
+          }
         },
         error: (e: unknown) => {
           // Endpoint già esistente: invece dell'errore, proponi di aggiungere la response
@@ -663,14 +669,16 @@ export class MonitorNextPage {
       })
       .pipe(finalize(() => this.creatingMock.set(false)))
       .subscribe({
-        next: (detail) =>
+        // Metodo e path vengono dalla entry catturata, non dalla risposta: restano corretti
+        // anche quando la variante è stata aggiunta ma il dettaglio non è componibile.
+        next: () =>
           this.toast.show({
             title: this.transloco.translate('monitor.toastResponseAdded'),
-            description: this.transloco.translate('monitor.toastResponseAddedDesc', { method: detail.method, path: detail.path }),
+            description: this.transloco.translate('monitor.toastResponseAddedDesc', { method: entry.method, path: request.config.path }),
             tone: 'success',
             action: {
               label: this.transloco.translate('monitor.toastOpenMock'),
-              run: () => this.router.navigate(['/mocks'], { queryParams: { m: detail.method, p: detail.path } }),
+              run: () => this.router.navigate(['/mocks'], { queryParams: { m: entry.method, p: request.config.path } }),
             },
           }),
         error: (e: unknown) => this.toast.show({ title: this.transloco.translate('common.error'), description: this.readErrorMessage(e), tone: 'error' }),

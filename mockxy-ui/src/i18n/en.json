@@ -380,7 +380,11 @@
     "fileHint": "Content-type from the file (overridable via header) · max 12 MB",
     "filePrefix": "File:",
     "noBody": "No body.",
-    "selectEndpoint": "Select an endpoint from the catalog."
+    "selectEndpoint": "Select an endpoint from the catalog.",
+    "unreadableTitle": "Change applied, detail not readable",
+    "unreadableHint": "The change is saved on disk. Its description cannot be shown until the workspace file below is readable again.",
+    "unreadableRetry": "Read again",
+    "variantInvalid": "unreadable"
   },
   "createDialog": {
     "title": "New {{type}}",

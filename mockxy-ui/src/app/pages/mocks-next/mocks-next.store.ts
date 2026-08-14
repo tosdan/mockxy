@@ -10,6 +10,8 @@ import {
   HandlerDefinitionInput,
   MockConfig,
   MockDetail,
+  MockDetailAfterMutation,
+  isDetailUnavailable,
   MockListResponse,
   MockLoadError,
   MockSummary,
@@ -81,6 +83,12 @@ export class MocksStore {
   /** Definizioni presenti su disco ma scartate dal caricamento (es. formato legacy): il catalogo le segnala invece di farle sparire in silenzio. */
   readonly loadErrors = signal<readonly MockLoadError[]>([]);
   readonly selected = signal<MockDetail | undefined>(undefined);
+  /**
+   * Motivo per cui il dettaglio dell'endpoint selezionato non è leggibile dopo una mutazione
+   * RIUSCITA. Non è un errore dell'operazione: la modifica è su disco, è la sua descrizione a
+   * mancare finché il workspace non torna leggibile.
+   */
+  readonly detailUnavailable = signal<string | undefined>(undefined);
   readonly loading = signal(false);
   readonly detailLoading = signal(false);
   readonly error = signal<string | undefined>(undefined);
@@ -241,7 +249,7 @@ export class MocksStore {
         next: ({ updated, res }) => {
           this.applyCatalogResponse(res);
           if (this.selected()?.id === id) {
-            this.setSelected(updated);
+            this.applyMutationDetail(updated);
           }
         },
         error: (e) => {
@@ -407,7 +415,7 @@ export class MocksStore {
         next: ({ detail, res }) => {
           this.applyCatalogResponse(res);
           if (this.selected()?.id === itemId) {
-            this.setSelected(detail);
+            this.applyMutationDetail(detail);
           }
         },
         error: (e) => {
@@ -582,7 +590,7 @@ export class MocksStore {
   }
 
   /** Crea una definizione, ricarica il catalogo e la rende selezionata; `onDone(ok)` per chiudere il dialog solo a buon fine. */
-  private runCreate(op: Observable<MockDetail>, onDone?: (ok: boolean) => void): void {
+  private runCreate(op: Observable<MockDetailAfterMutation>, onDone?: (ok: boolean) => void): void {
     this.creating.set(true);
     this.error.set(undefined);
     op.pipe(
@@ -591,7 +599,9 @@ export class MocksStore {
     ).subscribe({
       next: ({ detail, res }) => {
         this.applyCatalogResponse(res);
-        this.setSelected(detail);
+        // Anche qui la creazione è avvenuta: il dialog si chiude a buon fine e il catalogo la
+        // elenca. Se il dettaglio non si compone non la si può aprire, e il pannello lo dice.
+        this.applyMutationDetail(detail);
         onDone?.(true);
       },
       error: (e) => {
@@ -606,8 +616,42 @@ export class MocksStore {
    * l'endpoint aperto è lo stesso. Le transizioni verso "nessuna selezione" restano set diretti:
    * l'ultimo id persistito è comunque validato al ripristino contro il catalogo corrente.
    */
+  /**
+   * Applica al pannello il risultato di una mutazione RIUSCITA. Il ramo "dettaglio non
+   * componibile" non è un fallimento: la modifica è già su disco, manca la sua descrizione.
+   * Il pannello non va aggiornato col dettaglio precedente — mostrare stato stantio dopo una
+   * modifica andata a buon fine è proprio la confusione che questo ramo serve a evitare.
+   */
+  private applyMutationDetail(detail: MockDetailAfterMutation): void {
+    if (isDetailUnavailable(detail)) {
+      this.detailUnavailable.set(detail.detailUnavailable.message);
+      return;
+    }
+    this.setSelected(detail);
+  }
+
+  /** Rilegge il dettaglio dell'endpoint selezionato: è l'azione dello stato "non leggibile". */
+  reloadSelectedDetail(): void {
+    const id = this.selected()?.id;
+    if (id == null) {
+      return;
+    }
+    this.detailLoading.set(true);
+    this.error.set(undefined);
+    this.api
+      .getMock(id)
+      .pipe(finalize(() => this.detailLoading.set(false)))
+      .subscribe({
+        next: (detail) => this.setSelected(detail),
+        error: (e) => this.error.set(readErrorMessage(e) ?? this.transloco.translate('common.unexpectedError')),
+      });
+  }
+
   private setSelected(detail: MockDetail): void {
     this.selected.set(detail);
+    // Un dettaglio letto per intero chiude qualunque segnalazione di illeggibilità precedente,
+    // da qualunque strada arrivi (ricarica, cambio di endpoint, mutazione successiva riuscita).
+    this.detailUnavailable.set(undefined);
     this.viewState.write(SELECTED_ENDPOINT_STATE_KEY, detail.id);
   }
 
@@ -629,7 +673,11 @@ export class MocksStore {
    * i controlli durante la scrittura; `onSuccess` scatta solo a salvataggio riuscito
    * (es. per uscire dalla modalita' modifica preservando le bozze in caso di errore).
    */
-  private runDetailMutation(savingId: string, op: Observable<MockDetail>, onSuccess?: () => void): void {
+  private runDetailMutation(
+    savingId: string,
+    op: Observable<MockDetailAfterMutation>,
+    onSuccess?: () => void,
+  ): void {
     this.savingId.set(savingId);
     this.error.set(undefined);
     op.pipe(
@@ -637,7 +685,7 @@ export class MocksStore {
       finalize(() => this.savingId.set(undefined)),
     ).subscribe({
       next: ({ detail, res }) => {
-        this.setSelected(detail);
+        this.applyMutationDetail(detail);
         this.applyCatalogResponse(res);
         onSuccess?.();
       },

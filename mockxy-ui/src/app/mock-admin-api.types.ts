@@ -200,6 +200,9 @@ export interface ResponseSummary {
   templated?: boolean;
   selected?: boolean;
   missing?: boolean;
+  /** Il file c'è ma non è leggibile come definizione: `error` dice perché, il resto è assente. */
+  invalid?: boolean;
+  error?: string;
 }
 
 export interface MockSummary {
@@ -251,6 +254,26 @@ export interface MockDetail extends MockSummary {
   sse?: SseVariantConfig;
   /** Definizione della variante ws selezionata (copione, regole, presets). */
   ws?: WsVariantConfig;
+}
+
+/**
+ * Risposta di una mutazione che è andata a buon fine ma il cui dettaglio non è componibile
+ * (variante selezionata illeggibile, asset sparito a mano, `.collections.json` rotto). La
+ * modifica È su disco: non va trattata come un errore, ma il dettaglio a schermo non si può
+ * aggiornare finché il workspace non torna leggibile.
+ */
+export interface MockDetailUnavailable {
+  id: string;
+  detailUnavailable: { message: string };
+}
+
+/** Ciò che risponde una mutazione: il dettaglio aggiornato, oppure il motivo per cui manca. */
+export type MockDetailAfterMutation = MockDetail | MockDetailUnavailable;
+
+export function isDetailUnavailable(
+  detail: MockDetailAfterMutation,
+): detail is MockDetailUnavailable {
+  return 'detailUnavailable' in detail;
 }
 
 /**

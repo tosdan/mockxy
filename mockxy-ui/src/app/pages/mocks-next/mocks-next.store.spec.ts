@@ -1,5 +1,5 @@
 import { TestBed } from '@angular/core/testing';
-import { of, throwError } from 'rxjs';
+import { of, throwError, type Observable } from 'rxjs';
 import { MocksStore } from './mocks-next.store';
 import { MockAdminApiService } from '../../mock-admin-api.service';
 import { ViewStateService } from '../../shared/view-state.service';
@@ -8,6 +8,7 @@ import {
   UNSORTED_COLLECTION_ID,
   type CollectionSummary,
   type MockDetail,
+  type MockDetailAfterMutation,
   type MockListResponse,
   type MockSummary,
 } from '../../mock-admin-api.types';
@@ -59,27 +60,27 @@ function makeApiStub() {
   return {
       listMocks: vi.fn(() => of(listResponse([summary('e1'), summary('e2')]))),
       getMock: vi.fn((id: string) => of(detail(id))),
-      updateEndpoint: vi.fn((id: string) => of(detail(id))),
-      selectResponse: vi.fn((id: string) => of(detail(id))),
-      updateResponse: vi.fn((id: string) => of(detail(id))),
-      createResponse: vi.fn((id: string) => of(detail(id))),
-      createSequence: vi.fn((id: string) => of(detail(id))),
-      updateSequence: vi.fn((id: string) => of(detail(id))),
-      deleteResponse: vi.fn((id: string) => of(detail(id))),
-      uploadResponseFile: vi.fn((id: string) => of(detail(id))),
+      updateEndpoint: vi.fn((id: string): Observable<MockDetailAfterMutation> => of(detail(id))),
+      selectResponse: vi.fn((id: string): Observable<MockDetailAfterMutation> => of(detail(id))),
+      updateResponse: vi.fn((id: string): Observable<MockDetailAfterMutation> => of(detail(id))),
+      createResponse: vi.fn((id: string): Observable<MockDetailAfterMutation> => of(detail(id))),
+      createSequence: vi.fn((id: string): Observable<MockDetailAfterMutation> => of(detail(id))),
+      updateSequence: vi.fn((id: string): Observable<MockDetailAfterMutation> => of(detail(id))),
+      deleteResponse: vi.fn((id: string): Observable<MockDetailAfterMutation> => of(detail(id))),
+      uploadResponseFile: vi.fn((id: string): Observable<MockDetailAfterMutation> => of(detail(id))),
       deleteMock: vi.fn(() => of(undefined)),
       createCollection: vi.fn(() => of(coll('nuova'))),
-      assignDefinitionCollection: vi.fn((id: string) => of(detail(id))),
+      assignDefinitionCollection: vi.fn((id: string): Observable<MockDetailAfterMutation> => of(detail(id))),
       deleteCollection: vi.fn(() => of(undefined)),
       eraseCollection: vi.fn(() => of({ deleted: 1 })),
       updateCollectionEnabled: vi.fn(() => of(listResponse([summary('e1')]))),
       reorderCollections: vi.fn(() => of(undefined)),
       reparentCollection: vi.fn(() => of(undefined)),
       reorderCollectionChildren: vi.fn(() => of(undefined)),
-      createMock: vi.fn(() => of(detail('nuovo'))),
-      copyEndpoint: vi.fn(() => of(detail('copia'))),
-      createHandler: vi.fn(() => of(detail('nuovo-handler'))),
-      createMiddleware: vi.fn(() => of(detail('nuovo-middleware'))),
+      createMock: vi.fn((): Observable<MockDetailAfterMutation> => of(detail('nuovo'))),
+      copyEndpoint: vi.fn((): Observable<MockDetailAfterMutation> => of(detail('copia'))),
+      createHandler: vi.fn((): Observable<MockDetailAfterMutation> => of(detail('nuovo-handler'))),
+      createMiddleware: vi.fn((): Observable<MockDetailAfterMutation> => of(detail('nuovo-middleware'))),
     };
 }
 
@@ -357,6 +358,40 @@ describe('MocksStore', () => {
       expect(onSuccess).not.toHaveBeenCalled();
       expect(store.error()).toBe('response rotta');
       expect(store.savingId()).toBeUndefined();
+    });
+
+    it('con dettaglio non componibile resta un successo: niente errore, pannello dichiarato illeggibile', () => {
+      const store = create();
+      store.selected.set(detail('e1', { status: 200 }));
+      const onSuccess = vi.fn();
+      api.updateResponse.mockReturnValueOnce(
+        of({ id: 'e1', detailUnavailable: { message: 'Invalid JSON in .../002.response.json' } }),
+      );
+
+      store.saveResponse({ type: 'mock', title: '', status: 418, headers: {}, delayMs: 0, body: {} }, onSuccess);
+
+      // La mutazione è riuscita: onSuccess parte (le bozze si chiudono) e non c'è errore.
+      expect(onSuccess).toHaveBeenCalledTimes(1);
+      expect(store.error()).toBeUndefined();
+      expect(store.detailUnavailable()).toBe('Invalid JSON in .../002.response.json');
+      // Il pannello NON mostra il dettaglio precedente come se fosse aggiornato.
+      expect(store.selected()?.status).toBe(200);
+      expect(store.mocks().length).toBeGreaterThan(0); // il catalogo si aggiorna comunque
+      expect(store.savingId()).toBeUndefined();
+    });
+
+    it('una rilettura riuscita chiude lo stato di illeggibilità', () => {
+      const store = create();
+      store.selected.set(detail('e1'));
+      api.updateResponse.mockReturnValueOnce(of({ id: 'e1', detailUnavailable: { message: 'rotto' } }));
+      store.saveResponse({ type: 'mock', title: '', status: 418, headers: {}, delayMs: 0, body: {} });
+      expect(store.detailUnavailable()).toBe('rotto');
+
+      store.reloadSelectedDetail();
+
+      expect(api.getMock).toHaveBeenCalledWith('e1');
+      expect(store.detailUnavailable()).toBeUndefined();
+      expect(store.selected()?.id).toBe('e1');
     });
 
     it('senza selezione le mutazioni sono no-op', () => {

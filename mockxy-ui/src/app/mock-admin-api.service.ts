@@ -20,6 +20,7 @@ import {
   HandlerUpdateRequest,
   MockCreateRequest,
   MockDetail,
+  MockDetailAfterMutation,
   MockListResponse,
   MockSummary,
   OpenapiImportPreview,
@@ -100,18 +101,18 @@ export class MockAdminApiService {
   }
 
   /** Crea una nuova definizione mock nel file system locale. */
-  createMock(request: MockCreateRequest): Observable<MockDetail> {
-    return this.http.post<MockDetail>(`${this.baseUrl}/mocks`, request);
+  createMock(request: MockCreateRequest): Observable<MockDetailAfterMutation> {
+    return this.http.post<MockDetailAfterMutation>(`${this.baseUrl}/mocks`, request);
   }
 
   /** Crea una nuova definizione handler nel file system locale. */
-  createHandler(request: HandlerCreateRequest): Observable<MockDetail> {
-    return this.http.post<MockDetail>(`${this.baseUrl}/mocks`, request);
+  createHandler(request: HandlerCreateRequest): Observable<MockDetailAfterMutation> {
+    return this.http.post<MockDetailAfterMutation>(`${this.baseUrl}/mocks`, request);
   }
 
   /** Crea una nuova definizione middleware nel file system locale. */
-  createMiddleware(request: MiddlewareCreateRequest): Observable<MockDetail> {
-    return this.http.post<MockDetail>(`${this.baseUrl}/mocks`, request);
+  createMiddleware(request: MiddlewareCreateRequest): Observable<MockDetailAfterMutation> {
+    return this.http.post<MockDetailAfterMutation>(`${this.baseUrl}/mocks`, request);
   }
 
   /** Crea una nuova collection persistita del catalogo. */
@@ -120,8 +121,8 @@ export class MockAdminApiService {
   }
 
   /** Assegna o rimuove la collection logica di una definizione senza spostare i file. */
-  assignDefinitionCollection(id: string, request: AssignCollectionRequest): Observable<MockDetail> {
-    return this.http.put<MockDetail>(`${this.baseUrl}/mocks/${encodeURIComponent(id)}/collection`, request);
+  assignDefinitionCollection(id: string, request: AssignCollectionRequest): Observable<MockDetailAfterMutation> {
+    return this.http.put<MockDetailAfterMutation>(`${this.baseUrl}/mocks/${encodeURIComponent(id)}/collection`, request);
   }
 
   /** Persiste il nuovo ordine delle collection personalizzate del catalogo. */
@@ -192,27 +193,27 @@ export class MockAdminApiService {
   }
 
   /** Aggiorna configurazione e payload di un mock esistente. */
-  updateMock(id: string, request: MockUpdateRequest): Observable<MockDetail> {
-    return this.http.put<MockDetail>(`${this.baseUrl}/mocks/${encodeURIComponent(id)}`, request);
+  updateMock(id: string, request: MockUpdateRequest): Observable<MockDetailAfterMutation> {
+    return this.http.put<MockDetailAfterMutation>(`${this.baseUrl}/mocks/${encodeURIComponent(id)}`, request);
   }
 
   /** Aggiorna solo i metadati modificabili dell'endpoint. */
-  updateEndpoint(id: string, request: EndpointUpdateRequest): Observable<MockDetail> {
-    return this.http.put<MockDetail>(`${this.baseUrl}/mocks/${encodeURIComponent(id)}/endpoint`, request);
+  updateEndpoint(id: string, request: EndpointUpdateRequest): Observable<MockDetailAfterMutation> {
+    return this.http.put<MockDetailAfterMutation>(`${this.baseUrl}/mocks/${encodeURIComponent(id)}/endpoint`, request);
   }
 
   /** Copia un endpoint verso un nuovo metodo+path; con copyResponses copia tutte le response. */
-  copyEndpoint(id: string, request: EndpointCopyRequest): Observable<MockDetail> {
-    return this.http.post<MockDetail>(`${this.baseUrl}/mocks/${encodeURIComponent(id)}/copy`, request);
+  copyEndpoint(id: string, request: EndpointCopyRequest): Observable<MockDetailAfterMutation> {
+    return this.http.post<MockDetailAfterMutation>(`${this.baseUrl}/mocks/${encodeURIComponent(id)}/copy`, request);
   }
 
   /** Cambia la response selezionata per un endpoint. */
-  selectResponse(id: string, request: SelectResponseRequest): Observable<MockDetail> {
-    return this.http.put<MockDetail>(`${this.baseUrl}/mocks/${encodeURIComponent(id)}`, request);
+  selectResponse(id: string, request: SelectResponseRequest): Observable<MockDetailAfterMutation> {
+    return this.http.put<MockDetailAfterMutation>(`${this.baseUrl}/mocks/${encodeURIComponent(id)}`, request);
   }
 
   /** Crea una variante sequence e la seleziona. */
-  createSequence(id: string, sequence: ResponseSequenceCreateRequest): Observable<MockDetail> {
+  createSequence(id: string, sequence: ResponseSequenceCreateRequest): Observable<MockDetailAfterMutation> {
     return this.createResponse(id, sequence);
   }
 
@@ -221,7 +222,7 @@ export class MockAdminApiService {
     id: string,
     responseFileName: string,
     sequence: ResponseSequenceUpdateRequest,
-  ): Observable<MockDetail> {
+  ): Observable<MockDetailAfterMutation> {
     return this.updateResponse(id, responseFileName, sequence);
   }
 
@@ -261,21 +262,21 @@ export class MockAdminApiService {
   }
 
   /** Crea una nuova response per l'endpoint selezionato partendo dai valori confermati dall'utente. */
-  createResponse(id: string, request: CreateResponseRequest = {}): Observable<MockDetail> {
-    return this.http.post<MockDetail>(`${this.baseUrl}/mocks/${encodeURIComponent(id)}/responses`, request);
+  createResponse(id: string, request: CreateResponseRequest = {}): Observable<MockDetailAfterMutation> {
+    return this.http.post<MockDetailAfterMutation>(`${this.baseUrl}/mocks/${encodeURIComponent(id)}/responses`, request);
   }
 
   /** Aggiorna solo la response indicata per l'endpoint selezionato. */
-  updateResponse(id: string, responseFileName: string, request: ResponseUpdateRequest): Observable<MockDetail> {
-    return this.http.put<MockDetail>(
+  updateResponse(id: string, responseFileName: string, request: ResponseUpdateRequest): Observable<MockDetailAfterMutation> {
+    return this.http.put<MockDetailAfterMutation>(
       `${this.baseUrl}/mocks/${encodeURIComponent(id)}/responses/${encodeURIComponent(responseFileName)}`,
       request,
     );
   }
 
   /** Carica un file (bytes grezzi) e rende la response file-backed; il MIME reale viaggia in query. */
-  uploadResponseFile(id: string, responseFileName: string, file: File): Observable<MockDetail> {
-    return this.http.put<MockDetail>(
+  uploadResponseFile(id: string, responseFileName: string, file: File): Observable<MockDetailAfterMutation> {
+    return this.http.put<MockDetailAfterMutation>(
       `${this.baseUrl}/mocks/${encodeURIComponent(id)}/responses/${encodeURIComponent(responseFileName)}/file`,
       file,
       {
@@ -286,20 +287,20 @@ export class MockAdminApiService {
   }
 
   /** Elimina solo la response indicata per l'endpoint selezionato. */
-  deleteResponse(id: string, responseFileName: string): Observable<MockDetail> {
-    return this.http.delete<MockDetail>(
+  deleteResponse(id: string, responseFileName: string): Observable<MockDetailAfterMutation> {
+    return this.http.delete<MockDetailAfterMutation>(
       `${this.baseUrl}/mocks/${encodeURIComponent(id)}/responses/${encodeURIComponent(responseFileName)}`,
     );
   }
 
   /** Aggiorna la sorgente JavaScript e i metadati di un handler esistente. */
-  updateHandler(id: string, request: HandlerUpdateRequest): Observable<MockDetail> {
-    return this.http.put<MockDetail>(`${this.baseUrl}/mocks/${encodeURIComponent(id)}`, request);
+  updateHandler(id: string, request: HandlerUpdateRequest): Observable<MockDetailAfterMutation> {
+    return this.http.put<MockDetailAfterMutation>(`${this.baseUrl}/mocks/${encodeURIComponent(id)}`, request);
   }
 
   /** Aggiorna la sorgente JavaScript e i metadati di un middleware esistente. */
-  updateMiddleware(id: string, request: MiddlewareUpdateRequest): Observable<MockDetail> {
-    return this.http.put<MockDetail>(`${this.baseUrl}/mocks/${encodeURIComponent(id)}`, request);
+  updateMiddleware(id: string, request: MiddlewareUpdateRequest): Observable<MockDetailAfterMutation> {
+    return this.http.put<MockDetailAfterMutation>(`${this.baseUrl}/mocks/${encodeURIComponent(id)}`, request);
   }
 
   /** Elimina una definizione locale modificabile. */
