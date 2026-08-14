@@ -264,7 +264,7 @@ async function pruneScriptDefinitionCacheUnder(resolvedRoot) {
   }
 }
 
-async function loadScriptDefinition(filePath, label) {
+async function loadScriptDefinition(filePath, label, options) {
   const cachedEntry = scriptDefinitionCache.get(filePath);
   if (cachedEntry != null && (await isScriptCacheEntryFresh(cachedEntry))) {
     return cachedEntry.definition;
@@ -272,16 +272,20 @@ async function loadScriptDefinition(filePath, label) {
 
   try {
     const signature = await getFileSignature(filePath);
-    // Compilazione fresca (vedi script-loader): la cache dei moduli sotto la cartella dei mock è
-    // già stata svuotata a inizio scansione, quindi script principale e dipendenze locali
-    // vengono compilati freschi.
     const { definition, moduleRecord } = loadScriptModule(filePath);
 
-    const dependencies = new Map();
-    for (const dependencyFile of collectLocalDependencyFiles(moduleRecord)) {
-      dependencies.set(dependencyFile, await getFileSignature(dependencyFile));
+    // Una entry di cache è affidabile solo se la compilazione è avvenuta dentro il ciclo di
+    // scansione, dopo purgeModuleCacheUnder: fuori da quel ciclo (persistCache: false, usato
+    // dalla validazione admin) i require annidati possono risolvere moduli stantii da
+    // Module._cache, e persistere quella definizione con le firme correnti la farebbe
+    // sembrare fresca ai reload successivi.
+    if (options?.persistCache !== false) {
+      const dependencies = new Map();
+      for (const dependencyFile of collectLocalDependencyFiles(moduleRecord)) {
+        dependencies.set(dependencyFile, await getFileSignature(dependencyFile));
+      }
+      scriptDefinitionCache.set(filePath, { sourcePath: filePath, signature, dependencies, definition });
     }
-    scriptDefinitionCache.set(filePath, { sourcePath: filePath, signature, dependencies, definition });
 
     return definition;
   } catch (error) {
@@ -290,7 +294,7 @@ async function loadScriptDefinition(filePath, label) {
   }
 }
 
-async function validateScriptResponse(response, filePath, responseDir, type) {
+async function validateScriptResponse(response, filePath, responseDir, type, options) {
   const expectedSuffix = type === "handler" ? ".handler.js" : ".middleware.js";
   if (!isSafeLocalFileName(response.sourceFile, expectedSuffix)) {
     throw new Error(`Invalid response ${filePath}: sourceFile must be a ${expectedSuffix} filename`);
@@ -301,7 +305,7 @@ async function validateScriptResponse(response, filePath, responseDir, type) {
     throw new Error(`Missing source file referenced by ${filePath}: ${sourcePath}`);
   }
 
-  const definition = await loadScriptDefinition(sourcePath, type);
+  const definition = await loadScriptDefinition(sourcePath, type, options);
   const requiredFunction = type === "handler" ? "resolveResponse" : "transformResponse";
   if (!isPlainObject(definition) || typeof definition[requiredFunction] !== "function") {
     throw new Error(`Invalid ${type} ${sourcePath}: export an object with ${requiredFunction}`);
@@ -316,7 +320,7 @@ async function validateScriptResponse(response, filePath, responseDir, type) {
   };
 }
 
-async function loadResponseByName(endpoint, endpointFilePath, responseFileName, label) {
+async function loadResponseByName(endpoint, endpointFilePath, responseFileName, label, options) {
   const endpointDir = path.dirname(endpointFilePath);
   const responseDir = path.join(endpointDir, `${endpoint.method}${RESPONSES_DIR_SUFFIX}`);
   const responsePath = resolveLocalFile(responseDir, responseFileName, label);
@@ -421,7 +425,7 @@ async function loadResponseByName(endpoint, endpointFilePath, responseFileName, 
     return result;
   }
 
-  const script = await validateScriptResponse(response, responsePath, responseDir, type);
+  const script = await validateScriptResponse(response, responsePath, responseDir, type, options);
   return {
     type,
     title: response.title || "",
@@ -441,10 +445,10 @@ async function loadSelectedResponse(endpoint, endpointFilePath) {
 // variante a request-time, quindi al load si caricano (e validano) TUTTE — stessa filosofia
 // della selezionata: uno step rotto degrada l'endpoint. I passi middleware sono esclusi in v1:
 // la loro esecuzione vive nel percorso proxy, non nel serving locale.
-async function loadSequenceSteps(endpoint, endpointFilePath, sequence) {
+async function loadSequenceSteps(endpoint, endpointFilePath, sequence, options) {
   const steps = [];
   for (const step of sequence.steps) {
-    const response = await loadResponseByName(endpoint, endpointFilePath, step.response, "sequence step response");
+    const response = await loadResponseByName(endpoint, endpointFilePath, step.response, "sequence step response", options);
     if (response.type !== "mock" && response.type !== "handler") {
       throw new Error(
         `Invalid endpoint ${endpointFilePath}: sequence steps must reference mock or handler responses (${step.response} is a ${response.type})`

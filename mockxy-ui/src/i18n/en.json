@@ -278,6 +278,7 @@
     "emptyWorkspaceHint": "No mocks here yet. Create the first one with «New» or import from OpenAPI.",
     "footerCounts": "{{endpoints}} endpoint · {{collections}} collection",
     "footerActive": "{{active}} / {{total}} active",
+    "footerLoadErrors": "{{count}} not loaded",
     "delete": "Delete",
     "cancel": "Cancel",
     "collectionActionsTip": "Collection actions",

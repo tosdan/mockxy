@@ -352,7 +352,15 @@ async function readSequenceReferenceIndex(endpointFilePath, endpoint) {
     if (!fs.existsSync(responseFilePath)) {
       continue;
     }
-    const response = await readEndpointResponse(responseFilePath, endpoint);
+    // Un file illeggibile o invalido non dichiara riferimenti validi: si salta, senza far
+    // fallire l'indice — altrimenti una variante corrotta su disco bloccherebbe la
+    // cancellazione di response non correlate.
+    let response;
+    try {
+      response = await readEndpointResponse(responseFilePath, endpoint);
+    } catch {
+      continue;
+    }
     if (response.type !== "sequence") {
       continue;
     }

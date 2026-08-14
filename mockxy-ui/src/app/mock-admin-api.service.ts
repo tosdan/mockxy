@@ -55,6 +55,7 @@ interface ApiMockListResponse {
   items: MockListResponse['items'];
   collections?: MockListResponse['collections'];
   childOrder?: MockListResponse['childOrder'];
+  loadErrors?: MockListResponse['loadErrors'];
   folders?: unknown[];
 }
 
@@ -77,6 +78,7 @@ export class MockAdminApiService {
         items: response.items,
         collections: response.collections || [],
         childOrder: response.childOrder || {},
+        loadErrors: response.loadErrors || [],
       })),
     );
   }

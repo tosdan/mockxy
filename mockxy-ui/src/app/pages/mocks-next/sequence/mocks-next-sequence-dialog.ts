@@ -334,8 +334,12 @@ export class MocksNextSequenceDialog {
       title: this.title().trim(),
       steps: this.steps().map((step, index) => {
         const built: SequenceStep = { response: step.response };
-        if (!this.isTerminalStep(index)) {
-          built[step.mode] = Number(step.value);
+        const value = Number(step.value);
+        // L'ultimo step con onEnd 'stay' non mostra il criterio (a runtime e' inerte), ma il
+        // formato lo ammette: se il file ne aveva uno valido va riscritto tale e quale,
+        // altrimenti il dialog partirebbe "dirty" e il Save lo scarterebbe in silenzio.
+        if (!this.isTerminalStep(index) || (step.value.trim() !== '' && Number.isInteger(value) && value >= 1)) {
+          built[step.mode] = value;
         }
         return built;
       }),
@@ -375,7 +379,13 @@ export class MocksNextSequenceDialog {
   private refreshState(): void {
     this.api.getSequenceState(this.data.detail.id)
       .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe({ next: ({ sequenceState }) => this.sequenceState.set(sequenceState) });
+      .subscribe({
+        next: ({ sequenceState }) => this.sequenceState.set(sequenceState),
+        // Il poll continua finche' il dialog e' aperto anche se l'endpoint cambia sotto i piedi
+        // (variante deselezionata altrove, endpoint eliminato, backend riavviato): l'errore non
+        // deve finire nel global handler; lo stato mostra "-" finche' una lettura non riesce.
+        error: () => this.sequenceState.set(null),
+      });
   }
 
   protected resetSequence(): void {

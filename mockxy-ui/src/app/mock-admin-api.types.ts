@@ -260,10 +260,18 @@ export interface MockDetail extends MockSummary {
  */
 export type ChildOrderMap = Record<string, string[]>;
 
+/** Definizione presente su disco ma scartata dal caricamento (JSON invalido, formato legacy...). */
+export interface MockLoadError {
+  configFilePath: string;
+  message: string;
+}
+
 export interface MockListResponse {
   items: MockSummary[];
   collections: CollectionSummary[];
   childOrder: ChildOrderMap;
+  /** Presente solo nelle risposte che rifanno la scansione da disco (GET /mocks). */
+  loadErrors?: MockLoadError[];
 }
 
 export interface CollectionCreateRequest {

@@ -519,7 +519,10 @@ async function validateSequenceGraph(endpointPath, endpoint, response) {
     return;
   }
   try {
-    await loadSequenceSteps(endpoint, endpointPath, response);
+    // persistCache: false — questa validazione gira fuori dal ciclo purge/scan del reload,
+    // dove una compilazione può catturare dipendenze annidate stantie da Module._cache;
+    // la definizione non deve finire nella cache condivisa che i reload riusano.
+    await loadSequenceSteps(endpoint, endpointPath, response, { persistCache: false });
   } catch (error) {
     throw createAdminError(400, error.message);
   }
@@ -777,7 +780,10 @@ async function deleteAdminResponse(mocksDir, id, responseFileName, reloadRuntime
   }
 
   const referenceIndex = await readSequenceReferenceIndex(endpointPath, endpoint);
-  const referencedBy = referenceIndex.get(normalizedResponseFileName) || [];
+  // La response in cancellazione non conta come referente: i suoi riferimenti (incluso un
+  // eventuale auto-riferimento scritto a mano) spariscono insieme al file.
+  const referencedBy = (referenceIndex.get(normalizedResponseFileName) || [])
+    .filter((referrer) => referrer !== normalizedResponseFileName);
   if (referencedBy.length > 0) {
     throw createAdminError(
       409,

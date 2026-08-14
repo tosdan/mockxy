@@ -11,6 +11,7 @@ import {
   MockConfig,
   MockDetail,
   MockListResponse,
+  MockLoadError,
   MockSummary,
   MockType,
   ResponseSequenceCreateRequest,
@@ -77,6 +78,8 @@ export class MocksStore {
   readonly collections = signal<readonly CollectionSummary[]>([]);
   /** Ordine unificato dei figli per nodo (parentKey → ref miste di id endpoint e/o id collection). */
   readonly childOrder = signal<Readonly<Record<string, readonly string[]>>>({});
+  /** Definizioni presenti su disco ma scartate dal caricamento (es. formato legacy): il catalogo le segnala invece di farle sparire in silenzio. */
+  readonly loadErrors = signal<readonly MockLoadError[]>([]);
   readonly selected = signal<MockDetail | undefined>(undefined);
   readonly loading = signal(false);
   readonly detailLoading = signal(false);
@@ -613,6 +616,11 @@ export class MocksStore {
     this.mocks.set(res.items);
     this.collections.set(res.collections);
     this.childOrder.set(res.childOrder);
+    // Alcune mutazioni (es. PATCH collections/:id/enabled) rispondono senza rifare la scansione
+    // da disco: in quel caso le segnalazioni note restano valide e non vanno azzerate.
+    if (res.loadErrors != null) {
+      this.loadErrors.set(res.loadErrors);
+    }
   }
 
   /**
