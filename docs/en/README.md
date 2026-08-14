@@ -14,7 +14,7 @@ relevant page in the same round as the code.
   hot reload, including variant sequences and their runtime cursor.
 - [The response file](RESPONSE.md) — the variants: static responses (status, headers, JSON or
   textual body, file payload served streaming, delay and templating), handlers and middleware
-  as links to scripts, SSE streams and mocked WebSocket channels.
+  as links to scripts, selectable sequences, SSE streams and mocked WebSocket channels.
 - [The path convention](PATH.md) — how the answering endpoint is chosen: named parameters,
   declared query (exact equality), specificity rules, method check after the route has been
   chosen and diagnosing missed matches.

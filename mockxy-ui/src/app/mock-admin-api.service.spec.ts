@@ -264,6 +264,39 @@ describe('MockAdminApiService', () => {
     });
   });
 
+  it('should create and update a sequence through response routes', () => {
+    const sequence = {
+      type: 'sequence' as const,
+      title: 'Polling',
+      steps: [{ response: '001.response.json', times: 2 }, { response: '002.response.json' }],
+      onEnd: 'stay' as const,
+      resetAfterMs: null,
+    };
+    service.createSequence('abc/123', sequence).subscribe();
+    const createRequest = http.expectOne('/_admin/api/mocks/abc%2F123/responses');
+    expect(createRequest.request.method).toBe('POST');
+    expect(createRequest.request.body).toEqual(sequence);
+    createRequest.flush({});
+
+    service.updateSequence('abc/123', '003.response.json', sequence).subscribe();
+    const updateRequest = http.expectOne('/_admin/api/mocks/abc%2F123/responses/003.response.json');
+    expect(updateRequest.request.method).toBe('PUT');
+    expect(updateRequest.request.body).toEqual(sequence);
+    updateRequest.flush({});
+  });
+
+  it('should read and reset the selected sequence state', () => {
+    service.getSequenceState('abc/123').subscribe();
+    const stateRequest = http.expectOne('/_admin/api/mocks/abc%2F123/sequence/state');
+    expect(stateRequest.request.method).toBe('GET');
+    stateRequest.flush({ sequenceFile: '003.response.json', sequenceState: null });
+
+    service.resetSequence('abc/123').subscribe();
+    const resetRequest = http.expectOne('/_admin/api/mocks/abc%2F123/sequence/reset');
+    expect(resetRequest.request.method).toBe('POST');
+    resetRequest.flush({ sequenceFile: '003.response.json', sequenceState: null });
+  });
+
   it('should create an endpoint response with edited values', () => {
     service.createResponse('abc/123', {
       type: 'mock',

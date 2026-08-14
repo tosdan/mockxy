@@ -1,12 +1,13 @@
 const { test, expect } = require("@playwright/test");
 const { gotoMocks, mockIdByPath, resetWorkspace, E2E_BACKEND } = require("./helpers");
 
-// SEQ come segnale visivo unico della sequenza attiva: badge nella riga del catalogo e chip nel
-// pulsante Sequenza del dettaglio, entrambi nel verde del token --sequence. La sequenza viene
-// attivata via admin API su /api/status (l'unica fixture con due varianti); scrittura su file →
-// afterEach resetWorkspace.
+// SEQ come segnale visivo unico della sequence selezionata: badge nella riga del catalogo e chip
+// nel pulsante Sequenza del dettaglio, entrambi nel verde del token --sequence. La response viene
+// creata e quindi selezionata via admin API su /api/status (l'unica fixture con due varianti);
+// scrittura su file → afterEach resetWorkspace.
 const SEQUENCE = {
-  enabled: true,
+  type: "sequence",
+  title: "Polling",
   steps: [{ response: "001.response.json", times: 2 }, { response: "002.response.json" }],
   onEnd: "stay",
 };
@@ -14,9 +15,20 @@ const SEQUENCE = {
 // Il verde del token --sequence (styles.css): #6ee7b7.
 const SEQUENCE_GREEN = "rgb(110, 231, 183)";
 
-async function putSequence(request, sequence) {
+async function createSequence(request) {
   const id = await mockIdByPath(request, "/api/status");
-  const response = await request.put(`${E2E_BACKEND}/_admin/api/mocks/${id}`, { data: { sequence } });
+  const response = await request.post(`${E2E_BACKEND}/_admin/api/mocks/${id}/responses`, {
+    data: SEQUENCE,
+  });
+  expect(response.ok()).toBeTruthy();
+  const detail = await response.json();
+  return { id, sequenceFile: detail.selectedResponseFile };
+}
+
+async function selectResponse(request, id, responseFileName) {
+  const response = await request.put(`${E2E_BACKEND}/_admin/api/mocks/${id}`, {
+    data: { selectedResponseFile: responseFileName },
+  });
   expect(response.ok()).toBeTruthy();
 }
 
@@ -26,7 +38,7 @@ test.describe("SEQ · badge nel catalogo e chip sul pulsante Sequenza", () => {
   });
 
   test("con la sequenza attiva compaiono badge e chip, nel verde del token", async ({ page, request }) => {
-    await putSequence(request, SEQUENCE);
+    await createSequence(request);
     await gotoMocks(page);
 
     // Catalogo: la riga di /api/status porta il badge SEQ.
@@ -44,8 +56,9 @@ test.describe("SEQ · badge nel catalogo e chip sul pulsante Sequenza", () => {
     expect(color).toBe(SEQUENCE_GREEN);
   });
 
-  test("sequenza definita ma disattivata (enabled: false): nessun badge e nessun chip", async ({ page, request }) => {
-    await putSequence(request, { ...SEQUENCE, enabled: false });
+  test("selezionando una response ordinaria la sequence resta definita ma non è attiva", async ({ page, request }) => {
+    const { id } = await createSequence(request);
+    await selectResponse(request, id, "001.response.json");
     await gotoMocks(page);
 
     const row = page.locator("mocks-next-catalog div.cursor-pointer", { hasText: "/api/status" }).first();
@@ -57,13 +70,16 @@ test.describe("SEQ · badge nel catalogo e chip sul pulsante Sequenza", () => {
     await expect(sequenceButton.getByText("SEQ", { exact: true })).toHaveCount(0);
   });
 
-  test("rimossa la sequenza, badge e chip spariscono", async ({ page, request }) => {
-    await putSequence(request, SEQUENCE);
+  test("eliminando la response sequence selezionata, badge e chip spariscono", async ({ page, request }) => {
+    const { id, sequenceFile } = await createSequence(request);
     await gotoMocks(page);
     const catalog = page.locator("mocks-next-catalog");
     await expect(catalog.getByText("SEQ", { exact: true })).toBeVisible();
 
-    await putSequence(request, null);
+    const deleted = await request.delete(
+      `${E2E_BACKEND}/_admin/api/mocks/${id}/responses/${encodeURIComponent(sequenceFile)}`,
+    );
+    expect(deleted.ok()).toBeTruthy();
     await gotoMocks(page);
 
     await expect(catalog.getByText("SEQ", { exact: true })).toHaveCount(0);

@@ -24,8 +24,9 @@ state between tests, pipelines that import an updated spec.
 - **Errors** are JSON `{ error, message, details? }` with the appropriate status
   (`400` invalid input, `403` unexpected `Host` header, `404` not found, `409` conflict,
   `415` unsupported media type, `500` unexpected failure).
-- Catalog mutations **reload the runtime immediately**: the change is served from the next
-  request on, without restarts. Data files reload nothing ([`data()`
+- Catalog mutations **wait for the reload pass containing their write**: the next request sees
+  the change; a load error on the mutated endpoint triggers rollback and a non-`2xx` response.
+  Data files reload nothing ([`data()`
   re-reads on every call](DATI.md)), with one exception: the rename with reference rewriting
   reloads, because it touched the handlers' sources.
 
@@ -36,9 +37,10 @@ state between tests, pipelines that import an updated spec.
 | `GET /mocks` | the whole catalog: endpoints, collections and orderings; each endpoint also exposes `sequenceActive` for the SEQ badge. An unreadable endpoint file (invalid JSON, missing selected variant) doesn't fail the request: that endpoint is skipped and reported in `loadErrors` (`[{ configFilePath, message }]`), as the runtime does at load time |
 | `GET /mocks/resolve?method&path` | the endpoint that would cover a concrete request today (path with optional query), disabled ones included; `{ mock: null }` if none. A derived fact using the serving's matching, used by the monitor for "go to mock" |
 | `POST /mocks` | creates an endpoint (static mock, or handler/middleware with source); if one already exists for route+method it answers `409` with `details.existingMockId`, so the client can offer to add a variant to that endpoint |
-| `GET /mocks/:id` | endpoint detail with its variants: `endpoint.sequence` and `sequenceState`, the mock `templated` flag and normalized `sse`/`ws` configuration for the selected variant |
-| `PUT /mocks/:id` | updates the definition (including `enabled`, the selected variant and — with a `{ sequence }` body, `null` to remove it — the [variant sequence](ENDPOINT.md)) |
-| `POST /mocks/:id/sequence/reset` | resets the sequence cursor: the next request starts over from the first step. Responds with the cleared state (`sequenceState`) |
+| `GET /mocks/:id` | detail with variants and normalized configuration of the selected response; with `type: sequence` it exposes `sequence` and `sequenceState`, never `endpoint.sequence` |
+| `PUT /mocks/:id` | selects a response with `{ selectedResponseFile }`, or updates the selected ordinary response; the legacy `{ sequence }` body is rejected |
+| `GET /mocks/:id/sequence/state` | lightweight live state of the selected sequence: `{ sequenceFile, sequenceState }`; `400` on another type |
+| `POST /mocks/:id/sequence/reset` | clears cursor and handler memory for the selected sequence; responds `{ sequenceFile, sequenceState }` |
 | `POST /mocks/:id/sse/push` | manual push of the [SSE](RESPONSE.md) console: body `{ data, event?, id? }`, broadcast to every open connection — responds `{ delivered, connections }` |
 | `GET /mocks/:id/sse/connections` | SSE console state: open connections (with script position) and history of sent messages |
 | `POST /mocks/:id/ws/push` | manual push of the [WS](RESPONSE.md) console: body `{ data }`, broadcast to every open connection — responds `{ delivered, connections }` |
@@ -52,10 +54,10 @@ state between tests, pipelines that import an updated spec.
 
 | Method and path | What it does |
 |---|---|
-| `POST /mocks/:id/responses` | adds a `mock`, `handler`, `middleware`, `sse` or `ws` variant; the selected one is cloned when the type matches, otherwise the requested type starts from its defaults |
-| `PUT /mocks/:id/responses/:file` | updates a variant, including `templated` for mocks and scripts/rules/presets for SSE and WebSocket |
+| `POST /mocks/:id/responses` | adds and selects a `mock`, `handler`, `middleware`, `sse`, `ws`, or `sequence` variant; generic cloning also supports sequences |
+| `PUT /mocks/:id/responses/:file` | updates a variant; for sequences it edits title/steps/end/reset and validates the complete graph |
 | `PUT /mocks/:id/responses/:file/file` | uploads the raw bytes that make the variant [file-backed](RESPONSE.md) — body `application/octet-stream` (up to 12 MB), MIME type and name in the query (`?contentType=…&filename=…`) |
-| `DELETE /mocks/:id/responses/:file` | deletes a variant |
+| `DELETE /mocks/:id/responses/:file` | deletes a variant; returns `409` with `details.referencedBy` when a sequence uses it |
 
 ## Collections
 

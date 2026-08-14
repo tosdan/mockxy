@@ -28,9 +28,9 @@ Tre semantiche da conoscere:
   scrittura uniforme: riaccendendo la collezione si riaccende tutto, anche ciò che era stato
   disabilitato singolarmente prima.
 
-La lista si restringe con la ricerca libera e i filtri per metodo, tipo di variante attiva
-(`mock`, `handler`, `middleware`, `sse`, `ws`) e stato. Un badge **SEQ** identifica gli endpoint
-con una [sequenza di varianti](ENDPOINT.md) attiva.
+La lista si restringe con la ricerca libera e i filtri per metodo, tipo di variante selezionata
+(`mock`, `handler`, `middleware`, `sse`, `ws`, `sequence`) e stato. Un badge **SEQ** identifica
+gli endpoint la cui variante selezionata è una [sequenza](RESPONSE.md).
 
 ## Gli endpoint
 
@@ -45,9 +45,9 @@ giusta. Ogni endpoint si può poi:
 - **abilitare/disabilitare**: da spento, le sue richieste seguono il [fallback](PROXY.md);
 - **eliminare**, insieme alle sue varianti.
 
-Il pulsante **Sequenza** apre la configurazione degli step, del criterio per numero di richieste
-o durata, del comportamento finale e del reset per inattività. La stessa dialog mostra lo step
-runtime corrente e permette di azzerare subito il cursore.
+Il pulsante **Sequenza** crea una variante sequence oppure modifica quella selezionata. La dialog
+configura per ogni step il criterio per numero di richieste o durata, il comportamento finale e
+il reset per inattività; in modifica mostra anche lo stato live e può azzerare il cursore.
 
 ## Le varianti e l'editor
 

@@ -125,7 +125,7 @@ preferences. Not per-workspace.
 Properties of the single endpoint/variant, editable from the mock editor (persisted via
 `/_admin/api/mocks`). Different scope from this document; in short: `method`, `path`, `enabled`,
 `status`, `headers`, `delayMs`, `templated`, response type (JSON/text/file mock, handler,
-middleware, SSE, WebSocket), selectable variants (also per query string), variant sequence,
+middleware, sequence, SSE, WebSocket), selectable variants (also per query string),
 `description`, collection enabling.
 
 ---

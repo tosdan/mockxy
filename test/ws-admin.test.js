@@ -255,7 +255,7 @@ describe("ws admin API", () => {
     expect(wrongType.status).toBe(400);
   });
 
-  test("una variante ws non può essere step di una sequenza (PUT { sequence } → 400)", async () => {
+  test("una variante ws non può essere step di una response sequence", async () => {
     await writeWsEndpoint();
     const endpointPath = path.join(mocksDir, "canale", "GET.endpoint.json");
     const endpoint = JSON.parse(await fs.promises.readFile(endpointPath, "utf8"));
@@ -269,14 +269,13 @@ describe("ws admin API", () => {
     const { app } = await buildApp();
 
     const put = await request(app)
-      .put(`/_admin/api/mocks/${MOCK_ID}`)
+      .post(`/_admin/api/mocks/${MOCK_ID}/responses`)
       .send({
-        sequence: {
-          steps: [
-            { response: "001.response.json", times: 1 },
-            { response: "002.response.json" },
-          ],
-        },
+        type: "sequence",
+        steps: [
+          { response: "001.response.json", times: 1 },
+          { response: "002.response.json" },
+        ],
       });
     expect(put.status).toBe(400);
     expect(put.body.message).toMatch(/mock or handler/);

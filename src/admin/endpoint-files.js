@@ -6,7 +6,7 @@ const { createAdminError } = require("./admin-errors");
 const { resolvePayloadPath, readJsonFile } = require("./admin-fs");
 const { ENDPOINT_SUFFIX, RESPONSE_SUFFIX, RESPONSES_DIR_SUFFIX } = require("./mock-ids");
 const { HTTP_METHOD_PATTERN, validateHeaderValue } = require("./mock-validation");
-const { normalizeSequenceConfig } = require("../mocks/sequence-config");
+const { normalizeSequenceResponse } = require("../mocks/sequence-config");
 const { normalizeSseConfig } = require("../mocks/sse-config");
 const { normalizeWsConfig } = require("../mocks/ws-config");
 
@@ -92,12 +92,11 @@ function normalizeEndpointConfig(endpoint, filePath, options = {}) {
     throw createAdminError(400, "endpoint.selectedResponseFile must be listed in endpoint.responseFiles.");
   }
 
-  // Il campo sequence va normalizzato e TRASPORTATO: le scritture admin ricostruiscono il file
-  // endpoint da questa forma, e perdere qui la sequenza significherebbe cancellarla a ogni
-  // salvataggio dalla UI (stesse regole del loader runtime: modulo condiviso sequence-config).
-  const sequenceResult = normalizeSequenceConfig(endpoint.sequence, responseFiles);
-  if (sequenceResult.errors.length > 0) {
-    throw createAdminError(400, `${sequenceResult.errors.join("; ")}.`);
+  if (Object.prototype.hasOwnProperty.call(endpoint, "sequence")) {
+    throw createAdminError(
+      400,
+      "endpoint.sequence is no longer supported; migrate it to a response with type sequence."
+    );
   }
 
   const normalized = {
@@ -108,19 +107,15 @@ function normalizeEndpointConfig(endpoint, filePath, options = {}) {
     responseFiles,
     selectedResponseFile,
   };
-  // Solo quando presente: un endpoint senza sequenza non deve guadagnare "sequence": null su disco.
-  if (sequenceResult.sequence != null) {
-    normalized.sequence = sequenceResult.sequence;
-  }
   return normalized;
 }
 
-function normalizeEndpointResponse(response, responseFilePath) {
+function normalizeEndpointResponse(response, responseFilePath, responseFiles) {
   if (response == null || typeof response !== "object" || Array.isArray(response)) {
     throw createAdminError(400, "response must be an object.");
   }
-  if (response.type !== "mock" && response.type !== "handler" && response.type !== "middleware" && response.type !== "sse" && response.type !== "ws") {
-    throw createAdminError(400, "response.type must be mock, handler, middleware, sse or ws.");
+  if (response.type !== "mock" && response.type !== "handler" && response.type !== "middleware" && response.type !== "sse" && response.type !== "ws" && response.type !== "sequence") {
+    throw createAdminError(400, "response.type must be mock, handler, middleware, sse, ws or sequence.");
   }
   if (response.title != null && typeof response.title !== "string") {
     throw createAdminError(400, "response.title must be a string.");
@@ -162,6 +157,22 @@ function normalizeEndpointResponse(response, responseFilePath) {
     if (hasFile && (typeof response.file !== "string" || response.file.trim() === "")) {
       throw createAdminError(400, "response.file must be a non-empty string.");
     }
+  }
+
+  if (response.type === "sequence") {
+    if (!Array.isArray(responseFiles)) {
+      throw createAdminError(400, "endpoint.responseFiles are required to validate a sequence response.");
+    }
+    const { errors, sequence } = normalizeSequenceResponse(response, responseFiles);
+    if (errors.length > 0) {
+      throw createAdminError(400, `${errors.join("; ")}.`);
+    }
+    return {
+      type: "sequence",
+      title: response.title || "",
+      ...sequence,
+      responseFilePath,
+    };
   }
 
   if (response.type === "sse") {
@@ -220,9 +231,9 @@ async function readEndpointConfig(filePath) {
   return normalizeEndpointConfig(endpoint, filePath);
 }
 
-async function readEndpointResponse(responseFilePath) {
+async function readEndpointResponse(responseFilePath, endpoint) {
   const response = await readJsonFile(responseFilePath);
-  return normalizeEndpointResponse(response, responseFilePath);
+  return normalizeEndpointResponse(response, responseFilePath, endpoint?.responseFiles);
 }
 
 function resolveEndpointResponseFilePath(endpointFilePath, endpoint, responseFileName) {
@@ -239,7 +250,7 @@ async function readEndpointSelectedResponse(endpointFilePath) {
 
   return {
     endpoint,
-    response: await readEndpointResponse(responseFilePath),
+    response: await readEndpointResponse(responseFilePath, endpoint),
     responseFilePath,
     responseDir: getEndpointResponsesDir(endpointFilePath, endpoint.method),
   };
@@ -258,7 +269,7 @@ async function readEndpointResponseSummaries(endpointFilePath, endpoint) {
       continue;
     }
 
-    const response = await readEndpointResponse(responseFilePath);
+    const response = await readEndpointResponse(responseFilePath, endpoint);
     summaries.push({
       fileName: responseFile,
       type: response.type,
@@ -289,7 +300,7 @@ async function readEndpointResponseByName(endpointPath, responseFileName) {
 
   return {
     endpoint,
-    response: await readEndpointResponse(responseFilePath),
+    response: await readEndpointResponse(responseFilePath, endpoint),
     responseFileName: selectedResponseFile,
     responseFilePath,
     responseDir: getEndpointResponsesDir(endpointPath, endpoint.method),
@@ -322,13 +333,45 @@ async function isResponseAssetReferenced(responseDir, endpoint, excludedResponse
       continue;
     }
 
-    const response = await readEndpointResponse(responseFilePath);
+    const response = await readEndpointResponse(responseFilePath, endpoint);
     if (readResponseAssetFileName(response) === assetFileName) {
       return true;
     }
   }
 
   return false;
+}
+
+// Dipendenze dichiarate da tutte le response sequence dell'endpoint. È intenzionalmente un
+// indice calcolato al bisogno: le response sono poche e una cancellazione deve usare lo stato
+// corrente del disco, senza cache che potrebbe diventare stantia.
+async function readSequenceReferenceIndex(endpointFilePath, endpoint) {
+  const references = new Map();
+  for (const responseFile of endpoint.responseFiles) {
+    const responseFilePath = resolveEndpointResponseFilePath(endpointFilePath, endpoint, responseFile);
+    if (!fs.existsSync(responseFilePath)) {
+      continue;
+    }
+    // Un file illeggibile o invalido non dichiara riferimenti validi: si salta, senza far
+    // fallire l'indice — altrimenti una variante corrotta su disco bloccherebbe la
+    // cancellazione di response non correlate.
+    let response;
+    try {
+      response = await readEndpointResponse(responseFilePath, endpoint);
+    } catch {
+      continue;
+    }
+    if (response.type !== "sequence") {
+      continue;
+    }
+    for (const target of new Set(response.steps.map((step) => step.response))) {
+      if (!references.has(target)) {
+        references.set(target, []);
+      }
+      references.get(target).push(responseFile);
+    }
+  }
+  return references;
 }
 
 function buildEndpointFilePayload(method, routePath, disabled, description = "") {
@@ -395,6 +438,7 @@ module.exports = {
   readEndpointResponseByName,
   readResponseAssetFileName,
   isResponseAssetReferenced,
+  readSequenceReferenceIndex,
   buildEndpointFilePayload,
   assertEndpointPathUnchanged,
   createNextResponseFileName,

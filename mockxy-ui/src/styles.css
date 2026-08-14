@@ -47,6 +47,7 @@
   --color-type-mock: var(--type-mock);
   --color-type-handler: var(--type-handler);
   --color-type-middleware: var(--type-middleware);
+  --color-type-sequence: var(--type-sequence);
 }
 
 /* Monospace di default dell'app: Cascadia Code dove disponibile (come aurora-2),
@@ -110,6 +111,7 @@
   /* stati */
   --positive: #6f8f79; /* server online / toggle ON */
   --sequence: #6ee7b7; /* sequenza di varianti attiva (badge/chip SEQ): il verde acceso dei badge GET/2xx */
+  --type-sequence: var(--sequence);
   --switch-off: rgba(120, 120, 128, 0.5);
   --destructive: #fb7185; /* rose-400: bordo/fondo dei controlli distruttivi */
   --destructive-foreground: #ffffff;
@@ -269,4 +271,3 @@ body {
   height: 100%;
   overflow: hidden;
 }
-

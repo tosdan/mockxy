@@ -70,6 +70,7 @@ let uiSelectSeq = 0;
       [attr.aria-expanded]="open()"
       [attr.aria-controls]="open() ? listboxId : null"
       [attr.aria-activedescendant]="open() && activeIndex() >= 0 ? optionId(activeIndex()) : null"
+      [attr.aria-label]="ariaLabel()"
       [disabled]="disabled()"
       (click)="toggle()"
       (keydown)="onKeydown($event)"
@@ -140,6 +141,7 @@ export class UiSelect<T = string> {
   private readonly transloco = inject(TranslocoService);
   readonly options = input<readonly UiSelectOption<T>[]>([]);
   readonly placeholder = input('');
+  readonly ariaLabel = input<string | null>(null);
   /** Placeholder mostrato: quello passato dal consumer, o il default tradotto se assente. */
   protected readonly displayPlaceholder = computed(() => this.placeholder() || this.transloco.translate('common.selectPlaceholder'));
   /** Tono del trigger: 'default' o una classe di status (pill colorata + dot). */

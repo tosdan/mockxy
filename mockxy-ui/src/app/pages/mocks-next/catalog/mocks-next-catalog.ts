@@ -29,6 +29,7 @@ import {
   lucideSearch,
   lucideShrink,
   lucideTrash2,
+  lucideTriangleAlert,
   lucideUngroup,
   lucideX,
 } from '@ng-icons/lucide';
@@ -107,6 +108,7 @@ const COLLAPSED_COLLECTIONS_STATE_KEY = 'mocks-collapsed';
       lucideSearch,
       lucideShrink,
       lucideTrash2,
+      lucideTriangleAlert,
       lucideUngroup,
       lucideX,
     }),
@@ -258,6 +260,17 @@ const COLLAPSED_COLLECTIONS_STATE_KEY = 'mocks-collapsed';
       <span class="font-mono tabular-nums">{{ 'catalog.footerCounts' | transloco: { endpoints: store.totalEndpoints(), collections: store.totalCollections() } }}</span>
       <span class="h-3 w-px bg-border"></span>
       <span class="tabular-nums text-foreground/70">{{ 'catalog.footerActive' | transloco: { active: store.activeEndpoints(), total: store.totalEndpoints() } }}</span>
+      @if (store.loadErrors().length > 0) {
+      <span class="h-3 w-px bg-border"></span>
+      <span
+        class="flex items-center gap-1 font-semibold tabular-nums text-[color:var(--status-4xx)]"
+        [uiTooltip]="loadErrorsTooltip()"
+        [showDelay]="250"
+      >
+        <ng-icon name="lucideTriangleAlert" size="0.8rem" />
+        {{ 'catalog.footerLoadErrors' | transloco: { count: store.loadErrors().length } }}
+      </span>
+      }
     </div>
 
     <!-- INTESTAZIONE COLLECTION (riga cartella) -->
@@ -467,6 +480,14 @@ export class MocksNextCatalog {
   private readonly transloco = inject(TranslocoService);
   private readonly viewState = inject(ViewStateService);
 
+  /** Tooltip dell'indicatore nel footer: elenco delle definizioni scartate (file: motivo). */
+  protected readonly loadErrorsTooltip = computed(() =>
+    this.store
+      .loadErrors()
+      .map((loadError) => `${loadError.configFilePath}: ${loadError.message}`)
+      .join('\n'),
+  );
+
   protected readonly creatingCollection = signal(false);
   /** Genitore sotto cui creare la collection (undefined = livello root). */
   protected readonly creatingParentId = signal<string | undefined>(undefined);
@@ -493,6 +514,7 @@ export class MocksNextCatalog {
     { value: 'middleware', labelKey: 'catalog.filterMiddleware' },
     { value: 'sse', labelKey: 'catalog.filterSse' },
     { value: 'ws', labelKey: 'catalog.filterWs' },
+    { value: 'sequence', labelKey: 'catalog.filterSequence' },
   ];
   protected readonly statusOptions: ReadonlyArray<{ value: StatusFilter; labelKey: string }> = [
     { value: 'all', labelKey: 'catalog.filterAll' },
@@ -737,10 +759,10 @@ export class MocksNextCatalog {
   }
 
   protected typeDotClass(type: MockType): string {
-    return type === 'handler' ? 'bg-type-handler/55' : type === 'middleware' ? 'bg-type-middleware/55' : type === 'sse' || type === 'ws' ? 'bg-brand/55' : 'bg-type-mock/55';
+    return type === 'handler' ? 'bg-type-handler/55' : type === 'middleware' ? 'bg-type-middleware/55' : type === 'sequence' ? 'bg-sequence/55' : type === 'sse' || type === 'ws' ? 'bg-brand/55' : 'bg-type-mock/55';
   }
 
   protected typeTextClass(type: MockType): string {
-    return type === 'handler' ? 'text-type-handler/75' : type === 'middleware' ? 'text-type-middleware/75' : type === 'sse' || type === 'ws' ? 'text-brand/75' : 'text-type-mock/75';
+    return type === 'handler' ? 'text-type-handler/75' : type === 'middleware' ? 'text-type-middleware/75' : type === 'sequence' ? 'text-sequence/75' : type === 'sse' || type === 'ws' ? 'text-brand/75' : 'text-type-mock/75';
   }
 }

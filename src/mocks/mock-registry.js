@@ -2,17 +2,35 @@ const { createPathParamsMatcher } = require("./route-groups");
 
 class MockRegistry {
   constructor(routeGroups = [], sequenceStates = null) {
-    this.routeGroups = routeGroups;
+    this.routeGroups = [];
     this.paramsMatchers = new Map();
     // Cursori delle sequenze di varianti (SequenceStateStore): vive fuori dal registry perché
     // deve sopravvivere alle ricariche a caldo (setRouteGroups). Assente nei contesti senza
     // sequenze (test/usi legacy): lì una sequenza serve sempre il primo step.
     this.sequenceStates = sequenceStates;
+    this.setRouteGroups(routeGroups);
   }
 
   setRouteGroups(routeGroups) {
     this.routeGroups = routeGroups;
     this.paramsMatchers = new Map();
+    if (this.sequenceStates == null) {
+      return new Set();
+    }
+
+    const activeSequences = new Map();
+    for (const group of routeGroups) {
+      for (const [method, endpoint] of group.methods.entries()) {
+        if (endpoint.type !== "sequence") {
+          continue;
+        }
+        activeSequences.set(`${method} ${group.path}`, {
+          sequenceFileName: endpoint.sequenceFileName,
+          sequence: endpoint.sequence,
+        });
+      }
+    }
+    return this.sequenceStates.reconcile(activeSequences);
   }
 
   getParamsForGroup(group, requestPath, requestUrl) {
@@ -43,7 +61,11 @@ class MockRegistry {
         // variante registrata. sequenceStep accompagna la decisione per monitor/diagnostica.
         if (endpoint.type === "sequence") {
           const stepIndex = this.sequenceStates != null
-            ? this.sequenceStates.resolveStep(`${normalizedMethod} ${group.path}`, endpoint.sequence)
+            ? this.sequenceStates.resolveStep(
+              `${normalizedMethod} ${group.path}`,
+              endpoint.sequenceFileName,
+              endpoint.sequence
+            )
             : 0;
           const step = endpoint.steps[stepIndex];
           sequenceStep = {

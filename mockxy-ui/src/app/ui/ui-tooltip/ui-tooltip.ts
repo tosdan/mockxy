@@ -24,7 +24,7 @@ let uiTooltipSeq = 0;
     <div
       role="tooltip"
       [id]="tooltipId"
-      class="pointer-events-none w-max max-w-xs rounded-md bg-popover px-2.5 py-1.5 text-xs font-medium text-popover-foreground shadow-md ring-1 ring-border animate-in fade-in-0 zoom-in-95"
+      class="pointer-events-none w-max max-w-xs whitespace-pre-line rounded-md bg-popover px-2.5 py-1.5 text-xs font-medium text-popover-foreground shadow-md ring-1 ring-border animate-in fade-in-0 zoom-in-95"
     >
       {{ text() }}
     </div>

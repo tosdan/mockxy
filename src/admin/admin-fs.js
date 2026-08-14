@@ -108,20 +108,24 @@ async function readDirectoryBackup(dirPath) {
 
 async function runReload(reloadRuntime) {
   if (typeof reloadRuntime === "function") {
-    await reloadRuntime();
+    return reloadRuntime();
   }
+  return undefined;
 }
 
 // Protocollo transazionale unico delle mutazioni admin: esegue i passi ancora fallibili
 // (`commit`, opzionale) e il reload del runtime; su errore ripristina i backup, rifà il
 // reload per riallineare il runtime ai file ripristinati, poi propaga gli errori già
 // tipizzati (status HTTP presente) e traduce il resto in 400 col label dell'operazione.
-async function commitWithRollback({ backups, reloadRuntime, rejectionLabel, commit }) {
+async function commitWithRollback({ backups, reloadRuntime, rejectionLabel, commit, validateReloadResult }) {
   try {
     if (commit != null) {
       await commit();
     }
-    await runReload(reloadRuntime);
+    const reloadResult = await runReload(reloadRuntime);
+    if (validateReloadResult != null) {
+      await validateReloadResult(reloadResult);
+    }
   } catch (error) {
     await restoreBackup(backups);
     await runReload(reloadRuntime);

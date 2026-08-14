@@ -56,8 +56,9 @@ function summarizeEndpointResponse(endpoint, response) {
     selectedResponseFile: endpoint.selectedResponseFile,
     responseTitle: response.title || "",
     responseCount: endpoint.responseFiles.length,
-    // Badge di catalogo: l'endpoint sta servendo una sequenza di varianti (non la selezionata).
-    sequenceActive: endpoint.sequence != null && endpoint.sequence.enabled === true,
+    // La selezione è l'unico interruttore della sequence; `disabled` resta un'informazione
+    // ortogonale già esposta dal catalogo.
+    sequenceActive: response.type === "sequence",
   };
 }
 
@@ -193,6 +194,17 @@ async function getAdminMockDetail(mocksDir, id) {
       closeReason: response.closeReason,
       rules: response.rules,
       presets: response.presets,
+    };
+    detail.payloadFilePath = responseFilePath;
+    return detail;
+  }
+
+  // Variante sequence: la definizione vive nel file response selezionato, come SSE/WS.
+  if (response.type === "sequence") {
+    detail.sequence = {
+      steps: response.steps,
+      onEnd: response.onEnd,
+      resetAfterMs: response.resetAfterMs,
     };
     detail.payloadFilePath = responseFilePath;
     return detail;

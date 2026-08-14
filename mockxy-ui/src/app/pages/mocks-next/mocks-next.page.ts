@@ -14,7 +14,7 @@ import { OpenapiImportDialog } from './openapi-import/openapi-import-dialog';
 import { MocksNextDetail } from './detail/mocks-next-detail';
 import { MocksStore } from './mocks-next.store';
 import { ViewSwitcher } from '../../shared/view-switcher';
-import type { MockType } from '../../mock-admin-api.types';
+import type { EndpointCreateType } from '../../mock-admin-api.types';
 
 /**
  * Schermata Mocks: catalogo + dettaglio cablati ai dati REALI via MocksStore.
@@ -60,7 +60,7 @@ export class MocksNextPage implements OnInit {
   }
 
   /** Apre il dialog "Nuovo" per il tipo scelto (vcr → il dialog vede lo store page-scoped). */
-  protected openCreate(type: Exclude<MockType, 'sse' | 'ws'>): void {
+  protected openCreate(type: EndpointCreateType): void {
     this.dialog.open(MocksNextCreateDialog, {
       data: { type } satisfies CreateDialogData,
       viewContainerRef: this.vcr,

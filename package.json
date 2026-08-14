@@ -34,6 +34,7 @@
     "version:major": "node scripts/bump-version.js major",
     "check:versions": "node scripts/check-version-consistency.js",
     "check:release-tag": "node scripts/check-release-tag.js",
+    "check:admin-openapi": "node scripts/validate-admin-openapi.js",
     "icon": "node electron/scripts/generate-icon.js",
     "start": "node index.js",
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand --forceExit",

@@ -14,6 +14,7 @@ const { createNoopLogger, createTempDir, removeDir } = require("./helpers");
 // (SequenceStateStore) e serviti secondo la loro natura (mock o handler).
 describe("sequence serving", () => {
   let mocksDir;
+  const SEQUENCE_RESPONSE_FILE = "900.response.json";
 
   beforeEach(async () => {
     mocksDir = await createTempDir("sequence-serving-");
@@ -38,8 +39,16 @@ describe("sequence serving", () => {
     const responseDir = path.join(endpointDir, `${method}.responses`);
     await fs.promises.mkdir(responseDir, { recursive: true });
 
-    const responseFiles = Object.keys(responses);
-    for (const [fileName, content] of Object.entries(responses)) {
+    const persistedResponses = { ...responses };
+    if (sequence != null) {
+      persistedResponses[SEQUENCE_RESPONSE_FILE] = {
+        type: "sequence",
+        title: "Sequence",
+        ...sequence,
+      };
+    }
+    const responseFiles = Object.keys(persistedResponses);
+    for (const [fileName, content] of Object.entries(persistedResponses)) {
       await fs.promises.writeFile(path.join(responseDir, fileName), `${JSON.stringify(content, null, 2)}\n`, "utf8");
     }
     for (const [fileName, source] of Object.entries(assets)) {
@@ -52,11 +61,8 @@ describe("sequence serving", () => {
       description: "",
       enabled: true,
       responseFiles,
-      selectedResponseFile: selectedResponseFile || responseFiles[0],
+      selectedResponseFile: selectedResponseFile || (sequence != null ? SEQUENCE_RESPONSE_FILE : responseFiles[0]),
     };
-    if (sequence != null) {
-      endpoint.sequence = sequence;
-    }
     await fs.promises.writeFile(
       path.join(endpointDir, `${method}.endpoint.json`),
       `${JSON.stringify(endpoint, null, 2)}\n`,
@@ -196,7 +202,7 @@ describe("sequence serving", () => {
     expect((await request(app).get("/api/reset")).body).toEqual({ step: 1 });
   });
 
-  test("sequenza spenta (enabled false): vale la selezione classica", async () => {
+  test("sequence non selezionata: vale la selezione classica", async () => {
     await writeSequenceEndpoint({
       folder: "spenta",
       routePath: "/api/spenta",
@@ -205,7 +211,6 @@ describe("sequence serving", () => {
         "002.response.json": mockResponse({ variante: "altra" }),
       },
       sequence: {
-        enabled: false,
         steps: [
           { response: "002.response.json", times: 1 },
           { response: "001.response.json" },
@@ -217,6 +222,30 @@ describe("sequence serving", () => {
 
     expect((await request(app).get("/api/spenta")).body).toEqual({ variante: "selezionata" });
     expect((await request(app).get("/api/spenta")).body).toEqual({ variante: "selezionata" });
+  });
+
+  test("il vecchio campo endpoint.sequence viene rifiutato esplicitamente", async () => {
+    await writeSequenceEndpoint({
+      folder: "legacy",
+      routePath: "/api/legacy-sequence",
+      responses: {
+        "001.response.json": mockResponse({ ok: true }),
+        "002.response.json": mockResponse({ ok: false }),
+      },
+    });
+    const endpointPath = path.join(mocksDir, "legacy", "GET.endpoint.json");
+    const endpoint = JSON.parse(await fs.promises.readFile(endpointPath, "utf8"));
+    endpoint.sequence = {
+      steps: [
+        { response: "001.response.json", times: 1 },
+        { response: "002.response.json" },
+      ],
+    };
+    await fs.promises.writeFile(endpointPath, `${JSON.stringify(endpoint, null, 2)}\n`, "utf8");
+
+    const result = await loadEndpointRouteGroups(mocksDir);
+    expect(result.loadErrors).toHaveLength(1);
+    expect(result.loadErrors[0].message).toContain("endpoint.sequence is no longer supported");
   });
 
   test("uno step middleware degrada l'endpoint al load (non supportato in v1)", async () => {
@@ -234,6 +263,35 @@ describe("sequence serving", () => {
   },
 };
 `,
+      },
+      sequence: {
+        steps: [
+          { response: "001.response.json", times: 1 },
+          { response: "002.response.json" },
+        ],
+      },
+    });
+
+    const result = await loadEndpointRouteGroups(mocksDir);
+    expect(result.sequenceRouteGroups).toHaveLength(0);
+    expect(result.loadErrors).toHaveLength(1);
+    expect(result.loadErrors[0].message).toContain("sequence steps must reference mock or handler responses");
+  });
+
+  test.each([
+    ["sequence", { type: "sequence", title: "Nested", steps: [
+      { response: "001.response.json", times: 1 },
+      { response: "001.response.json" },
+    ], onEnd: "stay" }],
+    ["sse", { type: "sse", title: "Stream", script: [], onEnd: "keep-open" }],
+    ["ws", { type: "ws", title: "Socket", script: [], onEnd: "keep-open", rules: [], presets: [] }],
+  ])("uno step %s viene rifiutato dalla allow-list del runtime", async (type, disallowedResponse) => {
+    await writeSequenceEndpoint({
+      folder: `step-${type}`,
+      routePath: `/api/step-${type}`,
+      responses: {
+        "001.response.json": mockResponse({ ok: true }),
+        "002.response.json": disallowedResponse,
       },
       sequence: {
         steps: [

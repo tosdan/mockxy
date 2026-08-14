@@ -125,7 +125,7 @@ Interruttori "da banco di lavoro" nella runtime-bar; si azzerano al riavvio. App
 Proprietà del singolo endpoint/variante, editabili dall'editor dei mock (persistite via
 `/_admin/api/mocks`). Scope diverso da questo documento; in sintesi: `method`, `path`, `enabled`,
 `status`, `headers`, `delayMs`, `templated`, tipo di risposta (mock JSON/testo/file, handler,
-middleware, SSE, WebSocket), varianti selezionabili (anche per query string), sequenza di varianti,
+middleware, sequence, SSE, WebSocket), varianti selezionabili (anche per query string),
 `description`, abilitazione delle collezioni.
 
 ---

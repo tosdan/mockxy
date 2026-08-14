@@ -63,46 +63,15 @@ middleware type) is documented in the page on the response format.
 
 ## The variant sequence
 
-For endpoints whose response must **evolve over time** (the typical case: a polling client
-that first receives `processing` and later `completed`), the endpoint file can declare a
-**sequence**: an ordered list of variants with how long each one lasts. The sequence is a
-selection policy on top of the existing variants — the contents stay in the regular response
-files.
+A sequence is no longer a field of the endpoint file: it is a regular [`sequence` response
+variant](RESPONSE.md). `selectedResponseFile` is the only switch: selecting that file activates
+the scenario; selecting another response deactivates it. The legacy `endpoint.sequence` field
+is explicitly rejected.
 
-```json
-{
-  "sequence": {
-    "enabled": true,
-    "steps": [
-      { "response": "001.response.json", "times": 3 },
-      { "response": "002.response.json" }
-    ],
-    "onEnd": "stay",
-    "resetAfterMs": 30000
-  }
-}
-```
-
-- **`enabled`** — optional, default `true`. When `false` the definition stays in the file but
-  the classic selection (`selectedResponseFile`) applies; that field remains required either way.
-- **`steps`** — at least 2 entries. Each step references a variant listed in `responseFiles`
-  (of type `mock` or `handler`: middleware are not allowed in steps) and declares at most one
-  advance criterion: **`times`** (answers N requests, integer ≥ 1) or **`forMs`** (answers for
-  N milliseconds **from its first request**, not from the server clock). The last step may
-  have no criterion: it is the terminal state. The same variant may appear in several steps.
-- **`onEnd`** — `"stay"` (default): once the last step is exhausted the sequence stays there;
-  `"loop"`: it starts over from the first step (in that case the last step must declare a
-  criterion too).
-- **`resetAfterMs`** — optional: with no requests for this long, the sequence restarts from
-  the first step at the next call. Handy for repeated test sessions: polling stops once the
-  client sees the final outcome, and the next run starts fresh without manual intervention.
-
-Where the sequence currently stands (the **cursor**) is runtime state, not a file: it resets
-when the engine restarts, on explicit reset (from the UI or the admin API), on inactivity
-(`resetAfterMs`) and whenever the sequence definition changes. Edits to the endpoint file that
-do **not** touch the sequence (e.g. the description) do not reset it. Responses served by the
-steps follow the rules of their own nature (delays, automatic pagination and filters, handler
-timeouts): the sequence decides *which* variant answers, not *how*.
+The cursor is in-memory runtime state. It resets when the selected sequence response changes,
+when its definition changes, when leaving or re-entering the scenario, on manual reset, and on
+restart. An unrelated edit such as the endpoint description or the sequence title preserves
+the cursor.
 
 ## Validation and errors
 

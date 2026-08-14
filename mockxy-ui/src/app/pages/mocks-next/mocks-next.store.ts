@@ -11,10 +11,12 @@ import {
   MockConfig,
   MockDetail,
   MockListResponse,
+  MockLoadError,
   MockSummary,
   MockType,
+  ResponseSequenceCreateRequest,
+  ResponseSequenceUpdateRequest,
   ResponseUpdateRequest,
-  SequenceConfig,
   UNSORTED_COLLECTION_ID,
 } from '../../mock-admin-api.types';
 
@@ -58,7 +60,7 @@ const ROOT_ORDER_KEY = 'root';
 /** Chiave (ViewStateService) dell'endpoint selezionato, ritrovato tornando sulla view. */
 const SELECTED_ENDPOINT_STATE_KEY = 'mocks-selected';
 
-export type TypeFilter = 'all' | 'mock' | 'handler' | 'middleware' | 'sse' | 'ws';
+export type TypeFilter = 'all' | MockType;
 export type StatusFilter = 'all' | 'on' | 'off';
 
 /**
@@ -76,6 +78,8 @@ export class MocksStore {
   readonly collections = signal<readonly CollectionSummary[]>([]);
   /** Ordine unificato dei figli per nodo (parentKey → ref miste di id endpoint e/o id collection). */
   readonly childOrder = signal<Readonly<Record<string, readonly string[]>>>({});
+  /** Definizioni presenti su disco ma scartate dal caricamento (es. formato legacy): il catalogo le segnala invece di farle sparire in silenzio. */
+  readonly loadErrors = signal<readonly MockLoadError[]>([]);
   readonly selected = signal<MockDetail | undefined>(undefined);
   readonly loading = signal(false);
   readonly detailLoading = signal(false);
@@ -260,16 +264,23 @@ export class MocksStore {
     this.runDetailMutation(sel.id, this.api.selectResponse(sel.id, { selectedResponseFile: fileName }));
   }
 
-  /**
-   * Imposta (o rimuove, con null) la sequenza di varianti dell'endpoint aperto. Passa da
-   * runDetailMutation: il catalogo ricarica così il badge SEQ riflette lo stato.
-   */
-  updateSequence(sequence: SequenceConfig | null, onSuccess?: () => void): void {
+  /** Crea e seleziona una nuova variante sequence. */
+  createSequence(sequence: ResponseSequenceCreateRequest, onSuccess?: () => void): void {
     const sel = this.selected();
     if (!sel) {
       return;
     }
-    this.runDetailMutation(sel.id, this.api.updateSequence(sel.id, sequence), onSuccess);
+    this.runDetailMutation(sel.id, this.api.createSequence(sel.id, sequence), onSuccess);
+  }
+
+  /** Aggiorna la variante sequence selezionata, usando la rotta response per filename. */
+  updateSequence(sequence: ResponseSequenceUpdateRequest, onSuccess?: () => void): void {
+    const sel = this.selected();
+    const fileName = sel?.selectedResponseFile;
+    if (!sel || !fileName) {
+      return;
+    }
+    this.runDetailMutation(sel.id, this.api.updateSequence(sel.id, fileName, sequence), onSuccess);
   }
 
   /** Salva la response selezionata (body/headers/status/delay per mock, source per script). */
@@ -605,6 +616,11 @@ export class MocksStore {
     this.mocks.set(res.items);
     this.collections.set(res.collections);
     this.childOrder.set(res.childOrder);
+    // Alcune mutazioni (es. PATCH collections/:id/enabled) rispondono senza rifare la scansione
+    // da disco: in quel caso le segnalazioni note restano valide e non vanno azzerate.
+    if (res.loadErrors != null) {
+      this.loadErrors.set(res.loadErrors);
+    }
   }
 
   /**

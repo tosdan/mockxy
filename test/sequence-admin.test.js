@@ -12,9 +12,7 @@ const { SequenceStateStore } = require("../src/mocks/sequence-state");
 const { HandlerStateStore } = require("../src/mocks/handler-state");
 const { createNoopLogger, createTempDir, removeDir } = require("./helpers");
 
-// Admin API delle sequenze: definizione nel PUT /mocks/:id, stato nel dettaglio, reset del
-// cursore, flag di catalogo, e conservazione del campo sequence attraverso le altre scritture.
-describe("sequence admin API", () => {
+describe("sequence response admin API", () => {
   let mocksDir;
 
   beforeEach(async () => {
@@ -26,16 +24,43 @@ describe("sequence admin API", () => {
   });
 
   const MOCK_ID = encodeMockId("operazioni/GET.endpoint.json");
+  const SEQUENCE_PAYLOAD = {
+    steps: [
+      { response: "001.response.json", times: 2 },
+      { response: "002.response.json" },
+    ],
+    onEnd: "stay",
+  };
 
-  // Endpoint con due varianti mock (processing/completed), senza sequenza: la si imposta via admin.
-  async function writeEndpointWithVariants({ sequence } = {}) {
+  async function writeEndpointWithVariants({ withSequence = false, selectedResponseFile } = {}) {
     const endpointDir = path.join(mocksDir, "operazioni");
     const responseDir = path.join(endpointDir, "GET.responses");
     await fs.promises.mkdir(responseDir, { recursive: true });
     const variants = {
-      "001.response.json": { type: "mock", title: "Processing", status: 202, headers: {}, delayMs: 0, body: { status: "processing" } },
-      "002.response.json": { type: "mock", title: "Completed", status: 200, headers: {}, delayMs: 0, body: { status: "completed" } },
+      "001.response.json": {
+        type: "mock",
+        title: "Processing",
+        status: 202,
+        headers: {},
+        delayMs: 0,
+        body: { status: "processing" },
+      },
+      "002.response.json": {
+        type: "mock",
+        title: "Completed",
+        status: 200,
+        headers: {},
+        delayMs: 0,
+        body: { status: "completed" },
+      },
     };
+    if (withSequence) {
+      variants["003.response.json"] = {
+        type: "sequence",
+        title: "Polling",
+        ...SEQUENCE_PAYLOAD,
+      };
+    }
     for (const [fileName, content] of Object.entries(variants)) {
       await fs.promises.writeFile(path.join(responseDir, fileName), `${JSON.stringify(content, null, 2)}\n`, "utf8");
     }
@@ -45,31 +70,33 @@ describe("sequence admin API", () => {
       description: "",
       enabled: true,
       responseFiles: Object.keys(variants),
-      selectedResponseFile: "001.response.json",
+      selectedResponseFile: selectedResponseFile || (withSequence ? "003.response.json" : "001.response.json"),
     };
-    if (sequence != null) {
-      endpoint.sequence = sequence;
-    }
     await fs.promises.writeFile(
       path.join(endpointDir, "GET.endpoint.json"),
       `${JSON.stringify(endpoint, null, 2)}\n`,
       "utf8"
     );
+    return { endpointDir, responseDir };
   }
 
-  async function readEndpointFromDisk() {
-    return JSON.parse(await fs.promises.readFile(path.join(mocksDir, "operazioni", "GET.endpoint.json"), "utf8"));
+  async function readEndpointFromDisk(endpointDir = path.join(mocksDir, "operazioni"), method = "GET") {
+    return JSON.parse(await fs.promises.readFile(path.join(endpointDir, `${method}.endpoint.json`), "utf8"));
   }
 
-  async function buildApp() {
+  async function readResponseFromDisk(fileName, responseDir = path.join(mocksDir, "operazioni", "GET.responses")) {
+    return JSON.parse(await fs.promises.readFile(path.join(responseDir, fileName), "utf8"));
+  }
+
+  async function buildApp({ overrideReloadResult } = {}) {
     const sequenceStates = new SequenceStateStore();
     const handlerStates = new HandlerStateStore();
     const load = async () => {
-      const { mockRouteGroups, handlerRouteGroups, proxyMiddlewareRouteGroups, sequenceRouteGroups } =
-        await loadEndpointRouteGroups(mocksDir);
+      const loaded = await loadEndpointRouteGroups(mocksDir);
       return {
-        routeGroups: mergeLocalRouteGroups({ mockRouteGroups, handlerRouteGroups, sequenceRouteGroups }),
-        proxyMiddlewareRouteGroups,
+        routeGroups: mergeLocalRouteGroups(loaded),
+        proxyMiddlewareRouteGroups: loaded.proxyMiddlewareRouteGroups,
+        loadErrors: loaded.loadErrors,
       };
     };
     const initial = await load();
@@ -77,8 +104,15 @@ describe("sequence admin API", () => {
     const proxyMiddlewareRegistry = new ProxyMiddlewareRegistry(initial.proxyMiddlewareRouteGroups);
     const reloadRuntime = async () => {
       const next = await load();
-      registry.setRouteGroups(next.routeGroups);
+      const changedSequenceKeys = registry.setRouteGroups(next.routeGroups);
       proxyMiddlewareRegistry.setRouteGroups(next.proxyMiddlewareRouteGroups);
+      for (const key of changedSequenceKeys) {
+        handlerStates.reset(key);
+      }
+      if (typeof overrideReloadResult === "function") {
+        return overrideReloadResult(next);
+      }
+      return { applied: true, loadErrors: next.loadErrors, fatalError: null };
     };
 
     const app = createApp({
@@ -94,43 +128,44 @@ describe("sequence admin API", () => {
     return { app, sequenceStates, handlerStates };
   }
 
-  const SEQUENCE_PAYLOAD = {
-    steps: [
-      { response: "001.response.json", times: 2 },
-      { response: "002.response.json" },
-    ],
-  };
-
-  test("PUT sequence: salva la definizione, il serving la usa e il catalogo espone sequenceActive", async () => {
+  test("crea e seleziona una response sequence, poi il runtime la serve", async () => {
     await writeEndpointWithVariants();
     const { app } = await buildApp();
 
-    const put = await request(app).put(`/_admin/api/mocks/${MOCK_ID}`).send({ sequence: SEQUENCE_PAYLOAD });
-    expect(put.status).toBe(200);
+    const created = await request(app)
+      .post(`/_admin/api/mocks/${MOCK_ID}/responses`)
+      .send({ type: "sequence", title: "Polling", ...SEQUENCE_PAYLOAD });
 
-    const onDisk = await readEndpointFromDisk();
-    expect(onDisk.sequence).toEqual({
-      enabled: true,
-      steps: SEQUENCE_PAYLOAD.steps,
-      onEnd: "stay",
-      resetAfterMs: null,
+    expect(created.status).toBe(201);
+    const endpoint = await readEndpointFromDisk();
+    expect(endpoint).not.toHaveProperty("sequence");
+    expect(endpoint.selectedResponseFile).toBe("003.response.json");
+    expect(await readResponseFromDisk("003.response.json")).toEqual({
+      type: "sequence",
+      title: "Polling",
+      ...SEQUENCE_PAYLOAD,
     });
-
     expect((await request(app).get("/api/operazioni")).body).toEqual({ status: "processing" });
     expect((await request(app).get("/api/operazioni")).body).toEqual({ status: "processing" });
     expect((await request(app).get("/api/operazioni")).body).toEqual({ status: "completed" });
 
     const catalog = await request(app).get("/_admin/api/mocks");
-    const item = catalog.body.items.find((entry) => entry.path === "/api/operazioni");
-    expect(item.sequenceActive).toBe(true);
+    expect(catalog.body.items.find((item) => item.path === "/api/operazioni").sequenceActive).toBe(true);
   });
 
-  test("GET dettaglio: espone la definizione e lo stato runtime del cursore", async () => {
-    await writeEndpointWithVariants({ sequence: SEQUENCE_PAYLOAD });
+  test("dettaglio e state endpoint espongono definizione, filename e cursore", async () => {
+    await writeEndpointWithVariants({ withSequence: true });
     const { app } = await buildApp();
 
     const fresh = await request(app).get(`/_admin/api/mocks/${MOCK_ID}`);
-    expect(fresh.body.endpoint.sequence.steps).toHaveLength(2);
+    expect(fresh.body.endpoint).not.toHaveProperty("sequence");
+    expect(fresh.body.type).toBe("sequence");
+    expect(fresh.body.status).toBeNull();
+    expect(fresh.body.payloadType).toBe("none");
+    expect(fresh.body.sequence).toEqual({
+      ...SEQUENCE_PAYLOAD,
+      resetAfterMs: null,
+    });
     expect(fresh.body.sequenceState).toEqual({
       stepIndex: 0,
       servedInStep: 0,
@@ -139,89 +174,73 @@ describe("sequence admin API", () => {
     });
 
     await request(app).get("/api/operazioni");
-    const afterOne = await request(app).get(`/_admin/api/mocks/${MOCK_ID}`);
-    expect(afterOne.body.sequenceState.stepIndex).toBe(0);
-    expect(afterOne.body.sequenceState.servedInStep).toBe(1);
+    const state = await request(app).get(`/_admin/api/mocks/${MOCK_ID}/sequence/state`);
+    expect(state.status).toBe(200);
+    expect(state.body.sequenceFile).toBe("003.response.json");
+    expect(state.body.sequenceState.stepIndex).toBe(0);
+    expect(state.body.sequenceState.servedInStep).toBe(1);
   });
 
-  test("il dettaglio di un endpoint senza sequenza non ha sequenceState", async () => {
+  test("state e reset rifiutano un endpoint la cui response selezionata non è sequence", async () => {
     await writeEndpointWithVariants();
     const { app } = await buildApp();
-    const detail = await request(app).get(`/_admin/api/mocks/${MOCK_ID}`);
-    expect(detail.body.sequenceState).toBeUndefined();
-    expect(detail.body.sequenceActive).toBe(false);
+
+    expect((await request(app).get(`/_admin/api/mocks/${MOCK_ID}/sequence/state`)).status).toBe(400);
+    expect((await request(app).post(`/_admin/api/mocks/${MOCK_ID}/sequence/reset`)).status).toBe(400);
   });
 
-  test("POST sequence/reset: la sequenza riparte dal primo step", async () => {
-    await writeEndpointWithVariants({ sequence: SEQUENCE_PAYLOAD });
-    const { app } = await buildApp();
-
-    await request(app).get("/api/operazioni");
-    await request(app).get("/api/operazioni");
-    expect((await request(app).get("/api/operazioni")).body).toEqual({ status: "completed" });
-
-    const reset = await request(app).post(`/_admin/api/mocks/${MOCK_ID}/sequence/reset`);
-    expect(reset.status).toBe(200);
-    expect(reset.body.sequenceState).toEqual({
-      stepIndex: 0,
-      servedInStep: 0,
-      stepStartedAt: null,
-      lastRequestAt: null,
-    });
-
-    expect((await request(app).get("/api/operazioni")).body).toEqual({ status: "processing" });
-  });
-
-  test("il reset azzera anche la memoria handler dell'endpoint", async () => {
-    await writeEndpointWithVariants({ sequence: SEQUENCE_PAYLOAD });
+  test("resetta cursore e memoria handler della sequence selezionata", async () => {
+    await writeEndpointWithVariants({ withSequence: true });
     const { app, handlerStates } = await buildApp();
-
+    await request(app).get("/api/operazioni");
+    await request(app).get("/api/operazioni");
     handlerStates.enter("GET /api/operazioni").state.n = 7;
-    expect(handlerStates.enter("GET /api/operazioni").callCount).toBe(2);
 
-    await request(app).post(`/_admin/api/mocks/${MOCK_ID}/sequence/reset`);
-
-    const fresh = handlerStates.enter("GET /api/operazioni");
-    expect(fresh.callCount).toBe(1);
-    expect(fresh.state).toEqual({});
-  });
-
-  test("il reset su un endpoint senza sequenza risponde 400", async () => {
-    await writeEndpointWithVariants();
-    const { app } = await buildApp();
     const reset = await request(app).post(`/_admin/api/mocks/${MOCK_ID}/sequence/reset`);
-    expect(reset.status).toBe(400);
+
+    expect(reset.status).toBe(200);
+    expect(reset.body.sequenceFile).toBe("003.response.json");
+    expect(reset.body.sequenceState.stepIndex).toBe(0);
+    const freshHandlerState = handlerStates.enter("GET /api/operazioni");
+    expect(freshHandlerState.callCount).toBe(1);
+    expect(freshHandlerState.state).toEqual({});
+    expect((await request(app).get("/api/operazioni")).body).toEqual({ status: "processing" });
   });
 
-  test("PUT sequence: null rimuove la sequenza e torna la selezione classica", async () => {
-    await writeEndpointWithVariants({ sequence: SEQUENCE_PAYLOAD });
+  test("il vecchio PUT { sequence } viene rifiutato senza modificare l'endpoint", async () => {
+    await writeEndpointWithVariants();
+    const before = await readEndpointFromDisk();
     const { app } = await buildApp();
 
-    const put = await request(app).put(`/_admin/api/mocks/${MOCK_ID}`).send({ sequence: null });
-    expect(put.status).toBe(200);
+    const result = await request(app).put(`/_admin/api/mocks/${MOCK_ID}`).send({ sequence: SEQUENCE_PAYLOAD });
 
-    expect(await readEndpointFromDisk()).not.toHaveProperty("sequence");
-    // Selezionata: 001 (processing), servita stabilmente.
-    expect((await request(app).get("/api/operazioni")).body).toEqual({ status: "processing" });
-    expect((await request(app).get("/api/operazioni")).body).toEqual({ status: "processing" });
-    expect((await request(app).get("/api/operazioni")).body).toEqual({ status: "processing" });
+    expect(result.status).toBe(400);
+    expect(result.body.message).toContain("responses/:file");
+    expect(await readEndpointFromDisk()).toEqual(before);
   });
 
-  test("PUT sequence invalida: 400 senza toccare il file", async () => {
-    await writeEndpointWithVariants();
+  test("modifica per filename e resetta il cursore solo quando cambia lo scenario", async () => {
+    await writeEndpointWithVariants({ withSequence: true });
     const { app } = await buildApp();
+    await request(app).get("/api/operazioni");
 
-    const invalid = await request(app)
-      .put(`/_admin/api/mocks/${MOCK_ID}`)
-      .send({ sequence: { steps: [{ response: "001.response.json" }] } });
-    expect(invalid.status).toBe(400);
-    expect(invalid.body.message).toContain("at least 2 steps");
-    expect(await readEndpointFromDisk()).not.toHaveProperty("sequence");
+    const titleOnly = await request(app)
+      .put(`/_admin/api/mocks/${MOCK_ID}/responses/003.response.json`)
+      .send({ title: "Polling rinominato" });
+    expect(titleOnly.status).toBe(200);
+    let state = await request(app).get(`/_admin/api/mocks/${MOCK_ID}/sequence/state`);
+    expect(state.body.sequenceState.servedInStep).toBe(1);
+
+    const changed = await request(app)
+      .put(`/_admin/api/mocks/${MOCK_ID}/responses/003.response.json`)
+      .send({ steps: [{ response: "001.response.json", times: 1 }, { response: "002.response.json" }] });
+    expect(changed.status).toBe(200);
+    state = await request(app).get(`/_admin/api/mocks/${MOCK_ID}/sequence/state`);
+    expect(state.body.sequenceState).toMatchObject({ stepIndex: 0, servedInStep: 0 });
   });
 
-  test("PUT sequence con step middleware: 400 (non supportati in v1)", async () => {
-    await writeEndpointWithVariants();
-    const responseDir = path.join(mocksDir, "operazioni", "GET.responses");
+  test("create rifiuta un grafo con step middleware prima del successo", async () => {
+    const { responseDir } = await writeEndpointWithVariants();
     await fs.promises.writeFile(
       path.join(responseDir, "003.response.json"),
       `${JSON.stringify({ type: "middleware", title: "", sourceFile: "003.middleware.js" }, null, 2)}\n`,
@@ -241,56 +260,136 @@ describe("sequence admin API", () => {
     );
     const { app } = await buildApp();
 
-    const put = await request(app).put(`/_admin/api/mocks/${MOCK_ID}`).send({
-      sequence: {
-        steps: [
-          { response: "001.response.json", times: 1 },
-          { response: "003.response.json" },
-        ],
-      },
+    const result = await request(app).post(`/_admin/api/mocks/${MOCK_ID}/responses`).send({
+      type: "sequence",
+      title: "Invalida",
+      steps: [{ response: "001.response.json", times: 1 }, { response: "003.response.json" }],
     });
-    expect(put.status).toBe(400);
-    expect(put.body.message).toContain("mock or handler");
+
+    expect(result.status).toBe(400);
+    expect(result.body.message).toContain("mock or handler");
+    expect((await readEndpointFromDisk()).responseFiles).toHaveLength(3);
+    expect(fs.existsSync(path.join(responseDir, "004.response.json"))).toBe(false);
   });
 
-  test("le altre scritture admin conservano la sequenza (endpoint update non la perde)", async () => {
-    await writeEndpointWithVariants({ sequence: SEQUENCE_PAYLOAD });
+  test("la cancellazione di una response referenziata restituisce 409 con referencedBy", async () => {
+    await writeEndpointWithVariants({ withSequence: true });
     const { app } = await buildApp();
 
-    const update = await request(app)
-      .put(`/_admin/api/mocks/${MOCK_ID}/endpoint`)
-      .send({ description: "polling di prova" });
-    expect(update.status).toBe(200);
+    const result = await request(app).delete(`/_admin/api/mocks/${MOCK_ID}/responses/001.response.json`);
 
-    const onDisk = await readEndpointFromDisk();
-    expect(onDisk.description).toBe("polling di prova");
-    expect(onDisk.sequence).toEqual({
-      enabled: true,
-      steps: SEQUENCE_PAYLOAD.steps,
-      onEnd: "stay",
-      resetAfterMs: null,
+    expect(result.status).toBe(409);
+    expect(result.body.details).toEqual({ referencedBy: ["003.response.json"] });
+    expect((await readEndpointFromDisk()).responseFiles).toContain("001.response.json");
+  });
+
+  test("una sequence auto-referenziante scritta a mano resta cancellabile", async () => {
+    // L'admin API non produce mai un auto-riferimento, ma il file si può scrivere a mano: i
+    // riferimenti della sequence spariscono insieme al file, quindi non devono bloccarla.
+    const { responseDir } = await writeEndpointWithVariants({
+      withSequence: true,
+      selectedResponseFile: "001.response.json",
+    });
+    await fs.promises.writeFile(
+      path.join(responseDir, "003.response.json"),
+      `${JSON.stringify(
+        {
+          type: "sequence",
+          title: "Auto",
+          steps: [{ response: "001.response.json", times: 1 }, { response: "003.response.json" }],
+          onEnd: "stay",
+        },
+        null,
+        2
+      )}\n`,
+      "utf8"
+    );
+    const { app } = await buildApp();
+
+    const result = await request(app).delete(`/_admin/api/mocks/${MOCK_ID}/responses/003.response.json`);
+
+    expect(result.status).toBe(200);
+    expect((await readEndpointFromDisk()).responseFiles).toEqual(["001.response.json", "002.response.json"]);
+    expect(fs.existsSync(path.join(responseDir, "003.response.json"))).toBe(false);
+  });
+
+  test("una variante corrotta viene saltata dall'indice dei riferimenti, non fatta esplodere", async () => {
+    // Una variante illeggibile non dichiara riferimenti validi: la guardia della delete deve
+    // continuare a rispondere sui riferimenti REALI, non fallire sul parsing della vicina rotta.
+    const { responseDir } = await writeEndpointWithVariants({ withSequence: true });
+    await fs.promises.writeFile(path.join(responseDir, "004.response.json"), "{ invalid json", "utf8");
+    const endpoint = await readEndpointFromDisk();
+    endpoint.responseFiles.push("004.response.json");
+    await fs.promises.writeFile(
+      path.join(mocksDir, "operazioni", "GET.endpoint.json"),
+      `${JSON.stringify(endpoint, null, 2)}\n`,
+      "utf8"
+    );
+    const { app } = await buildApp();
+
+    const result = await request(app).delete(`/_admin/api/mocks/${MOCK_ID}/responses/001.response.json`);
+
+    expect(result.status).toBe(409);
+    expect(result.body.details).toEqual({ referencedBy: ["003.response.json"] });
+  });
+
+  test("clona una sequence come nuova variante con una nuova identità", async () => {
+    await writeEndpointWithVariants({ withSequence: true });
+    const { app } = await buildApp();
+
+    const cloned = await request(app)
+      .post(`/_admin/api/mocks/${MOCK_ID}/responses`)
+      .send({ title: "Polling clone" });
+
+    expect(cloned.status).toBe(201);
+    expect((await readEndpointFromDisk()).selectedResponseFile).toBe("004.response.json");
+    expect(await readResponseFromDisk("004.response.json")).toEqual({
+      type: "sequence",
+      title: "Polling clone",
+      ...SEQUENCE_PAYLOAD,
     });
   });
 
-  test("modificare la definizione della sequenza azzera il cursore (firma cambiata)", async () => {
-    await writeEndpointWithVariants({ sequence: SEQUENCE_PAYLOAD });
+  test("la copia parziale di un endpoint sequence include la chiusura minima degli step", async () => {
+    await writeEndpointWithVariants({ withSequence: true });
     const { app } = await buildApp();
 
-    await request(app).get("/api/operazioni");
-    await request(app).get("/api/operazioni");
-    expect((await request(app).get("/api/operazioni")).body).toEqual({ status: "completed" });
-
-    const put = await request(app).put(`/_admin/api/mocks/${MOCK_ID}`).send({
-      sequence: {
-        steps: [
-          { response: "001.response.json", times: 1 },
-          { response: "002.response.json" },
-        ],
-      },
+    const copied = await request(app).post(`/_admin/api/mocks/${MOCK_ID}/copy`).send({
+      method: "POST",
+      path: "/api/operazioni-copia",
+      copyResponses: false,
     });
-    expect(put.status).toBe(200);
 
-    expect((await request(app).get("/api/operazioni")).body).toEqual({ status: "processing" });
-    expect((await request(app).get("/api/operazioni")).body).toEqual({ status: "completed" });
+    expect(copied.status).toBe(201);
+    const targetDir = path.join(mocksDir, "api", "operazioni-copia");
+    const endpoint = await readEndpointFromDisk(targetDir, "POST");
+    expect(endpoint.responseFiles).toEqual([
+      "001.response.json",
+      "002.response.json",
+      "003.response.json",
+    ]);
+    expect(endpoint.selectedResponseFile).toBe("003.response.json");
+  });
+
+  test("un loadError dell'endpoint mutato causa rollback anche se il reload è applicato", async () => {
+    const { responseDir } = await writeEndpointWithVariants();
+    const endpointPath = path.join(mocksDir, "operazioni", "GET.endpoint.json");
+    const before = await readEndpointFromDisk();
+    const { app } = await buildApp({
+      overrideReloadResult: () => ({
+        applied: true,
+        loadErrors: [{ filePath: endpointPath, message: "graph not loadable" }],
+        fatalError: null,
+      }),
+    });
+
+    const result = await request(app)
+      .post(`/_admin/api/mocks/${MOCK_ID}/responses`)
+      .send({ type: "sequence", title: "Polling", ...SEQUENCE_PAYLOAD });
+
+    expect(result.status).toBe(400);
+    expect(result.body.message).toContain("graph not loadable");
+    expect(await readEndpointFromDisk()).toEqual(before);
+    expect(fs.existsSync(path.join(responseDir, "003.response.json"))).toBe(false);
   });
 });

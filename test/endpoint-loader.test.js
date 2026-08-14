@@ -1,7 +1,7 @@
 const fs = require("fs");
 const path = require("path");
 const request = require("supertest");
-const { loadEndpointRouteGroups } = require("../src/mocks/endpoint-loader");
+const { loadEndpointRouteGroups, loadSequenceSteps } = require("../src/mocks/endpoint-loader");
 const { createServerRuntime } = require("../src/server");
 const { createNoopLogger, createTempDir, removeDir, writeHandler, writeMock } = require("./helpers");
 
@@ -98,6 +98,50 @@ module.exports = {
     // il file nello stesso istante della scansione: forziamo un mtime diverso, senza sleep.
     const bumpedMtime = new Date(Date.now() + 10);
     await fs.promises.utimes(helperPath, bumpedMtime, bumpedMtime);
+
+    const second = await loadEndpointRouteGroups(mocksDir);
+    expect(second.loadErrors).toEqual([]);
+    const secondResult = await second.handlerRouteGroups[0].methods.get("GET").resolveResponse({});
+    expect(secondResult.jsonBody.value).toBe(2);
+  });
+
+  test("una compilazione fuori scansione non lascia in cache una definizione con dipendenze stantie", async () => {
+    // La validazione admin del grafo sequence (validateSequenceGraph) chiama loadSequenceSteps
+    // FUORI dal ciclo purge/scan: lì i require annidati risolvono ancora dalla Module._cache, e
+    // quella definizione — stantia — non deve essere persistita con le firme correnti, altrimenti
+    // il reload successivo la considererebbe fresca e installerebbe il vecchio helper.
+    await writeHandler({
+      mocksDir,
+      folder: "seq",
+      method: "GET",
+      source: `const helper = require("./helper");
+module.exports = {
+  path: "/seq",
+  async resolveResponse() {
+    return { jsonBody: { value: helper.value } };
+  }
+};
+`,
+    });
+    const helperPath = path.join(mocksDir, "seq", "GET.responses", "helper.js");
+    await fs.promises.writeFile(helperPath, "module.exports = { value: 1 };\n", "utf8");
+
+    const first = await loadEndpointRouteGroups(mocksDir);
+    expect(first.loadErrors).toEqual([]);
+    const firstResult = await first.handlerRouteGroups[0].methods.get("GET").resolveResponse({});
+    expect(firstResult.jsonBody.value).toBe(1);
+
+    await fs.promises.writeFile(helperPath, "module.exports = { value: 2 };\n", "utf8");
+    // Come sopra: mtime forzato perché la firma è mtime+dimensione e la dimensione non cambia.
+    const bumpedMtime = new Date(Date.now() + 10);
+    await fs.promises.utimes(helperPath, bumpedMtime, bumpedMtime);
+
+    await loadSequenceSteps(
+      { method: "GET" },
+      path.join(mocksDir, "seq", "GET.endpoint.json"),
+      { steps: [{ response: "001.response.json" }] },
+      { persistCache: false }
+    );
 
     const second = await loadEndpointRouteGroups(mocksDir);
     expect(second.loadErrors).toEqual([]);

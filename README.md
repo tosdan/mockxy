@@ -73,7 +73,7 @@ None of these is textbook development — no team is perfect. But it's what actu
 - 📡 **Real-time monitor**: captures requests and responses (mock and proxy), with filters, export, copy-as-cURL and **mock creation straight from observed traffic**, including in bulk.
 - 📁 **Mocks as files**: every endpoint is a folder of readable JSON files, versionable in git and editable by hand, with hot reload.
 - 🔀 **Multiple response variants per endpoint**: 200 with data, 404, 500, empty list… and you pick the active one with a switch.
-- 🔁 **Variant sequences**: evolve the response automatically after a number of requests or an amount of time, with looping and reset controls.
+- 🔁 **Variant sequences**: a selectable `sequence` response evolves through other mock/handler variants after a number of requests or an amount of time, with looping and reset controls.
 - 🧩 **Static mock templating**: use request params, query, headers and body plus generated helpers directly in response bodies and headers.
 - 📣 **SSE and WebSocket mocks**: timed scripts, response rules, live connections and consoles for manually directing messages.
 - ⏱️ **Simulated latency**: per-response delay or a global delay to emulate a slow network.
@@ -99,7 +99,7 @@ flowchart LR
 
 For every incoming request Mockxy looks up the matching endpoint among those defined (method + path, with support for path parameters and the query string; the most specific route always wins). Then:
 
-1. if the endpoint has an active **mock response**, it answers with it (status, headers, optionally templated body and delay); a sequence can choose the current variant automatically;
+1. if the selected response is a **mock**, it answers with it (status, headers, optionally templated body and delay); if it is a **sequence**, the sequence selects the current mock/handler step automatically;
 2. if the active response is a **handler**, it runs your JavaScript code and answers with the result;
 3. if the active response is **SSE**, it opens the stream and sends events from its script or console;
 4. if there is no mock and the **proxy fallback** is enabled, it forwards the request to `BACKEND_URL` and returns the backend's response — possibly transformed by a **middleware**;

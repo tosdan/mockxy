@@ -2,6 +2,7 @@ const fs = require("fs");
 const path = require("path");
 const { writeFileAtomic } = require("../utils/fs-atomic");
 const { validatePathFormat } = require("../mocks/route-groups");
+const { loadSequenceSteps } = require("../mocks/endpoint-loader");
 const { createAdminError } = require("./admin-errors");
 const {
   readBackup,
@@ -44,6 +45,7 @@ const {
   assertSafeResponseAssetFileName,
   readResponseAssetFileName,
   isResponseAssetReferenced,
+  readSequenceReferenceIndex,
 } = require("./endpoint-files");
 const {
   getCollectionsMetadataFilePath,
@@ -53,7 +55,7 @@ const {
   serializedByWorkspace,
 } = require("./collections-state");
 const { getAdminMockDetail } = require("./mock-catalog");
-const { normalizeSequenceConfig } = require("../mocks/sequence-config");
+const { normalizeSequenceResponse } = require("../mocks/sequence-config");
 const { normalizeSseConfig, validateSseMessage } = require("../mocks/sse-config");
 const { normalizeWsConfig, validateWsMessage } = require("../mocks/ws-config");
 
@@ -111,7 +113,12 @@ async function createAdminEndpointFromMock(mocksDir, payload, reloadRuntime) {
   await writeFileAtomic(endpointPath, `${JSON.stringify(endpoint, null, 2)}\n`, "utf8");
 
   const relativePath = toPosixRelativePath(path.relative(mocksDir, endpointPath));
-  await commitWithRollback({ backups, reloadRuntime, rejectionLabel: "Endpoint create rejected" });
+  await commitWithRollback({
+    backups,
+    reloadRuntime,
+    rejectionLabel: "Endpoint create rejected",
+    validateReloadResult: validateEndpointReload(endpointPath),
+  });
 
   return getAdminMockDetail(mocksDir, encodeMockId(relativePath));
 }
@@ -162,6 +169,7 @@ async function createAdminEndpointFromScript(mocksDir, payload, reloadRuntime, t
     reloadRuntime,
     rejectionLabel: "Endpoint create rejected",
     commit: () => assertEndpointSourceIsValid(sourcePath, type),
+    validateReloadResult: validateEndpointReload(endpointPath),
   });
 
   return getAdminMockDetail(mocksDir, encodeMockId(relativePath));
@@ -200,13 +208,16 @@ function hasExplicitResponseCreatePayload(payload) {
     && Object.keys(payload).some((fieldName) => fieldName !== "title");
 }
 
-function buildEndpointResponseClone(responseDir, response, responseFileName, payload) {
-  const nextResponse = hasExplicitResponseCreatePayload(payload)
-    ? buildUpdatedEndpointResponse(response, payload)
+function buildEndpointResponseClone(responseDir, response, responseFileName, payload, endpoint) {
+  let nextResponse = hasExplicitResponseCreatePayload(payload)
+    ? buildUpdatedEndpointResponse(response, payload, endpoint)
     : cloneJsonSerializable(response);
   delete nextResponse.responseFilePath;
   if (!hasExplicitResponseCreatePayload(payload)) {
     nextResponse.title = normalizeNewResponseTitle(payload?.title);
+    if (response.type === "sequence") {
+      nextResponse = buildSequenceResponseFile(nextResponse.title, response);
+    }
   }
   const assetCopies = [];
   const assetWrites = [];
@@ -261,7 +272,7 @@ function buildEndpointResponseClone(responseDir, response, responseFileName, pay
   };
 }
 
-const NEW_RESPONSE_TYPES = new Set(["mock", "handler", "middleware", "sse", "ws"]);
+const NEW_RESPONSE_TYPES = new Set(["mock", "handler", "middleware", "sse", "ws", "sequence"]);
 
 // Forma su disco di una variante sse a partire dalla forma normalizzata: i campi vuoti/default
 // non sporcano il file (retryMs null e presets vuoti vengono omessi).
@@ -295,13 +306,26 @@ function buildWsResponseFile(title, ws) {
   return nextResponse;
 }
 
+function buildSequenceResponseFile(title, sequence) {
+  const nextResponse = {
+    type: "sequence",
+    title,
+    steps: sequence.steps,
+    onEnd: sequence.onEnd,
+  };
+  if (sequence.resetAfterMs != null) {
+    nextResponse.resetAfterMs = sequence.resetAfterMs;
+  }
+  return nextResponse;
+}
+
 /**
  * Costruisce una response NUOVA del tipo richiesto (mock/handler/middleware) invece di
  * clonare quella selezionata: abilita endpoint con response di tipi misti. Per gli script
  * scrive il file sorgente (template se `source` assente). Stessa forma di output di
  * buildEndpointResponseClone (nextResponse + assetCopies + assetWrites).
  */
-function buildNewTypedResponse(responseDir, responseFileName, payload) {
+function buildNewTypedResponse(responseDir, responseFileName, payload, endpoint) {
   const type = payload.type;
   const title = normalizeNewResponseTitle(payload?.title);
 
@@ -348,6 +372,18 @@ function buildNewTypedResponse(responseDir, responseFileName, payload) {
     return { nextResponse: buildWsResponseFile(title, ws), assetCopies: [], assetWrites: [] };
   }
 
+  if (type === "sequence") {
+    const { errors, sequence } = normalizeSequenceResponse(payload, endpoint.responseFiles);
+    if (errors.length > 0) {
+      throw createAdminError(400, `${errors.join("; ")}.`);
+    }
+    return {
+      nextResponse: buildSequenceResponseFile(title, sequence),
+      assetCopies: [],
+      assetWrites: [],
+    };
+  }
+
   const baseName = path.basename(responseFileName, RESPONSE_SUFFIX);
   const sourceFile = `${baseName}${type === "handler" ? ".handler.js" : ".middleware.js"}`;
   const nextResponse = { type, title, sourceFile };
@@ -387,7 +423,7 @@ function normalizeTemplatedFlag(payload, response) {
   return response?.templated === true;
 }
 
-function buildUpdatedEndpointResponse(response, payload) {
+function buildUpdatedEndpointResponse(response, payload, endpoint) {
   const requestedType = payload?.type || response.type;
   if (requestedType !== response.type) {
     throw createAdminError(400, "Response type cannot be changed.");
@@ -453,10 +489,57 @@ function buildUpdatedEndpointResponse(response, payload) {
     return buildWsResponseFile(normalizeUpdatedResponseTitle(payload, response), ws);
   }
 
+  if (response.type === "sequence") {
+    if (Object.prototype.hasOwnProperty.call(payload || {}, "enabled")) {
+      throw createAdminError(400, "sequence.enabled is not supported; select the sequence response to activate it.");
+    }
+    const merged = {
+      steps: Object.prototype.hasOwnProperty.call(payload || {}, "steps") ? payload.steps : response.steps,
+      onEnd: Object.prototype.hasOwnProperty.call(payload || {}, "onEnd") ? payload.onEnd : response.onEnd,
+      resetAfterMs: Object.prototype.hasOwnProperty.call(payload || {}, "resetAfterMs")
+        ? payload.resetAfterMs
+        : response.resetAfterMs,
+    };
+    const { errors, sequence } = normalizeSequenceResponse(merged, endpoint.responseFiles);
+    if (errors.length > 0) {
+      throw createAdminError(400, `${errors.join("; ")}.`);
+    }
+    return buildSequenceResponseFile(normalizeUpdatedResponseTitle(payload, response), sequence);
+  }
+
   return {
     type: response.type,
     title: normalizeUpdatedResponseTitle(payload, response),
     sourceFile: response.sourceFile,
+  };
+}
+
+async function validateSequenceGraph(endpointPath, endpoint, response) {
+  if (response.type !== "sequence") {
+    return;
+  }
+  try {
+    // persistCache: false — questa validazione gira fuori dal ciclo purge/scan del reload,
+    // dove una compilazione può catturare dipendenze annidate stantie da Module._cache;
+    // la definizione non deve finire nella cache condivisa che i reload riusano.
+    await loadSequenceSteps(endpoint, endpointPath, response, { persistCache: false });
+  } catch (error) {
+    throw createAdminError(400, error.message);
+  }
+}
+
+function validateEndpointReload(endpointPath) {
+  const expectedPath = path.resolve(endpointPath);
+  return (reloadResult) => {
+    if (reloadResult?.fatalError != null) {
+      throw reloadResult.fatalError;
+    }
+    const loadError = reloadResult?.loadErrors?.find(
+      (candidate) => path.resolve(candidate.filePath) === expectedPath
+    );
+    if (loadError != null) {
+      throw new Error(loadError.message);
+    }
   };
 }
 
@@ -475,8 +558,8 @@ async function createAdminResponse(mocksDir, id, payload, reloadRuntime) {
 
   const wantsNewType = NEW_RESPONSE_TYPES.has(payload?.type) && payload.type !== response.type;
   const { nextResponse, assetCopies, assetWrites } = wantsNewType
-    ? buildNewTypedResponse(responseDir, responseFileName, payload)
-    : buildEndpointResponseClone(responseDir, response, responseFileName, payload);
+    ? buildNewTypedResponse(responseDir, responseFileName, payload, endpoint)
+    : buildEndpointResponseClone(responseDir, response, responseFileName, payload, endpoint);
   const targetAssetPaths = new Set();
   for (const assetCopy of assetCopies) {
     if (!fs.existsSync(assetCopy.sourcePath)) {
@@ -534,12 +617,14 @@ async function createAdminResponse(mocksDir, id, payload, reloadRuntime) {
     reloadRuntime,
     rejectionLabel: "Endpoint response create rejected",
     commit: async () => {
-      await readEndpointResponse(responseFilePath);
+      const validatedResponse = await readEndpointResponse(responseFilePath, nextEndpoint);
+      await validateSequenceGraph(endpointPath, nextEndpoint, validatedResponse);
       if (nextResponse.type === "handler" || nextResponse.type === "middleware") {
         const sourcePath = resolvePayloadPath(responseDir, nextResponse.sourceFile);
         assertEndpointSourceIsValid(sourcePath, nextResponse.type);
       }
     },
+    validateReloadResult: validateEndpointReload(endpointPath),
   });
 
   return getAdminMockDetail(mocksDir, id);
@@ -552,7 +637,7 @@ async function updateAdminResponse(mocksDir, id, responseFileName, payload, relo
   }
 
   const { endpoint, response, responseFilePath, responseDir } = await readEndpointResponseByName(endpointPath, responseFileName);
-  const nextResponse = buildUpdatedEndpointResponse(response, payload);
+  const nextResponse = buildUpdatedEndpointResponse(response, payload, endpoint);
   const backups = [await readBackup(responseFilePath)];
   let sourcePath;
 
@@ -577,11 +662,13 @@ async function updateAdminResponse(mocksDir, id, responseFileName, payload, relo
     reloadRuntime,
     rejectionLabel: "Endpoint response update rejected",
     commit: async () => {
-      await readEndpointResponse(responseFilePath);
+      const validatedResponse = await readEndpointResponse(responseFilePath, endpoint);
+      await validateSequenceGraph(endpointPath, endpoint, validatedResponse);
       if (sourcePath != null) {
         assertEndpointSourceIsValid(sourcePath, nextResponse.type);
       }
     },
+    validateReloadResult: validateEndpointReload(endpointPath),
   });
 
   // Switch via dal file (es. file→body): rimuove l'asset orfano se non più referenziato.
@@ -662,7 +749,8 @@ async function setAdminResponseFile(mocksDir, id, responseFileName, fileBuffer, 
     backups,
     reloadRuntime,
     rejectionLabel: "Response file update rejected",
-    commit: () => readEndpointResponse(responseFilePath),
+    commit: () => readEndpointResponse(responseFilePath, endpoint),
+    validateReloadResult: validateEndpointReload(endpointPath),
   });
 
   if (oldAsset) {
@@ -689,6 +777,19 @@ async function deleteAdminResponse(mocksDir, id, responseFileName, reloadRuntime
     await readEndpointResponseByName(endpointPath, responseFileName);
   if (endpoint.responseFiles.length <= 1) {
     throw createAdminError(400, "Cannot delete the last response of an endpoint.");
+  }
+
+  const referenceIndex = await readSequenceReferenceIndex(endpointPath, endpoint);
+  // La response in cancellazione non conta come referente: i suoi riferimenti (incluso un
+  // eventuale auto-riferimento scritto a mano) spariscono insieme al file.
+  const referencedBy = (referenceIndex.get(normalizedResponseFileName) || [])
+    .filter((referrer) => referrer !== normalizedResponseFileName);
+  if (referencedBy.length > 0) {
+    throw createAdminError(
+      409,
+      "Cannot delete a response referenced by a sequence.",
+      { referencedBy }
+    );
   }
 
   const remainingResponseFiles = endpoint.responseFiles.filter((candidate) => candidate !== normalizedResponseFileName);
@@ -720,7 +821,12 @@ async function deleteAdminResponse(mocksDir, id, responseFileName, reloadRuntime
     await fs.promises.rm(assetPath, { force: true });
   }
 
-  await commitWithRollback({ backups, reloadRuntime, rejectionLabel: "Endpoint response delete rejected" });
+  await commitWithRollback({
+    backups,
+    reloadRuntime,
+    rejectionLabel: "Endpoint response delete rejected",
+    validateReloadResult: validateEndpointReload(endpointPath),
+  });
 
   return getAdminMockDetail(mocksDir, id);
 }
@@ -779,6 +885,7 @@ async function updateAdminEndpoint(mocksDir, id, payload, reloadRuntime) {
     reloadRuntime,
     rejectionLabel: "Endpoint update rejected",
     commit: () => readEndpointConfig(endpointPath),
+    validateReloadResult: validateEndpointReload(endpointPath),
   });
 
   return getAdminMockDetail(mocksDir, id);
@@ -790,43 +897,8 @@ async function updateAdminMock(mocksDir, id, payload, reloadRuntime) {
     throw createAdminError(404, "Endpoint definition not found.");
   }
 
-  // Aggiornamento della sola sequenza (dialog Sequenza della UI): normalizza la definizione
-  // contro le varianti dell'endpoint e valida che ogni step referenzi una response leggibile e
-  // di tipo mock/handler (i middleware vivono nel percorso proxy: esclusi dalle sequenze in v1).
-  // `sequence: null` rimuove il campo (l'endpoint torna alla sola selezione classica).
   if (Object.prototype.hasOwnProperty.call(payload || {}, "sequence")) {
-    const endpoint = await readEndpointConfig(endpointPath);
-    const { errors, sequence } = normalizeSequenceConfig(payload.sequence, endpoint.responseFiles);
-    if (errors.length > 0) {
-      throw createAdminError(400, `${errors.join("; ")}.`);
-    }
-
-    if (sequence != null) {
-      const stepResponseFiles = [...new Set(sequence.steps.map((step) => step.response))];
-      for (const stepResponseFile of stepResponseFiles) {
-        const responseFilePath = resolveEndpointResponseFilePath(endpointPath, endpoint, stepResponseFile);
-        if (!fs.existsSync(responseFilePath)) {
-          throw createAdminError(404, `Sequence step response file not found: ${stepResponseFile}.`);
-        }
-        const stepResponse = await readEndpointResponse(responseFilePath);
-        if (stepResponse.type !== "mock" && stepResponse.type !== "handler") {
-          throw createAdminError(400, "Sequence steps must reference mock or handler responses.");
-        }
-      }
-    }
-
-    const nextEndpoint = { ...endpoint };
-    if (sequence != null) {
-      nextEndpoint.sequence = sequence;
-    } else {
-      delete nextEndpoint.sequence;
-    }
-    const backups = [await readBackup(endpointPath)];
-    await writeFileAtomic(endpointPath, `${JSON.stringify(nextEndpoint, null, 2)}\n`, "utf8");
-
-    await commitWithRollback({ backups, reloadRuntime, rejectionLabel: "Endpoint sequence update rejected" });
-
-    return getAdminMockDetail(mocksDir, id);
+    throw createAdminError(400, "Update sequence responses via PUT /mocks/:id/responses/:file.");
   }
 
   if (Object.prototype.hasOwnProperty.call(payload || {}, "selectedResponseFile")) {
@@ -841,7 +913,8 @@ async function updateAdminMock(mocksDir, id, payload, reloadRuntime) {
       throw createAdminError(404, "Selected response file not found.");
     }
 
-    await readEndpointResponse(responseFilePath);
+    const selectedResponse = await readEndpointResponse(responseFilePath, endpoint);
+    await validateSequenceGraph(endpointPath, endpoint, selectedResponse);
     const nextEndpoint = {
       ...endpoint,
       selectedResponseFile,
@@ -849,15 +922,21 @@ async function updateAdminMock(mocksDir, id, payload, reloadRuntime) {
     const backups = [await readBackup(endpointPath)];
     await writeFileAtomic(endpointPath, `${JSON.stringify(nextEndpoint, null, 2)}\n`, "utf8");
 
-    await commitWithRollback({ backups, reloadRuntime, rejectionLabel: "Endpoint response selection rejected" });
+    await commitWithRollback({
+      backups,
+      reloadRuntime,
+      rejectionLabel: "Endpoint response selection rejected",
+      validateReloadResult: validateEndpointReload(endpointPath),
+    });
 
     return getAdminMockDetail(mocksDir, id);
   }
 
   const { endpoint, response, responseFilePath, responseDir } = await readEndpointSelectedResponse(endpointPath);
   // La forma "config+body" di questo update è pensata per mock/handler/middleware: una variante
-  // sse/ws si aggiorna dalla rotta della singola response (PUT /mocks/:id/responses/:file).
-  if (response.type === "sse" || response.type === "ws") {
+  // sse/ws/sequence si aggiornano dalla rotta della singola response
+  // (PUT /mocks/:id/responses/:file).
+  if (response.type === "sse" || response.type === "ws" || response.type === "sequence") {
     throw createAdminError(400, `Update ${response.type} responses via PUT /mocks/:id/responses/:file.`);
   }
   const expectedMethod = extractMethodFromEndpointFileName(endpointPath);
@@ -927,6 +1006,7 @@ async function updateAdminMock(mocksDir, id, payload, reloadRuntime) {
         assertEndpointSourceIsValid(sourcePath, requestedType);
       }
     },
+    validateReloadResult: validateEndpointReload(endpointPath),
   });
 
   return getAdminMockDetail(mocksDir, id);
@@ -942,9 +1022,9 @@ async function resetAdminSequence(mocksDir, id, sequenceStates, handlerStates) {
     throw createAdminError(404, "Endpoint definition not found.");
   }
 
-  const endpoint = await readEndpointConfig(endpointPath);
-  if (endpoint.sequence == null) {
-    throw createAdminError(400, "Endpoint has no sequence to reset.");
+  const { endpoint, response } = await readEndpointSelectedResponse(endpointPath);
+  if (response.type !== "sequence") {
+    throw createAdminError(400, "The selected response of this endpoint is not a sequence variant.");
   }
   const sequenceKey = `${endpoint.method} ${endpoint.path}`;
   if (sequenceStates != null) {
@@ -954,8 +1034,28 @@ async function resetAdminSequence(mocksDir, id, sequenceStates, handlerStates) {
     handlerStates.reset(sequenceKey);
   }
   return {
+    sequenceFile: endpoint.selectedResponseFile,
     sequenceState: sequenceStates != null
-      ? sequenceStates.getState(sequenceKey, endpoint.sequence)
+      ? sequenceStates.getState(sequenceKey, endpoint.selectedResponseFile, response)
+      : null,
+  };
+}
+
+async function getAdminSequenceState(mocksDir, id, sequenceStates) {
+  const endpointPath = resolveAdminFilePath(mocksDir, id);
+  if (!fs.existsSync(endpointPath)) {
+    throw createAdminError(404, "Endpoint definition not found.");
+  }
+
+  const { endpoint, response } = await readEndpointSelectedResponse(endpointPath);
+  if (response.type !== "sequence") {
+    throw createAdminError(400, "The selected response of this endpoint is not a sequence variant.");
+  }
+  const sequenceKey = `${endpoint.method} ${endpoint.path}`;
+  return {
+    sequenceFile: endpoint.selectedResponseFile,
+    sequenceState: sequenceStates != null
+      ? sequenceStates.getState(sequenceKey, endpoint.selectedResponseFile, response)
       : null,
   };
 }
@@ -1159,26 +1259,42 @@ async function copyAdminEndpoint(mocksDir, id, payload, reloadRuntime) {
   const sourceResponseDir = getEndpointResponsesDir(sourceEndpointPath, sourceEndpoint.method);
   const copyAll = payload?.copyResponses === true;
   const selectedResponseFile = sourceEndpoint.selectedResponseFile;
-  const responseFiles = copyAll ? [...sourceEndpoint.responseFiles] : [selectedResponseFile];
+  const selectedSourceResponsePath = resolvePayloadPath(sourceResponseDir, selectedResponseFile);
+  if (!fs.existsSync(selectedSourceResponsePath)) {
+    throw createAdminError(404, `Response file not found: ${selectedResponseFile}`);
+  }
+  const selectedSourceResponse = await readEndpointResponse(selectedSourceResponsePath, sourceEndpoint);
+  const requiredResponseFiles = new Set([selectedResponseFile]);
+  if (!copyAll && selectedSourceResponse.type === "sequence") {
+    for (const step of selectedSourceResponse.steps) {
+      requiredResponseFiles.add(step.response);
+    }
+  }
+  const responseFiles = copyAll
+    ? [...sourceEndpoint.responseFiles]
+    : sourceEndpoint.responseFiles.filter((responseFile) => requiredResponseFiles.has(responseFile));
 
   // Raccogli i file da copiare: ogni response json + il suo eventuale asset (file/handler/middleware).
-  const fileCopies = [];
+  const fileCopiesByTarget = new Map();
   for (const responseFile of responseFiles) {
     const sourceResponsePath = resolvePayloadPath(sourceResponseDir, responseFile);
     if (!fs.existsSync(sourceResponsePath)) {
       throw createAdminError(404, `Response file not found: ${responseFile}`);
     }
-    fileCopies.push({ sourcePath: sourceResponsePath, targetPath: resolvePayloadPath(targetResponseDir, responseFile) });
-    const response = await readEndpointResponse(sourceResponsePath);
+    const responseTargetPath = resolvePayloadPath(targetResponseDir, responseFile);
+    fileCopiesByTarget.set(responseTargetPath, { sourcePath: sourceResponsePath, targetPath: responseTargetPath });
+    const response = await readEndpointResponse(sourceResponsePath, sourceEndpoint);
     const assetFileName = readResponseAssetFileName(response);
     if (assetFileName != null) {
       const sourceAssetPath = resolvePayloadPath(sourceResponseDir, assetFileName);
       if (!fs.existsSync(sourceAssetPath)) {
         throw createAdminError(404, `Response asset not found: ${assetFileName}`);
       }
-      fileCopies.push({ sourcePath: sourceAssetPath, targetPath: resolvePayloadPath(targetResponseDir, assetFileName) });
+      const assetTargetPath = resolvePayloadPath(targetResponseDir, assetFileName);
+      fileCopiesByTarget.set(assetTargetPath, { sourcePath: sourceAssetPath, targetPath: assetTargetPath });
     }
   }
+  const fileCopies = [...fileCopiesByTarget.values()];
 
   const targetEndpoint = {
     method,
@@ -1201,7 +1317,19 @@ async function copyAdminEndpoint(mocksDir, id, payload, reloadRuntime) {
   }
   await writeFileAtomic(targetEndpointPath, `${JSON.stringify(targetEndpoint, null, 2)}\n`, "utf8");
 
-  await commitWithRollback({ backups, reloadRuntime, rejectionLabel: "Endpoint copy rejected" });
+  await commitWithRollback({
+    backups,
+    reloadRuntime,
+    rejectionLabel: "Endpoint copy rejected",
+    commit: async () => {
+      for (const responseFile of responseFiles) {
+        const copiedResponsePath = resolvePayloadPath(targetResponseDir, responseFile);
+        const copiedResponse = await readEndpointResponse(copiedResponsePath, targetEndpoint);
+        await validateSequenceGraph(targetEndpointPath, targetEndpoint, copiedResponse);
+      }
+    },
+    validateReloadResult: validateEndpointReload(targetEndpointPath),
+  });
 
   return getAdminMockDetail(mocksDir, encodeMockId(relativePath));
 }
@@ -1214,6 +1342,7 @@ module.exports = {
   deleteAdminResponse,
   updateAdminEndpoint,
   updateAdminMock,
+  getAdminSequenceState,
   resetAdminSequence,
   pushAdminSseMessage,
   listAdminSseState,
