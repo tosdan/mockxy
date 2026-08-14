@@ -127,6 +127,29 @@ In edit della sequence selezionata la UI mostra uno snapshot del cursore, lo agg
 polling leggero su `/sequence/state`, cancella il polling alla chiusura e offre il reset. Il
 dettaglio mostra un riepilogo degli step invece del form generico.
 
+## Limite noto — mutazioni ravvicinate sullo stesso endpoint
+
+L'azzeramento dello scenario è deciso dalla mutazione che lo causa (`invalidateScenario` in
+`src/admin/endpoint-operations.js`), non dedotto dal reload. Il motivo è che il reload **aggrega**:
+le chiamate arrivate mentre un giro è in corso vengono servite dal successivo (`createReloadHandler`
+in `src/server.js`), quindi due cambi di selezione che si annullano a vicenda producono una sola
+riconciliazione, che confronta due firme identiche e conclude — correttamente, per quel che vede —
+che nulla è cambiato. Lo stato intermedio non è mai esistito su disco al momento della scansione.
+
+Con quella correzione il caso ricorrente è risolto, ma **resta una finestra di concorrenza non
+caratterizzata**. Sintomo: subito dopo una raffica di mutazioni sullo stesso endpoint,
+`GET /mocks/:id/sequence/state` può riportare un `servedInStep` precedente invece di ripartire da
+zero. Osservato solo dalla suite di accettazione, che spara più mutazioni in pochi millisecondi da
+tre browser in parallelo; **non** riproducibile rigiocando la stessa sequenza di chiamate HTTP una
+dopo l'altra.
+
+Quando lo si può incontrare: solo da un client automatico che muta lo stesso endpoint a raffica.
+Non usando l'interfaccia — Mockxy è uno strumento di sviluppo per un utente alla volta (al massimo
+un paio sulla versione headless) e non è pensato per carichi concorrenti. Se capita, il rimedio è
+il reset esplicito: `POST /mocks/:id/sequence/reset`, o "Riparti dall'inizio" nella dialog.
+
+Non affrontato di proposito: il costo della diagnosi non è giustificato dall'uso previsto.
+
 ## Limiti intenzionali
 
 - cursore globale per endpoint, non per client;
