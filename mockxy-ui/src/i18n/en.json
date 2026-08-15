@@ -10,7 +10,8 @@
     "copyCode": "Copy the code",
     "unexpectedError": "Unexpected error.",
     "selectPlaceholder": "Select…",
-    "noOptions": "No options"
+    "noOptions": "No options",
+    "clearFilter": "Clear the filter"
   },
   "storico": {
     "title": "Dump history",

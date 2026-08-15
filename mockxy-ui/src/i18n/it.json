@@ -10,7 +10,8 @@
     "copyCode": "Copia il codice",
     "unexpectedError": "Errore imprevisto.",
     "selectPlaceholder": "Seleziona…",
-    "noOptions": "Nessuna opzione"
+    "noOptions": "Nessuna opzione",
+    "clearFilter": "Svuota il filtro"
   },
   "storico": {
     "title": "Storico dump",

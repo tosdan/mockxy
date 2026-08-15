@@ -55,6 +55,46 @@ describe('MonitorNextPage', () => {
     return { fixture, c: fixture.componentInstance as any };
   }
 
+  describe('pulsante di reset del filtro path/URL', () => {
+    // La pagina ha piu' label con dentro dei controlli: si punta all'aria-label del pulsante.
+    function clearButton(fixture: ReturnType<typeof create>['fixture']): HTMLButtonElement | null {
+      return (fixture.nativeElement as HTMLElement).querySelector('button[aria-label="Svuota il filtro"]');
+    }
+
+    it('a filtro vuoto non compare', () => {
+      const { fixture } = create();
+      expect(clearButton(fixture)).toBeNull();
+    });
+
+    it('compare col filtro valorizzato, lo svuota e ripristina le entry filtrate', () => {
+      const { fixture, c } = create();
+      c.search.set('orders');
+      fixture.detectChanges();
+      expect(c.filtered().length).toBe(1);
+
+      const button = clearButton(fixture);
+      expect(button?.getAttribute('aria-label')).toBe('Svuota il filtro');
+      button?.click();
+      fixture.detectChanges();
+
+      expect(c.search()).toBe('');
+      expect(c.filtered().length).toBe(3);
+      expect(clearButton(fixture)).toBeNull();
+    });
+
+    it('dopo lo svuotamento il fuoco resta nel campo', () => {
+      const { fixture, c } = create();
+      c.search.set('orders');
+      fixture.detectChanges();
+
+      clearButton(fixture)?.click();
+
+      expect(document.activeElement).toBe(
+        (fixture.nativeElement as HTMLElement).querySelector('label input[type="text"]'),
+      );
+    });
+  });
+
   it('carica le entry dallo snapshot live', () => {
     const { c } = create();
     expect(c.entries().length).toBe(3);

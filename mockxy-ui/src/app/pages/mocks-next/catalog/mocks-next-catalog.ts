@@ -156,7 +156,18 @@ const COLLAPSED_COLLECTIONS_STATE_KEY = 'mocks-collapsed';
       </div>
       <label class="relative mt-2.5 block">
         <ng-icon name="lucideSearch" size="0.85rem" class="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
-        <input ui-input type="text" [placeholder]="'catalog.searchPlaceholder' | transloco" class="w-full pl-8 text-[12.5px]" [value]="store.searchTerm()" (input)="store.searchTerm.set($any($event.target).value)" />
+        <!-- pr-8 anche a campo vuoto: il testo non deve spostarsi quando il pulsante compare. -->
+        <input #searchInput ui-input type="text" [placeholder]="'catalog.searchPlaceholder' | transloco" class="w-full pl-8 pr-8 text-[12.5px]" [value]="store.searchTerm()" (input)="store.searchTerm.set($any($event.target).value)" />
+        @if (store.searchTerm() !== '') {
+        <button
+          type="button"
+          class="absolute right-1.5 top-1/2 grid h-5 w-5 -translate-y-1/2 place-items-center rounded text-muted-foreground transition hover:bg-accent hover:text-foreground"
+          [attr.aria-label]="'common.clearFilter' | transloco"
+          (click)="clearSearch(searchInput)"
+        >
+          <ng-icon name="lucideX" size="0.7rem" />
+        </button>
+        }
       </label>
       @if (creatingCollection() && creatingParentId() === undefined) {
       <div class="mt-2 flex items-center gap-1.5">
@@ -479,6 +490,15 @@ export class MocksNextCatalog {
   protected readonly store = inject(MocksStore);
   private readonly transloco = inject(TranslocoService);
   private readonly viewState = inject(ViewStateService);
+
+  /**
+   * Svuota il filtro e rimette il fuoco nel campo: chi lo azzera di solito sta per riscriverci,
+   * e perdere il fuoco costringerebbe a un click in piu'.
+   */
+  protected clearSearch(input: HTMLInputElement): void {
+    this.store.searchTerm.set('');
+    input.focus();
+  }
 
   /** Tooltip dell'indicatore nel footer: elenco delle definizioni scartate (file: motivo). */
   protected readonly loadErrorsTooltip = computed(() =>
