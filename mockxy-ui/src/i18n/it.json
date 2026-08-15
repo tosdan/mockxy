@@ -10,7 +10,8 @@
     "copyCode": "Copia il codice",
     "unexpectedError": "Errore imprevisto.",
     "selectPlaceholder": "Seleziona…",
-    "noOptions": "Nessuna opzione"
+    "noOptions": "Nessuna opzione",
+    "clearFilter": "Svuota il filtro"
   },
   "storico": {
     "title": "Storico dump",
@@ -269,7 +270,6 @@
     "collapseAllTip": "Collassa tutte le cartelle",
     "filtersTip": "Filtri",
     "searchPlaceholder": "Filtra il catalogo…",
-    "searchClear": "Svuota il filtro",
     "collectionNamePlaceholder": "Nome collection…",
     "subCollectionNamePlaceholder": "Nome sotto-collection…",
     "createTip": "Crea",

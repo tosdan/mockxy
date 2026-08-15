@@ -42,7 +42,7 @@ describe('MocksNextCatalog — footer delle definizioni scartate', () => {
 
   describe('pulsante di reset del filtro', () => {
     function clearButton(fixture: ReturnType<typeof create>['fixture']): HTMLButtonElement | null {
-      return (fixture.nativeElement as HTMLElement).querySelector('label button[type="button"]');
+      return (fixture.nativeElement as HTMLElement).querySelector('button[aria-label="Svuota il filtro"]');
     }
 
     it('a filtro vuoto non compare', () => {

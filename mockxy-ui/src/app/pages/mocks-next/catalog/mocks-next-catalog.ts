@@ -162,7 +162,7 @@ const COLLAPSED_COLLECTIONS_STATE_KEY = 'mocks-collapsed';
         <button
           type="button"
           class="absolute right-1.5 top-1/2 grid h-5 w-5 -translate-y-1/2 place-items-center rounded text-muted-foreground transition hover:bg-accent hover:text-foreground"
-          [attr.aria-label]="'catalog.searchClear' | transloco"
+          [attr.aria-label]="'common.clearFilter' | transloco"
           (click)="clearSearch(searchInput)"
         >
           <ng-icon name="lucideX" size="0.7rem" />

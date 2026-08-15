@@ -120,8 +120,19 @@ interface SourceMeta {
       <div class="relative z-20 flex shrink-0 flex-wrap items-center gap-2 border-b border-border bg-card/30 px-5 py-2">
         <label class="relative">
           <ng-icon name="lucideSearch" size="0.9rem" class="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
-          <input type="text" [placeholder]="'monitor.filterPlaceholder' | transloco" [value]="search()" (input)="search.set($any($event.target).value)"
-                 class="h-8 w-64 rounded-lg border border-input bg-black/30 pl-8 pr-3 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-ring/50 focus:ring-2 focus:ring-ring/20" />
+          <!-- pr-8 anche a campo vuoto: il testo non deve spostarsi quando il pulsante compare. -->
+          <input #searchInput type="text" [placeholder]="'monitor.filterPlaceholder' | transloco" [value]="search()" (input)="search.set($any($event.target).value)"
+                 class="h-8 w-64 rounded-lg border border-input bg-black/30 pl-8 pr-8 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-ring/50 focus:ring-2 focus:ring-ring/20" />
+          @if (search() !== '') {
+          <button
+            type="button"
+            class="absolute right-1.5 top-1/2 grid h-5 w-5 -translate-y-1/2 place-items-center rounded text-muted-foreground transition hover:bg-accent hover:text-foreground"
+            [attr.aria-label]="'common.clearFilter' | transloco"
+            (click)="clearSearch(searchInput)"
+          >
+            <ng-icon name="lucideX" size="0.7rem" />
+          </button>
+          }
         </label>
         <ui-select class="w-40" [options]="methodOptions" [value]="methodFilter()" (valueChange)="methodFilter.set($any($event))" />
         @for (n of statusChips; track n) {
@@ -386,6 +397,15 @@ export class MonitorNextPage {
   protected readonly listWidth = signal(clampListWidth(readStoredListWidth()));
 
   protected readonly search = signal('');
+
+  /**
+   * Svuota il filtro e rimette il fuoco nel campo: chi lo azzera di solito sta per riscriverci,
+   * e perdere il fuoco costringerebbe a un click in piu'.
+   */
+  protected clearSearch(input: HTMLInputElement): void {
+    this.search.set('');
+    input.focus();
+  }
   protected readonly methodFilter = signal('all');
   protected readonly sourceFilter = signal('all');
   protected readonly statusClasses = signal<ReadonlySet<number>>(new Set());

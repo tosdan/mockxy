@@ -10,7 +10,8 @@
     "copyCode": "Copy the code",
     "unexpectedError": "Unexpected error.",
     "selectPlaceholder": "Select…",
-    "noOptions": "No options"
+    "noOptions": "No options",
+    "clearFilter": "Clear the filter"
   },
   "storico": {
     "title": "Dump history",
@@ -269,7 +270,6 @@
     "collapseAllTip": "Collapse all folders",
     "filtersTip": "Filters",
     "searchPlaceholder": "Filter the catalog…",
-    "searchClear": "Clear the filter",
     "collectionNamePlaceholder": "Collection name…",
     "subCollectionNamePlaceholder": "Sub-collection name…",
     "createTip": "Create",
