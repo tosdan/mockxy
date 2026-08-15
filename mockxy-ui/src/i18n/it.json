@@ -269,6 +269,7 @@
     "collapseAllTip": "Collassa tutte le cartelle",
     "filtersTip": "Filtri",
     "searchPlaceholder": "Filtra il catalogo…",
+    "searchClear": "Svuota il filtro",
     "collectionNamePlaceholder": "Nome collection…",
     "subCollectionNamePlaceholder": "Nome sotto-collection…",
     "createTip": "Crea",
