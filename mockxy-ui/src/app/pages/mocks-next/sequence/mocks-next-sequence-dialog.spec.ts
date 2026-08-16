@@ -297,7 +297,10 @@ describe('MocksNextSequenceDialog', () => {
     c.resetSequence();
     expect(api.resetSequence).toHaveBeenCalledWith('id-1');
     expect(c.sequenceState().stepIndex).toBe(0);
-    expect(toast.show).toHaveBeenCalledWith(expect.objectContaining({ tone: 'success' }));
+    expect(toast.show).toHaveBeenCalledWith(expect.objectContaining({
+      tone: 'success',
+      title: expect.stringContaining('runtime'),
+    }));
   });
 
   it('se il reset fallisce conserva lo snapshot e mostra un errore', () => {

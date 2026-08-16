@@ -35,6 +35,7 @@
     "check:versions": "node scripts/check-version-consistency.js",
     "check:release-tag": "node scripts/check-release-tag.js",
     "check:admin-openapi": "node scripts/validate-admin-openapi.js",
+    "benchmark:shared-state": "node --expose-gc scripts/benchmark-shared-state.js",
     "icon": "node electron/scripts/generate-icon.js",
     "start": "node index.js",
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand --forceExit",

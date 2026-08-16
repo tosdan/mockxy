@@ -11,7 +11,8 @@
     "unexpectedError": "Errore imprevisto.",
     "selectPlaceholder": "Seleziona…",
     "noOptions": "Nessuna opzione",
-    "clearFilter": "Svuota il filtro"
+    "clearFilter": "Svuota il filtro",
+    "cancel": "Annulla"
   },
   "storico": {
     "title": "Storico dump",
@@ -81,7 +82,29 @@
     "renameRewrite": "aggiorna anche i riferimenti data() negli handler ({{count}})",
     "renameRewriteAria": "Aggiorna i riferimenti data() negli handler",
     "toastRenamedRewritten": "riferimenti data() aggiornati ({{count}}) — controlla i data() dinamici",
-    "deleteWarnUsed": "{{count}} endpoint usano questo file con data(): eliminandolo si romperanno."
+    "deleteWarnUsed": "{{count}} endpoint usano questo file con data(): eliminandolo si romperanno.",
+    "tabsAria": "Tipo di dati",
+    "filesTab": "File dati",
+    "runtimeTab": "Stato runtime",
+    "runtimeCount": "{{count}} risorse · {{size}}",
+    "runtimeRefresh": "Aggiorna",
+    "runtimeResetAll": "Azzera tutto",
+    "runtimeResetAllConfirm": "Azzera {{count}} risorse",
+    "runtimeLoading": "Carico lo stato runtime…",
+    "runtimeRetry": "Riprova",
+    "runtimeEmpty": "Nessuna risorsa runtime materializzata.",
+    "runtimeEmptyHint": "Le risorse compaiono alla prima chiamata di sharedState.open() e si ricreano dal seed dopo un reset.",
+    "runtimeResource": "Risorsa / seedKey",
+    "runtimeStatus": "Stato",
+    "runtimeSizeVersion": "Dimensione / versione",
+    "runtimeLastEndpoint": "Ultimo endpoint",
+    "runtimeActions": "Azioni",
+    "runtimeReset": "Azzera",
+    "runtimeResetConfirm": "Conferma reset",
+    "runtimeTrafficCaveat": "Il reset è immediato ma non sospende il traffico: una nuova richiesta può inizializzare subito un'altra generazione.",
+    "runtimeResetDone": "Risorsa {{name}} azzerata.",
+    "runtimeAlreadyAbsent": "La risorsa {{name}} era già assente.",
+    "runtimeResetAllDone": "Azzerate {{count}} risorse runtime."
   },
   "runtimeBar": {
     "serverOn": "Server attivo",
@@ -199,6 +222,8 @@
     "monitorDumpMaxTotalHint": "Superato il tetto, i dump più vecchi vengono eliminati. 0 = pruning disattivato. Default 1073741824 (1 GB). Cambiandolo il server del workspace riparte."
   },
   "monitor": {
+    "openSharedState": "Apri stato condiviso",
+    "openSharedStateTip": "Mostra la risorsa e la sua seedKey nella pagina Dati",
     "paused": "In pausa",
     "selectedCount": "{{count}} selezionate",
     "createMock": "Crea mock",
@@ -415,6 +440,11 @@
     "copyAllResponses": "Copia tutte le response ({{count}})",
     "copyAllResponsesHint": "Se disattivo, copia solo la response attualmente selezionata.",
     "copyAllResponsesAria": "Copia tutte le response",
+    "previewLoading": "Verifico cosa verrà copiato…",
+    "previewReady": "Anteprima pronta: {{responses}} response · {{assets}} asset",
+    "previewFailed": "Impossibile calcolare l'anteprima della copia.",
+    "sharedStateWarning": "La copia continuerà a condividere lo stato: {{names}}.",
+    "sharedStateWarningHint": "Per renderla indipendente, modifica nome e seedKey nel sorgente copiato.",
     "cancel": "Annulla",
     "copy": "Copia"
   },
@@ -481,7 +511,7 @@
     "addStep": "Aggiungi step",
     "stateLine": "Step corrente: {{step}} · {{served}} richieste servite",
     "reset": "Riparti dall'inizio",
-    "resetDone": "Sequenza ripartita dal primo step",
+    "resetDone": "Sequenza ripartita dal primo step; lo stato runtime condiviso non è stato azzerato",
     "errMinSteps": "Servono almeno 2 step.",
     "errMinVariants": "Servono almeno due response mock o handler utilizzabili.",
     "errStepResponse": "Ogni step deve indicare una variante.",

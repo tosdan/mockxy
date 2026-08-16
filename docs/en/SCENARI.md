@@ -45,6 +45,25 @@ matures, the boundary moves **one area at a time**:
 - for the quick comparison "how does the backend behave on *everything*?" there's the [full
   proxy](CONTROLLI.md), which suspends the mocks without losing them.
 
+### “The frontend must already exercise GET → POST → GET”
+
+A static response is not enough when the frontend creates an item and expects it in the next
+list. Use [handler shared runtime state](HANDLER.md):
+
+1. prepare `files/items.json` with the initial dataset;
+2. make GET and POST separate handlers that both open `items` with the same
+   `seedKey: "items@v1"` and `initialize: () => data("items")`;
+3. have GET return `items.read()` and, when needed, `applyListQuery: true` to preserve filters
+   and pagination;
+4. have POST validate the body and use `items.mutate(draft => ...)` to append it atomically;
+5. before each run, stop frontend polling and reset `items` from **Data → Runtime state** or the
+   Admin API; the next GET starts again from the seed file.
+
+The file is never rewritten: it is the baseline versioned in git, while added items live only in
+the process. Multiple browsers share the same resource. When its shape changes, bump `seedKey`,
+use the Monitor to find any handler still declaring the previous signature, and reset explicitly.
+A restart or actual engine replacement clears everything anyway.
+
 ## "I can't reproduce this case"
 
 A 500, a timeout, an empty list, a pathological dataset: you pin the response of **that

@@ -31,7 +31,8 @@ file). Below, the recurring symptoms by area.
   (including case: it's the *value* that is case-insensitive), and the key must have scalar
   values ([lists](LISTE.md)).
 - **Pagination doesn't kick in.** You need **both** `page` and `size`, valid; and the body
-  must be an array or an object with *exactly one* top-level array.
+  must be an array or an object with *exactly one* top-level array. If the response comes from
+  a handler, it must also return `applyListQuery: true`.
 - **`X-Total-Count` isn't the one declared in the mock.** With a filter or pagination active
   the computed value always wins.
 
@@ -54,6 +55,16 @@ file). Below, the recurring symptoms by area.
   timeout); the file is named in the log.
 - **`413 Payload Too Large`** — the request body exceeds 2 MB: the handler isn't even
   executed.
+- **`409 Shared State Conflict`** — the resource was reset during the request, or one handler
+  declares a different `seedKey`. The public response hides the name: open the Monitor entry,
+  follow “Open shared state”, stop traffic and reset the resource. Do not automatically retry a
+  POST unless the scenario is known to be idempotent.
+- **Shared state ignores a data-file edit.** This is intentional: the file is read only when a
+  generation is created. Reset the resource under **Data → Runtime state**; when shape and code
+  changed, first bump `seedKey` in every handler.
+- **Added items disappeared.** Shared state is volatile: restart, closing or actually replacing
+  the engine starts from the seed. Different browsers and tests on one instance also share it,
+  so isolate suites with an explicit reset.
 - **The middleware doesn't transform.** Responses over 10 MB and streams (`text/event-stream`)
   pass through intact with `x-mock-source: backend` and a warning in the log; a middleware
   that *fails* is fail-open: it lets the original response through ([middleware](MIDDLEWARE.md)).

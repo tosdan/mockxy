@@ -16,6 +16,10 @@ state between tests, pipelines that import an updated spec.
   request with `content-type: application/json` triggers the browser's preflight and dies
   there. The only structural exception is the OpenAPI import, which accepts YAML but
   **rejects `text/plain` with `415`** precisely to avoid opening the "simple" request hole.
+- Parameterless POST operations (`sequence/reset`, `monitoring/dump/flush`, and both shared
+  state resets) still require `Content-Type: application/json` and a body exactly equal to
+  `{}`. A missing or empty body, `null`, arrays, scalars and non-empty objects return `400`; a
+  different media type returns `415`. One form keeps the contract explicit and uniform.
 
 ## Conventions
 
@@ -40,13 +44,13 @@ state between tests, pipelines that import an updated spec.
 | `GET /mocks/:id` | detail with variants and normalized configuration of the selected response; with `type: sequence` it exposes `sequence` and `sequenceState`, never `endpoint.sequence` |
 | `PUT /mocks/:id` | selects a response with `{ selectedResponseFile }`, or updates the selected ordinary response; the legacy `{ sequence }` body is rejected |
 | `GET /mocks/:id/sequence/state` | lightweight live state of the selected sequence: `{ sequenceFile, sequenceState }`; `400` on another type |
-| `POST /mocks/:id/sequence/reset` | clears cursor and handler memory for the selected sequence; responds `{ sequenceFile, sequenceState }` |
+| `POST /mocks/:id/sequence/reset` | clears cursor and handler memory for the selected sequence; body `{}`; responds `{ sequenceFile, sequenceState }` |
 | `POST /mocks/:id/sse/push` | manual push of the [SSE](RESPONSE.md) console: body `{ data, event?, id? }`, broadcast to every open connection — responds `{ delivered, connections }` |
 | `GET /mocks/:id/sse/connections` | SSE console state: open connections (with script position) and history of sent messages |
 | `POST /mocks/:id/ws/push` | manual push of the [WS](RESPONSE.md) console: body `{ data }`, broadcast to every open connection — responds `{ delivered, connections }` |
 | `GET /mocks/:id/ws/connections` | WS console state: open connections (with script position) and the bidirectional transcript (sent and received) |
 | `PUT /mocks/:id/endpoint` | updates **only** `description` and `enabled` (any other field is a `400`): method and path are fixed at creation — the path determines the files' folder — and are changed with `POST /mocks/:id/copy` |
-| `POST /mocks/:id/copy` | duplicates onto a new method+path — body `{ method, path, copyResponses }` |
+| `POST /mocks/:id/copy` | duplicates onto a new method+path — body `{ method, path, copyResponses }`; with `?dryRun=true`, returns the plan without writing or reloading |
 | `PUT /mocks/:id/collection` | assigns the endpoint to a collection |
 | `DELETE /mocks/:id` | deletes endpoint and variants |
 
@@ -90,6 +94,23 @@ state between tests, pipelines that import an updated spec.
 | `PATCH /files/:name` | renames — body `{ name, rewriteReferences }` ([safe rename](DATI.md)) |
 | `DELETE /files/:name` | deletes the file |
 
+## Shared runtime state
+
+| Method and path | What it does |
+|---|---|
+| `GET /runtime/shared-state` | lists store metadata, current usage and limits; it never exposes values |
+| `POST /runtime/shared-state/:name/reset` | idempotently invalidates one resource; body `{}`; responds `{ name, reset }` |
+| `POST /runtime/shared-state/reset` | invalidates every resource; body `{}`; responds `{ resetCount }` |
+
+The list exposes name, `seedKey`, status (`initializing` or `ready`), version, occupied bytes,
+timestamps and initialization/last-access origin. It helps find handlers using a stale
+signature, while remaining an administrative surface: the live JSON is never included. A
+reset does not write data files or alter sequences, `state`, `callCount` or `firstRequestAt`.
+
+A reset linearizes invalidation but does not pause traffic: a later request may immediately
+initialize a new generation. In deterministic suites, stop clients and polling first, reset,
+then start the scenario.
+
 ## Monitor and history
 
 | Method and path | What it does |
@@ -99,7 +120,7 @@ state between tests, pipelines that import an updated spec.
 | `GET /monitoring/requests/stream` | live event stream (SSE) |
 | `GET /monitoring/dump` | state of the disk writing |
 | `PATCH /monitoring/dump` | turns it on/off and adjusts cadence/threshold at runtime — body `{ enabled?, intervalMs?, threshold? }` |
-| `POST /monitoring/dump/flush` | manual flush; answers with the number of entries written |
+| `POST /monitoring/dump/flush` | manual flush; body `{}`; answers with the number of entries written |
 | `GET /monitoring/dumps` | list of the dump files |
 | `GET /monitoring/dumps/read` | cursor-paginated reading (`?fileIndex&lineIndex&limit`) |
 | `POST /monitoring/dumps/create-mocks` | creates mocks in bulk from a file or from a selection of entries |
@@ -129,8 +150,26 @@ curl -s -X POST "http://localhost:3000/_admin/api/mocks/import/openapi?dryRun=tr
 # turn on the history's disk writing and force a flush
 curl -s -X PATCH http://localhost:3000/_admin/api/monitoring/dump \
   -H "content-type: application/json" -d '{"enabled": true}'
-curl -s -X POST http://localhost:3000/_admin/api/monitoring/dump/flush
+curl -s -X POST http://localhost:3000/_admin/api/monitoring/dump/flush \
+  -H "content-type: application/json" -d '{}'
+
+# runtime state (metadata only) and idempotent reset of "items"
+curl -s http://localhost:3000/_admin/api/runtime/shared-state
+curl -s -X POST http://localhost:3000/_admin/api/runtime/shared-state/items/reset \
+  -H "content-type: application/json" -d '{}'
+
+# copy preview: also reports preserved literal sharedState references
+curl -s -X POST "http://localhost:3000/_admin/api/mocks/ID/copy?dryRun=true" \
+  -H "content-type: application/json" \
+  -d '{"method":"GET","path":"/items-copy","copyResponses":true}'
 ```
+
+Preview and real copy use the same planner. The dry run responds `200` with planned files,
+literal `sharedState.open("name", ...)` references and warnings; the copy responds `201`. The
+dry run creates no directories, writes no files and does not reload the runtime. Dynamic names
+or names hidden in helpers cannot be detected, while comments or strings can cause a
+conservative warning: preview informs but neither enables nor blocks commit. Copy does not
+rewrite the name or `seedKey`, because sharing the resource may be intentional.
 
 ## The machine-readable description
 

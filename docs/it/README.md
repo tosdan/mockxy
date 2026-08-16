@@ -25,14 +25,14 @@ la pagina pertinente nello stesso giro del codice.
   di precedenza, cosa non riceve ritardi e dove si configura ciascun livello.
 - [Gli handler](HANDLER.md) — risposte calcolate da script locali: il contratto di
   `resolveResponse`, il contesto ricevuto (parametri, query, header, body in tre forme,
-  `data()`, `state`, `callCount`, `firstRequestAt`), il formato del risultato, errori, timeout
-  e limiti.
+  `data()`, `sharedState`, `state`, `callCount`, `firstRequestAt`), stato JSON condiviso fra
+  endpoint, il formato del risultato, errori, timeout e limiti.
 - [I middleware proxy](MIDDLEWARE.md) — trasformare le risposte del backend reale: il
   contratto di `transformResponse`, header fusi sopra quelli del backend, i casi di bypass
   (stream, oltre 10 MB) e il fail-open sugli errori.
 - [I file dati e `data()`](DATI.md) — i dataset JSON riusabili: contratto su disco (nomi
   canonici, cartella piatta), semantica di rilettura e copia per chiamata, la pagina Dati
-  (upload, rinomina sicura con riscrittura dei riferimenti), limiti di dimensione.
+  (file, stato runtime e reset, rinomina sicura con riscrittura dei riferimenti), limiti.
 - [Il proxy fallback](PROXY.md) — la decisione mock/proxy richiesta per richiesta, cosa viene
   inoltrato al backend, errori e semantica del timeout (fino ai primi header), e la tassonomia
   completa dell'header `x-mock-source`.
@@ -79,8 +79,8 @@ la pagina pertinente nello stesso giro del codice.
 ## Guide
 
 - [Gli scenari d'uso](SCENARI.md) — i percorsi passo-passo dietro al design proxy+cattura:
-  staging resettato, contratto avanti al backend, confine mock/reale che si sposta, il caso
-  difficile da riprodurre.
+  staging resettato, contratto avanti al backend, confine mock/reale che si sposta, flusso
+  frontend GET→POST→GET stateful e il caso difficile da riprodurre.
 - [Collegare il frontend](FRONTEND.md) — proxy del dev server o chiamata diretta cross-origin:
   cosa serve per ciascuna strada e come verificare che tutto passi da Mockxy.
 - [Risoluzione dei problemi](TROUBLESHOOTING.md) — sintomo per sintomo, area per area, con la

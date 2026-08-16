@@ -8,6 +8,7 @@ const { createLogger } = require("./utils/logger");
 const { MockRegistry } = require("./mocks/mock-registry");
 const { SequenceStateStore } = require("./mocks/sequence-state");
 const { HandlerStateStore } = require("./mocks/handler-state");
+const { SharedStateStore } = require("./mocks/shared-state");
 const { SseConnectionStore } = require("./mocks/sse-connections");
 const { WsConnectionStore } = require("./mocks/ws-connections");
 const { createWsUpgradeDispatcher } = require("./mocks/ws-serving");
@@ -221,6 +222,9 @@ async function createServerRuntime({ configOverrides = {}, logger: extLogger } =
   // Memoria per-endpoint degli handler (state/callCount/firstRequestAt): come i cursori,
   // vive nel runtime e sopravvive alle ricariche a caldo; si azzera a riavvio o reset.
   const handlerStates = new HandlerStateStore();
+  // Named JSON state shared by handlers. It survives hot reloads and is closed only with this
+  // runtime, so no store or generation leaks across workspace/runtime boundaries.
+  const sharedStates = new SharedStateStore({ logger });
   // Connessioni SSE vive + storico per la console; chiuse a ogni reload e allo shutdown.
   const sseConnections = new SseConnectionStore();
   // Connessioni WebSocket mockate + transcript bidirezionale; stessa vita delle SSE.
@@ -257,6 +261,7 @@ async function createServerRuntime({ configOverrides = {}, logger: extLogger } =
     monitorDump,
     sequenceStates,
     handlerStates,
+    sharedStates,
     sseConnections,
     wsConnections,
   });
@@ -279,6 +284,7 @@ async function createServerRuntime({ configOverrides = {}, logger: extLogger } =
     registry,
     sequenceStates,
     handlerStates,
+    sharedStates,
     sseConnections,
     wsConnections,
     reloadRuntime,
@@ -353,6 +359,8 @@ async function startServer(options = {}) {
     // Ogni passo di pulizia è protetto: un errore (es. flush del dump su disco pieno) non deve
     // impedire la chiusura del server né propagarsi come unhandled rejection.
     const cleanupSteps = [
+      // Invalidate handler capabilities before waiting on any I/O-bound cleanup operation.
+      ["shared state close", () => runtime.sharedStates?.close()],
       ["monitor dump stop", () => runtime.monitorDump?.stop()],
       ["watcher close", () => runtime.watcher?.close()],
       // Gli stream SSE aperti trattengono server.close come le WebSocket: chiusura esplicita.

@@ -37,6 +37,7 @@ Non devi mockare tutto per iniziare: parti con zero mock, lavora normalmente e a
   - [I mock sono file](#i-mock-sono-file)
   - [Risposte dinamiche: gli handler](#risposte-dinamiche-gli-handler)
     - [Riusare dati salvati: `data()`](#riusare-dati-salvati-data)
+    - [Condividere stato runtime fra handler](#condividere-stato-runtime-fra-handler)
   - [Trasformare le risposte del backend: i middleware](#trasformare-le-risposte-del-backend-i-middleware)
   - [Import da OpenAPI](#import-da-openapi)
   - [Dati riusabili: la pagina Dati](#dati-riusabili-la-pagina-dati)
@@ -79,6 +80,7 @@ Nessuno di questi è lo scenario di sviluppo da manuale — nessun team è perfe
 - ⏱️ **Latenze simulate**: ritardo per singola risposta o ritardo globale per emulare una rete lenta.
 - 📄 **Paginazione e filtri automatici**: se il body è un array, `?page=0&size=10` restituisce solo la pagina richiesta (totale nell'header `X-Total-Count`) e `?chiave=valore` filtra gli elementi per uguaglianza (case-insensitive di default).
 - 🧩 **Handler JavaScript stateful**: quando un JSON statico non basta, generi la risposta con una funzione che riceve richiesta, dati riusabili e memoria effimera per endpoint (`state`, `callCount`, `firstRequestAt`).
+- 🔗 **Stato condiviso fra handler**: risorse JSON nominate permettono di modellare flussi stateful come POST → GET, con compatibilità del seed esplicita, reset e nessuna scrittura nei file del workspace.
 - 🗂️ **File dati riusabili**: carichi collezioni JSON nella pagina Dati e le richiami dagli handler con `data("nome")` per servirle o manipolarle, senza incollarle nel codice.
 - 🔧 **Middleware proxy**: intercetti la risposta del backend reale e la trasformi prima che arrivi all'applicazione.
 - 📥 **Import OpenAPI / Swagger**: da una specifica 3.x o 2.0 genera un mock per ogni endpoint, con corpi ricavati da esempi e schemi — una base solida da rifinire a mano.
@@ -311,6 +313,35 @@ Il file si referenzia per **nome senza estensione** (`data("utenti")` → `utent
 
 Lo stesso `data()` è disponibile anche nei **middleware proxy** (vedi sotto), per arricchire la risposta reale del backend con dati tuoi.
 
+### Condividere stato runtime fra handler
+
+Quando due handler devono vedere la stessa risorsa che evolve — per esempio il frontend crea un
+item con `POST /api/items` e si aspetta che la successiva `GET /api/items` lo includa — entrambi
+gli script aprono la stessa risorsa nominata:
+
+```js
+const items = await sharedState.open("items", {
+  seedKey: "items@v1",
+  initialize: () => data("items"),
+});
+
+// handler POST
+const creato = items.mutate((draft) => {
+  draft.push(jsonBody);
+  return jsonBody;
+});
+
+// handler GET
+return { jsonBody: items.read(), applyListQuery: true };
+```
+
+Il file dati è soltanto il seed: il JSON live resta in memoria, sopravvive al reload a caldo
+degli handler e non viene mai riscritto su disco. Si perde al riavvio/cambio workspace e si può
+azzerare per risorsa o globalmente da **Dati → Stato runtime**. `seedKey` è la firma di
+compatibilità obbligatoria: quando cambia la forma della risorsa, incrementala e poi esegui il
+reset. Il contratto completo su lifecycle, concorrenza, limiti ed errori è in
+[docs/it/HANDLER.md](docs/it/HANDLER.md#stato-runtime-condiviso).
+
 ## Trasformare le risposte del backend: i middleware
 
 Il terzo tipo di variante è il **middleware proxy**: la richiesta arriva davvero al backend, ma prima che la risposta torni all'applicazione puoi ispezionarla e modificarla. Il caso d'uso tipico è il contratto che corre avanti rispetto all'implementazione: il backend risponde ancora nel formato vecchio e tu aggiungi i campi nuovi che il tuo client ormai si aspetta, continuando però a lavorare con dati reali. Torna utile anche per correggere un payload non ancora allineato o rimuovere header di troppo.
@@ -338,7 +369,7 @@ L'import è pensato per darti **una base di lavoro completa in pochi secondi**, 
 
 ## Dati riusabili: la pagina Dati
 
-La pagina **Dati** raccoglie file JSON che gli handler (e i middleware) richiamano con `data("nome")` — vedi [gli handler](#riusare-dati-salvati-data). Da qui carichi i file (solo `.json`, anche in blocco o per trascinamento), ne rivedi il contenuto, li rinomini o li elimini; il pulsante "copia riferimento" ti dà lo snippet pronto da incollare in un handler. I file finiscono in `FILES_DIR` (`workspace/files`) e sono versionati come i mock: il dataset di una demo viaggia con il repo. Contratto su disco, semantica di `data()` e dettagli della pagina sono in [docs/it/DATI.md](docs/it/DATI.md).
+La pagina **Dati** raccoglie file JSON che gli handler (e i middleware) richiamano con `data("nome")` — vedi [gli handler](#riusare-dati-salvati-data). Da qui carichi i file (solo `.json`, anche in blocco o per trascinamento), ne rivedi il contenuto, li rinomini o li elimini; il pulsante "copia riferimento" ti dà lo snippet pronto da incollare in un handler. Il tab **Stato runtime** mostra invece i metadati delle risorse condivise live e consente reset per risorsa/globale senza esporne i valori. I file finiscono in `FILES_DIR` (`workspace/files`) e sono versionati come i mock: il dataset di una demo viaggia con il repo. Contratti su disco e runtime, semantica di `data()` e dettagli della pagina sono in [docs/it/DATI.md](docs/it/DATI.md).
 
 Ogni file mostra **da quali endpoint è usato** (riconoscendo i riferimenti `data("nome")` scritti come stringa letterale), e su questa mappa si appoggia la **rinomina sicura**: rinominando un file referenziato, Mockxy propone di riscrivere le occorrenze nei sorgenti che lo usano — riscrittura tutto-o-niente, con riepilogo finale e ricarica del runtime.
 

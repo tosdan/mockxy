@@ -1,6 +1,7 @@
 # Piano definitivo — Stato runtime condiviso tra handler
 
-Stato: **specifica definitiva dopo adversarial review, pronta per l'implementazione**
+Stato: **specifica definitiva dopo adversarial review, implementata nel branch
+`feat/shared-runtime-state`**
 
 Data: 16 agosto 2026
 
@@ -10,6 +11,10 @@ hot reload, limiti, sicurezza, test e documentazione.
 Questo documento è la fonte di verità della feature. Le sezioni sulle alternative non sono una
 cronologia delle proposte: conservano soltanto le ragioni che serviranno a non riaprire in futuro
 decisioni già analizzate.
+
+Le fasi e la matrice di test nelle sezioni 21–22 restano nel documento come mappa verificabile
+dell'implementazione, non come backlog ancora aperto. Il contratto utente corrente è riportato
+nelle guide italiane/inglesi e nell'OpenAPI dell'Admin API.
 
 ## 1. Esito dell'analisi
 
@@ -116,7 +121,7 @@ adesso ID, PUT/PATCH/DELETE, relazioni, schema e persistenza per risolvere il ca
 | POST admin senza parametri | Le quattro mutazioni richiedono `application/json` e un body `{}` effettivamente presente; un marker del parser distingue un buffer decodificato di zero byte dall'oggetto parsato. |
 | Visibilità admin | Metadati e diagnostica degli errori, mai il valore. |
 | Liste | Nuovo opt-in `applyListQuery: true` nel risultato degli handler. |
-| Limiti v1 | 256 risorse, 5 MiB per risorsa, 25 MiB totali, profondità JSON massima 100. |
+| Limiti v1 | 256 risorse, 3 MiB per risorsa, 25 MiB totali, profondità JSON massima 100. I candidati da 5 e 4 MiB sono stati ridotti dopo il benchmark pre-merge. |
 | Persistenza workspace | Nessun nuovo campo/file; zero migrazioni. |
 
 ## 5. Il contratto esposto agli handler
@@ -1030,7 +1035,7 @@ Esempio lista:
   "totalBytes": 1842,
   "limits": {
     "maxEntries": 256,
-    "maxEntryBytes": 5242880,
+      "maxEntryBytes": 3145728,
     "maxTotalBytes": 26214400,
     "maxDepth": 100
   }
@@ -1219,7 +1224,7 @@ potrebbe altrimenti far crescere il processo senza limite. L'MVP impone costanti
 | Limite | Valore v1 | Motivazione |
 |---|---:|---|
 | Numero entry pronte/in init | 256 | Ferma nomi dinamici senza impedire workspace realistici. |
-| Dimensione serializzata per entry | 5 MiB (5.242.880 byte) | Tiene contenuto il blocco sincrono di parse/validate/stringify e i duplicati temporanei. |
+| Dimensione serializzata per entry | 3 MiB (3.145.728 byte) | Tiene il p95 della mutazione completa sotto il gate misurato con margine e contiene i duplicati temporanei. |
 | Dimensione serializzata totale | 25 MiB (26.214.400 byte) | Consente più scenari realistici senza promettere un database in RAM. |
 | Profondità JSON | 100 | Evita strutture patologiche e overflow dei traversal. |
 
@@ -1237,16 +1242,17 @@ Un superamento non modifica valore, versione o contatori di size. L'errore ha co
 se non intercettato dallo script, segue la mappatura pubblica sicura della sezione 16. Lo script
 può intercettarlo e produrre un altro status se lo scenario lo richiede.
 
-Le costanti non diventano impostazioni UI/env nell'MVP. Il limite da 5 MiB è deliberatamente
+Le costanti non diventano impostazioni UI/env nell'MVP. Il limite da 3 MiB è deliberatamente
 più basso del massimo dei file dati: durante una mutazione convivono stringa precedente, draft,
 nuova stringa e strutture del validatore, quindi equiparare file su disco e stato mutabile
 sottostimerebbe sia memoria sia blocco dell'event loop.
 
-Prima del merge un benchmark riproducibile usa un array di plain object realistici da 1 e
-5 MiB, cinque warm-up e trenta campioni su una macchina di riferimento registrata insieme ai
+Prima del merge un benchmark riproducibile usa un array di plain object realistici da 1 MiB e
+della dimensione massima candidata, cinque warm-up e trenta campioni su una macchina di
+riferimento registrata insieme ai
 risultati. Il generatore deterministico, il seed e lo script restano nel repository; il run usa
-Node 24 in modalità normale e `--expose-gc` soltanto per stabilizzare le misure di memoria. A
-5 MiB il gate è p95 <= 50 ms per `read()`, p95 <= 100 ms per una `mutate()` no-op
+Node 24 in modalità normale e `--expose-gc` soltanto per stabilizzare le misure di memoria. Alla
+dimensione massima il gate è p95 <= 50 ms per `read()`, p95 <= 100 ms per una `mutate()` no-op
 completa di parse/validazione/serializzazione, p95 <= 100 ms per `read()` + filtro/pagina
 rappresentativi con `buildMockPayload()`, e picco addizionale sia heap sia RSS <= 128 MiB con GC
 controllato. Il benchmark non entra nella CI multipiattaforma come test temporale flaky; il
@@ -1254,6 +1260,11 @@ report è un artefatto di review. Se una soglia fallisce si abbassa il limite do
 del rilascio, non si allenta automaticamente il gate. Un risultato migliore non autorizza da
 solo ad alzare la quota. Se casi reali richiederanno dataset maggiori, si valuterà una
 configurazione esplicita invece di rimuovere i limiti.
+
+Il benchmark pre-merge è registrato in
+[`docs/sviluppo/BENCHMARK-STATO-RUNTIME-CONDIVISO.md`](../sviluppo/BENCHMARK-STATO-RUNTIME-CONDIVISO.md):
+i candidati da 5 e 4 MiB hanno fallito il p95 della mutazione no-op; 3 MiB ha chiuso a 77,99 ms
+con tutti i gate verdi. Per questo la quota definitiva differisce dalla proposta iniziale.
 
 Le quote limitano soltanto ciò che viene commesso tramite questa API. Una factory o callback è
 pur sempre JavaScript e può allocare memoria arbitraria prima della validazione o fuori dal
@@ -1282,7 +1293,7 @@ finché non richiedono una diversa azione del chiamante:
 | `SHARED_STATE_REENTRANT_ACCESS` | Un mutator o una sua continuazione usa qualunque operazione shared-state, anche su un'altra entry. | Nessuno |
 | `SHARED_STATE_INVALID_VALUE` | Valore non JSON, ciclico o troppo profondo. | Nessuno |
 | `SHARED_STATE_ENTRY_LIMIT` | Troppe risorse. | Nessuno |
-| `SHARED_STATE_ENTRY_TOO_LARGE` | Entry oltre 5 MiB. | Nessuno |
+| `SHARED_STATE_ENTRY_TOO_LARGE` | Entry oltre 3 MiB. | Nessuno |
 | `SHARED_STATE_TOTAL_TOO_LARGE` | Totale oltre 25 MiB. | Nessuno |
 
 Tutti sono istanze di `SharedStateError`; `respondWithHandler()` li riconosce con
@@ -1476,8 +1487,8 @@ mitigazioni marcate come test sono requisiti, non suggerimenti.
 | Traffico continuo subito dopo reset | La risorsa ricompare e sembra non azzerata | Reset non è una pausa; un nuovo `open` crea una generazione nuova | Stop/reset/start nel setup deterministico |
 | Handler muta A, poi B fallisce | Stato multi-risorsa parziale | Transazioni cross-resource fuori scope, documentate | Nessuna promessa di rollback globale |
 | Nome derivato da path/body | Creazione illimitata di entry | Pattern/length + massimo 256 + guida whitelist | La 257ª entry fallisce senza alterare totale |
-| POST ripetute fanno crescere una lista | OOM | 5 MiB entry, 25 MiB totale, rollback quota | Superamento conserva size/versione precedente |
-| Mutate su 5 MiB blocca l'event loop | Latenza globale; il timer non interrompe lavoro sincrono | Limite, callback sync breve e benchmark con gate espliciti | p95 e memoria rispettano le soglie della sezione 15 |
+| POST ripetute fanno crescere una lista | OOM | 3 MiB entry, 25 MiB totale, rollback quota | Superamento conserva size/versione precedente |
+| Mutate sulla dimensione massima blocca l'event loop | Latenza globale; il timer non interrompe lavoro sincrono | Limite ridotto a 3 MiB dopo i fallimenti misurati a 5/4 MiB, callback sync breve e gate espliciti | p95 e memoria rispettano le soglie della sezione 15 |
 | JSON molto profondo/ciclico | Stack overflow/stringify failure | Validator iterativo, cicli e max depth 100 | Errori stabili, processo vivo |
 | `NaN`, infinito, `BigInt`, `Date`, Buffer o `-0` aritmetico | Conversioni silenziose oppure 500 intermittenti su uno zero valido per lo scenario | JSON-only rigoroso; tipi/valori non JSON rifiutati, `-0` canonicalizzato esplicitamente | Invalidi rifiutati senza commit; `-0` radice o annidato viene riletto come `0` |
 | Array sparso, object con getter/symbol o `Proxy` | Stringify ignora/trasforma o la validazione esegue codice | `isProxy`, descriptor validation e array densi | Errore stabile, getter/trap mai invocati |
@@ -1840,7 +1851,7 @@ File nuovo indicativo: `src/mocks/shared-state.js`.
 5. facade/handle request-scoped, `read`, `mutate`, `replace` e chiusura idempotente;
 6. logger strutturato iniettato, warning unico per tentativo di init fallito e isolamento degli
    errori del logger;
-7. reset singolo/globale, `close()`, metadata e quote 256/5 MiB/25 MiB;
+7. reset singolo/globale, `close()`, metadata e quote 256/3 MiB/25 MiB;
 8. unit test completi, inclusi init/reset/closure simulati e assenza di unhandled rejection.
 
 **Gate:** tutte le invarianti delle sezioni 6–9 dimostrate senza Express.
@@ -1934,7 +1945,7 @@ Aggiornare almeno:
 - indici README/documentazione e troubleshooting;
 - template/example workspace, se utile.
 
-Eseguire backend, frontend, E2E mirati e benchmark 1/5 MiB con i gate della sezione 15.
+Eseguire backend, frontend, E2E mirati e benchmark 1 MiB/dimensione massima con i gate della sezione 15.
 
 **Gate:** contratto italiano/inglese, OpenAPI, release notes, UI e runtime descrivono la stessa
 semantica e il report prestazionale giustifica il limite pubblicato.
@@ -1994,7 +2005,7 @@ semantica e il report prestazionale giustifica il limite pubblicato.
 - stale handle dopo reset singolo e globale;
 - nuova generazione dopo reset riparte da versione 1 con timestamp/origin nuovi;
 - `close()` permanente invalida entry/init/handle ed è idempotente;
-- boundary esatti: profondità 100/101, entry 5 MiB/+1 byte, totale 25 MiB/+1 byte ed entry
+- boundary esatti: profondità 100/101, entry 3 MiB/+1 byte, totale 25 MiB/+1 byte ed entry
   numero 256/257;
 - accounting totale quando un valore cresce, diminuisce, fallisce o viene resettato;
 - metadata ordinati e senza valori.

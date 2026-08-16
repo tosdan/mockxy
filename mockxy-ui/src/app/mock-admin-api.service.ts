@@ -13,6 +13,7 @@ import {
   CollectionSummary,
   CreateResponseRequest,
   EndpointCopyRequest,
+  EndpointCopyPreview,
   EndpointUpdateRequest,
   HandlerCreateRequest,
   MiddlewareCreateRequest,
@@ -48,6 +49,7 @@ import {
   WsPushResult,
   WsStateResponse,
   ServerState,
+  SharedStateListResponse,
   UNSORTED_COLLECTION_ID,
   MockUpdateRequest,
 } from './mock-admin-api.types';
@@ -207,6 +209,14 @@ export class MockAdminApiService {
     return this.http.post<MockDetailAfterMutation>(`${this.baseUrl}/mocks/${encodeURIComponent(id)}/copy`, request);
   }
 
+  /** Calcola la copia e i riferimenti shared-state senza creare file né ricaricare il runtime. */
+  previewEndpointCopy(id: string, request: EndpointCopyRequest): Observable<EndpointCopyPreview> {
+    return this.http.post<EndpointCopyPreview>(
+      `${this.baseUrl}/mocks/${encodeURIComponent(id)}/copy?dryRun=true`,
+      request,
+    );
+  }
+
   /** Cambia la response selezionata per un endpoint. */
   selectResponse(id: string, request: SelectResponseRequest): Observable<MockDetailAfterMutation> {
     return this.http.put<MockDetailAfterMutation>(`${this.baseUrl}/mocks/${encodeURIComponent(id)}`, request);
@@ -341,6 +351,24 @@ export class MockAdminApiService {
       `${this.baseUrl}/monitoring/dump/flush`,
       {},
     );
+  }
+
+  /** Elenca soltanto metadati e quote delle risorse runtime condivise. */
+  listSharedState(): Observable<SharedStateListResponse> {
+    return this.http.get<SharedStateListResponse>(`${this.baseUrl}/runtime/shared-state`);
+  }
+
+  /** Azzera in modo idempotente una singola generazione runtime. */
+  resetSharedState(name: string): Observable<{ name: string; reset: boolean }> {
+    return this.http.post<{ name: string; reset: boolean }>(
+      `${this.baseUrl}/runtime/shared-state/${encodeURIComponent(name)}/reset`,
+      {},
+    );
+  }
+
+  /** Azzera tutte le risorse runtime senza toccare file, sequence o state locale. */
+  resetAllSharedState(): Observable<{ resetCount: number }> {
+    return this.http.post<{ resetCount: number }>(`${this.baseUrl}/runtime/shared-state/reset`, {});
   }
 
   /** Elenca i file di dump su disco. */

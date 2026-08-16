@@ -337,7 +337,44 @@ describe('MockAdminApiService', () => {
     service.resetSequence('abc/123').subscribe();
     const resetRequest = http.expectOne('/_admin/api/mocks/abc%2F123/sequence/reset');
     expect(resetRequest.request.method).toBe('POST');
+    expect(resetRequest.request.body).toEqual({});
     resetRequest.flush({ sequenceFile: '003.response.json', sequenceState: null });
+  });
+
+  it('should preview endpoint copy without changing the commit endpoint contract', () => {
+    const payload = { method: 'POST', path: '/copied', copyResponses: false };
+    service.previewEndpointCopy('abc/123', payload).subscribe();
+    const preview = http.expectOne('/_admin/api/mocks/abc%2F123/copy?dryRun=true');
+    expect(preview.request.method).toBe('POST');
+    expect(preview.request.body).toEqual(payload);
+    preview.flush({
+      dryRun: true,
+      target: { method: 'POST', path: '/copied' },
+      copyResponses: false,
+      responseFiles: [],
+      assetFiles: [],
+      sharedStateRefs: [],
+      warnings: [],
+    });
+  });
+
+  it('should list and reset shared runtime state with explicit empty JSON bodies', () => {
+    service.listSharedState().subscribe();
+    const list = http.expectOne('/_admin/api/runtime/shared-state');
+    expect(list.request.method).toBe('GET');
+    list.flush({ items: [], totalBytes: 0, limits: {} });
+
+    service.resetSharedState('orders.v2').subscribe();
+    const single = http.expectOne('/_admin/api/runtime/shared-state/orders.v2/reset');
+    expect(single.request.method).toBe('POST');
+    expect(single.request.body).toEqual({});
+    single.flush({ name: 'orders.v2', reset: true });
+
+    service.resetAllSharedState().subscribe();
+    const all = http.expectOne('/_admin/api/runtime/shared-state/reset');
+    expect(all.request.method).toBe('POST');
+    expect(all.request.body).toEqual({});
+    all.flush({ resetCount: 1 });
   });
 
   it('should create an endpoint response with edited values', () => {

@@ -2,6 +2,7 @@ const fs = require("fs");
 const path = require("path");
 const request = require("supertest");
 const { createApp } = require("../src/app");
+const { SharedStateStore } = require("../src/mocks/shared-state");
 const { encodeMockId } = require("../src/admin/mock-ids");
 const { loadEndpointRouteGroups } = require("../src/mocks/endpoint-loader");
 const { mergeLocalRouteGroups } = require("../src/mocks/local-route-groups");
@@ -86,6 +87,7 @@ describe("sse admin API", () => {
       reloadRuntime,
       requestMonitor: new RequestMonitorStore(),
       sseConnections,
+      sharedStates: new SharedStateStore(),
     });
     return { app, sseConnections };
   }

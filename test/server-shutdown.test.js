@@ -70,6 +70,40 @@ describe("startServer shutdown", () => {
       await removeDir(mocksDir);
     }
   }, 10000);
+
+  test("chiude lo shared state come primo passo e invalida gli handle attivi", async () => {
+    const mocksDir = await createTempDir();
+
+    try {
+      const runtime = await startTestServer(mocksDir);
+      const facade = runtime.sharedStates.createRequestFacade({ method: "GET", path: "/active" });
+      const handle = await facade.api.open("active", {
+        seedKey: "active@v1",
+        initialize: () => ({ count: 0 }),
+      });
+      const cleanupOrder = [];
+      const closeSharedState = runtime.sharedStates.close.bind(runtime.sharedStates);
+      const stopMonitorDump = runtime.monitorDump.stop.bind(runtime.monitorDump);
+      runtime.sharedStates.close = () => {
+        cleanupOrder.push("shared-state");
+        return closeSharedState();
+      };
+      runtime.monitorDump.stop = async () => {
+        cleanupOrder.push("monitor-dump");
+        return stopMonitorDump();
+      };
+
+      await runtime.shutdown();
+
+      expect(cleanupOrder.slice(0, 2)).toEqual(["shared-state", "monitor-dump"]);
+      expect(() => handle.read()).toThrow(expect.objectContaining({
+        code: "SHARED_STATE_STORE_CLOSED",
+      }));
+    } finally {
+      await removeDir(mocksDir);
+    }
+  }, 10000);
+
   test("completa anche con una connessione keep-alive ancora aperta", async () => {
     const mocksDir = await createTempDir();
     const agent = new http.Agent({ keepAlive: true, maxSockets: 1 });

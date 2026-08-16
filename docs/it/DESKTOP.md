@@ -90,6 +90,11 @@ dialog). Il file delle impostazioni e la sua natura locale sono documentati
 nell'[anatomia del workspace](WORKSPACE.md) — e non toccano mai la versione headless, che si
 configura solo con variabili d'ambiente.
 
+Il riavvio azzera anche lo [stato runtime condiviso](HANDLER.md), oltre a cursori sequence e
+memoria locale degli handler. Salvare le impostazioni durante uno scenario equivale quindi a
+ripartire dai seed; un semplice cambio di scheda verso un altro workspace, senza spegnere il
+motore, conserva invece ciascuno store separatamente.
+
 ## Il log degli errori (`logs/`)
 
 Gli errori finiscono anche su file, in una sottocartella **`logs/`**. Per la portable Windows e

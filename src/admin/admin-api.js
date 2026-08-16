@@ -8,6 +8,7 @@ const {
 } = require("./mock-catalog");
 const {
   copyAdminEndpoint,
+  previewAdminEndpointCopy,
   createAdminMock,
   createAdminResponse,
   deleteAdminMock,
@@ -51,6 +52,41 @@ const {
   deleteDumpFile,
 } = require("../monitoring/monitor-dump-reader");
 
+const PARSED_JSON_BODY_BYTES = Symbol("parsedJsonBodyBytes");
+
+function markParsedJsonBodyLength(req, _res, buffer) {
+  req[PARSED_JSON_BODY_BYTES] = buffer.length;
+}
+
+// Parameterless administrative mutations use one unambiguous wire contract: an actual,
+// non-empty application/json payload whose parsed value is exactly {}.
+function requireEmptyJsonObject(req, res, next) {
+  if (!req.is("application/json")) {
+    sendJson(res, 415, {
+      error: "Unsupported Media Type",
+      message: "Use Content-Type: application/json.",
+    });
+    return;
+  }
+
+  const prototype = req.body != null && typeof req.body === "object"
+    ? Object.getPrototypeOf(req.body)
+    : undefined;
+  const isEmptyPlainObject = (
+    req[PARSED_JSON_BODY_BYTES] > 0
+    && prototype === Object.prototype
+    && Reflect.ownKeys(req.body).length === 0
+  );
+  if (!isEmptyPlainObject) {
+    sendJson(res, 400, {
+      error: "Bad Request",
+      message: "Request body must be an empty JSON object ({}).",
+    });
+    return;
+  }
+  next();
+}
+
 // Sends a structured Server-Sent Events payload to a live monitoring client.
 function sendSseEvent(res, payload) {
   res.write(`data: ${JSON.stringify(payload)}\n\n`);
@@ -61,13 +97,13 @@ function sendJson(res, status, payload) {
   res.status(status).json(payload);
 }
 
-function createAdminApiRouter({ config, reloadRuntime, requestMonitor, serverState, monitorDump, sequenceStates, handlerStates, sseConnections, wsConnections }) {
+function createAdminApiRouter({ config, reloadRuntime, requestMonitor, serverState, monitorDump, sequenceStates, handlerStates, sharedStates, sseConnections, wsConnections }) {
   const router = express.Router();
   // Store dello scenario runtime, passati alle mutazioni che possono invalidarlo: il reload da
   // solo non basta, perche' aggrega piu' scritture in un giro unico (vedi invalidateScenario).
   const scenarioStates = { sequenceStates, handlerStates };
 
-  router.use(express.json({ limit: "2mb" }));
+  router.use(express.json({ limit: "2mb", verify: markParsedJsonBodyLength }));
 
   router.get('/monitoring/requests', (_req, res) => {
     const items = requestMonitor?.listEntries() || [];
@@ -136,7 +172,7 @@ function createAdminApiRouter({ config, reloadRuntime, requestMonitor, serverSta
     sendJson(res, 200, monitorDump.getStatus());
   });
 
-  router.post('/monitoring/dump/flush', async (_req, res) => {
+  router.post('/monitoring/dump/flush', requireEmptyJsonObject, async (_req, res) => {
     const flushed = monitorDump ? await monitorDump.flush() : 0;
     sendJson(res, 200, { flushed, ...(monitorDump ? monitorDump.getStatus() : {}) });
   });
@@ -192,6 +228,37 @@ function createAdminApiRouter({ config, reloadRuntime, requestMonitor, serverSta
     }
     sendJson(res, 200, serverState ? serverState.setState(body) : DEFAULT_SERVER_STATE);
   });
+
+  // Runtime shared state is intentionally metadata-only: values remain private to handlers.
+  router.get("/runtime/shared-state", (_req, res) => {
+    sendJson(res, 200, sharedStates.listMetadata());
+  });
+
+  router.post(
+    "/runtime/shared-state/:name/reset",
+    requireEmptyJsonObject,
+    (req, res) => {
+      try {
+        const normalizedName = String(req.params.name).trim().toLowerCase();
+        const reset = sharedStates.reset(req.params.name);
+        sendJson(res, 200, { name: normalizedName, reset });
+      } catch (error) {
+        if (error?.code === "SHARED_STATE_INVALID_NAME") {
+          sendJson(res, 400, { error: "Bad Request", message: error.message });
+          return;
+        }
+        throw error;
+      }
+    }
+  );
+
+  router.post(
+    "/runtime/shared-state/reset",
+    requireEmptyJsonObject,
+    (_req, res) => {
+      sendJson(res, 200, { resetCount: sharedStates.resetAll() });
+    }
+  );
 
   router.get("/mocks", async (_req, res) => {
     // Gli endpoint illeggibili non spengono il catalogo: vengono saltati e segnalati qui.
@@ -293,7 +360,7 @@ function createAdminApiRouter({ config, reloadRuntime, requestMonitor, serverSta
 
   // Reset del cursore della sequenza (e della memoria handler dell'endpoint): azione runtime
   // immediata, nessun file toccato.
-  router.post("/mocks/:id/sequence/reset", async (req, res) => {
+  router.post("/mocks/:id/sequence/reset", requireEmptyJsonObject, async (req, res) => {
     const result = await resetAdminSequence(config.mocksDir, req.params.id, sequenceStates, handlerStates);
     sendJson(res, 200, result);
   });
@@ -362,14 +429,28 @@ function createAdminApiRouter({ config, reloadRuntime, requestMonitor, serverSta
     }
   );
 
-  // Copia un endpoint verso un nuovo metodo+path; body { method, path, copyResponses }.
+  // Copia un endpoint verso un nuovo metodo+path; dryRun usa lo stesso planner ma non scrive.
   router.post("/mocks/:id/copy", async (req, res) => {
-    const detail = await copyAdminEndpoint(
-      config.mocksDir,
-      req.params.id,
-      req.body,
-      reloadRuntime
-    );
+    const dryRunValues = new URL(req.originalUrl, "http://mockxy.local")
+      .searchParams
+      .getAll("dryRun");
+    if (
+      dryRunValues.length > 1
+      || (dryRunValues.length === 1 && !["true", "false"].includes(dryRunValues[0]))
+    ) {
+      sendJson(res, 400, {
+        error: "Bad Request",
+        message: "dryRun must be specified at most once and be exactly true or false.",
+      });
+      return;
+    }
+
+    if (dryRunValues[0] === "true") {
+      const preview = await previewAdminEndpointCopy(config.mocksDir, req.params.id, req.body);
+      sendJson(res, 200, preview);
+      return;
+    }
+    const detail = await copyAdminEndpoint(config.mocksDir, req.params.id, req.body, reloadRuntime);
     sendJson(res, 201, detail);
   });
 
@@ -502,5 +583,6 @@ function sendAdminApiDisabled(_req, res) {
 
 module.exports = {
   createAdminApiRouter,
+  requireEmptyJsonObject,
   sendAdminApiDisabled,
 };

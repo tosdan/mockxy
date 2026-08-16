@@ -8,6 +8,7 @@ import {
   lucideArrowLeft,
   lucideCheck,
   lucideCopy,
+  lucideDatabase,
   lucideDownload,
   lucideListTree,
   lucidePlus,
@@ -50,7 +51,7 @@ interface SourceMeta {
   imports: [DatePipe, ViewSwitcher, NgIcon, TranslocoPipe, UiBadge, UiButton, UiCode, UiCollapsible, UiSelect, UiTable, UiTooltip],
   providers: [
     provideIcons({
-      lucideActivity, lucideArrowLeft, lucideCheck, lucideCopy, lucideDownload, lucideListTree,
+      lucideActivity, lucideArrowLeft, lucideCheck, lucideCopy, lucideDatabase, lucideDownload, lucideListTree,
       lucidePlus, lucideSearch, lucideTrash2, lucideX,
     }),
   ],
@@ -232,7 +233,15 @@ interface SourceMeta {
                 <span class="font-mono text-[11.5px]">{{ seq.responseTitle ? seq.responseTitle + ' — ' : '' }}{{ seq.responseFile }}</span>
               </span>
               }
+              @if (sel.sharedStateError; as sharedError) {
+              <span class="inline-flex items-center gap-1.5 rounded-md bg-[color-mix(in_srgb,var(--status-4xx)_12%,transparent)] px-2 py-1 font-mono text-[11px] text-[var(--status-4xx)]">
+                {{ sharedError.code }}@if (sharedError.name) { · {{ sharedError.name }} }
+              </span>
+              }
               <span class="ml-auto flex flex-wrap items-center gap-2">
+                @if (sel.sharedStateError?.name; as sharedStateName) {
+                <button ui-button variant="outline" size="sm" (click)="goToSharedState(sharedStateName)" [uiTooltip]="'monitor.openSharedStateTip' | transloco"><ng-icon name="lucideDatabase" size="0.85rem" /> {{ 'monitor.openSharedState' | transloco }}</button>
+                }
                 @if (sel.source === 'mock' || sel.source === 'handler') {
                 <button ui-button variant="outline" size="sm" (click)="goToDefinition(sel)" [uiTooltip]="'monitor.goToDefinitionTip' | transloco"><ng-icon name="lucideListTree" size="0.85rem" /> {{ 'monitor.goToMock' | transloco }}</button>
                 } @else if (coveringMock(); as covering) {
@@ -776,6 +785,10 @@ export class MonitorNextPage {
   /** Apre nel catalogo la definizione (mock/handler) che ha servito questa request. */
   protected goToDefinition(entry: RequestMonitorEntry): void {
     this.router.navigate(['/mocks'], { queryParams: { m: entry.method, p: entry.matchedRoutePath } });
+  }
+
+  protected goToSharedState(name: string): void {
+    this.router.navigate(['/dati'], { queryParams: { tab: 'runtime', name } });
   }
 
   // --- helper di presentazione (colori sui token, come mocks-next) ---

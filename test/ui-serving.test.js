@@ -2,6 +2,7 @@ const fs = require("fs");
 const path = require("path");
 const request = require("supertest");
 const { createApp } = require("../src/app");
+const { SharedStateStore } = require("../src/mocks/shared-state");
 const { MockRegistry } = require("../src/mocks/mock-registry");
 const { ProxyMiddlewareRegistry } = require("../src/proxy/proxy-middleware-registry");
 const { RequestMonitorStore } = require("../src/monitoring/request-monitor");
@@ -34,6 +35,7 @@ describe("serving dell'interfaccia admin (/_admin/ui)", () => {
       proxyMiddlewareRegistry: new ProxyMiddlewareRegistry([]),
       requestMonitor: new RequestMonitorStore(),
       logger: createNoopLogger(),
+      sharedStates: new SharedStateStore(),
       config: {
         uiDistDir: serveUi ? uiDistDir : undefined,
         adminApiEnabled: false,

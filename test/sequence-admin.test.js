@@ -2,6 +2,7 @@ const fs = require("fs");
 const path = require("path");
 const request = require("supertest");
 const { createApp } = require("../src/app");
+const { SharedStateStore } = require("../src/mocks/shared-state");
 const { encodeMockId } = require("../src/admin/mock-ids");
 const { loadEndpointRouteGroups } = require("../src/mocks/endpoint-loader");
 const { mergeLocalRouteGroups } = require("../src/mocks/local-route-groups");
@@ -107,6 +108,7 @@ describe("sequence response admin API", () => {
     const initial = await load();
     const registry = new MockRegistry(initial.routeGroups, sequenceStates);
     const proxyMiddlewareRegistry = new ProxyMiddlewareRegistry(initial.proxyMiddlewareRouteGroups);
+    const sharedStates = new SharedStateStore();
     const reloadRuntime = async () => {
       if (roundsToSkip > 0) {
         roundsToSkip -= 1;
@@ -133,8 +135,9 @@ describe("sequence response admin API", () => {
       requestMonitor: new RequestMonitorStore(),
       sequenceStates,
       handlerStates,
+      sharedStates,
     });
-    return { app, sequenceStates, handlerStates };
+    return { app, sequenceStates, handlerStates, sharedStates };
   }
 
   test("crea e seleziona una response sequence, poi il runtime la serve", async () => {
@@ -195,17 +198,23 @@ describe("sequence response admin API", () => {
     const { app } = await buildApp();
 
     expect((await request(app).get(`/_admin/api/mocks/${MOCK_ID}/sequence/state`)).status).toBe(400);
-    expect((await request(app).post(`/_admin/api/mocks/${MOCK_ID}/sequence/reset`)).status).toBe(400);
+    expect((await request(app).post(`/_admin/api/mocks/${MOCK_ID}/sequence/reset`).send({})).status).toBe(400);
   });
 
   test("resetta cursore e memoria handler della sequence selezionata", async () => {
     await writeEndpointWithVariants({ withSequence: true });
-    const { app, handlerStates } = await buildApp();
+    const { app, handlerStates, sharedStates } = await buildApp();
     await request(app).get("/api/operazioni");
     await request(app).get("/api/operazioni");
     handlerStates.enter("GET /api/operazioni").state.n = 7;
+    const facade = sharedStates.createRequestFacade();
+    const shared = await facade.api.open("sequence-independent", {
+      seedKey: "sequence-independent@v1",
+      initialize: () => ({ count: 0 }),
+    });
+    shared.mutate((draft) => { draft.count = 4; });
 
-    const reset = await request(app).post(`/_admin/api/mocks/${MOCK_ID}/sequence/reset`);
+    const reset = await request(app).post(`/_admin/api/mocks/${MOCK_ID}/sequence/reset`).send({});
 
     expect(reset.status).toBe(200);
     expect(reset.body.sequenceFile).toBe("003.response.json");
@@ -213,6 +222,7 @@ describe("sequence response admin API", () => {
     const freshHandlerState = handlerStates.enter("GET /api/operazioni");
     expect(freshHandlerState.callCount).toBe(1);
     expect(freshHandlerState.state).toEqual({});
+    expect(shared.read()).toEqual({ count: 4 });
     expect((await request(app).get("/api/operazioni")).body).toEqual({ status: "processing" });
   });
 

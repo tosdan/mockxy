@@ -48,6 +48,18 @@ describe('DatiPage', () => {
         of({ ...summary(next.toLowerCase()), referencesRewritten: 0, referencingEndpoints: [] as DataFileUsage[] }),
       ),
       deleteDataFile: vi.fn(() => of(undefined)),
+      listSharedState: vi.fn(() => of({
+        items: [{
+          name: 'items', seedKey: 'items@v1', status: 'ready' as const, version: 2,
+          sizeBytes: 128, initializedAt: 1, updatedAt: 2, lastAccessAt: 3,
+          initializedBy: { method: 'GET', path: '/api/items' },
+          lastAccessedBy: { method: 'POST', path: '/api/items' },
+        }],
+        totalBytes: 128,
+        limits: { maxEntries: 256, maxEntryBytes: 1, maxTotalBytes: 1, maxDepth: 100 },
+      })),
+      resetSharedState: vi.fn((name: string) => of({ name, reset: true })),
+      resetAllSharedState: vi.fn(() => of({ resetCount: 1 })),
     };
   }
 
@@ -112,6 +124,44 @@ describe('DatiPage', () => {
       const { c } = create();
       c.select('aziende');
       expect(viewState.write).toHaveBeenCalledWith('dati-selected', 'aziende');
+    });
+  });
+
+  describe('stato runtime', () => {
+    it('carica metadati senza valori quando si apre la tab runtime', () => {
+      const { fixture, c } = create();
+      c.switchTab('runtime');
+      fixture.detectChanges();
+      expect(api.listSharedState).toHaveBeenCalled();
+      expect(c.runtimeItems()[0]).toMatchObject({ name: 'items', seedKey: 'items@v1', version: 2 });
+      expect(fixture.nativeElement.textContent).toContain('items@v1');
+    });
+
+    it('resetta una risorsa e aggiorna la lista con annuncio accessibile', () => {
+      const { c } = create();
+      c.switchTab('runtime');
+      c.resetRuntime('items');
+      expect(api.resetSharedState).toHaveBeenCalledWith('items');
+      expect(c.runtimeAnnouncement()).toContain('items');
+      expect(api.listSharedState).toHaveBeenCalledTimes(2);
+    });
+
+    it('reset globale usa il conteggio restituito e ricarica', () => {
+      const { c } = create();
+      c.switchTab('runtime');
+      c.resetAllRuntime();
+      expect(api.resetAllSharedState).toHaveBeenCalled();
+      expect(c.runtimeAnnouncement()).toContain('1');
+    });
+
+    it('un errore di caricamento resta visibile nella tab e permette un retry', () => {
+      api.listSharedState.mockReturnValueOnce(throwError(() => ({ error: { message: 'runtime down' } })));
+      const { fixture, c } = create();
+      c.switchTab('runtime');
+      fixture.detectChanges();
+      expect(c.runtimeError()).toBe('runtime down');
+      expect(fixture.nativeElement.textContent).toContain('runtime down');
+      expect(toast.show).toHaveBeenCalledWith(expect.objectContaining({ tone: 'error' }));
     });
   });
 

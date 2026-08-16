@@ -45,6 +45,11 @@ file è documentato nelle pagine dedicate al formato endpoint e response.
 middleware leggono a runtime tramite l'accessor `data()`. La cartella è piatta (nessuna
 sottocartella) e i nomi dei file sono normalizzati a lowercase.
 
+Lo [stato runtime condiviso](HANDLER.md) degli handler **non è un altro file del workspace**:
+vive soltanto nella memoria del motore. Un file dati può inizializzarlo, ma le mutazioni non
+vengono scritte su disco né condivise in git. Reload a caldo conserva lo stato; riavvio, crash o
+chiusura del relativo motore lo perdono e la prima richiesta riparte dal seed corrente.
+
 **`.gitignore`** viene generato alla prima apertura e ri-verificato a ogni apertura successiva:
 la riga che esclude la parte locale (`.mockxy/`) viene aggiunta se mancante, ed eventuali righe
 scritte da versioni precedenti e non più usate vengono rimosse. Il resto del file non viene
@@ -85,6 +90,9 @@ All'apertura di una cartella, l'app desktop distingue tre casi:
 Alla prima apertura viene assegnata (e salvata) una porta libera; da lì in poi il workspace
 riapre sempre sulla stessa porta, così i client configurati contro quell'indirizzo continuano a
 funzionare.
+
+Ogni workspace aperto ha il proprio store runtime isolato. Passare a un'altra scheda non lo
+cancella se il relativo motore resta aperto; chiudere il workspace o riavviarne il motore sì.
 
 ## Cosa condividere con il team
 

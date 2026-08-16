@@ -25,6 +25,7 @@ const { formatSseMessage, SseConnectionStore } = require("./mocks/sse-connection
 const { runWithTimeout } = require("./utils/run-with-timeout");
 const { ServerStateStore } = require("./server-state");
 const { setNoCacheHeaders } = require("./utils/cache");
+const { isSharedStateError } = require("./mocks/shared-state");
 
 const MAX_HANDLER_REQUEST_BODY_BYTES = 2 * 1024 * 1024;
 
@@ -268,7 +269,7 @@ function normalizeRemovedHeaders(removeHeaders) {
 }
 
 // Validates and converts the local handler result into a response payload.
-function buildHandlerResponsePayload(handlerResult) {
+function buildHandlerResponsePayload(handlerResult, req, caseInsensitiveFilters = true) {
   const isObjectResult = handlerResult != null && typeof handlerResult === "object";
   if (!isObjectResult || Array.isArray(handlerResult)) {
     throw new Error("resolveResponse must return an object");
@@ -281,8 +282,15 @@ function buildHandlerResponsePayload(handlerResult) {
 
   const hasBody = Object.prototype.hasOwnProperty.call(handlerResult, "body");
   const hasJsonBody = Object.prototype.hasOwnProperty.call(handlerResult, "jsonBody");
+  const hasApplyListQuery = Object.prototype.hasOwnProperty.call(handlerResult, "applyListQuery");
   if (hasBody && hasJsonBody) {
     throw new Error("resolveResponse cannot return both body and jsonBody");
+  }
+  if (hasApplyListQuery && typeof handlerResult.applyListQuery !== "boolean") {
+    throw new Error("resolveResponse applyListQuery must be a boolean when provided");
+  }
+  if (handlerResult.applyListQuery === true && !hasJsonBody) {
+    throw new Error("resolveResponse applyListQuery requires jsonBody");
   }
 
   const headers = sanitizeMockHeaders(cloneHeaders(handlerResult.headers));
@@ -291,12 +299,19 @@ function buildHandlerResponsePayload(handlerResult) {
   });
 
   if (hasJsonBody) {
+    const listPayload = handlerResult.applyListQuery === true
+      ? buildMockPayload(handlerResult.jsonBody, req, caseInsensitiveFilters)
+      : { body: handlerResult.jsonBody, totalCount: undefined };
+    if (listPayload.totalCount !== undefined) {
+      removeHeader(headers, "x-total-count");
+      headers["x-total-count"] = String(listPayload.totalCount);
+    }
     stripBodyDependentHeaders(headers);
     headers["content-type"] = "application/json; charset=utf-8";
     return {
       status: responseStatus,
       headers,
-      body: handlerResult.jsonBody,
+      body: listPayload.body,
       sendAsJson: true,
     };
   }
@@ -335,6 +350,18 @@ function logHandlerFailure(logger, req, handlerConfig, error) {
     error: error.message,
     errorName: error.name,
     errorStack: error.stack,
+    ...(isSharedStateError(error) ? {
+      sharedStateCode: error.code,
+      sharedStateName: error.meta?.name,
+      sharedStateRequestedSeedKey: error.meta?.requestedSeedKey,
+      sharedStateCurrentSeedKey: error.meta?.currentSeedKey,
+      sharedStateActualBytes: error.meta?.actualBytes,
+      sharedStateLimitBytes: error.meta?.limitBytes,
+      sharedStateActualEntries: error.meta?.actualEntries,
+      sharedStateLimitEntries: error.meta?.limitEntries,
+      sharedStateActualDepth: error.meta?.actualDepth,
+      sharedStateLimitDepth: error.meta?.limitDepth,
+    } : {}),
   });
 }
 
@@ -342,7 +369,14 @@ function logHandlerFailure(logger, req, handlerConfig, error) {
 // a JSON data file on demand (lazily: files never referenced are never opened).
 // `handlerRuntime` è la memoria per-endpoint (HandlerStateStore): state mutabile condiviso tra
 // le chiamate (e tra le varianti dell'endpoint), callCount progressivo e firstRequestAt.
-function buildHandlerContext(req, decision, requestSnapshot, dataFileReader, handlerRuntime) {
+function buildHandlerContext(
+  req,
+  decision,
+  requestSnapshot,
+  dataFileReader,
+  handlerRuntime,
+  sharedState
+) {
   return {
     req,
     params: decision.params || {},
@@ -355,6 +389,7 @@ function buildHandlerContext(req, decision, requestSnapshot, dataFileReader, han
     state: handlerRuntime.state,
     callCount: handlerRuntime.callCount,
     firstRequestAt: handlerRuntime.firstRequestAt,
+    sharedState,
   };
 }
 
@@ -381,25 +416,108 @@ function sendHandlerResponse(res, responsePayload) {
 
 // Executes a local dynamic handler without contacting the backend.
 // `handlerStates` è facoltativo (test/usi legacy): senza store lo script riceve comunque i
-// campi state/callCount/firstRequestAt, ma effimeri per la singola richiesta.
-async function respondWithHandler(req, res, decision, logger, requestTimeoutMs, dataFileReader, handlerStates) {
+// campi state/callCount/firstRequestAt, ma effimeri per la singola richiesta. Lo shared state,
+// invece, appartiene sempre al runtime ed è request-scoped tramite un facade esplicitamente
+// iniettato.
+async function respondWithHandler(
+  req,
+  res,
+  decision,
+  {
+    logger,
+    requestTimeoutMs,
+    dataFileReader,
+    handlerStates,
+    sharedStates,
+    caseInsensitiveFilters = true,
+  }
+) {
+  let clientDisconnected = false;
+  let sharedStateRequest = null;
+  const handleResponseClose = () => {
+    if (!res.writableEnded) {
+      clientDisconnected = true;
+      sharedStateRequest?.close();
+    }
+  };
+  res.once("close", handleResponseClose);
+
   try {
     const requestSnapshot = await readHandlerRequestSnapshot(req);
+    // IncomingMessage may be marked destroyed after a completely consumed body (notably under
+    // Supertest/Node auto-destroy). Only treat it as a lost client when parsing did not complete.
+    if (clientDisconnected || req.aborted || (req.destroyed && !req.complete) || res.destroyed) {
+      return;
+    }
+
+    sharedStateRequest = sharedStates.createRequestFacade({
+      method: decision.handler.method,
+      path: decision.handler.path,
+      responseFile: decision.handler.selectedResponseFile,
+    });
     const handlerRuntime = handlerStates != null
       ? handlerStates.enter(`${decision.handler.method} ${decision.handler.path}`)
       : { state: {}, callCount: 1, firstRequestAt: Date.now() };
-    const handlerResult = await runWithTimeout(
-      () => decision.handler.resolveResponse(buildHandlerContext(req, decision, requestSnapshot, dataFileReader, handlerRuntime)),
-      requestTimeoutMs,
-      {
-        code: "HANDLER_TIMEOUT",
-        message: `Handler timed out after ${requestTimeoutMs}ms.`,
-      }
+    let handlerResult;
+    try {
+      handlerResult = await runWithTimeout(
+        () => decision.handler.resolveResponse(buildHandlerContext(
+          req,
+          decision,
+          requestSnapshot,
+          dataFileReader,
+          handlerRuntime,
+          sharedStateRequest.api
+        )),
+        requestTimeoutMs,
+        {
+          code: "HANDLER_TIMEOUT",
+          message: `Handler timed out after ${requestTimeoutMs}ms.`,
+        }
+      );
+    } finally {
+      // A return, throw or timeout ends the request-scoped capability before response building.
+      sharedStateRequest.close();
+    }
+
+    if (clientDisconnected || res.writableEnded || res.destroyed) {
+      return;
+    }
+    sendHandlerResponse(
+      res,
+      buildHandlerResponsePayload(handlerResult, req, caseInsensitiveFilters)
     );
-    sendHandlerResponse(res, buildHandlerResponsePayload(handlerResult));
   } catch (error) {
+    // `code` alone is script-controlled. Silence only the utility error accompanied by an
+    // actual lost-client signal; a handler throwing an ordinary Error with the same code must
+    // still receive the standard 500 path.
+    if (
+      error.code === "CLIENT_ABORTED"
+      && (clientDisconnected || req.aborted || (req.destroyed && !req.complete) || res.destroyed)
+    ) {
+      return;
+    }
+
+    if (isSharedStateError(error)) {
+      req._sharedStateError = Object.fromEntries(Object.entries({
+        code: error.code,
+        name: error.meta?.name,
+        requestedSeedKey: error.meta?.requestedSeedKey,
+        currentSeedKey: error.meta?.currentSeedKey,
+        actualBytes: error.meta?.actualBytes,
+        limitBytes: error.meta?.limitBytes,
+        actualEntries: error.meta?.actualEntries,
+        limitEntries: error.meta?.limitEntries,
+        actualDepth: error.meta?.actualDepth,
+        limitDepth: error.meta?.limitDepth,
+        responseFile: decision.handler.selectedResponseFile,
+      }).filter(([, value]) => value !== undefined));
+    }
     logHandlerFailure(logger, req, decision.handler, error);
 
+    if (res.headersSent || res.writableEnded || res.destroyed) {
+      return;
+    }
     setNoCacheHeaders(res);
     res.setHeader(TECH_HEADER, "handler");
     if (error.code === "BODY_TOO_LARGE") {
@@ -418,11 +536,60 @@ async function respondWithHandler(req, res, decision, logger, requestTimeoutMs, 
       return;
     }
 
+    if (isSharedStateError(error)) {
+      const sharedStateResponse = buildSharedStateErrorResponse(error);
+      res.status(sharedStateResponse.status).json(sharedStateResponse.body);
+      return;
+    }
+
     res.status(500).json({
       error: "Handler Execution Failed",
       message: "Unable to generate a local handler response.",
     });
+  } finally {
+    sharedStateRequest?.close();
+    res.off("close", handleResponseClose);
   }
+}
+
+function buildSharedStateErrorResponse(error) {
+  const responses = {
+    SHARED_STATE_SEED_CONFLICT: {
+      status: 409,
+      message: "The shared runtime state has an incompatible seed. Stop traffic, find the resource in the Mockxy monitor or server log, reset it, then retry.",
+    },
+    SHARED_STATE_RESET_DURING_INITIALIZATION: {
+      status: 409,
+      message: "The shared runtime state was reset while this request was initializing. Retry the request only if it is safe. See the Mockxy monitor or server log.",
+    },
+    SHARED_STATE_STALE_HANDLE: {
+      status: 409,
+      message: "The shared runtime state was reset while this request was running. Retry the request only if it is safe. See the Mockxy monitor or server log.",
+    },
+    SHARED_STATE_STORE_CLOSED: {
+      status: 503,
+      message: "The shared runtime state is unavailable because Mockxy is shutting down. Retry later.",
+    },
+  };
+  const mapped = responses[error.code];
+  if (mapped != null) {
+    return {
+      status: mapped.status,
+      body: {
+        error: mapped.status === 503 ? "Shared State Unavailable" : "Shared State Conflict",
+        code: error.code,
+        message: mapped.message,
+      },
+    };
+  }
+  return {
+    status: 500,
+    body: {
+      error: "Handler Execution Failed",
+      code: error.code,
+      message: "Unable to use shared runtime state. See the Mockxy monitor or server log.",
+    },
+  };
 }
 
 // Resolves the effective response delay by giving precedence to the mock-specific delay.
@@ -809,9 +976,13 @@ function createApp({
   monitorDump,
   sequenceStates,
   handlerStates,
+  sharedStates,
   sseConnections = new SseConnectionStore(),
   wsConnections,
 }) {
+  if (sharedStates == null || typeof sharedStates.createRequestFacade !== "function") {
+    throw new TypeError("createApp requires an explicitly injected sharedStates store");
+  }
   const app = express();
   app.disable("x-powered-by");
 
@@ -819,7 +990,7 @@ function createApp({
   const dataFileReader = createDataFileReader(config?.filesDir);
 
   if (config?.adminApiEnabled !== false) {
-    app.use("/_admin/api", createAdminHostGuard(config), createAdminApiRouter({ config, reloadRuntime, requestMonitor, serverState, monitorDump, sequenceStates, handlerStates, sseConnections, wsConnections }));
+    app.use("/_admin/api", createAdminHostGuard(config), createAdminApiRouter({ config, reloadRuntime, requestMonitor, serverState, monitorDump, sequenceStates, handlerStates, sharedStates, sseConnections, wsConnections }));
   } else {
     app.use("/_admin/api", sendAdminApiDisabled);
   }
@@ -972,7 +1143,19 @@ function createApp({
       req._responseMode = "handler";
       req._matchedRoutePath = decision.routePath;
       req._sequenceStep = decision.sequenceStep;
-      await respondWithHandler(req, res, decision, logger, config.requestTimeoutMs, dataFileReader, handlerStates);
+      await respondWithHandler(
+        req,
+        res,
+        decision,
+        {
+          logger,
+          requestTimeoutMs: config.requestTimeoutMs,
+          dataFileReader,
+          handlerStates,
+          sharedStates,
+          caseInsensitiveFilters: config.caseInsensitiveFilters,
+        }
+      );
       return;
     }
 
@@ -1050,6 +1233,8 @@ module.exports = {
   respondWithMockOnlyMiss,
   respondWithBackendNotConfigured,
   buildMockPayload,
+  buildHandlerResponsePayload,
+  buildSharedStateErrorResponse,
   parsePaginationValues,
   readPagination,
   readPaginationFromUrl,

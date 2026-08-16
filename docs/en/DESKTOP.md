@@ -89,6 +89,10 @@ settings file and its local nature are documented in the
 [workspace anatomy](WORKSPACE.md) — and they never touch the headless flavor, which is
 configured through environment variables only.
 
+Restarting also clears [shared runtime state](HANDLER.md), sequence cursors and endpoint-local
+handler memory. Saving settings during a scenario therefore starts again from the seeds; merely
+switching to another workspace tab, without stopping the engine, keeps each store separately.
+
 ## The error log (`logs/`)
 
 Errors are also written to files, in a **`logs/`** subfolder. For the Windows portable and Linux

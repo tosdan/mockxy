@@ -11,7 +11,8 @@
     "unexpectedError": "Unexpected error.",
     "selectPlaceholder": "Select…",
     "noOptions": "No options",
-    "clearFilter": "Clear the filter"
+    "clearFilter": "Clear the filter",
+    "cancel": "Cancel"
   },
   "storico": {
     "title": "Dump history",
@@ -81,7 +82,29 @@
     "renameRewrite": "also update the data() references in the handlers ({{count}})",
     "renameRewriteAria": "Update the data() references in the handlers",
     "toastRenamedRewritten": "data() references updated ({{count}}) — check any dynamic data() calls",
-    "deleteWarnUsed": "{{count}} endpoints use this file with data(): deleting it will break them."
+    "deleteWarnUsed": "{{count}} endpoints use this file with data(): deleting it will break them.",
+    "tabsAria": "Data type",
+    "filesTab": "Data files",
+    "runtimeTab": "Runtime state",
+    "runtimeCount": "{{count}} resources · {{size}}",
+    "runtimeRefresh": "Refresh",
+    "runtimeResetAll": "Reset all",
+    "runtimeResetAllConfirm": "Reset {{count}} resources",
+    "runtimeLoading": "Loading runtime state…",
+    "runtimeRetry": "Retry",
+    "runtimeEmpty": "No runtime resource has been materialized.",
+    "runtimeEmptyHint": "Resources appear on the first sharedState.open() call and are recreated from their seed after a reset.",
+    "runtimeResource": "Resource / seedKey",
+    "runtimeStatus": "Status",
+    "runtimeSizeVersion": "Size / version",
+    "runtimeLastEndpoint": "Last endpoint",
+    "runtimeActions": "Actions",
+    "runtimeReset": "Reset",
+    "runtimeResetConfirm": "Confirm reset",
+    "runtimeTrafficCaveat": "Reset is immediate but does not pause traffic: a new request may initialize another generation right away.",
+    "runtimeResetDone": "Resource {{name}} reset.",
+    "runtimeAlreadyAbsent": "Resource {{name}} was already absent.",
+    "runtimeResetAllDone": "Reset {{count}} runtime resources."
   },
   "runtimeBar": {
     "serverOn": "Server on",
@@ -199,6 +222,8 @@
     "monitorDumpMaxTotalHint": "Once the cap is exceeded, the oldest dumps are deleted. 0 = pruning off. Default 1073741824 (1 GB). Changing it restarts the workspace server."
   },
   "monitor": {
+    "openSharedState": "Open shared state",
+    "openSharedStateTip": "Show the resource and its seedKey in the Data page",
     "paused": "Paused",
     "selectedCount": "{{count}} selected",
     "createMock": "Create mock",
@@ -415,6 +440,11 @@
     "copyAllResponses": "Copy all responses ({{count}})",
     "copyAllResponsesHint": "If off, copies only the currently selected response.",
     "copyAllResponsesAria": "Copy all responses",
+    "previewLoading": "Checking what will be copied…",
+    "previewReady": "Preview ready: {{responses}} responses · {{assets}} assets",
+    "previewFailed": "Unable to calculate the copy preview.",
+    "sharedStateWarning": "The copy will keep sharing runtime state: {{names}}.",
+    "sharedStateWarningHint": "To make it independent, change the name and seedKey in the copied source.",
     "cancel": "Cancel",
     "copy": "Copy"
   },
@@ -481,7 +511,7 @@
     "addStep": "Add step",
     "stateLine": "Current step: {{step}} · {{served}} requests served",
     "reset": "Start over",
-    "resetDone": "Sequence restarted from the first step",
+    "resetDone": "Sequence restarted from the first step; shared runtime state was not reset",
     "errMinSteps": "At least 2 steps are required.",
     "errMinVariants": "At least two usable mock or handler responses are required.",
     "errStepResponse": "Each step must reference a variant.",

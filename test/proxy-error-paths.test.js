@@ -2,6 +2,7 @@ const http = require("http");
 const zlib = require("zlib");
 const request = require("supertest");
 const { createApp } = require("../src/app");
+const { SharedStateStore } = require("../src/mocks/shared-state");
 const {
   buildBufferedUpstreamResponse,
   classifyUpstreamError,
@@ -250,6 +251,7 @@ describe("proxy sotto guasto (integrazione)", () => {
       logger: createNoopLogger(),
       proxyMiddlewareRegistry: new ProxyMiddlewareRegistry(proxyMiddlewareRouteGroups),
       requestMonitor: new RequestMonitorStore(),
+      sharedStates: new SharedStateStore(),
     });
   }
 

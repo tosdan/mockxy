@@ -1,5 +1,6 @@
 const request = require("supertest");
 const { createApp } = require("../src/app");
+const { SharedStateStore } = require("../src/mocks/shared-state");
 const { loadEndpointRouteGroups } = require("../src/mocks/endpoint-loader");
 const { mergeLocalRouteGroups } = require("../src/mocks/local-route-groups");
 const { MockRegistry } = require("../src/mocks/mock-registry");
@@ -85,6 +86,7 @@ describe("handler state nel serving", () => {
       proxyMiddlewareRegistry: new ProxyMiddlewareRegistry(proxyMiddlewareRouteGroups),
       requestMonitor: new RequestMonitorStore(),
       handlerStates,
+      sharedStates: new SharedStateStore(),
     });
   }
 

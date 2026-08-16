@@ -58,6 +58,7 @@ const { getAdminMockDetailAfterCommit } = require("./mock-catalog");
 const { normalizeSequenceResponse, computeSequenceSignature } = require("../mocks/sequence-config");
 const { normalizeSseConfig, validateSseMessage } = require("../mocks/sse-config");
 const { normalizeWsConfig, validateWsMessage } = require("../mocks/ws-config");
+const { findLiteralSharedStateReferences } = require("../mocks/shared-state-usage");
 
 // Mutazioni degli endpoint e delle loro response: creazione (mock o script), aggiornamento,
 // upload di asset, cancellazione e copia. Ogni mutazione scrive su disco con backup e, se il
@@ -1269,7 +1270,7 @@ async function deleteAdminMock(mocksDir, id, reloadRuntime) {
 // con copyResponses=true copia TUTTE le response e i relativi asset, preservando quella selezionata.
 // Description ed enabled vengono ereditati dalla sorgente. Errore 409 se al nuovo metodo+path esiste già
 // un endpoint (stesso metodo HTTP + stessa path → stessa cartella + file endpoint).
-async function copyAdminEndpoint(mocksDir, id, payload, reloadRuntime) {
+async function planAdminEndpointCopy(mocksDir, id, payload) {
   const sourceEndpointPath = resolveAdminFilePath(mocksDir, id);
   if (!fs.existsSync(sourceEndpointPath)) {
     throw createAdminError(404, "Endpoint definition not found.");
@@ -1324,6 +1325,9 @@ async function copyAdminEndpoint(mocksDir, id, payload, reloadRuntime) {
 
   // Raccogli i file da copiare: ogni response json + il suo eventuale asset (file/handler/middleware).
   const fileCopiesByTarget = new Map();
+  const assetFiles = [];
+  const seenAssetFiles = new Set();
+  const handlerSourcePaths = [];
   for (const responseFile of responseFiles) {
     const sourceResponsePath = resolvePayloadPath(sourceResponseDir, responseFile);
     if (!fs.existsSync(sourceResponsePath)) {
@@ -1340,6 +1344,13 @@ async function copyAdminEndpoint(mocksDir, id, payload, reloadRuntime) {
       }
       const assetTargetPath = resolvePayloadPath(targetResponseDir, assetFileName);
       fileCopiesByTarget.set(assetTargetPath, { sourcePath: sourceAssetPath, targetPath: assetTargetPath });
+      if (!seenAssetFiles.has(assetFileName)) {
+        seenAssetFiles.add(assetFileName);
+        assetFiles.push(assetFileName);
+      }
+      if (response.type === "handler") {
+        handlerSourcePaths.push(sourceAssetPath);
+      }
     }
   }
   const fileCopies = [...fileCopiesByTarget.values()];
@@ -1353,23 +1364,68 @@ async function copyAdminEndpoint(mocksDir, id, payload, reloadRuntime) {
     selectedResponseFile,
   };
 
+  const sharedStateRefs = new Set();
+  for (const handlerSourcePath of handlerSourcePaths) {
+    const source = await fs.promises.readFile(handlerSourcePath, "utf8");
+    for (const name of findLiteralSharedStateReferences(source)) {
+      sharedStateRefs.add(name);
+    }
+  }
+  const sortedSharedStateRefs = [...sharedStateRefs]
+    .sort((left, right) => left.localeCompare(right));
+
   const relativePath = toPosixRelativePath(path.relative(mocksDir, targetEndpointPath));
+  return {
+    targetEndpointPath,
+    targetResponseDir,
+    targetEndpoint,
+    responseFiles,
+    fileCopies,
+    relativePath,
+    preview: {
+      dryRun: true,
+      target: { method, path: routePath },
+      copyResponses: copyAll,
+      responseFiles: [...responseFiles],
+      assetFiles,
+      sharedStateRefs: sortedSharedStateRefs,
+      warnings: sortedSharedStateRefs.length === 0
+        ? []
+        : [{ code: "SHARED_STATE_REFERENCES_PRESERVED", names: sortedSharedStateRefs }],
+    },
+  };
+}
+
+async function previewAdminEndpointCopy(mocksDir, id, payload) {
+  return (await planAdminEndpointCopy(mocksDir, id, payload)).preview;
+}
+
+async function copyAdminEndpoint(mocksDir, id, payload, reloadRuntime) {
+  // Rebuild the plan at commit time: a successful preview is never trusted as a lock or token.
+  const plan = await planAdminEndpointCopy(mocksDir, id, payload);
+  const {
+    targetEndpointPath,
+    targetResponseDir,
+    targetEndpoint,
+    responseFiles,
+    fileCopies,
+    relativePath,
+  } = plan;
   const backups = [await readBackup(targetEndpointPath)];
   for (const fileCopy of fileCopies) {
     backups.push(await readBackup(fileCopy.targetPath));
   }
-
-  await fs.promises.mkdir(targetResponseDir, { recursive: true });
-  for (const fileCopy of fileCopies) {
-    await fs.promises.copyFile(fileCopy.sourcePath, fileCopy.targetPath);
-  }
-  await writeFileAtomic(targetEndpointPath, `${JSON.stringify(targetEndpoint, null, 2)}\n`, "utf8");
 
   await commitWithRollback({
     backups,
     reloadRuntime,
     rejectionLabel: "Endpoint copy rejected",
     commit: async () => {
+      await fs.promises.mkdir(targetResponseDir, { recursive: true });
+      for (const fileCopy of fileCopies) {
+        await fs.promises.copyFile(fileCopy.sourcePath, fileCopy.targetPath);
+      }
+      await writeFileAtomic(targetEndpointPath, `${JSON.stringify(targetEndpoint, null, 2)}\n`, "utf8");
       for (const responseFile of responseFiles) {
         const copiedResponsePath = resolvePayloadPath(targetResponseDir, responseFile);
         const copiedResponse = await readEndpointResponse(copiedResponsePath, targetEndpoint);
@@ -1399,4 +1455,5 @@ module.exports = {
   deleteAdminMock,
   deleteAdminMocksUnlocked,
   copyAdminEndpoint,
+  previewAdminEndpointCopy,
 };

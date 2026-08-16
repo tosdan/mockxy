@@ -255,6 +255,9 @@ function createRequestMonitorEntry({
     // Endpoint con sequenza: step servito ({ index, count, responseFile, responseTitle }),
     // altrimenti assente. La progressione della sequenza si legge da qui.
     sequenceStep: req._sequenceStep,
+    // Internal shared-state diagnostics are copied explicitly; the public mock response remains
+    // sanitized while the administrative monitor can identify the resource and seed contract.
+    sharedStateError: req._sharedStateError,
     middlewareRoutePath: req._proxyMiddlewareMeta?.routePath,
     middlewareFilePath: req._proxyMiddlewareMeta?.filePath,
     requestHeaders,

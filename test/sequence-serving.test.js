@@ -1,14 +1,17 @@
 const fs = require("fs");
+const http = require("http");
 const path = require("path");
 const request = require("supertest");
 const { createApp } = require("../src/app");
+const { SharedStateStore } = require("../src/mocks/shared-state");
 const { loadEndpointRouteGroups } = require("../src/mocks/endpoint-loader");
 const { mergeLocalRouteGroups } = require("../src/mocks/local-route-groups");
 const { MockRegistry } = require("../src/mocks/mock-registry");
 const { ProxyMiddlewareRegistry } = require("../src/proxy/proxy-middleware-registry");
 const { RequestMonitorStore } = require("../src/monitoring/request-monitor");
 const { SequenceStateStore } = require("../src/mocks/sequence-state");
-const { createNoopLogger, createTempDir, removeDir } = require("./helpers");
+const { HandlerStateStore } = require("../src/mocks/handler-state");
+const { createNoopLogger, createTempDir, removeDir, waitFor } = require("./helpers");
 
 // Serving delle sequenze di varianti: gli step vengono scelti a request-time dal cursore
 // (SequenceStateStore) e serviti secondo la loro natura (mock o handler).
@@ -74,7 +77,7 @@ describe("sequence serving", () => {
     return { type: "mock", title: "", status, headers: {}, delayMs: 0, body };
   }
 
-  async function buildApp({ sequenceStates, requestMonitor } = {}) {
+  async function buildApp({ sequenceStates, requestMonitor, handlerStates } = {}) {
     const { mockRouteGroups, handlerRouteGroups, proxyMiddlewareRouteGroups, sequenceRouteGroups, loadErrors } =
       await loadEndpointRouteGroups(mocksDir);
     expect(loadErrors).toEqual([]);
@@ -86,6 +89,8 @@ describe("sequence serving", () => {
       logger: createNoopLogger(),
       proxyMiddlewareRegistry: new ProxyMiddlewareRegistry(proxyMiddlewareRouteGroups),
       requestMonitor: requestMonitor || new RequestMonitorStore(),
+      handlerStates,
+      sharedStates: new SharedStateStore(),
     });
   }
 
@@ -130,8 +135,16 @@ describe("sequence serving", () => {
       },
       assets: {
         "002.handler.js": `module.exports = {
-  resolveResponse({ params }) {
-    return { status: 200, jsonBody: { status: "completed", id: params.id } };
+  async resolveResponse({ params, sharedState }) {
+    const state = await sharedState.open("sequence-result", {
+      seedKey: "sequence-result@v1",
+      initialize: () => ({ calls: 0 }),
+    });
+    const sharedCalls = state.mutate((draft) => {
+      draft.calls += 1;
+      return draft.calls;
+    });
+    return { status: 200, jsonBody: { status: "completed", id: params.id, sharedCalls } };
   },
 };
 `,
@@ -148,7 +161,67 @@ describe("sequence serving", () => {
     expect((await request(app).get("/api/misto/7")).body).toEqual({ status: "processing" });
     const done = await request(app).get("/api/misto/7");
     expect(done.headers["x-mock-source"]).toBe("handler");
-    expect(done.body).toEqual({ status: "completed", id: "7" });
+    expect(done.body).toEqual({ status: "completed", id: "7", sharedCalls: 1 });
+    expect((await request(app).get("/api/misto/8")).body)
+      .toEqual({ status: "completed", id: "8", sharedCalls: 2 });
+  });
+
+  test("un abort del body consuma lo step di routing ma non avvia né conta l'handler", async () => {
+    const sequenceStates = new SequenceStateStore();
+    const handlerStates = new HandlerStateStore();
+    await writeSequenceEndpoint({
+      folder: "abort",
+      method: "POST",
+      routePath: "/api/abort",
+      responses: {
+        "001.response.json": { type: "handler", title: "Handler", sourceFile: "001.handler.js" },
+        "002.response.json": mockResponse({ step: 2 }),
+      },
+      assets: {
+        "001.handler.js": `module.exports = {
+  resolveResponse({ callCount }) {
+    return { jsonBody: { callCount } };
+  },
+};
+`,
+      },
+      sequence: {
+        steps: [
+          { response: "001.response.json", times: 1 },
+          { response: "002.response.json" },
+        ],
+      },
+    });
+    const app = await buildApp({ sequenceStates, handlerStates });
+    const server = app.listen(0, "127.0.0.1");
+    await new Promise((resolve) => server.once("listening", resolve));
+
+    try {
+      const client = http.request({
+        host: "127.0.0.1",
+        port: server.address().port,
+        method: "POST",
+        path: "/api/abort",
+        headers: {
+          "content-type": "application/json",
+          "content-length": "100",
+        },
+      });
+      client.on("error", () => {});
+      client.write("{");
+
+      await waitFor(() => sequenceStates.entries.get("POST /api/abort")?.stepIndex === 1);
+      const clientClosed = new Promise((resolve) => client.once("close", resolve));
+      client.destroy();
+      await clientClosed;
+
+      const next = await request(server).post("/api/abort").send({});
+      expect(next.status).toBe(200);
+      expect(next.body).toEqual({ step: 2 });
+      expect(handlerStates.entries.has("POST /api/abort")).toBe(false);
+    } finally {
+      await new Promise((resolve) => server.close(resolve));
+    }
   });
 
   test("step forMs: si avanza a tempo, misurato dalla prima richiesta dello step", async () => {

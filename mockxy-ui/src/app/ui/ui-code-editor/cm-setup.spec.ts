@@ -21,6 +21,8 @@ describe('scriptCompletionSource', () => {
     expect(labels).toContain('handler');
     expect(labels).toContain('middleware');
     expect(labels).toContain('resolveResponse');
+    expect(labels).toContain('sharedState');
+    expect(labels).toContain('applyListQuery');
     expect(labels).toContain('transformResponse');
     expect(labels).toContain('jsonBody');
   });

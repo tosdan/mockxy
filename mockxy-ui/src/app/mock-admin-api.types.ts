@@ -347,6 +347,19 @@ export interface EndpointCopyRequest {
   copyResponses: boolean;
 }
 
+export interface EndpointCopyPreview {
+  dryRun: true;
+  target: { method: string; path: string };
+  copyResponses: boolean;
+  responseFiles: string[];
+  assetFiles: string[];
+  sharedStateRefs: string[];
+  warnings: Array<{
+    code: 'SHARED_STATE_REFERENCES_PRESERVED' | string;
+    names: string[];
+  }>;
+}
+
 export interface ResponseMockUpdateRequest {
   type: 'mock';
   title?: string;
@@ -468,6 +481,8 @@ export interface RequestMonitorEntry {
     responseFile: string;
     responseTitle?: string;
   };
+  /** Diagnostica amministrativa di un errore shared-state; mai inclusa nel body pubblico. */
+  sharedStateError?: SharedStateErrorMetadata;
   middlewareRoutePath?: string;
   middlewareFilePath?: string;
   requestHeaders: Record<string, string | string[]>;
@@ -478,6 +493,50 @@ export interface RequestMonitorEntry {
   responseBody?: string;
   responseBodyBytes?: number;
   responseBodyTruncated?: boolean;
+}
+
+export interface SharedStateErrorMetadata {
+  code: string;
+  name?: string;
+  requestedSeedKey?: string;
+  currentSeedKey?: string;
+  actualBytes?: number;
+  limitBytes?: number;
+  actualEntries?: number;
+  limitEntries?: number;
+  actualDepth?: number;
+  limitDepth?: number;
+  responseFile?: string;
+}
+
+export interface SharedStateOrigin {
+  method?: string;
+  path?: string;
+  responseFile?: string;
+}
+
+export interface SharedStateSummary {
+  name: string;
+  seedKey: string;
+  status: 'initializing' | 'ready';
+  version: number | null;
+  sizeBytes: number | null;
+  initializedAt: number | null;
+  updatedAt: number | null;
+  lastAccessAt: number | null;
+  initializedBy: SharedStateOrigin;
+  lastAccessedBy: SharedStateOrigin | null;
+}
+
+export interface SharedStateListResponse {
+  items: SharedStateSummary[];
+  totalBytes: number;
+  limits: {
+    maxEntries: number;
+    maxEntryBytes: number;
+    maxTotalBytes: number;
+    maxDepth: number;
+  };
 }
 
 export interface RequestMonitorListResponse {
