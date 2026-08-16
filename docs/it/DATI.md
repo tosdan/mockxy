@@ -59,6 +59,24 @@ un riavvio, ricarica quel file e la sua anteprima. Se il file non esiste più, l
 salvata viene ignorata; un upload completato seleziona invece il file appena caricato e mostra
 subito il contenuto aggiornato.
 
+### Il tab Stato runtime
+
+La stessa pagina ha due tab distinti: **File dati** gestisce i seed su disco; **Stato runtime**
+mostra le risorse JSON effimere aperte dagli handler tramite [`sharedState`](HANDLER.md). Per
+ogni risorsa mostra soltanto metadati — nome, `seedKey`, stato, versione, dimensione, timestamp e
+ultimo endpoint — mai il valore vivo. Da qui si può azzerare una singola risorsa o tutto lo
+store, con conferma e stato busy per evitare doppi comandi.
+
+Le due viste non sono due editor dello stesso dato. Se `items.json` inizializza `items`, la
+prima apertura ne crea una copia nello store; modificare in seguito il file non altera quella
+copia già viva. Il nuovo seed viene letto dopo un reset della risorsa o al riavvio del motore.
+Analogamente, una POST che muta lo stato runtime non modifica `items.json`.
+
+Il reset non ferma le richieste in arrivo: un client o un polling attivo può ricreare subito la
+risorsa. Prima di preparare uno scenario ripetibile, fermare il traffico, azzerare e soltanto
+poi avviare il frontend. Un link proveniente dal Monitor apre direttamente
+`/dati?tab=runtime&name=...` ed evidenzia la risorsa coinvolta nell'errore.
+
 ## Dimensioni
 
 Ogni chiamata `data()` rilegge e riparsa il file dal disco: fino al megabyte non si nota, ma un

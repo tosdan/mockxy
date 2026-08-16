@@ -8,6 +8,7 @@ const {
   resolveMockDelayMs,
   resolveProxyDelayMs,
 } = require("../src/app");
+const { SharedStateStore } = require("../src/mocks/shared-state");
 const { loadEndpointRouteGroups } = require("../src/mocks/endpoint-loader");
 const { MAX_MIDDLEWARE_BODY_BYTES } = require("../src/proxy/proxy");
 const { mergeLocalRouteGroups } = require("../src/mocks/local-route-groups");
@@ -102,6 +103,7 @@ describe("app integration", () => {
       proxyMiddlewareRegistry,
       requestMonitor: requestMonitor || new RequestMonitorStore(),
       serverState,
+      sharedStates: new SharedStateStore(),
     });
   }
 
@@ -2232,6 +2234,7 @@ describe("app integration", () => {
         requestTimeoutMs: 100,
       },
       logger,
+      sharedStates: new SharedStateStore(),
     });
 
     const response = await request(app).get("/unreachable");

@@ -11,7 +11,9 @@ prima della pagina**: questa pagina le documenta insieme.
 
 ## Quando si attivano
 
-Solo sui body **JSON di tipo `mock`** che sono:
+Si attivano automaticamente sui body **JSON di tipo `mock`**, oppure esplicitamente su una
+risposta di [handler](HANDLER.md) che restituisce `applyListQuery: true`. In entrambi i casi il
+body deve essere:
 
 - un **array** (`[ ... ]`), oppure
 - un **oggetto con esattamente una proprietà array di primo livello** — ad esempio
@@ -19,8 +21,21 @@ Solo sui body **JSON di tipo `mock`** che sono:
   filtrato sostituiscono l'array, le altre proprietà passano intatte. Con due o più proprietà
   array l'automatismo non si attiva (non ci sarebbe un criterio per scegliere).
 
-Restano fuori: body testuali, payload da `file`, risposte di handler e middleware, risposte
-proxate.
+Restano fuori: body testuali, payload da `file`, risposte di middleware, risposte proxate e gli
+handler che non fanno opt-in. Il flag è intenzionalmente disattivato per default, così una
+lista restituita da un handler esistente non cambia comportamento.
+
+```js
+return {
+  status: 200,
+  jsonBody: itemsState.read(),
+  applyListQuery: true,
+};
+```
+
+`applyListQuery` deve essere booleano e richiede `jsonBody`; un valore diverso o `true` insieme
+al solo `body` rende invalido il risultato dell'handler. Se il JSON non ha una delle forme lista
+qui sotto, il flag non lo modifica.
 
 ## I filtri
 

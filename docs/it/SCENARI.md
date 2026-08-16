@@ -45,6 +45,25 @@ matura, il confine si sposta **una zona alla volta**:
 - per il confronto rapido «come si comporta il backend su *tutto*?» c'è il [proxy
   totale](CONTROLLI.md), che sospende i mock senza perderli.
 
+### «Il frontend deve già provare un flusso GET → POST → GET»
+
+Una risposta statica non basta quando il frontend crea un elemento e si aspetta di ritrovarlo
+nella lista successiva. Si usa lo [stato runtime condiviso degli handler](HANDLER.md):
+
+1. si prepara `files/items.json` con il dataset iniziale;
+2. GET e POST diventano due handler distinti che aprono entrambi `items` con la stessa
+   `seedKey: "items@v1"` e `initialize: () => data("items")`;
+3. la GET restituisce `items.read()` e, se serve, `applyListQuery: true` per conservare filtri e
+   paginazione;
+4. la POST valida il body e usa `items.mutate(draft => ...)` per aggiungerlo atomicamente;
+5. prima di ogni prova si ferma il polling del frontend e si azzera `items` da **Dati → Stato
+   runtime** o dall'Admin API; la GET seguente riparte dal file seed.
+
+Il file non viene riscritto: è la baseline versionata in git, mentre gli item aggiunti vivono
+solo nel processo. Più browser condividono la stessa risorsa. Se la forma cambia, si incrementa
+la `seedKey`, si trova dal Monitor qualunque handler rimasto alla firma precedente e si esegue
+un reset esplicito. Riavvio o cambio effettivo del motore azzerano comunque tutto.
+
 ## «Questo caso non riesco a riprodurlo»
 
 Un 500, un timeout, una lista vuota, un dataset patologico: si fissa la risposta di **quel

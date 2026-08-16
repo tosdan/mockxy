@@ -117,6 +117,8 @@ tags:
     description: Live request feed, its durable NDJSON archive, and mock creation from captured traffic.
   - name: Server state
     description: Runtime switches that decide whether mocks are used at all.
+  - name: Shared runtime state
+    description: Metadata and reset actions for named JSON resources shared by local handlers. Values are never exposed.
 
 paths:
   # ───────────────────────────────── Catalog ─────────────────────────────────
@@ -611,6 +613,14 @@ paths:
         `copyResponses: true` copies every variant with its assets and preserves the selection.
         Since the path defines the folder, this is also how you "move" an
         endpoint: copy, then delete the original.
+        With `dryRun=true` the same planner validates the destination and returns files, assets
+        and best-effort literal shared-state references without writing or reloading anything.
+      parameters:
+        - name: dryRun
+          in: query
+          required: false
+          schema: { type: boolean, default: false }
+          description: Must occur at most once and be exactly `true` or `false` on the wire.
       requestBody:
         required: true
         content:
@@ -626,6 +636,11 @@ paths:
                   default: false
             example: { method: GET, path: /api/v2/users, copyResponses: true }
       responses:
+        "200":
+          description: Read-only copy plan (`dryRun=true`).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EndpointCopyPreview" }
         "201":
           description: The new endpoint
           content:
@@ -706,6 +721,8 @@ paths:
         Runtime action, no file touched: the next request starts over from the first step.
         It also clears the endpoint's **handler memory** (`state`, `callCount`,
         `firstRequestAt`), otherwise a handler step would resume mid-story.
+      requestBody:
+        $ref: "#/components/requestBodies/EmptyJsonObject"
       responses:
         "200":
           description: The reset cursor
@@ -1322,6 +1339,8 @@ paths:
       operationId: flushDump
       summary: Flush the buffered entries now
       description: Writes whatever is buffered and waits for the write queue to drain — the way to make captured traffic readable immediately (e.g. in a test).
+      requestBody:
+        $ref: "#/components/requestBodies/EmptyJsonObject"
       responses:
         "200":
           description: How many entries were taken in, plus the current status.
@@ -1334,6 +1353,66 @@ paths:
                     properties:
                       flushed: { type: integer }
                   - { $ref: "#/components/schemas/DumpStatus" }
+
+  # ─────────────────────────── Shared runtime state ─────────────────────────
+  /runtime/shared-state:
+    get:
+      tags: [Shared runtime state]
+      operationId: listSharedRuntimeState
+      summary: List shared-state metadata and limits
+      description: Returns lifecycle metadata and resource identities, never stored JSON values.
+      responses:
+        "200":
+          description: Current resources, aggregate bytes and defensive limits.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SharedStateList" }
+
+  /runtime/shared-state/{name}/reset:
+    parameters:
+      - name: name
+        in: path
+        required: true
+        schema: { type: string }
+        description: Canonical shared-state resource name (case and surrounding whitespace are normalized).
+    post:
+      tags: [Shared runtime state]
+      operationId: resetSharedRuntimeState
+      summary: Reset one resource generation
+      description: Idempotent and immediate. It does not reload files or reset sequence/handler-local state.
+      requestBody:
+        $ref: "#/components/requestBodies/EmptyJsonObject"
+      responses:
+        "200":
+          description: Whether a current generation existed.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [name, reset]
+                properties:
+                  name: { type: string }
+                  reset: { type: boolean }
+        "400": { $ref: "#/components/responses/BadRequest" }
+
+  /runtime/shared-state/reset:
+    post:
+      tags: [Shared runtime state]
+      operationId: resetAllSharedRuntimeState
+      summary: Reset every resource generation
+      description: Counts ready and initializing entries removed at the linearization point.
+      requestBody:
+        $ref: "#/components/requestBodies/EmptyJsonObject"
+      responses:
+        "200":
+          description: Number of removed entries.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [resetCount]
+                properties:
+                  resetCount: { type: integer, minimum: 0 }
 
   /monitoring/dumps:
     get:
@@ -1524,6 +1603,15 @@ paths:
         "400": { $ref: "#/components/responses/BadRequest" }
 
 components:
+  requestBodies:
+    EmptyJsonObject:
+      required: true
+      description: An actual non-empty `application/json` payload whose parsed value is exactly `{}`.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/EmptyJsonObject"
+          example: {}
   parameters:
     MockId:
       name: id
@@ -1633,6 +1721,74 @@ components:
           schema: { $ref: "#/components/schemas/ServerState" }
 
   schemas:
+    EmptyJsonObject:
+      type: object
+      maxProperties: 0
+      additionalProperties: false
+
+    EndpointCopyPreview:
+      type: object
+      required: [dryRun, target, copyResponses, responseFiles, assetFiles, sharedStateRefs, warnings]
+      properties:
+        dryRun: { type: boolean, const: true }
+        target:
+          type: object
+          required: [method, path]
+          properties:
+            method: { $ref: "#/components/schemas/HttpMethod" }
+            path: { $ref: "#/components/schemas/RoutePath" }
+        copyResponses: { type: boolean }
+        responseFiles: { type: array, items: { type: string } }
+        assetFiles: { type: array, items: { type: string } }
+        sharedStateRefs: { type: array, items: { type: string } }
+        warnings:
+          type: array
+          items:
+            type: object
+            required: [code, names]
+            properties:
+              code: { type: string, const: SHARED_STATE_REFERENCES_PRESERVED }
+              names: { type: array, items: { type: string } }
+
+    SharedStateOrigin:
+      type: object
+      properties:
+        method: { type: string }
+        path: { type: string }
+        responseFile: { type: string }
+
+    SharedStateSummary:
+      type: object
+      required: [name, seedKey, status, version, sizeBytes, initializedAt, updatedAt, lastAccessAt, initializedBy, lastAccessedBy]
+      properties:
+        name: { type: string }
+        seedKey: { type: string }
+        status: { type: string, enum: [initializing, ready] }
+        version: { type: [integer, "null"] }
+        sizeBytes: { type: [integer, "null"] }
+        initializedAt: { type: [integer, "null"], description: Epoch milliseconds. }
+        updatedAt: { type: [integer, "null"], description: Epoch milliseconds. }
+        lastAccessAt: { type: [integer, "null"], description: Epoch milliseconds. }
+        initializedBy: { $ref: "#/components/schemas/SharedStateOrigin" }
+        lastAccessedBy:
+          oneOf:
+            - { $ref: "#/components/schemas/SharedStateOrigin" }
+            - { type: "null" }
+
+    SharedStateList:
+      type: object
+      required: [items, totalBytes, limits]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/SharedStateSummary" } }
+        totalBytes: { type: integer, minimum: 0 }
+        limits:
+          type: object
+          required: [maxEntries, maxEntryBytes, maxTotalBytes, maxDepth]
+          properties:
+            maxEntries: { type: integer }
+            maxEntryBytes: { type: integer }
+            maxTotalBytes: { type: integer }
+            maxDepth: { type: integer }
     # ── Shared primitives ────────────────────────────────────────────────────
     Error:
       type: object
@@ -2467,6 +2623,22 @@ components:
             count: { type: integer }
             responseFile: { type: string }
             responseTitle: { type: string }
+        sharedStateError:
+          type: object
+          description: Administrative diagnostics for an uncaught shared-state error. Stored values and request bodies are never included.
+          required: [code]
+          properties:
+            code: { type: string }
+            name: { type: string }
+            requestedSeedKey: { type: string }
+            currentSeedKey: { type: string }
+            actualBytes: { type: integer }
+            limitBytes: { type: integer }
+            actualEntries: { type: integer }
+            limitEntries: { type: integer }
+            actualDepth: { type: integer }
+            limitDepth: { type: integer }
+            responseFile: { type: string }
         middlewareRoutePath: { type: string }
         middlewareFilePath: { type: string }
         requestHeaders:

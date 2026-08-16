@@ -100,6 +100,16 @@ describe('MonitorNextPage', () => {
     expect(c.entries().length).toBe(3);
   });
 
+  it('apre con deep link la risorsa shared-state diagnosticata', () => {
+    const { c } = create();
+    const router = TestBed.inject(Router);
+    const navigate = vi.spyOn(router, 'navigate').mockResolvedValue(true);
+    c.goToSharedState('items');
+    expect(navigate).toHaveBeenCalledWith(['/dati'], {
+      queryParams: { tab: 'runtime', name: 'items' },
+    });
+  });
+
   it('calcola le statistiche su tutte le entry', () => {
     const { c } = create();
     expect(c.total()).toBe(3);

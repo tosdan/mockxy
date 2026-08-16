@@ -5,6 +5,7 @@ const { createServerRuntime } = require("../src/server");
 const {
   createNoopLogger,
   createTempDir,
+  writeHandler,
   writeMock,
   removeDir,
   startBackendServer,
@@ -79,6 +80,81 @@ describe("mock watch behavior", () => {
       if (runtime.watcher) {
         await runtime.watcher.close();
       }
+    }
+  }, 15000);
+
+  test("il reload a caldo degli handler conserva lo shared runtime state", async () => {
+    const getSource = (revision, seedId) => `module.exports = {
+  method: "GET",
+  path: "/hot-shared",
+  async resolveResponse({ sharedState }) {
+    const state = await sharedState.open("hot-shared", {
+      seedKey: "hot-shared@v1",
+      initialize: () => [{ id: ${seedId} }],
+    });
+    return { jsonBody: { revision: ${JSON.stringify(revision)}, items: state.read() } };
+  },
+};
+`;
+    await writeHandler({
+      mocksDir,
+      folder: "hot-shared-get",
+      method: "GET",
+      source: getSource("before", 1),
+    });
+    await writeHandler({
+      mocksDir,
+      folder: "hot-shared-post",
+      method: "POST",
+      source: `module.exports = {
+  method: "POST",
+  path: "/hot-shared",
+  async resolveResponse({ jsonBody, sharedState }) {
+    const state = await sharedState.open("hot-shared", {
+      seedKey: "hot-shared@v1",
+      initialize: () => [{ id: 1 }],
+    });
+    state.mutate((draft) => { draft.push(jsonBody); });
+    return { status: 201, jsonBody };
+  },
+};
+`,
+    });
+    const runtime = await createServerRuntime({
+      configOverrides: {
+        backendUrl: backend.url,
+        mocksDir,
+        devWatch: true,
+        nodeEnv: "development",
+      },
+      logger: createNoopLogger(),
+    });
+
+    try {
+      if (runtime.watcher) {
+        await new Promise((resolve) => runtime.watcher.on("ready", resolve));
+      }
+      expect((await request(runtime.app).post("/hot-shared").send({ id: 2 })).status).toBe(201);
+
+      // Il nuovo initializer è deliberatamente diverso: se il reload azzerasse lo store,
+      // comparirebbe 999. Lo stato live deve invece mantenere seed e mutazione precedenti.
+      await writeHandler({
+        mocksDir,
+        folder: "hot-shared-get",
+        method: "GET",
+        source: getSource("after", 999),
+      });
+
+      await waitFor(async () => {
+        const response = await request(runtime.app).get("/hot-shared");
+        return response.body.revision === "after"
+          && JSON.stringify(response.body.items) === JSON.stringify([{ id: 1 }, { id: 2 }]);
+      }, 5000);
+    } finally {
+      if (runtime.watcher) {
+        await runtime.watcher.close();
+      }
+      runtime.sharedStates.close();
     }
   }, 15000);
 

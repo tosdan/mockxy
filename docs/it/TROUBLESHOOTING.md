@@ -30,7 +30,8 @@ incriminato). Qui sotto, i sintomi ricorrenti per area.
   livello in modo esatto (maiuscole comprese: è il *valore* a essere case-insensitive), e la
   chiave deve avere valori scalari ([liste](LISTE.md)).
 - **La paginazione non si attiva.** Servono **entrambi** `page` e `size`, validi; e il body
-  dev'essere un array o un oggetto con *un solo* array di primo livello.
+  dev'essere un array o un oggetto con *un solo* array di primo livello. Se la risposta viene
+  da un handler, questo deve restituire anche `applyListQuery: true`.
 - **`X-Total-Count` non è quello dichiarato nel mock.** Con filtro o paginazione attivi vince
   sempre il valore calcolato.
 
@@ -53,6 +54,16 @@ incriminato). Qui sotto, i sintomi ricorrenti per area.
   timeout); il file è indicato nel log.
 - **`413 Payload Too Large`** — il body della richiesta supera i 2 MB: l'handler non viene
   nemmeno eseguito.
+- **`409 Shared State Conflict`** — durante la richiesta la risorsa è stata azzerata, oppure un
+  handler usa una `seedKey` diversa dagli altri. La risposta pubblica non rivela il nome: aprire
+  la voce nel Monitor, seguire «Apri stato condiviso», fermare il traffico e azzerare la risorsa.
+  Non riprovare automaticamente una POST se non si sa che lo scenario è idempotente.
+- **Lo stato condiviso ignora la modifica al file dati.** È intenzionale: il file è letto solo
+  quando nasce una generazione. Azzerare la risorsa da **Dati → Stato runtime**; se forma e codice
+  sono cambiati, incrementare prima la `seedKey` in tutti gli handler.
+- **Gli item aggiunti sono spariti.** Lo stato condiviso è volatile: riavvio, chiusura o cambio
+  effettivo del motore ripartono dal seed. Anche browser e test diversi sulla stessa istanza lo
+  condividono, quindi isolare le suite con un reset esplicito.
 - **Il middleware non trasforma.** Risposte oltre 10 MB e stream (`text/event-stream`) passano
   integre con `x-mock-source: backend` e un avviso nel log; un middleware che *fallisce* è
   fail-open: passa la risposta originale ([i middleware](MIDDLEWARE.md)).

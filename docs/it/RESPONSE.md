@@ -252,7 +252,9 @@ Se è selezionata, la sequence decide quale response serve ogni richiesta. Non c
   richiesta successiva. Assente significa mai.
 
 Il cursore è globale per endpoint e non viene persistito. La UI espone stato e reset; l'admin
-API offre `GET /mocks/:id/sequence/state` e `POST /mocks/:id/sequence/reset`. Non si può
+API offre `GET /mocks/:id/sequence/state` e `POST /mocks/:id/sequence/reset` (JSON `{}`). Il
+reset azzera cursore e memoria handler locale, ma lascia invariato l'eventuale [stato condiviso
+fra handler](HANDLER.md); il suo reset è separato nella pagina Dati. Non si può
 cancellare una response referenziata: l'API risponde `409` indicando le sequence dipendenti.
 
 ## Validazione ed errori

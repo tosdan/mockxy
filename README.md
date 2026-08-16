@@ -37,6 +37,7 @@ You don't have to mock everything to get started: begin with zero mocks, work as
   - [Mocks are files](#mocks-are-files)
   - [Dynamic responses: handlers](#dynamic-responses-handlers)
     - [Reusing saved data: `data()`](#reusing-saved-data-data)
+    - [Sharing runtime state between handlers](#sharing-runtime-state-between-handlers)
   - [Transforming backend responses: middleware](#transforming-backend-responses-middleware)
   - [OpenAPI import](#openapi-import)
   - [Reusable data: the Data page](#reusable-data-the-data-page)
@@ -79,6 +80,7 @@ None of these is textbook development — no team is perfect. But it's what actu
 - ⏱️ **Simulated latency**: per-response delay or a global delay to emulate a slow network.
 - 📄 **Automatic pagination and filters**: if the body is an array, `?page=0&size=10` returns just the requested page (total in the `X-Total-Count` header) and `?key=value` filters items by equality (case-insensitive by default).
 - 🧩 **Stateful JavaScript handlers**: when static JSON isn't enough, generate the response from the request, reusable data and per-endpoint ephemeral memory (`state`, `callCount`, `firstRequestAt`).
+- 🔗 **Shared handler state**: named JSON resources let different handlers model stateful flows such as POST → GET, with explicit seed compatibility, reset controls and no writes to workspace files.
 - 🗂️ **Reusable data files**: upload JSON collections in the Data page and read them from handlers with `data("name")` to serve or reshape them, without pasting them into code.
 - 🔧 **Proxy middleware**: intercept the real backend's response and transform it before it reaches your application.
 - 📥 **OpenAPI / Swagger import**: from a 3.x or 2.0 spec, generates a mock for every endpoint, with bodies derived from examples and schemas — a solid base to refine by hand.
@@ -311,6 +313,34 @@ Files are referenced by **name without extension** (`data("users")` → `users.j
 
 The same `data()` is available in **proxy middleware** too (see below), to enrich the backend's real response with your own data.
 
+### Sharing runtime state between handlers
+
+When two handlers must see the same evolving resource — for example a frontend creates an item
+with `POST /api/items` and expects the next `GET /api/items` to include it — open the same named
+resource from both scripts:
+
+```js
+const items = await sharedState.open("items", {
+  seedKey: "items@v1",
+  initialize: () => data("items"),
+});
+
+// POST handler
+const created = items.mutate((draft) => {
+  draft.push(jsonBody);
+  return jsonBody;
+});
+
+// GET handler
+return { jsonBody: items.read(), applyListQuery: true };
+```
+
+The data file is only the seed: the live JSON stays in memory, survives handler hot reload and
+never writes back to disk. It is lost on restart/workspace change and can be reset per resource
+or globally from **Data → Runtime state**. `seedKey` is the required compatibility signature:
+bump it when the resource shape changes, then reset. The complete lifecycle, concurrency, limits
+and error contract is in [docs/en/HANDLER.md](docs/en/HANDLER.md#shared-runtime-state).
+
 ## Transforming backend responses: middleware
 
 The third variant type is the **proxy middleware**: the request really reaches the backend, but before the response goes back to your application you can inspect and modify it. The typical use case is the contract running ahead of the implementation: the backend still answers in the old shape and you add the new fields your client already expects, while keeping real data. It's also handy to fix a payload that isn't aligned yet, or to strip extra headers.
@@ -338,7 +368,7 @@ The import is designed to give you **a complete working base in seconds**, not p
 
 ## Reusable data: the Data page
 
-The **Data** page collects the JSON files that handlers (and middleware) read with `data("name")` — see [handlers](#reusing-saved-data-data). From here you upload files (`.json` only, in bulk or by drag & drop), review their content, rename or delete them; the "copy reference" button gives you a snippet ready to paste into a handler. Files live in `FILES_DIR` (`workspace/files`) and are versioned like mocks: a demo's dataset travels with the repo. The on-disk contract, `data()` semantics and page details are in [docs/en/DATI.md](docs/en/DATI.md).
+The **Data** page collects the JSON files that handlers (and middleware) read with `data("name")` — see [handlers](#reusing-saved-data-data). From here you upload files (`.json` only, in bulk or by drag & drop), review their content, rename or delete them; the "copy reference" button gives you a snippet ready to paste into a handler. Its **Runtime state** tab instead shows metadata for live shared resources and provides per-resource/global reset without exposing their values. Files live in `FILES_DIR` (`workspace/files`) and are versioned like mocks: a demo's dataset travels with the repo. The on-disk and runtime contracts, `data()` semantics and page details are in [docs/en/DATI.md](docs/en/DATI.md).
 
 Each file shows **which endpoints use it** (recognizing `data("name")` references written as string literals), and the **safe rename** builds on that map: when you rename a referenced file, Mockxy offers to rewrite the occurrences in the sources that use it — an all-or-nothing rewrite, with a final summary and a runtime reload.
 

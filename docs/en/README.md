@@ -25,13 +25,14 @@ relevant page in the same round as the code.
   precedence rules, what never gets delayed and where each level is configured.
 - [Handlers](HANDLER.md) — responses computed by local scripts: the contract of
   `resolveResponse`, the context received (params, query, headers, body in three forms,
-  `data()`, `state`, `callCount`, `firstRequestAt`), the result format, errors, timeouts and limits.
+  `data()`, `sharedState`, `state`, `callCount`, `firstRequestAt`), JSON state shared between
+  endpoints, the result format, errors, timeouts and limits.
 - [Proxy middleware](MIDDLEWARE.md) — transforming the real backend's responses: the
   contract of `transformResponse`, headers merged on top of the backend's, the bypass cases
   (streams, over 10 MB) and the fail-open behavior on errors.
 - [Data files and `data()`](DATI.md) — the reusable JSON datasets: the on-disk contract
   (canonical names, flat folder), re-read and per-call copy semantics, the Data page
-  (upload, safe rename with reference rewriting), size limits.
+  (files, runtime state and reset, safe rename with reference rewriting), limits.
 - [The proxy fallback](PROXY.md) — the request-by-request mock/proxy decision, what gets
   forwarded to the backend, errors and timeout semantics (up to the first headers), and the
   full taxonomy of the `x-mock-source` header.
@@ -77,8 +78,8 @@ relevant page in the same round as the code.
 ## Guides
 
 - [The usage scenarios](SCENARI.md) — the step-by-step walkthroughs behind the proxy+capture
-  design: staging reset, contract ahead of the backend, the mock/real boundary that moves, the
-  hard-to-reproduce case.
+  design: staging reset, contract ahead of the backend, the mock/real boundary that moves, a
+  stateful frontend GET→POST→GET flow, and the hard-to-reproduce case.
 - [Wiring up the frontend](FRONTEND.md) — dev-server proxy or direct cross-origin calls:
   what each route requires and how to verify that everything goes through Mockxy.
 - [Troubleshooting](TROUBLESHOOTING.md) — symptom by symptom, area by area, with the

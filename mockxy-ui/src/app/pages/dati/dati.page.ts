@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
+import { ActivatedRoute, Router } from '@angular/router';
 import { finalize } from 'rxjs';
 import { NgIcon, provideIcons } from '@ng-icons/core';
 import {
@@ -6,6 +7,8 @@ import {
   lucideClipboardCopy,
   lucideFileJson,
   lucidePencil,
+  lucideRefreshCw,
+  lucideRotateCcw,
   lucideTrash2,
   lucideTriangleAlert,
   lucideUpload,
@@ -21,7 +24,7 @@ import { UiInput } from '../../ui/ui-input/ui-input';
 import { UiTooltip } from '../../ui/ui-tooltip/ui-tooltip';
 import { ToastService } from '../../ui/ui-toast/ui-toast';
 import { MockAdminApiService } from '../../mock-admin-api.service';
-import type { DataFileSummary, DataFileUsage } from '../../mock-admin-api.types';
+import type { DataFileSummary, DataFileUsage, SharedStateSummary } from '../../mock-admin-api.types';
 
 /** Avviso non bloccante oltre questa dimensione: i file grandi si pagano a ogni chiamata data(). */
 const LARGE_FILE_WARNING_BYTES = 5 * 1024 * 1024;
@@ -43,6 +46,8 @@ const SELECTED_FILE_STATE_KEY = 'dati-selected';
       lucideClipboardCopy,
       lucideFileJson,
       lucidePencil,
+      lucideRefreshCw,
+      lucideRotateCcw,
       lucideTrash2,
       lucideTriangleAlert,
       lucideUpload,
@@ -67,18 +72,36 @@ const SELECTED_FILE_STATE_KEY = 'dati-selected';
           <div class="text-sm font-bold tracking-tight">{{ 'dati.title' | transloco }}</div>
           <div class="text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground">{{ 'dati.subtitle' | transloco }}</div>
         </div>
-        <span class="text-[12px] text-muted-foreground">{{ 'dati.count' | transloco: { count: files().length } }}</span>
+        <div class="ml-2 flex items-center rounded-lg bg-muted p-0.5" role="tablist" [attr.aria-label]="'dati.tabsAria' | transloco">
+          <button id="dati-files-tab" type="button" role="tab" aria-controls="dati-files-panel" class="rounded-md px-3 py-1.5 text-[12px] font-semibold transition" [class.bg-card]="activeTab() === 'files'" [attr.aria-selected]="activeTab() === 'files'" (click)="switchTab('files')">{{ 'dati.filesTab' | transloco }}</button>
+          <button id="dati-runtime-tab" type="button" role="tab" aria-controls="dati-runtime-panel" class="rounded-md px-3 py-1.5 text-[12px] font-semibold transition" [class.bg-card]="activeTab() === 'runtime'" [attr.aria-selected]="activeTab() === 'runtime'" (click)="switchTab('runtime')">{{ 'dati.runtimeTab' | transloco }}</button>
+        </div>
+        <span class="text-[12px] text-muted-foreground">
+          @if (activeTab() === 'files') { {{ 'dati.count' | transloco: { count: files().length } }} }
+          @else { {{ 'dati.runtimeCount' | transloco: { count: runtimeItems().length, size: formatSize(runtimeTotalBytes()) } }} }
+        </span>
 
         <div class="ml-auto flex items-center gap-2">
+          @if (activeTab() === 'files') {
           <button ui-button size="sm" [disabled]="busy()" (click)="fileInput.click()">
             <ng-icon name="lucideUpload" size="0.9rem" /> {{ 'dati.upload' | transloco }}
           </button>
           <input #fileInput type="file" class="hidden" accept=".json,application/json" multiple (change)="onFilesSelected($event)" />
+          } @else {
+          <button ui-button variant="outline" size="sm" [disabled]="runtimeLoading()" (click)="reloadRuntime()"><ng-icon name="lucideRefreshCw" size="0.9rem" /> {{ 'dati.runtimeRefresh' | transloco }}</button>
+          @if (confirmingResetAll()) {
+          <button ui-button variant="destructive" size="sm" autofocus [disabled]="runtimeBusyAll()" (click)="resetAllRuntime()"><ng-icon name="lucideRotateCcw" size="0.9rem" /> {{ 'dati.runtimeResetAllConfirm' | transloco: { count: runtimeItems().length } }}</button>
+          <button ui-button variant="outline" size="sm" (click)="confirmingResetAll.set(false)">{{ 'common.cancel' | transloco }}</button>
+          } @else {
+          <button ui-button variant="destructive" size="sm" [disabled]="runtimeItems().length === 0 || runtimeLoading()" (click)="confirmingResetAll.set(true)"><ng-icon name="lucideRotateCcw" size="0.9rem" /> {{ 'dati.runtimeResetAll' | transloco }}</button>
+          }
+          }
         </div>
       </header>
 
+      @if (activeTab() === 'files') {
       <!-- BODY: lista + preview -->
-      <div class="relative z-10 flex min-h-0 flex-1">
+      <div id="dati-files-panel" class="relative z-10 flex min-h-0 flex-1" role="tabpanel" aria-labelledby="dati-files-tab">
         <div class="flex min-h-0 w-[420px] shrink-0 flex-col border-r border-border">
           @if (files().length === 0 && !loading()) {
           <div class="flex flex-1 flex-col items-center justify-center gap-3 p-8 text-center">
@@ -203,6 +226,57 @@ const SELECTED_FILE_STATE_KEY = 'dati-selected';
           }
         </div>
       </div>
+      } @else {
+      <div id="dati-runtime-panel" class="relative z-10 min-h-0 flex-1 overflow-y-auto mx-scroll p-5" role="tabpanel" aria-labelledby="dati-runtime-tab">
+        <p class="sr-only" aria-live="polite">{{ runtimeAnnouncement() }}</p>
+        @if (runtimeLoading() && runtimeItems().length === 0) {
+        <div class="grid h-full place-items-center text-[13px] text-muted-foreground">{{ 'dati.runtimeLoading' | transloco }}</div>
+        } @else if (runtimeError(); as error) {
+        <div class="grid h-full place-items-center p-8 text-center">
+          <div>
+            <ng-icon name="lucideTriangleAlert" size="2rem" class="text-destructive-soft" />
+            <p class="mt-3 text-[13px] text-destructive-soft">{{ error }}</p>
+            <button ui-button variant="outline" size="sm" class="mt-3" (click)="reloadRuntime()">{{ 'dati.runtimeRetry' | transloco }}</button>
+          </div>
+        </div>
+        } @else if (runtimeItems().length === 0) {
+        <div class="grid h-full place-items-center p-8 text-center">
+          <div>
+            <ng-icon name="lucideRefreshCw" size="2rem" class="text-muted-foreground/50" />
+            <p class="mt-3 text-[13px] text-muted-foreground">{{ 'dati.runtimeEmpty' | transloco }}</p>
+            <p class="mt-1 max-w-[52ch] text-[12px] text-muted-foreground/80">{{ 'dati.runtimeEmptyHint' | transloco }}</p>
+          </div>
+        </div>
+        } @else {
+        <div class="overflow-hidden rounded-xl border border-border bg-card">
+          <table class="w-full border-collapse text-left text-[12px]">
+            <thead class="bg-muted text-[10.5px] font-bold uppercase tracking-[0.12em] text-muted-foreground">
+              <tr><th class="px-4 py-2.5">{{ 'dati.runtimeResource' | transloco }}</th><th class="px-4 py-2.5">{{ 'dati.runtimeStatus' | transloco }}</th><th class="px-4 py-2.5">{{ 'dati.runtimeSizeVersion' | transloco }}</th><th class="px-4 py-2.5">{{ 'dati.runtimeLastEndpoint' | transloco }}</th><th class="px-4 py-2.5 text-right">{{ 'dati.runtimeActions' | transloco }}</th></tr>
+            </thead>
+            <tbody>
+              @for (item of runtimeItems(); track item.name) {
+              <tr class="border-t border-border-soft" [class.mx-selected]="item.name === selectedRuntimeName()" [attr.data-shared-state-name]="item.name">
+                <td class="px-4 py-3 align-top"><div class="font-mono text-[13px] font-bold">{{ item.name }}</div><div class="mt-1 font-mono text-[11px] text-muted-foreground">{{ item.seedKey }}</div></td>
+                <td class="px-4 py-3 align-top"><span class="rounded-md bg-muted px-2 py-1 text-[10.5px] font-bold">{{ item.status }}</span></td>
+                <td class="px-4 py-3 align-top font-mono tabular-nums"><div>{{ item.sizeBytes == null ? '—' : formatSize(item.sizeBytes) }}</div><div class="mt-1 text-[11px] text-muted-foreground">v{{ item.version ?? '—' }}</div></td>
+                <td class="px-4 py-3 align-top"><div class="font-mono text-[11.5px]">{{ originLabel(item.lastAccessedBy ?? item.initializedBy) }}</div><div class="mt-1 text-[11px] text-muted-foreground">{{ formatRuntimeDate(item.lastAccessAt ?? item.initializedAt) }}</div></td>
+                <td class="px-4 py-3 text-right align-top">
+                  @if (confirmingRuntimeName() === item.name) {
+                  <button ui-button variant="destructive" size="sm" autofocus [disabled]="runtimeBusyNames().has(item.name)" (click)="resetRuntime(item.name)">{{ 'dati.runtimeResetConfirm' | transloco }}</button>
+                  <button ui-button variant="ghost" size="sm" (click)="confirmingRuntimeName.set(null)">{{ 'common.cancel' | transloco }}</button>
+                  } @else {
+                  <button ui-button variant="outline" size="sm" [disabled]="runtimeBusyNames().has(item.name)" (click)="confirmingRuntimeName.set(item.name)"><ng-icon name="lucideRotateCcw" size="0.8rem" /> {{ 'dati.runtimeReset' | transloco }}</button>
+                  }
+                </td>
+              </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+        <p class="mt-3 text-[11.5px] text-muted-foreground">{{ 'dati.runtimeTrafficCaveat' | transloco }}</p>
+        }
+      </div>
+      }
     </div>
   `,
 })
@@ -211,6 +285,8 @@ export class DatiPage implements OnInit {
   private readonly toast = inject(ToastService);
   private readonly transloco = inject(TranslocoService);
   private readonly viewState = inject(ViewStateService);
+  private readonly route = inject(ActivatedRoute);
+  private readonly router = inject(Router);
 
   protected readonly files = signal<DataFileSummary[]>([]);
   protected readonly loading = signal(false);
@@ -224,6 +300,19 @@ export class DatiPage implements OnInit {
   protected readonly rewriteRefsOnRename = signal(true);
   protected readonly confirmingDelete = signal(false);
   protected readonly largeFileWarningBytes = LARGE_FILE_WARNING_BYTES;
+  protected readonly activeTab = signal<'files' | 'runtime'>(
+    this.route.snapshot.queryParamMap.get('tab') === 'runtime' ? 'runtime' : 'files',
+  );
+  protected readonly runtimeItems = signal<SharedStateSummary[]>([]);
+  protected readonly runtimeTotalBytes = signal(0);
+  protected readonly runtimeLoading = signal(false);
+  protected readonly runtimeError = signal<string | null>(null);
+  protected readonly runtimeBusyAll = signal(false);
+  protected readonly runtimeBusyNames = signal<ReadonlySet<string>>(new Set());
+  protected readonly confirmingRuntimeName = signal<string | null>(null);
+  protected readonly confirmingResetAll = signal(false);
+  protected readonly selectedRuntimeName = signal<string | null>(this.route.snapshot.queryParamMap.get('name'));
+  protected readonly runtimeAnnouncement = signal('');
 
   protected readonly selected = computed(() => this.files().find((f) => f.name === this.selectedName()) ?? null);
   protected readonly selectedUsedBy = computed<DataFileUsage[]>(() => this.selected()?.usedBy ?? []);
@@ -236,7 +325,93 @@ export class DatiPage implements OnInit {
   });
 
   ngOnInit(): void {
-    this.reload();
+    if (this.activeTab() === 'runtime') {
+      this.reloadRuntime();
+    } else {
+      this.reload();
+    }
+  }
+
+  protected switchTab(tab: 'files' | 'runtime'): void {
+    if (tab === this.activeTab()) {
+      return;
+    }
+    this.activeTab.set(tab);
+    this.router.navigate([], {
+      relativeTo: this.route,
+      queryParams: tab === 'runtime' ? { tab: 'runtime' } : { tab: null, name: null },
+      queryParamsHandling: 'merge',
+      replaceUrl: true,
+    });
+    if (tab === 'runtime') {
+      this.reloadRuntime();
+    } else if (this.files().length === 0) {
+      this.reload();
+    }
+  }
+
+  protected reloadRuntime(): void {
+    this.runtimeLoading.set(true);
+    this.runtimeError.set(null);
+    this.api.listSharedState().pipe(finalize(() => this.runtimeLoading.set(false))).subscribe({
+      next: (response) => {
+        this.runtimeItems.set(response.items);
+        this.runtimeTotalBytes.set(response.totalBytes);
+        const requested = this.selectedRuntimeName();
+        if (requested != null && !response.items.some((item) => item.name === requested)) {
+          this.selectedRuntimeName.set(null);
+        }
+      },
+      error: (error) => {
+        this.runtimeError.set(this.errorMessage(error));
+        this.showError(error);
+      },
+    });
+  }
+
+  protected resetRuntime(name: string): void {
+    this.runtimeBusyNames.update((current) => new Set([...current, name]));
+    this.api.resetSharedState(name).pipe(finalize(() => {
+      this.runtimeBusyNames.update((current) => {
+        const next = new Set(current);
+        next.delete(name);
+        return next;
+      });
+    })).subscribe({
+      next: ({ reset }) => {
+        this.confirmingRuntimeName.set(null);
+        this.runtimeAnnouncement.set(this.transloco.translate(
+          reset ? 'dati.runtimeResetDone' : 'dati.runtimeAlreadyAbsent',
+          { name },
+        ));
+        this.reloadRuntime();
+      },
+      error: (error) => this.showError(error),
+    });
+  }
+
+  protected resetAllRuntime(): void {
+    this.runtimeBusyAll.set(true);
+    this.api.resetAllSharedState().pipe(finalize(() => this.runtimeBusyAll.set(false))).subscribe({
+      next: ({ resetCount }) => {
+        this.confirmingResetAll.set(false);
+        this.selectedRuntimeName.set(null);
+        this.runtimeAnnouncement.set(this.transloco.translate('dati.runtimeResetAllDone', { count: resetCount }));
+        this.reloadRuntime();
+      },
+      error: (error) => this.showError(error),
+    });
+  }
+
+  protected originLabel(origin: SharedStateSummary['initializedBy']): string {
+    if (origin.method == null && origin.path == null) {
+      return '—';
+    }
+    return `${origin.method ?? ''} ${origin.path ?? ''}`.trim();
+  }
+
+  protected formatRuntimeDate(timestamp: number | null): string {
+    return timestamp == null ? '—' : new Date(timestamp).toLocaleString();
   }
 
   private reload(keepSelection = true): void {
@@ -307,6 +482,7 @@ export class DatiPage implements OnInit {
   }
 
   protected onDragOver(event: DragEvent): void {
+    if (this.activeTab() !== 'files') return;
     event.preventDefault();
     this.dragging.set(true);
   }
@@ -321,6 +497,7 @@ export class DatiPage implements OnInit {
   protected onDrop(event: DragEvent): void {
     event.preventDefault();
     this.dragging.set(false);
+    if (this.activeTab() !== 'files') return;
     this.uploadAll(Array.from(event.dataTransfer?.files ?? []));
   }
 
@@ -481,12 +658,16 @@ export class DatiPage implements OnInit {
   }
 
   private showError(error: unknown, context?: string): void {
-    const message = (error as { error?: { message?: string } })?.error?.message
-      ?? this.t('common.unexpectedError');
+    const message = this.errorMessage(error);
     this.toast.show({
       title: context ? `${this.t('common.error')} — ${context}` : this.t('common.error'),
       description: message,
       tone: 'error',
     });
+  }
+
+  private errorMessage(error: unknown): string {
+    return (error as { error?: { message?: string } })?.error?.message
+      ?? this.t('common.unexpectedError');
   }
 }

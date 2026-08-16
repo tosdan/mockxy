@@ -58,6 +58,24 @@ after a restart, that file and its preview are restored. If the file no longer e
 saved selection is ignored; a completed upload selects the newly uploaded file instead and
 immediately shows its fresh content.
 
+### The Runtime state tab
+
+The same page has two separate tabs: **Data files** manages on-disk seeds; **Runtime state**
+shows ephemeral JSON resources opened by handlers through [`sharedState`](HANDLER.md). It
+shows metadata only for each resource — name, `seedKey`, status, version, size, timestamps and
+last endpoint — never the live value. You can reset one resource or the whole store here, with
+confirmation and a busy state preventing duplicate commands.
+
+The two views are not editors for the same value. If `items.json` initializes `items`, the
+first open creates a copy in the store; later edits to the file do not alter that already-live
+copy. The new seed is read after resetting the resource or restarting the engine. Likewise, a
+POST mutating runtime state never changes `items.json`.
+
+Reset does not stop incoming requests: an active client or polling loop may immediately
+recreate the resource. Before preparing a repeatable scenario, stop traffic, reset, then start
+the frontend. A link from the Monitor opens `/dati?tab=runtime&name=...` directly and
+highlights the resource involved in the failure.
+
 ## Sizes
 
 Every `data()` call re-reads and re-parses the file from disk: up to a megabyte you won't

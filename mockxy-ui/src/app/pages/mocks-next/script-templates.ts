@@ -3,7 +3,9 @@
 export const HANDLER_TEMPLATE = `module.exports = {
   // data("nome") legge un file JSON dalla pagina Dati:
   //   const items = await data("nome-file");
-  async resolveResponse({ params, query, requestHeaders, jsonBody, data }) {
+  // Stato JSON condiviso opt-in tra endpoint:
+  //   const items = await sharedState.open("items", { seedKey: "items@v1", initialize: () => [] });
+  async resolveResponse({ params, query, requestHeaders, jsonBody, data, sharedState }) {
     return {
       status: 200,
       headers: {

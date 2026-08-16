@@ -251,7 +251,9 @@ field: select another variant to deactivate it.
   request. Absent means never.
 
 The cursor is global per endpoint and is not persisted. The UI exposes state and reset; the
-admin API provides `GET /mocks/:id/sequence/state` and `POST /mocks/:id/sequence/reset`. A
+admin API provides `GET /mocks/:id/sequence/state` and `POST /mocks/:id/sequence/reset` (JSON
+`{}`). Reset clears the cursor and endpoint-local handler memory, but leaves any [state shared
+between handlers](HANDLER.md) unchanged; reset that separately from the Data page. A
 referenced response cannot be deleted: the API returns `409` naming its dependent sequences.
 
 ## Validation and errors

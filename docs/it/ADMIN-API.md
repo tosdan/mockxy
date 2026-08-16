@@ -16,6 +16,10 @@ resettano lo stato tra i test, pipeline che importano una specifica aggiornata.
   cross-origin con `content-type: application/json` scatena il preflight del browser e muore
   lì. L'unica eccezione strutturale è l'import OpenAPI, che accetta YAML ma **rifiuta
   `text/plain` con `415`** proprio per non aprire la falla delle richieste "semplici".
+- Le POST senza parametri (`sequence/reset`, `monitoring/dump/flush` e i due reset dello stato
+  condiviso) richiedono comunque `Content-Type: application/json` e un body esattamente `{}`.
+  Body assente o vuoto, `null`, array, scalari e oggetti non vuoti rispondono `400`; un media
+  type diverso risponde `415`. La forma unica rende il contratto esplicito e uniforme.
 
 ## Convenzioni
 
@@ -40,13 +44,13 @@ resettano lo stato tra i test, pipeline che importano una specifica aggiornata.
 | `GET /mocks/:id` | dettaglio con varianti e configurazione normalizzata della response selezionata; con `type: sequence` espone `sequence` e `sequenceState`, mai `endpoint.sequence` |
 | `PUT /mocks/:id` | seleziona una response con `{ selectedResponseFile }`, oppure aggiorna la response ordinaria selezionata; il vecchio body `{ sequence }` è rifiutato |
 | `GET /mocks/:id/sequence/state` | stato live leggero della sequence selezionata: `{ sequenceFile, sequenceState }`; `400` su un altro tipo |
-| `POST /mocks/:id/sequence/reset` | azzera cursore e memoria handler della sequence selezionata; risponde `{ sequenceFile, sequenceState }` |
+| `POST /mocks/:id/sequence/reset` | azzera cursore e memoria handler della sequence selezionata; body `{}`; risponde `{ sequenceFile, sequenceState }` |
 | `POST /mocks/:id/sse/push` | push manuale della console [SSE](RESPONSE.md): body `{ data, event?, id? }`, broadcast a tutte le connessioni aperte — risponde `{ delivered, connections }` |
 | `GET /mocks/:id/sse/connections` | stato della console SSE: connessioni aperte (con posizione nel copione) e storico dei messaggi usciti |
 | `POST /mocks/:id/ws/push` | push manuale della console [WS](RESPONSE.md): body `{ data }`, broadcast a tutte le connessioni aperte — risponde `{ delivered, connections }` |
 | `GET /mocks/:id/ws/connections` | stato della console WS: connessioni aperte (con posizione nel copione) e transcript bidirezionale (usciti e ricevuti) |
 | `PUT /mocks/:id/endpoint` | aggiorna **solo** `description` ed `enabled` (qualunque altro campo è `400`): metodo e percorso sono fissati alla creazione — il percorso determina la cartella dei file — e si cambiano con `POST /mocks/:id/copy` |
-| `POST /mocks/:id/copy` | duplica su nuovo metodo+percorso — body `{ method, path, copyResponses }` |
+| `POST /mocks/:id/copy` | duplica su nuovo metodo+percorso — body `{ method, path, copyResponses }`; con `?dryRun=true` restituisce il piano senza scrivere né ricaricare |
 | `PUT /mocks/:id/collection` | assegna l'endpoint a una collezione |
 | `DELETE /mocks/:id` | elimina endpoint e varianti |
 
@@ -90,6 +94,24 @@ resettano lo stato tra i test, pipeline che importano una specifica aggiornata.
 | `PATCH /files/:name` | rinomina — body `{ name, rewriteReferences }` ([rinomina sicura](DATI.md)) |
 | `DELETE /files/:name` | elimina il file |
 
+## Stato runtime condiviso
+
+| Metodo e percorso | Cosa fa |
+|---|---|
+| `GET /runtime/shared-state` | elenca metadati, uso corrente e limiti dello store; non espone mai i valori |
+| `POST /runtime/shared-state/:name/reset` | invalida in modo idempotente una risorsa; body `{}`; risponde `{ name, reset }` |
+| `POST /runtime/shared-state/reset` | invalida tutte le risorse; body `{}`; risponde `{ resetCount }` |
+
+La lista espone nome, `seedKey`, stato (`initializing` o `ready`), versione, byte occupati,
+timestamp e origine dell'inizializzazione/ultimo accesso. Serve a diagnosticare gli handler che
+usano una firma non più compatibile, ma resta una superficie amministrativa: non contiene il
+JSON vivo. Un reset non scrive i file dati e non modifica sequence, `state`, `callCount` o
+`firstRequestAt`.
+
+Il reset linearizza l'invalidazione ma non ferma il traffico: una richiesta successiva può
+inizializzare subito una nuova generazione. In una suite deterministica, interrompere prima
+client e polling, eseguire il reset, poi avviare lo scenario.
+
 ## Monitor e storico
 
 | Metodo e percorso | Cosa fa |
@@ -99,7 +121,7 @@ resettano lo stato tra i test, pipeline che importano una specifica aggiornata.
 | `GET /monitoring/requests/stream` | flusso live degli eventi (SSE) |
 | `GET /monitoring/dump` | stato della scrittura su disco |
 | `PATCH /monitoring/dump` | accende/spegne e regola cadenza/soglia a runtime — body `{ enabled?, intervalMs?, threshold? }` |
-| `POST /monitoring/dump/flush` | flush manuale; risponde con il numero di voci scritte |
+| `POST /monitoring/dump/flush` | flush manuale; body `{}`; risponde con il numero di voci scritte |
 | `GET /monitoring/dumps` | elenco dei file di dump |
 | `GET /monitoring/dumps/read` | lettura paginata a cursore (`?fileIndex&lineIndex&limit`) |
 | `POST /monitoring/dumps/create-mocks` | crea mock in blocco da un file o da una selezione di voci |
@@ -129,8 +151,26 @@ curl -s -X POST "http://localhost:3000/_admin/api/mocks/import/openapi?dryRun=tr
 # accendi la scrittura su disco dello storico e forza un flush
 curl -s -X PATCH http://localhost:3000/_admin/api/monitoring/dump \
   -H "content-type: application/json" -d '{"enabled": true}'
-curl -s -X POST http://localhost:3000/_admin/api/monitoring/dump/flush
+curl -s -X POST http://localhost:3000/_admin/api/monitoring/dump/flush \
+  -H "content-type: application/json" -d '{}'
+
+# stato runtime (solo metadati) e reset idempotente di "items"
+curl -s http://localhost:3000/_admin/api/runtime/shared-state
+curl -s -X POST http://localhost:3000/_admin/api/runtime/shared-state/items/reset \
+  -H "content-type: application/json" -d '{}'
+
+# anteprima della copia: segnala anche riferimenti sharedState letterali conservati
+curl -s -X POST "http://localhost:3000/_admin/api/mocks/ID/copy?dryRun=true" \
+  -H "content-type: application/json" \
+  -d '{"method":"GET","path":"/items-copy","copyResponses":true}'
 ```
+
+L'anteprima e la copia reale condividono lo stesso planner. Il dry run risponde `200` con file
+previsti, riferimenti `sharedState.open("nome", ...)` letterali e warning; la copia risponde
+`201`. Il dry run non crea cartelle, non scrive file e non ricarica il runtime. I nomi dinamici
+o nascosti in helper non sono rilevabili, mentre commenti/stringhe possono produrre un warning
+prudenziale: l'anteprima informa, non abilita né blocca il commit. La copia non riscrive nome o
+`seedKey`, perché condividere la risorsa può essere intenzionale.
 
 ## La descrizione leggibile dalle macchine
 

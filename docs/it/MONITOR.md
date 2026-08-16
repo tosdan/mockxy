@@ -23,6 +23,15 @@ al middleware coinvolto, più header e body di richiesta e risposta. Per gli end
 richiesta** (posizione e variante, badge «SEQ n/m»): la progressione della sequenza si legge
 scorrendo il monitor.
 
+Se un errore non intercettato nasce dallo [stato runtime condiviso](HANDLER.md), la voce porta
+anche `sharedStateError`: codice, nome della risorsa, `seedKey` richiesta/corrente e origine
+dell'accesso, quando disponibili. La risposta HTTP resta deliberatamente sanitizzata e non
+espone questi dettagli alla superficie pubblica del mock; il Monitor è invece amministrativo
+ed è il percorso diagnostico anche per chiamate partite da `curl`, test o applicazioni esterne.
+Il dettaglio offre **«Apri stato condiviso»**, che porta alla riga corrispondente in **Dati →
+Stato runtime**. I metadati seguono la voce anche negli archivi su disco; non includono mai il
+valore, il draft, il body della richiesta o lo stack.
+
 ## Mascheramento e limiti di cattura
 
 - Gli header sensibili — `Authorization`, `Cookie`, `Set-Cookie`, `Proxy-Authorization`,

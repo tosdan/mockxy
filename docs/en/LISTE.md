@@ -11,7 +11,9 @@ before the page**: this page documents them together.
 
 ## When they kick in
 
-Only on **JSON bodies of type `mock`** that are:
+They activate automatically on **JSON bodies of type `mock`**, or explicitly on a
+[handler](HANDLER.md) response returning `applyListQuery: true`. In both cases, the body must
+be:
 
 - an **array** (`[ ... ]`), or
 - an **object with exactly one top-level array property** — for example
@@ -19,8 +21,21 @@ Only on **JSON bodies of type `mock`** that are:
   filtered result replaces the array, the other properties pass through intact. With two or
   more array properties the automatism doesn't kick in (there would be no criterion to choose).
 
-Left out: textual bodies, payloads from `file`, handler and middleware responses, proxied
-responses.
+Left out: textual bodies, payloads from `file`, middleware responses, proxied responses and
+handlers that do not opt in. The flag is deliberately off by default, so an existing handler
+returning a list does not change behavior.
+
+```js
+return {
+  status: 200,
+  jsonBody: itemsState.read(),
+  applyListQuery: true,
+};
+```
+
+`applyListQuery` must be a boolean and requires `jsonBody`; another value, or `true` with only
+`body`, makes the handler result invalid. If the JSON does not have one of the list shapes
+below, the flag leaves it unchanged.
 
 ## Filters
 

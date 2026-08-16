@@ -45,6 +45,11 @@ dedicated to the endpoint and response formats.
 middleware read at runtime through the `data()` accessor. The folder is flat (no
 subfolders) and file names are normalized to lowercase.
 
+Handler [shared runtime state](HANDLER.md) is **not another workspace file**: it lives only in
+the engine's memory. A data file may initialize it, but mutations are neither written to disk
+nor shared through git. Hot reload preserves state; restart, crash or closing that workspace's
+engine loses it, and the first request starts again from the current seed.
+
 **`.gitignore`** is generated on first open and re-checked on every subsequent open: the line
 excluding the local part (`.mockxy/`) is added if missing, and any lines written by previous
 versions and no longer in use are removed. The rest of the file is not touched: a customized
@@ -85,6 +90,10 @@ When opening a folder, the desktop app distinguishes three cases:
 
 On first open a free port is assigned (and saved); from then on the workspace always reopens on
 the same port, so the clients configured against that address keep working.
+
+Every open workspace has its own isolated runtime store. Switching to another tab does not erase
+it while that workspace's engine remains open; closing the workspace or restarting its engine
+does.
 
 ## What to share with the team
 

@@ -54,6 +54,11 @@ al file endpoint. L'interfaccia propone un template di partenza già in questa f
   chiamata (le modifiche al file sono visibili alla richiesta successiva) e ogni handler riceve
   una **copia propria**: mutarla non inquina le altre richieste. Un nome inesistente è un
   errore esplicito, che diventa il fallimento standard dell'handler.
+- **`sharedState`** — lo store JSON effimero condiviso da **handler diversi**. È la primitiva
+  per scenari stateful come «POST aggiunge un item, la GET successiva lo restituisce». Si apre
+  una risorsa con `await sharedState.open(nome, { seedKey, initialize })` e si usa l'handle
+  risultante con `read()`, `mutate()` o `replace()`. Il contratto completo è nella sezione
+  [Stato runtime condiviso](#stato-runtime-condiviso).
 - **`state`** — oggetto mutabile **persistente tra le chiamate** dello stesso endpoint (e
   condiviso tra le sue varianti): la memoria per contatori, macchine a stati per-risorsa
   (`state[params.id] = ...`), esiti che dipendono dalla storia. È **effimero e locale al
@@ -102,10 +107,138 @@ senza nemmeno eseguire lo script.
   - **`body`** — una **stringa o un `Buffer`**, servito così com'è: il content-type lo
     dichiarano gli `headers`. È la strada per testo, XML, o payload binari generati;
   - **nessuno dei due** — risposta senza corpo (tipico per `204`).
+- **`applyListQuery`** — booleano facoltativo, default `false`. Con `true`, il motore applica a
+  `jsonBody` le stesse regole di [filtro e paginazione delle liste](LISTE.md) dei mock statici,
+  incluso `X-Total-Count`. Richiede `jsonBody`; un valore non booleano rende invalido il
+  risultato.
 
 Le risposte degli handler escono con header di no-cache e con `x-mock-source: handler`, e non
 ricevono [ritardi simulati](RITARDI.md): uno script che vuole essere lento attende al proprio
 interno.
+
+## Stato runtime condiviso
+
+`state` appartiene a un endpoint. `sharedState`, invece, permette a più handler di raggiungere
+la stessa risorsa per nome. Un file dati può inizializzarla, ma dopo l'apertura il valore vivo
+resta soltanto in memoria e non riscrive il file.
+
+Questo è un esempio completo per una GET e una POST che condividono `items`:
+
+```js
+// Lo stesso helper, ripetuto nei due file *.handler.js.
+function openItems({ sharedState, data }) {
+  return sharedState.open("items", {
+    seedKey: "items@v1",
+    initialize: () => data("items"),
+  });
+}
+
+// GET /items
+module.exports = {
+  async resolveResponse(context) {
+    const items = await openItems(context);
+    return {
+      status: 200,
+      jsonBody: items.read(),
+      applyListQuery: true,
+    };
+  },
+};
+```
+
+```js
+// POST /items — nello script dell'altro endpoint, con lo stesso openItems().
+module.exports = {
+  async resolveResponse(context) {
+    const items = await openItems(context);
+    let created;
+    try {
+      created = items.mutate((draft) => {
+        if (!Array.isArray(draft)) throw new Error("items must be an array");
+        if (draft.some((item) => String(item.id) === String(context.jsonBody.id))) {
+          const error = new Error("duplicate item");
+          error.code = "DUPLICATE_ITEM";
+          throw error;
+        }
+        const item = { ...context.jsonBody };
+        draft.push(item);
+        return item;
+      });
+    } catch (error) {
+      if (error.code === "DUPLICATE_ITEM") {
+        return { status: 409, jsonBody: { error: "duplicate_item" } };
+      }
+      throw error;
+    }
+    return { status: 201, jsonBody: created };
+  },
+};
+```
+
+Le operazioni dell'handle sono:
+
+- `read()` restituisce una copia JSON: modificarla non cambia lo store;
+- `mutate(callback)` passa alla callback un draft privato e commette tutto insieme solo se la
+  callback termina correttamente. La callback deve essere sincrona; il suo valore di ritorno
+  viene restituito allo script, ma non sostituisce la radice;
+- `replace(value)` sostituisce l'intero valore e restituisce `undefined`.
+
+Initializer e mutator non possono usare, direttamente o nelle loro continuazioni asincrone,
+nessun'altra operazione shared-state. Questa regola evita dipendenze circolari, ordine nascosto
+fra risorse e commit parziali. L'inizializzazione può invece essere asincrona: se più richieste
+aprono insieme una risorsa assente, una sola factory viene usata e le altre attendono lo stesso
+esito.
+
+### Il ruolo di `seedKey`
+
+Il nome identifica la risorsa; `seedKey` dichiara quale **forma logica** gli handler si
+aspettano. Tutti gli handler che aprono `items` devono usare la stessa firma. Se uno è rimasto a
+`items@v1` e un altro passa a `items@v2`, il secondo riceve un conflitto esplicito invece di
+lavorare silenziosamente su dati dalla forma sbagliata. Il Monitor e la pagina **Dati → Stato
+runtime** mostrano nome, firma e handler coinvolto per trovare il riferimento non aggiornato.
+
+`seedKey` non confronta il codice delle factory e non valida lo schema del JSON: è una
+dichiarazione intenzionale dell'autore. Va incrementata quando cambia la forma o la strategia
+di inizializzazione, poi la risorsa va azzerata. Non va derivata da body, query, orario o altri
+input della singola richiesta; altrimenti il contenuto dipenderebbe nuovamente dalla prima
+richiesta arrivata.
+
+Nomi e firme seguono queste regole:
+
+- il nome viene normalizzato con trim e minuscole, è lungo 1–128 caratteri e ammette solo
+  `a-z`, `0-9`, `.`, `_`, `-` (ma non `.` o `..`);
+- `seedKey` è case-sensitive, non viene normalizzata, è lunga 1–256 caratteri e non ammette
+  spazi ai bordi o caratteri di controllo. Non è un segreto: compare nei metadati admin.
+
+### Vita, reset e concorrenza
+
+Lo stato sopravvive al reload a caldo degli handler, ma si perde al riavvio del motore. Si può
+azzerare una risorsa o tutto lo store dalla pagina **Dati → Stato runtime** e dall'[Admin
+API](ADMIN-API.md). Il reset non modifica file dati, `state`, `callCount` o cursori delle
+sequence; il reset di una sequence, simmetricamente, non tocca lo stato condiviso.
+
+Un reset invalida gli handle già aperti e le inizializzazioni in corso. Non sospende il
+traffico: una nuova richiesta può inizializzare subito la nuova generazione. Per un test
+deterministico, ferma prima polling/client, esegui il reset e avvia poi lo scenario.
+
+Return, errore, timeout e disconnessione del client chiudono il facade dell'invocazione:
+continuazioni tardive non possono modificare lo store. Se il client è già sparito dopo la
+lettura del body, l'handler non viene avviato e quella richiesta non incrementa `callCount`;
+l'eventuale step sequence era però già stato scelto dal routing e non viene riavvolto.
+
+### Valori, quote ed errori
+
+Lo store accetta JSON rigoroso e ne conserva una copia serializzata. Sono rifiutati cicli,
+`undefined`, funzioni, simboli, `BigInt`, numeri non finiti, oggetti di classe, accessor,
+proprietà non enumerabili e profondità oltre 100; `-0` viene conservato come lo `0` equivalente
+in JSON. I limiti predefiniti sono 256 risorse, 3 MiB per risorsa e 25 MiB complessivi.
+
+Gli errori shared-state non intercettati producono una risposta pubblica senza nome, firma,
+valori o stack: conflitti generazionali `409`, runtime in chiusura `503`, altri errori `500`.
+Il dettaglio completo resta nel log e, per gli errori di una richiesta, nella relativa voce del
+Monitor. Uno script può intercettare un codice noto e restituire una risposta di dominio; se
+non lo riconosce deve rilanciare l'errore. Non applicare retry generici: solo l'autore dello
+scenario sa se gli effetti già prodotti siano idempotenti.
 
 ## Errori, timeout e limiti
 

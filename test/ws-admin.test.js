@@ -2,6 +2,7 @@ const fs = require("fs");
 const path = require("path");
 const request = require("supertest");
 const { createApp } = require("../src/app");
+const { SharedStateStore } = require("../src/mocks/shared-state");
 const { encodeMockId } = require("../src/admin/mock-ids");
 const { loadEndpointRouteGroups } = require("../src/mocks/endpoint-loader");
 const { mergeLocalRouteGroups } = require("../src/mocks/local-route-groups");
@@ -87,6 +88,7 @@ describe("ws admin API", () => {
       reloadRuntime,
       requestMonitor: new RequestMonitorStore(),
       wsConnections,
+      sharedStates: new SharedStateStore(),
     });
     return { app, wsConnections };
   }

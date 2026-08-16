@@ -23,6 +23,15 @@ middleware involved, plus request and response headers and bodies. For endpoints
 (position and variant, «SEQ n/m» badge): the sequence progression can be read by scrolling the
 monitor.
 
+When an uncaught error originates from [shared runtime state](HANDLER.md), the entry also
+contains `sharedStateError`: the code, resource name, requested/current `seedKey`, and access
+origin when available. The HTTP response remains deliberately sanitized and does not expose
+these details on the public mock surface; the Monitor is administrative and remains the
+diagnostic path even for calls made by `curl`, tests or external applications. The detail view
+offers **“Open shared state”**, linking to the corresponding row under **Data → Runtime
+state**. Metadata follows the entry into on-disk archives, but never includes the value, draft,
+request body or stack.
+
 ## Masking and capture limits
 
 - Sensitive headers — `Authorization`, `Cookie`, `Set-Cookie`, `Proxy-Authorization`,

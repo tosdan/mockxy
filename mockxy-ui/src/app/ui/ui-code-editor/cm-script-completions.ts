@@ -12,7 +12,7 @@ import {
 } from '@codemirror/autocomplete';
 
 const HANDLER_SNIPPET = `module.exports = {
-  async resolveResponse({ params, query, requestHeaders, jsonBody, data }) {
+  async resolveResponse({ params, query, requestHeaders, jsonBody, data, sharedState }) {
     return {
       status: 200,
       headers: {},
@@ -31,7 +31,7 @@ const MIDDLEWARE_SNIPPET = `module.exports = {
   }
 };`;
 
-const RESOLVE_SNIPPET = `async resolveResponse({ params, query, requestHeaders, jsonBody, data }) {
+const RESOLVE_SNIPPET = `async resolveResponse({ params, query, requestHeaders, jsonBody, data, sharedState }) {
   return {
     status: 200,
     headers: {},
@@ -65,6 +65,7 @@ const SCRIPT_COMPLETIONS: readonly Completion[] = [
   snippetCompletion('status: \${}', { label: 'status', type: 'property', detail: 'campo risposta' }),
   snippetCompletion('headers: { \${} }', { label: 'headers', type: 'property', detail: 'campo risposta' }),
   snippetCompletion('jsonBody: \${}', { label: 'jsonBody', type: 'property', detail: 'campo risposta' }),
+  snippetCompletion('applyListQuery: true', { label: 'applyListQuery', type: 'property', detail: 'filtri e paginazione su jsonBody' }),
   { label: 'params', type: 'variable', detail: 'input richiesta' },
   { label: 'query', type: 'variable', detail: 'input richiesta' },
   { label: 'requestHeaders', type: 'variable', detail: 'input richiesta' },
@@ -73,6 +74,12 @@ const SCRIPT_COMPLETIONS: readonly Completion[] = [
     type: 'function',
     detail: 'file dati (pagina Dati)',
     info: 'Legge un file JSON della pagina Dati: va destrutturato dal contesto di resolveResponse/transformResponse',
+  }),
+  snippetCompletion('const \${itemsState} = await sharedState.open("\${items}", {\n  seedKey: "\${items@v1}",\n  initialize: () => []\n});', {
+    label: 'sharedState',
+    type: 'function',
+    detail: 'stato JSON condiviso tra handler',
+    info: 'Apre una risorsa runtime nominata con seedKey esplicita; read/mutate/replace sono sincroni',
   }),
 ];
 

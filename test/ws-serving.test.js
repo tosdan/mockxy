@@ -2,6 +2,7 @@ const fs = require("fs");
 const path = require("path");
 const WebSocket = require("ws");
 const { createApp } = require("../src/app");
+const { SharedStateStore } = require("../src/mocks/shared-state");
 const { loadEndpointRouteGroups } = require("../src/mocks/endpoint-loader");
 const { mergeLocalRouteGroups } = require("../src/mocks/local-route-groups");
 const { MockRegistry } = require("../src/mocks/mock-registry");
@@ -84,6 +85,7 @@ describe("ws serving", () => {
       requestMonitor: new RequestMonitorStore(),
       serverState,
       wsConnections,
+      sharedStates: new SharedStateStore(),
     });
     await new Promise((resolve) => {
       server = app.listen(0, "127.0.0.1", resolve);

@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, effect, inject, signal } from '@angular/core';
 import { DIALOG_DATA, DialogRef } from '@angular/cdk/dialog';
 import { NgIcon, provideIcons } from '@ng-icons/core';
 import { lucideCheck, lucideCopy, lucideX } from '@ng-icons/lucide';
@@ -8,6 +8,8 @@ import { UiCheckbox } from '../../../ui/ui-checkbox/ui-checkbox';
 import { UiInput } from '../../../ui/ui-input/ui-input';
 import { UiSelect, type UiSelectOption } from '../../../ui/ui-select/ui-select';
 import { MocksStore } from '../mocks-next.store';
+import { MockAdminApiService } from '../../../mock-admin-api.service';
+import type { EndpointCopyPreview } from '../../../mock-admin-api.types';
 import { routePathError } from '../../../mock-path-convention';
 import { MOCK_METHODS } from '../../../mock-admin-ui.constants';
 
@@ -65,6 +67,22 @@ const METHOD_OPTIONS: readonly UiSelectOption<string>[] = MOCK_METHODS.map((m) =
           </button>
         </div>
 
+        <div class="rounded-lg border border-border bg-muted/50 px-3.5 py-3" aria-live="polite">
+          @if (previewLoading()) {
+          <p class="text-[12px] text-muted-foreground">{{ 'copyDialog.previewLoading' | transloco }}</p>
+          } @else if (previewError()) {
+          <p class="text-[12px] text-destructive-soft">{{ previewError() }}</p>
+          } @else if (preview(); as plan) {
+          <p class="text-[12px] text-muted-foreground">{{ 'copyDialog.previewReady' | transloco: { responses: plan.responseFiles.length, assets: plan.assetFiles.length } }}</p>
+          @if (plan.sharedStateRefs.length > 0) {
+          <div class="mt-2 rounded-md border border-[color-mix(in_srgb,var(--status-4xx)_35%,transparent)] bg-[color-mix(in_srgb,var(--status-4xx)_10%,transparent)] px-3 py-2 text-[12px] text-[var(--status-4xx)]">
+            <p class="font-semibold">{{ 'copyDialog.sharedStateWarning' | transloco: { names: plan.sharedStateRefs.join(', ') } }}</p>
+            <p class="mt-1 text-[11.5px]">{{ 'copyDialog.sharedStateWarningHint' | transloco }}</p>
+          </div>
+          }
+          }
+        </div>
+
         @if (store.error()) {
         <p class="text-[12.5px] text-destructive-soft">{{ store.error() }}</p>
         }
@@ -79,6 +97,7 @@ const METHOD_OPTIONS: readonly UiSelectOption<string>[] = MOCK_METHODS.map((m) =
 })
 export class MocksNextCopyDialog {
   protected readonly store = inject(MocksStore);
+  private readonly api = inject(MockAdminApiService);
   private readonly dialogRef = inject<DialogRef<string>>(DialogRef);
   protected readonly data = inject<CopyDialogData>(DIALOG_DATA);
   private readonly transloco = inject(TranslocoService);
@@ -97,7 +116,64 @@ export class MocksNextCopyDialog {
 
   /** Chiave i18n dell'errore path (o null se valido), dalla validazione condivisa; tradotta nel template. */
   protected readonly pathError = computed(() => routePathError(this.path()));
-  protected readonly canCopy = computed(() => !this.store.creating() && this.path().trim() !== '' && this.pathError() === null);
+  protected readonly preview = signal<EndpointCopyPreview | null>(null);
+  protected readonly previewLoading = signal(false);
+  protected readonly previewError = signal<string | null>(null);
+  private readonly previewKey = signal<string | null>(null);
+  private readonly currentRequestKey = computed(() => JSON.stringify({
+    method: this.method(),
+    path: this.path().trim(),
+    copyResponses: this.copyResponses(),
+  }));
+  protected readonly canCopy = computed(() => (
+    !this.store.creating()
+    && !this.previewLoading()
+    && this.path().trim() !== ''
+    && this.pathError() === null
+    && this.preview() != null
+    && this.previewKey() === this.currentRequestKey()
+  ));
+
+  private readonly updatePreview = effect((onCleanup) => {
+    const request = {
+      method: this.method(),
+      path: this.path().trim(),
+      copyResponses: this.copyResponses(),
+    };
+    const key = this.currentRequestKey();
+    this.preview.set(null);
+    this.previewKey.set(null);
+    this.previewError.set(null);
+    if (request.path === '' || this.pathError() != null) {
+      this.previewLoading.set(false);
+      return;
+    }
+
+    this.previewLoading.set(true);
+    let subscription: { unsubscribe(): void } | null = null;
+    const timer = setTimeout(() => {
+      subscription = this.api.previewEndpointCopy(this.data.id, request).subscribe({
+        next: (preview) => {
+          if (this.currentRequestKey() !== key) return;
+          this.preview.set(preview);
+          this.previewKey.set(key);
+          this.previewLoading.set(false);
+        },
+        error: (error: unknown) => {
+          if (this.currentRequestKey() !== key) return;
+          this.previewError.set(
+            (error as { error?: { message?: string } })?.error?.message
+              ?? this.transloco.translate('copyDialog.previewFailed'),
+          );
+          this.previewLoading.set(false);
+        },
+      });
+    }, 150);
+    onCleanup(() => {
+      clearTimeout(timer);
+      subscription?.unsubscribe();
+    });
+  });
 
   protected copy(): void {
     if (!this.canCopy()) return;

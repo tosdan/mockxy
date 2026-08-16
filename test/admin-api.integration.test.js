@@ -3,6 +3,7 @@ const path = require("path");
 const zlib = require("zlib");
 const request = require("supertest");
 const { createApp } = require("../src/app");
+const { SharedStateStore } = require("../src/mocks/shared-state");
 const { encodeMockId } = require("../src/admin/mock-ids");
 const { loadEndpointRouteGroups } = require("../src/mocks/endpoint-loader");
 const { mergeLocalRouteGroups } = require("../src/mocks/local-route-groups");
@@ -93,6 +94,7 @@ describe("admin API", () => {
       reloadRuntime,
       requestMonitor,
       monitorDump,
+      sharedStates: new SharedStateStore(),
     });
   }
 
@@ -125,7 +127,7 @@ describe("admin API", () => {
     test("flush manuale ritorna il conteggio", async () => {
       const app = await buildApp();
       await request(app).patch("/_admin/api/monitoring/dump").send({ enabled: true });
-      const res = await request(app).post("/_admin/api/monitoring/dump/flush");
+      const res = await request(app).post("/_admin/api/monitoring/dump/flush").send({});
       expect(res.status).toBe(200);
       expect(res.body).toMatchObject({ flushed: 0 });
       await request(app).patch("/_admin/api/monitoring/dump").send({ enabled: false });
@@ -319,7 +321,7 @@ describe("admin API", () => {
       expect(entry.responseHeaders["content-encoding"]).toBe("gzip");
       expect(JSON.parse(entry.responseBody)).toEqual({ backend: true, gz: "ok" });
 
-      await request(app).post("/_admin/api/monitoring/dump/flush");
+      await request(app).post("/_admin/api/monitoring/dump/flush").send({});
       const dump = await request(app).get("/_admin/api/monitoring/dumps/read");
       const dumpedEntry = dump.body.items.find((item) => item.path === "/anything");
       expect(dumpedEntry).toBeDefined();
@@ -2813,6 +2815,7 @@ describe("admin API", () => {
       },
       logger: createNoopLogger(),
       proxyMiddlewareRegistry: new ProxyMiddlewareRegistry([]),
+      sharedStates: new SharedStateStore(),
     });
 
     const response = await request(app).get("/not-mocked");
@@ -2840,6 +2843,7 @@ describe("admin API", () => {
       },
       logger: createNoopLogger(),
       proxyMiddlewareRegistry: new ProxyMiddlewareRegistry([]),
+      sharedStates: new SharedStateStore(),
     });
 
     const response = await request(app).get("/not-mocked");
