@@ -28,23 +28,19 @@ test.describe("E14 · i18n e viste", () => {
   });
 
   test("naviga da Catalogo a Monitor e ritorna", async ({ page }) => {
-    await page.getByRole("button", { name: "Cambia vista" }).click();
-    await page.getByRole("menuitem", { name: "Monitor" }).click();
+    await page.getByRole("navigation", { name: "Viste" }).getByRole("link", { name: "Monitor" }).click();
     await expect(page).toHaveURL(/\/monitor/);
 
-    await page.getByRole("button", { name: "Cambia vista" }).click();
-    await page.getByRole("menuitem", { name: "Catalogo" }).click();
+    await page.getByRole("navigation", { name: "Viste" }).getByRole("link", { name: "Catalogo" }).click();
     await expect(page).toHaveURL(/\/mocks/);
     await expect(catalog.getByText(/8\s+endpoint/)).toBeVisible();
   });
 
   test("naviga da Catalogo a Storico dump e ritorna", async ({ page }) => {
-    await page.getByRole("button", { name: "Cambia vista" }).click();
-    await page.getByRole("menuitem", { name: "Storico" }).click();
+    await page.getByRole("navigation", { name: "Viste" }).getByRole("link", { name: "Storico" }).click();
     await expect(page).toHaveURL(/\/storico/);
 
-    await page.getByRole("button", { name: "Cambia vista" }).click();
-    await page.getByRole("menuitem", { name: "Catalogo" }).click();
+    await page.getByRole("navigation", { name: "Viste" }).getByRole("link", { name: "Catalogo" }).click();
     await expect(page).toHaveURL(/\/mocks/);
   });
 });
