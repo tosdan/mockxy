@@ -121,13 +121,6 @@
     "flushTip": "Write queued requests to disk now",
     "loading": "Loading…"
   },
-  "viewSwitcher": {
-    "catalogo": "Catalog",
-    "monitor": "Monitor",
-    "storico": "History",
-    "dati": "Data",
-    "changeView": "Change view"
-  },
   "viewRail": {
     "catalogo": "Catalog",
     "monitor": "Monitor",

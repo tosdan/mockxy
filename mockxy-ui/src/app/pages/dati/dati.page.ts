@@ -15,7 +15,6 @@ import {
   lucideX,
 } from '@ng-icons/lucide';
 import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
-import { ViewSwitcher } from '../../shared/view-switcher';
 import { ViewStateService } from '../../shared/view-state.service';
 import { UiButton } from '../../ui/ui-button/ui-button';
 import { UiCheckbox } from '../../ui/ui-checkbox/ui-checkbox';
@@ -39,7 +38,7 @@ const SELECTED_FILE_STATE_KEY = 'dati-selected';
  */
 @Component({
   selector: 'app-dati',
-  imports: [ViewSwitcher, NgIcon, TranslocoPipe, UiButton, UiCheckbox, UiCode, UiInput, UiTooltip],
+  imports: [NgIcon, TranslocoPipe, UiButton, UiCheckbox, UiCode, UiInput, UiTooltip],
   providers: [
     provideIcons({
       lucideCheck,
@@ -65,8 +64,6 @@ const SELECTED_FILE_STATE_KEY = 'dati-selected';
     >
       <!-- TOPBAR -->
       <header class="relative z-30 flex h-14 shrink-0 items-center gap-3 border-b border-border bg-card px-5">
-        <app-view-switcher current="dati" />
-        <span class="h-6 w-px shrink-0 bg-border"></span>
         <span class="grid h-8 w-8 place-items-center rounded-lg bg-muted text-brand ring-1 ring-border"><ng-icon name="lucideFileJson" size="1rem" /></span>
         <div class="leading-tight">
           <div class="text-sm font-bold tracking-tight">{{ 'dati.title' | transloco }}</div>

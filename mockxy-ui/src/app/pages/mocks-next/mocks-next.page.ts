@@ -13,7 +13,6 @@ import { MocksNextCreateDialog, type CreateDialogData } from './create/mocks-nex
 import { OpenapiImportDialog } from './openapi-import/openapi-import-dialog';
 import { MocksNextDetail } from './detail/mocks-next-detail';
 import { MocksStore } from './mocks-next.store';
-import { ViewSwitcher } from '../../shared/view-switcher';
 import type { EndpointCreateType } from '../../mock-admin-api.types';
 
 /**
@@ -22,7 +21,7 @@ import type { EndpointCreateType } from '../../mock-admin-api.types';
  */
 @Component({
   selector: 'app-mocks-next',
-  imports: [ViewSwitcher, CdkMenuTrigger, NgIcon, TranslocoPipe, UiButton, UiMenu, UiMenuItem, MocksNextCatalog, MocksNextDetail],
+  imports: [CdkMenuTrigger, NgIcon, TranslocoPipe, UiButton, UiMenu, UiMenuItem, MocksNextCatalog, MocksNextDetail],
   providers: [
     MocksStore,
     provideIcons({ lucideActivity, lucideCheck, lucideChevronDown, lucideCog, lucideFileCode, lucideFolderOpen, lucideLayers, lucideListTree, lucidePlus, lucideUpload }),

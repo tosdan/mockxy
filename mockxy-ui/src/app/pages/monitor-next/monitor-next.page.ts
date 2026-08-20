@@ -27,7 +27,6 @@ import { UiTooltip } from '../../ui/ui-tooltip/ui-tooltip';
 import { ToastService } from '../../ui/ui-toast/ui-toast';
 import { UiDialog } from '../../ui/ui-dialog/ui-dialog';
 import { MockAdminApiService } from '../../mock-admin-api.service';
-import { ViewSwitcher } from '../../shared/view-switcher';
 import { MonitorStreamStore } from '../../shared/monitor-stream.store';
 import type { MockCreateRequest, MockSummary, RequestMonitorEntry } from '../../mock-admin-api.types';
 import { isDetailUnavailable } from '../../mock-admin-api.types';
@@ -48,7 +47,7 @@ interface SourceMeta {
  */
 @Component({
   selector: 'app-monitor-next',
-  imports: [DatePipe, ViewSwitcher, NgIcon, TranslocoPipe, UiBadge, UiButton, UiCode, UiCollapsible, UiSelect, UiTable, UiTooltip],
+  imports: [DatePipe, NgIcon, TranslocoPipe, UiBadge, UiButton, UiCode, UiCollapsible, UiSelect, UiTable, UiTooltip],
   providers: [
     provideIcons({
       lucideActivity, lucideArrowLeft, lucideCheck, lucideCopy, lucideDatabase, lucideDownload, lucideListTree,
@@ -60,8 +59,6 @@ interface SourceMeta {
     <div class="absolute inset-0 flex flex-col overflow-hidden bg-background text-foreground mx-scroll">
       <!-- TOPBAR -->
       <header class="relative z-30 flex h-14 shrink-0 items-center gap-4 border-b border-border bg-card px-5">
-        <app-view-switcher current="monitor" />
-        <span class="h-6 w-px shrink-0 bg-border"></span>
         <div class="flex items-center gap-2.5">
           <span class="grid h-8 w-8 place-items-center rounded-lg bg-gradient-to-br from-brand to-[var(--brand-deep)] text-white ring-1 ring-white/10">
             <ng-icon name="lucideActivity" size="1.05rem" />

@@ -121,13 +121,6 @@
     "flushTip": "Scrivi subito su disco le request in coda",
     "loading": "Caricamento…"
   },
-  "viewSwitcher": {
-    "catalogo": "Catalogo",
-    "monitor": "Monitor",
-    "storico": "Storico",
-    "dati": "Dati",
-    "changeView": "Cambia vista"
-  },
   "viewRail": {
     "catalogo": "Catalogo",
     "monitor": "Monitor",

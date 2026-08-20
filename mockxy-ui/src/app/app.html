@@ -1,7 +1,12 @@
 <app-workspace-bar />
 <app-runtime-bar />
 <app-update-notification />
-<main class="relative min-h-0 flex-1">
-  <router-outlet></router-outlet>
-</main>
+<!-- Rail delle view a sinistra, pagina instradata a destra: la navigazione fra le view vive nella
+     shell, non nella topbar di ogni pagina. -->
+<div class="flex min-h-0 flex-1">
+  <app-view-rail />
+  <main class="relative min-w-0 flex-1">
+    <router-outlet></router-outlet>
+  </main>
+</div>
 <ui-toaster />

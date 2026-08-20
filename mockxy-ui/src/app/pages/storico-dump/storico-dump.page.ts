@@ -1,5 +1,4 @@
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal, viewChild } from '@angular/core';
-import { ViewSwitcher } from '../../shared/view-switcher';
 import { CdkFixedSizeVirtualScroll, CdkVirtualForOf, CdkVirtualScrollViewport } from '@angular/cdk/scrolling';
 import { CdkMenuTrigger } from '@angular/cdk/menu';
 import { finalize } from 'rxjs';
@@ -35,7 +34,6 @@ const PAGE_SIZE = 300;
 @Component({
   selector: 'app-storico-dump',
   imports: [
-    ViewSwitcher,
     CdkVirtualScrollViewport,
     CdkFixedSizeVirtualScroll,
     CdkVirtualForOf,
@@ -56,8 +54,6 @@ const PAGE_SIZE = 300;
     <div class="absolute inset-0 flex flex-col overflow-hidden bg-background text-foreground">
       <!-- TOPBAR -->
       <header class="relative z-30 flex h-14 shrink-0 items-center gap-3 border-b border-border bg-card px-5">
-        <app-view-switcher current="storico" />
-        <span class="h-6 w-px shrink-0 bg-border"></span>
         <span class="grid h-8 w-8 place-items-center rounded-lg bg-muted text-brand ring-1 ring-border"><ng-icon name="lucideDatabase" size="1rem" /></span>
         <div class="leading-tight">
           <div class="text-sm font-bold tracking-tight">{{ 'storico.title' | transloco }}</div>
