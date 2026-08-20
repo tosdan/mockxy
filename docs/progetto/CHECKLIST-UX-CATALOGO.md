@@ -79,16 +79,15 @@ Tocca anche Monitor / Storico / Dati, ma solo per togliere il pulsante dalle lor
 
 ## 2. Barra unica in cima
 
-Il runtime diventa indicatori; gli interruttori passano in un popover. La topbar di pagina del
-catalogo sparisce: «Importa OpenAPI» e «Nuovo» scendono nella testata del catalogo (gruppo 4).
+Il runtime diventa indicatori; gli interruttori passano in un popover, e le due righe da 38 px in
+cima diventano una.
 
-- [ ] Cluster di indicatori: server + indirizzo, proxy, monitor, dump — sola lettura.
-- [ ] Popover runtime con gli interruttori attuali, indirizzo, copia, flush.
-- [ ] Fondere la barra runtime con la barra workspace in una sola riga.
-- [ ] Spostare «Apri…» e «Recenti» nella striscia delle tab workspace.
-- [ ] Eliminare la topbar di pagina del catalogo (blocco logo «Mockxy / CATALOGO» incluso).
+- [x] Cluster di indicatori: server + indirizzo, proxy, monitor, dump — sola lettura.
+- [x] Popover runtime con gli interruttori attuali, indirizzo, copia, flush.
+- [x] Fondere la barra runtime con la barra workspace in una sola riga.
+- [x] Spostare «Apri…» e «Recenti» nella striscia delle tab workspace.
 - [ ] Verificare l'area di trascinamento finestra e lo spazio dei pulsanti di sistema (Electron).
-- [ ] Test: gli indicatori riflettono lo store; il popover commuta gli stessi segnali di prima.
+- [x] Test: gli indicatori riflettono lo store; il popover commuta gli stessi segnali di prima.
 - [ ] **Anteprima e ok.**
 
 ## 3. Status bar globale
@@ -102,6 +101,10 @@ catalogo sparisce: «Importa OpenAPI» e «Nuovo» scendono nella testata del ca
 
 ## 4. Testata del catalogo
 
+Qui atterrano «Importa OpenAPI» e «Nuovo», quindi qui la topbar di pagina può sparire.
+
+
+- [ ] Eliminare la topbar di pagina del catalogo (blocco logo «Mockxy / CATALOGO» incluso).
 - [ ] Un solo «Nuovo ▾»: mock, handler, middleware, collection, importa OpenAPI.
 - [ ] Menu «…» per ricarica, espandi tutto, collassa tutto.
 - [ ] Campo di ricerca a tutta larghezza con scorciatoia `/`.
