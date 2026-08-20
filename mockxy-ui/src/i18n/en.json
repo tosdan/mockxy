@@ -111,7 +111,8 @@
     "loadErrorsOne": "1 definition not loaded",
     "loadErrors": "{{count}} definitions not loaded",
     "loadErrorsTitle": "Definitions not loaded",
-    "loadErrorsHint": "These files are in the workspace but the engine discarded them: their endpoints do not appear in the catalog."
+    "loadErrorsHint": "These files are in the workspace but the engine discarded them: their endpoints do not appear in the catalog.",
+    "commands": "Commands"
   },
   "runtimeStatus": {
     "title": "Runtime",
@@ -147,6 +148,27 @@
     "recentlyOpened": "Recently opened",
     "none": "None",
     "removeRecentTip": "Remove from recent"
+  },
+  "palette": {
+    "title": "Commands",
+    "placeholder": "Search an endpoint or a command…",
+    "noMatch": "No command matches.",
+    "loading": "Loading endpoints…",
+    "groupViews": "Views",
+    "groupRuntime": "Runtime",
+    "groupEndpoints": "Endpoints",
+    "serverOn": "Turn the server on",
+    "serverOff": "Turn the server off",
+    "proxyOn": "Enable Proxy All",
+    "proxyOff": "Disable Proxy All",
+    "monitorPause": "Pause the monitor",
+    "monitorResume": "Resume the monitor",
+    "dumpOn": "Enable the disk dump",
+    "dumpOff": "Disable the disk dump",
+    "flush": "Write the dump to disk now",
+    "hintMove": "move",
+    "hintRun": "run",
+    "hintClose": "close"
   },
   "viewRail": {
     "catalogo": "Catalog",

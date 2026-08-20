@@ -3,6 +3,7 @@ import { CdkConnectedOverlay, CdkOverlayOrigin, type ConnectedPosition } from '@
 import { NgIcon, provideIcons } from '@ng-icons/core';
 import { lucideTriangleAlert, lucideX } from '@ng-icons/lucide';
 import { TranslocoPipe } from '@jsverse/transloco';
+import { UiKbd } from '../ui/ui-kbd/ui-kbd';
 import { WorkspaceSummaryStore } from './workspace-summary.store';
 
 /**
@@ -15,7 +16,7 @@ import { WorkspaceSummaryStore } from './workspace-summary.store';
  */
 @Component({
   selector: 'app-status-bar',
-  imports: [CdkConnectedOverlay, CdkOverlayOrigin, NgIcon, TranslocoPipe],
+  imports: [CdkConnectedOverlay, CdkOverlayOrigin, NgIcon, TranslocoPipe, UiKbd],
   providers: [provideIcons({ lucideTriangleAlert, lucideX })],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -77,12 +78,24 @@ import { WorkspaceSummaryStore } from './workspace-summary.store';
       </ng-template>
       }
       }
+
+      <!-- Il suggerimento sta a destra e fuori dal blocco del riepilogo: la scorciatoia c'e' anche
+           quando il catalogo non e' ancora stato aperto. -->
+      <span class="ml-auto inline-flex items-center gap-1.5">
+        {{ 'statusBar.commands' | transloco }}
+        <ui-kbd>{{ modifierKey }}</ui-kbd>
+        <ui-kbd>K</ui-kbd>
+      </span>
     </div>
   `,
 })
 export class StatusBar {
   protected readonly summary = inject(WorkspaceSummaryStore);
   protected readonly open = signal(false);
+
+  /** Su macOS la scorciatoia si annuncia con Cmd, altrove con Ctrl. */
+  protected readonly modifierKey =
+    typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform) ? 'Cmd' : 'Ctrl';
 
   protected readonly positions: ConnectedPosition[] = [
     { originX: 'start', originY: 'top', overlayX: 'start', overlayY: 'bottom', offsetY: -6 },

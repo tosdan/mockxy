@@ -5,6 +5,7 @@ import { UiToaster } from './ui/ui-toast/ui-toast';
 import { UpdateNotification } from './shared/update-notification';
 import { ViewRail } from './shared/view-rail';
 import { StatusBar } from './shared/status-bar';
+import { CommandPalette } from './shared/command-palette';
 
 /**
  * Shell applicativa: una barra in cima (workspace + stato runtime), il rail delle view a sinistra,
@@ -13,7 +14,7 @@ import { StatusBar } from './shared/status-bar';
  */
 @Component({
   selector: 'app-root',
-  imports: [RouterOutlet, TopBar, UpdateNotification, ViewRail, StatusBar, UiToaster],
+  imports: [RouterOutlet, TopBar, UpdateNotification, ViewRail, StatusBar, CommandPalette, UiToaster],
   templateUrl: './app.html',
   styleUrl: './app.css',
   changeDetection: ChangeDetectionStrategy.OnPush,

@@ -111,7 +111,8 @@
     "loadErrorsOne": "1 definizione non caricata",
     "loadErrors": "{{count}} definizioni non caricate",
     "loadErrorsTitle": "Definizioni non caricate",
-    "loadErrorsHint": "Questi file stanno nel workspace ma il motore li ha scartati: i loro endpoint non compaiono nel catalogo."
+    "loadErrorsHint": "Questi file stanno nel workspace ma il motore li ha scartati: i loro endpoint non compaiono nel catalogo.",
+    "commands": "Comandi"
   },
   "runtimeStatus": {
     "title": "Runtime",
@@ -147,6 +148,27 @@
     "recentlyOpened": "Aperti di recente",
     "none": "Nessuno",
     "removeRecentTip": "Rimuovi dai recenti"
+  },
+  "palette": {
+    "title": "Comandi",
+    "placeholder": "Cerca un endpoint o un comando…",
+    "noMatch": "Nessun comando corrisponde.",
+    "loading": "Carico gli endpoint…",
+    "groupViews": "Viste",
+    "groupRuntime": "Runtime",
+    "groupEndpoints": "Endpoint",
+    "serverOn": "Accendi il server",
+    "serverOff": "Spegni il server",
+    "proxyOn": "Attiva Proxy All",
+    "proxyOff": "Disattiva Proxy All",
+    "monitorPause": "Metti in pausa il monitor",
+    "monitorResume": "Riprendi il monitor",
+    "dumpOn": "Attiva il dump su disco",
+    "dumpOff": "Disattiva il dump su disco",
+    "flush": "Scrivi subito il dump su disco",
+    "hintMove": "muovi",
+    "hintRun": "esegui",
+    "hintClose": "chiudi"
   },
   "viewRail": {
     "catalogo": "Catalogo",

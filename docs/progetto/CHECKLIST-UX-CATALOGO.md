@@ -187,11 +187,11 @@ al «per lista di id».
 
 ## 10. Palette comandi
 
-- [ ] Apertura con `Ctrl+K` / `Cmd+K` da qualunque view.
-- [ ] Suggerimento della scorciatoia a destra nella status bar.
-- [ ] Salto a un endpoint per metodo e percorso.
-- [ ] Comandi di runtime (server, proxy, monitor, dump) e di navigazione fra le view.
-- [ ] Test: apertura, ricerca, esecuzione, chiusura con Esc.
+- [x] Apertura con `Ctrl+K` / `Cmd+K` da qualunque view.
+- [x] Suggerimento della scorciatoia a destra nella status bar.
+- [x] Salto a un endpoint per metodo e percorso.
+- [x] Comandi di runtime (server, proxy, monitor, dump) e di navigazione fra le view.
+- [x] Test: apertura, ricerca, esecuzione, chiusura con Esc.
 - [ ] **Anteprima e ok.**
 
 ## Test e2e rossi gia' prima di questo lavoro

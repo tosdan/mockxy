@@ -26,9 +26,12 @@ describe('StatusBar', () => {
     return fixture.nativeElement.textContent.replace(/\s+/g, ' ').trim();
   }
 
-  it('senza riepilogo non inventa conteggi, ma tiene lo spazio della striscia', () => {
+  it('senza riepilogo non inventa conteggi, ma annuncia comunque la scorciatoia', () => {
     const fixture = create();
-    expect(text(fixture)).toBe('');
+    // La palette risponde anche prima che il catalogo sia stato aperto: il suggerimento
+    // non dipende dal riepilogo.
+    expect(text(fixture)).toContain('Comandi');
+    expect(text(fixture)).not.toContain('endpoint');
     expect(fixture.nativeElement.querySelector('div')).not.toBeNull();
   });
 
