@@ -22,6 +22,7 @@ import { MocksStore } from '../mocks-next.store';
 import { StatusCombobox, isValidStatus } from '../status-combobox/status-combobox';
 import { MocksNextCopyDialog, type CopyDialogData } from '../copy/mocks-next-copy-dialog';
 import { MocksNextSequenceDialog, type SequenceDialogData } from '../sequence/mocks-next-sequence-dialog';
+import { MocksNextSequenceSummary } from '../sequence/mocks-next-sequence-summary';
 import { MocksNextSseConsole } from '../sse/mocks-next-sse-console';
 import { MocksNextWsConsole } from '../ws/mocks-next-ws-console';
 import { MocksNextResponseForm } from './response-form';
@@ -40,7 +41,7 @@ const METHOD_TONES: ReadonlySet<string> = new Set(['get', 'post', 'put', 'delete
  */
 @Component({
   selector: 'mocks-next-detail',
-  imports: [CdkMenuTrigger, CdkCopyToClipboard, NgIcon, StatusCombobox, TranslocoPipe, UiBadge, UiButton, UiChip, UiCode, UiCollapsible, UiInput, UiMenu, UiMenuItem, UiSelect, UiSkeleton, UiSwitch, UiTable, UiTooltip, MocksNextResponseForm, MocksNextSseConsole, MocksNextWsConsole],
+  imports: [CdkMenuTrigger, CdkCopyToClipboard, NgIcon, StatusCombobox, TranslocoPipe, UiBadge, UiButton, UiChip, UiCode, UiCollapsible, UiInput, UiMenu, UiMenuItem, UiSelect, UiSkeleton, UiSwitch, UiTable, UiTooltip, MocksNextResponseForm, MocksNextSequenceSummary, MocksNextSseConsole, MocksNextWsConsole],
   providers: [provideIcons({ lucideCable, lucideCheck, lucideCog, lucideCopy, lucideEllipsisVertical, lucideFile, lucideFolder, lucideFileCode, lucideLayers, lucideListOrdered, lucideMessageSquare, lucidePencil, lucidePlus, lucideRadio, lucideTrash2, lucideTriangleAlert, lucideX })],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { class: 'relative flex min-w-0 flex-1 flex-col overflow-hidden bg-muted' },
@@ -355,31 +356,9 @@ const METHOD_TONES: ReadonlySet<string> = new Set(['get', 'post', 'put', 'delete
         } @else if (d.type === 'ws') {
         <!-- Variante WS: console con transcript bidirezionale (regia manuale). -->
         <mocks-next-ws-console [detail]="d" />
-        } @else if (d.type === 'sequence' && d.sequence; as sequence) {
-        <div class="min-h-0 flex-1 overflow-y-auto px-6 py-5 mx-scroll">
-          <div class="mx-auto flex max-w-3xl flex-col gap-4">
-            <div class="flex flex-wrap items-center gap-2">
-              <ui-badge tone="neutral">{{ sequence.onEnd === 'loop' ? ('sequenceDialog.onEndLoop' | transloco) : ('sequenceDialog.onEndStay' | transloco) }}</ui-badge>
-              <ui-chip>
-                <span class="text-[10px] font-semibold uppercase tracking-wide">{{ 'sequenceDialog.autoReset' | transloco }}</span>
-                <span class="font-mono font-semibold text-foreground">{{ sequence.resetAfterMs == null ? ('sequenceDialog.autoResetNever' | transloco) : sequence.resetAfterMs + ' ms' }}</span>
-              </ui-chip>
-            </div>
-            <ol class="flex flex-col gap-2" [attr.aria-label]="'sequenceDialog.steps' | transloco">
-              @for (step of sequence.steps; track $index) {
-              <li class="flex items-center gap-3 rounded-lg border border-border bg-black/20 px-3 py-2.5">
-                <span class="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-[color-mix(in_srgb,var(--sequence)_16%,transparent)] font-mono text-[11px] font-bold text-sequence">{{ $index + 1 }}</span>
-                <span class="min-w-0 flex-1 truncate font-mono text-[12px] text-foreground">{{ step.response }}</span>
-                <span class="text-[12px] text-muted-foreground">
-                  @if (step.times != null) { {{ step.times }} {{ 'sequenceDialog.unitTimes' | transloco }} }
-                  @else if (step.forMs != null) { {{ step.forMs }} ms }
-                  @else { {{ 'sequenceDialog.finalStep' | transloco }} }
-                </span>
-              </li>
-              }
-            </ol>
-          </div>
-        </div>
+        } @else if (d.type === 'sequence' && d.sequence) {
+        <!-- Variante sequence: definizione degli step e cursore runtime nello stesso riepilogo. -->
+        <mocks-next-sequence-summary [detail]="d" />
         } @else {
         @if (headerEntries().length) {
         <div class="shrink-0 border-b border-border">

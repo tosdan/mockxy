@@ -558,7 +558,7 @@
     "moveDown": "Sposta giù",
     "removeStep": "Elimina step",
     "addStep": "Aggiungi step",
-    "stateLine": "Step corrente: {{step}} · {{served}} richieste servite",
+    "stateLine": "Prossima richiesta: step {{step}} · {{served}} servite in questo step",
     "reset": "Riparti dall'inizio",
     "resetDone": "Sequenza ripartita dal primo step; lo stato runtime condiviso non è stato azzerato",
     "errMinSteps": "Servono almeno 2 step.",
@@ -569,6 +569,21 @@
     "savedTitle": "Sequenza salvata",
     "cancel": "Annulla",
     "save": "Salva"
+  },
+  "sequenceSummary": {
+    "next": "La prossima richiesta risponde col passo {{step}}",
+    "nextTerminal": "Ogni richiesta risponde col passo {{step}}, l'ultimo",
+    "never": "Nessuna richiesta ancora: la prossima parte dal passo 1",
+    "neverHint": "Il cursore riparte da zero anche quando modifichi la sequenza",
+    "staleReset": "Ferma da troppo tempo: la prossima richiesta riparte dal passo 1",
+    "staleResetHint": "L'auto-reset per inattività scatta alla richiesta successiva, non allo scadere del tempo",
+    "servedInStep": "servite {{served}} in questo passo",
+    "served": "servite {{served}} di {{total}}",
+    "servedCount": "servite {{served}}",
+    "elapsed": "{{elapsed}} ms",
+    "waitingFirstRequest": "parte alla prima richiesta",
+    "lastRequest": "ultima richiesta {{ago}} fa",
+    "stepDone": "già servito"
   },
   "openapiImport": {
     "title": "Importa OpenAPI",
