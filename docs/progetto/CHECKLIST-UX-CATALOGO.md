@@ -194,6 +194,28 @@ al «per lista di id».
 - [x] Test: apertura, ricerca, esecuzione, chiusura con Esc.
 - [ ] **Anteprima e ok.**
 
+## 11. Cursore runtime nel riepilogo della sequence
+
+Nato dalla proposta dell'ispettore a colonna: di quella e' rimasta solo la parte sequenze, e sta
+dentro il riepilogo che gia' c'era invece di prendersi 300 px di body.
+
+- [x] Banda sopra l'elenco degli step: chi risponde alla prossima richiesta, quante ne ha servite
+      questo passo, da quanto tempo tace.
+- [x] «La prossima richiesta risponde col passo N», non «passo corrente»: per gli step `times` il
+      motore avanza il cursore appena esaurita la quota, quindi lo stato esposto e' sempre "cosa
+      risponde adesso". Stessa correzione alla riga di stato del dialog, che diceva la cosa
+      sbagliata da sempre.
+- [x] Avanzamento nella riga dello step: servite su quota (o tempo trascorso), barra sottile,
+      spunta al posto del numero sui passi gia' fatti.
+- [x] Stato «mai servita» dichiarato: `getState` lo restituisce anche dopo una modifica alla
+      sequenza, e «passo 1» da solo si leggerebbe come "in corso".
+- [x] Stato «ferma da troppo»: passata la finestra di `resetAfterMs` il motore non ha ancora
+      azzerato niente (lo fa alla richiesta successiva), quindi il cursore letto e' stantio e
+      dirlo e' l'unico modo di non mentire.
+- [x] «Riparti dall'inizio» dove si guarda il cursore (`POST /mocks/:id/sequence/reset`).
+- [x] Test: 14 unit sulla derivazione, 5 e2e che attraversano il motore vero.
+- [ ] **Anteprima e ok.**
+
 ## Test e2e: com'e' finita
 
 Erano quattro rossi, tutti presenti anche su `main`. Chiusi.
