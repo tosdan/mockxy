@@ -92,11 +92,10 @@ cima diventano una.
 
 ## 3. Status bar globale
 
-- [ ] Striscia in fondo alla shell: conteggi endpoint / collection / attivi.
-- [ ] Errori di caricamento con dettaglio apribile (oggi solo un tooltip nel footer del catalogo).
-- [ ] Suggerimento della palette comandi a destra.
-- [ ] Rimuovere il footer del catalogo, ora ridondante.
-- [ ] Test: conteggi ed errori seguono lo store.
+- [x] Striscia in fondo alla shell: conteggi endpoint / collection / attivi.
+- [x] Errori di caricamento con dettaglio apribile (oggi solo un tooltip nel footer del catalogo).
+- [x] Rimuovere il footer del catalogo, ora ridondante.
+- [x] Test: conteggi ed errori seguono lo store.
 - [ ] **Anteprima e ok.**
 
 ## 4. Testata del catalogo
@@ -178,6 +177,7 @@ al «per lista di id».
 ## 10. Palette comandi
 
 - [ ] Apertura con `Ctrl+K` / `Cmd+K` da qualunque view.
+- [ ] Suggerimento della scorciatoia a destra nella status bar.
 - [ ] Salto a un endpoint per metodo e percorso.
 - [ ] Comandi di runtime (server, proxy, monitor, dump) e di navigazione fra le view.
 - [ ] Test: apertura, ricerca, esecuzione, chiusura con Esc.
