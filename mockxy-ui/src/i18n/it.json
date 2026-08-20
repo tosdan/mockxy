@@ -128,6 +128,17 @@
     "dati": "Dati",
     "changeView": "Cambia vista"
   },
+  "viewRail": {
+    "catalogo": "Catalogo",
+    "monitor": "Monitor",
+    "storico": "Storico",
+    "dati": "Dati",
+    "nav": "Viste"
+  },
+  "settingsMenu": {
+    "label": "Impostaz.",
+    "tip": "Impostazioni e preferenze"
+  },
   "workspaceBar": {
     "closeWs": "Chiudi workspace",
     "noneOpen": "Nessun workspace aperto"
