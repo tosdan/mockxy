@@ -1,11 +1,6 @@
 import { ChangeDetectionStrategy, Component, effect, inject, OnInit, signal, ViewContainerRef } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
-import { CdkMenuTrigger } from '@angular/cdk/menu';
-import { NgIcon, provideIcons } from '@ng-icons/core';
-import { lucideActivity, lucideCheck, lucideChevronDown, lucideCog, lucideFileCode, lucideFolderOpen, lucideLayers, lucideListTree, lucidePlus, lucideUpload } from '@ng-icons/lucide';
 import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
-import { UiButton } from '../../ui/ui-button/ui-button';
-import { UiMenu, UiMenuItem } from '../../ui/ui-menu/ui-menu';
 import { UiDialog } from '../../ui/ui-dialog/ui-dialog';
 import { ToastService } from '../../ui/ui-toast/ui-toast';
 import { MocksNextCatalog } from './catalog/mocks-next-catalog';
@@ -18,15 +13,13 @@ import type { EndpointCreateType } from '../../mock-admin-api.types';
 
 /**
  * Schermata Mocks: catalogo + dettaglio cablati ai dati REALI via MocksStore.
- * Topbar + status strip inline; catalogo e dettaglio sono componenti dedicati.
+ * Nessuna topbar propria: la pagina è i due pannelli e il divisore fra loro. Creazione e import
+ * partono dalla testata del catalogo e arrivano qui, che possiede i dialog.
  */
 @Component({
   selector: 'app-mocks-next',
-  imports: [CdkMenuTrigger, NgIcon, TranslocoPipe, UiButton, UiMenu, UiMenuItem, MocksNextCatalog, MocksNextDetail],
-  providers: [
-    MocksStore,
-    provideIcons({ lucideActivity, lucideCheck, lucideChevronDown, lucideCog, lucideFileCode, lucideFolderOpen, lucideLayers, lucideListTree, lucidePlus, lucideUpload }),
-  ],
+  imports: [TranslocoPipe, MocksNextCatalog, MocksNextDetail],
+  providers: [MocksStore],
   templateUrl: './mocks-next.page.html',
   styleUrl: './mocks-next.page.css',
   changeDetection: ChangeDetectionStrategy.OnPush,

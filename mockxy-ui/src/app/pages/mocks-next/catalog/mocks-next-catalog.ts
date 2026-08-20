@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, ElementRef, computed, effect, inject, signal, viewChild } from '@angular/core';
+import { ChangeDetectionStrategy, Component, ElementRef, computed, effect, inject, output, signal, viewChild } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
 import { CdkMenuTrigger } from '@angular/cdk/menu';
 import {
@@ -13,16 +13,20 @@ import {
   lucideArrowDown,
   lucideArrowUp,
   lucideCheck,
+  lucideChevronDown,
   lucideChevronRight,
   lucideEllipsisVertical,
   lucideExpand,
   lucideFilter,
   lucideFilterX,
+  lucideFileCode,
   lucideFolder,
   lucideFolderPlus,
   lucideGripVertical,
   lucideInfo,
+  lucideLayers,
   lucideMessageSquare,
+  lucidePlus,
   lucidePower,
   lucidePowerOff,
   lucideRefreshCw,
@@ -30,12 +34,14 @@ import {
   lucideShrink,
   lucideTrash2,
   lucideUngroup,
+  lucideUpload,
   lucideX,
 } from '@ng-icons/lucide';
 import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
 import { UiBadge, type BadgeTone } from '../../../ui/ui-badge/ui-badge';
 import { UiButton } from '../../../ui/ui-button/ui-button';
 import { UiInput } from '../../../ui/ui-input/ui-input';
+import { UiKbd } from '../../../ui/ui-kbd/ui-kbd';
 import { UiMenu, UiMenuItem } from '../../../ui/ui-menu/ui-menu';
 import { UiSwitch } from '../../../ui/ui-switch/ui-switch';
 import { UiTooltip } from '../../../ui/ui-tooltip/ui-tooltip';
@@ -45,7 +51,7 @@ import {
   type StatusFilter,
   type TypeFilter,
 } from '../mocks-next.store';
-import { UNSORTED_COLLECTION_ID, type MockType } from '../../../mock-admin-api.types';
+import { UNSORTED_COLLECTION_ID, type EndpointCreateType, type MockType } from '../../../mock-admin-api.types';
 import { ViewStateService } from '../../../shared/view-state.service';
 import {
   ROOT_ORDER_KEY,
@@ -80,6 +86,7 @@ const COLLAPSED_COLLECTIONS_STATE_KEY = 'mocks-collapsed';
     UiBadge,
     UiButton,
     UiInput,
+    UiKbd,
     UiMenu,
     UiMenuItem,
     UiSwitch,
@@ -91,16 +98,20 @@ const COLLAPSED_COLLECTIONS_STATE_KEY = 'mocks-collapsed';
       lucideArrowDown,
       lucideArrowUp,
       lucideCheck,
+      lucideChevronDown,
       lucideChevronRight,
       lucideEllipsisVertical,
       lucideExpand,
       lucideFilter,
       lucideFilterX,
+      lucideFileCode,
       lucideFolder,
       lucideFolderPlus,
       lucideGripVertical,
       lucideInfo,
+      lucideLayers,
       lucideMessageSquare,
+      lucidePlus,
       lucidePower,
       lucidePowerOff,
       lucideRefreshCw,
@@ -108,11 +119,15 @@ const COLLAPSED_COLLECTIONS_STATE_KEY = 'mocks-collapsed';
       lucideShrink,
       lucideTrash2,
       lucideUngroup,
+      lucideUpload,
       lucideX,
     }),
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  host: { class: 'flex min-w-0 flex-col border-r border-border bg-card' },
+  host: {
+    class: 'flex min-w-0 flex-col border-r border-border bg-card',
+    '(document:keydown)': 'onDocumentKeydown($event)',
+  },
   styles: [
     // Il segnaposto (clone all'origine, lista statica) è attenuato per indicare la sorgente del drag.
     '.cdk-drag-placeholder { opacity: 0.4; }',
@@ -131,20 +146,19 @@ const COLLAPSED_COLLECTIONS_STATE_KEY = 'mocks-collapsed';
           <h2 class="text-[11px] font-bold uppercase tracking-[0.16em] text-muted-foreground">{{ 'catalog.title' | transloco }}</h2>
           <ui-badge tone="neutral">{{ store.totalEndpoints() }}</ui-badge>
         </div>
-        <div class="flex items-center gap-1">
-          <button ui-button variant="outline" size="icon" [uiTooltip]="'catalog.reloadTip' | transloco" (click)="store.reload()">
-            <ng-icon name="lucideRefreshCw" size="0.95rem" />
+        <div class="flex items-center gap-1.5">
+          <!-- Un solo punto di creazione: qui nasce tutto quello che comparira' nell'albero
+               sotto, invece che sparso fra la topbar di pagina e le icone della testata. -->
+          <button ui-button size="sm" [cdkMenuTriggerFor]="newMenu">
+            <ng-icon name="lucidePlus" size="0.9rem" />
+            {{ 'catalog.new' | transloco }}
+            <ng-icon name="lucideChevronDown" size="0.75rem" class="opacity-70" />
           </button>
-          <button ui-button variant="outline" size="icon" [uiTooltip]="'catalog.newCollectionTip' | transloco" (click)="startCreateCollection()">
-            <ng-icon name="lucideFolderPlus" size="0.95rem" />
+          <!-- Ricarica, espandi e collassa: rare, quindi in secondo piano. -->
+          <button ui-button variant="outline" size="icon" class="size-7" [uiTooltip]="'catalog.viewActionsTip' | transloco" [attr.aria-label]="'catalog.viewActionsTip' | transloco" [cdkMenuTriggerFor]="viewMenu">
+            <ng-icon name="lucideEllipsisVertical" size="0.95rem" />
           </button>
-          <button ui-button variant="outline" size="icon" [uiTooltip]="'catalog.expandAllTip' | transloco" (click)="expandAll()">
-            <ng-icon name="lucideExpand" size="0.95rem" />
-          </button>
-          <button ui-button variant="outline" size="icon" [uiTooltip]="'catalog.collapseAllTip' | transloco" (click)="collapseAll()">
-            <ng-icon name="lucideShrink" size="0.95rem" />
-          </button>
-          <button ui-button variant="outline" size="icon" class="relative" [uiTooltip]="'catalog.filtersTip' | transloco" [cdkMenuTriggerFor]="filterMenu">
+          <button ui-button variant="outline" size="icon" class="relative size-7" [uiTooltip]="'catalog.filtersTip' | transloco" [attr.aria-label]="'catalog.filtersTip' | transloco" [cdkMenuTriggerFor]="filterMenu">
             <ng-icon name="lucideFilter" size="0.95rem" />
             @if (store.hasMenuFilter()) {
             <span class="absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-[var(--destructive)]/70"></span>
@@ -165,6 +179,10 @@ const COLLAPSED_COLLECTIONS_STATE_KEY = 'mocks-collapsed';
         >
           <ng-icon name="lucideX" size="0.7rem" />
         </button>
+        } @else {
+        <!-- La scorciatoia si annuncia dove si usa; sparisce appena il campo ha del testo,
+             perche' li' quel posto serve alla "x" che lo svuota. -->
+        <ui-kbd class="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2">/</ui-kbd>
         }
       </label>
       @if (creatingCollection() && creatingParentId() === undefined) {
@@ -354,6 +372,53 @@ const COLLAPSED_COLLECTIONS_STATE_KEY = 'mocks-collapsed';
       </div>
     </ng-template>
 
+    <!-- menu "Nuovo": tutto cio' che puo' comparire nell'albero, in un posto solo -->
+    <ng-template #newMenu>
+      <div ui-menu class="min-w-[15rem]">
+        <button ui-menu-item (click)="create.emit('mock')">
+          <ng-icon name="lucideLayers" size="0.9rem" class="text-type-mock" />
+          <span class="flex-1">Mock</span>
+        </button>
+        <button ui-menu-item (click)="create.emit('handler')">
+          <ng-icon name="lucideFileCode" size="0.9rem" class="text-type-handler" />
+          <span class="flex-1">Handler</span>
+        </button>
+        <button ui-menu-item (click)="create.emit('middleware')">
+          <ng-icon name="lucideCog" size="0.9rem" class="text-type-middleware" />
+          <span class="flex-1">Middleware</span>
+        </button>
+        <div class="my-1 h-px bg-border"></div>
+        <button ui-menu-item (click)="startCreateCollection()">
+          <ng-icon name="lucideFolderPlus" size="0.9rem" class="text-brand" />
+          <span class="flex-1">{{ 'catalog.newCollectionTip' | transloco }}</span>
+        </button>
+        <div class="my-1 h-px bg-border"></div>
+        <button ui-menu-item (click)="importOpenapi.emit()">
+          <ng-icon name="lucideUpload" size="0.9rem" class="text-muted-foreground" />
+          <span class="flex-1">{{ 'catalog.importOpenapi' | transloco }}</span>
+        </button>
+      </div>
+    </ng-template>
+
+    <!-- menu delle azioni di vista: rare, quindi qui invece che in barra -->
+    <ng-template #viewMenu>
+      <div ui-menu class="min-w-[14rem]">
+        <button ui-menu-item (click)="store.reload()">
+          <ng-icon name="lucideRefreshCw" size="0.9rem" class="text-muted-foreground" />
+          <span class="flex-1">{{ 'catalog.reloadTip' | transloco }}</span>
+        </button>
+        <div class="my-1 h-px bg-border"></div>
+        <button ui-menu-item (click)="expandAll()">
+          <ng-icon name="lucideExpand" size="0.9rem" class="text-muted-foreground" />
+          <span class="flex-1">{{ 'catalog.expandAllTip' | transloco }}</span>
+        </button>
+        <button ui-menu-item (click)="collapseAll()">
+          <ng-icon name="lucideShrink" size="0.9rem" class="text-muted-foreground" />
+          <span class="flex-1">{{ 'catalog.collapseAllTip' | transloco }}</span>
+        </button>
+      </div>
+    </ng-template>
+
     <!-- menu filtri (tipo + stato) -->
     <ng-template #filterMenu>
       <div ui-menu>
@@ -467,9 +532,38 @@ const COLLAPSED_COLLECTIONS_STATE_KEY = 'mocks-collapsed';
   `,
 })
 export class MocksNextCatalog {
+  /**
+   * Creazione di un endpoint e import OpenAPI restano alla pagina, che possiede i dialog e il
+   * ViewContainerRef da cui vedono lo store page-scoped: il catalogo si limita a chiederli.
+   */
+  readonly create = output<EndpointCreateType>();
+  readonly importOpenapi = output<void>();
+
   protected readonly store = inject(MocksStore);
   private readonly transloco = inject(TranslocoService);
   private readonly viewState = inject(ViewStateService);
+
+  /**
+   * "/" porta al filtro del catalogo, come in git, less e nella maggior parte dei tool a lista.
+   * Non intercetta nulla mentre si sta scrivendo altrove (campi, editor di codice, aree
+   * modificabili) ne' quando accompagna un modificatore, che sarebbe una scorciatoia diversa.
+   */
+  protected onDocumentKeydown(event: KeyboardEvent): void {
+    if (event.key !== '/' || event.ctrlKey || event.metaKey || event.altKey) {
+      return;
+    }
+    const target = event.target as HTMLElement | null;
+    if (target?.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target?.tagName ?? '')) {
+      return;
+    }
+    const input = this.searchInput()?.nativeElement;
+    if (!input) {
+      return;
+    }
+    event.preventDefault();
+    input.focus();
+    input.select();
+  }
 
   /**
    * Svuota il filtro e rimette il fuoco nel campo: chi lo azzera di solito sta per riscriverci,
@@ -492,6 +586,8 @@ export class MocksNextCatalog {
   protected readonly dropIntoId = signal<string | null>(null);
   /** Contenitore della drop-list, per leggere le posizioni delle righe durante il drag. */
   private readonly listEl = viewChild<ElementRef<HTMLElement>>('listEl');
+  /** Campo del filtro: bersaglio della scorciatoia "/". */
+  private readonly searchInput = viewChild<ElementRef<HTMLInputElement>>('searchInput');
   /** Input di creazione collection (root o sotto-collection): gli si dà il fuoco appena compare. */
   private readonly createInput = viewChild<ElementRef<HTMLInputElement>>('createInput');
 

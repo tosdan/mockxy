@@ -300,14 +300,14 @@
     "toastNoMocksCreated": "Nessun mock creato"
   },
   "mocks": {
-    "subtitle": "Catalogo",
-    "importOpenapi": "Importa OpenAPI",
-    "new": "Nuovo",
     "resizeHint": "Trascina per ridimensionare · doppio click per reimpostare"
   },
   "catalog": {
     "title": "Catalogo",
     "reloadTip": "Ricarica dal disco",
+    "new": "Nuovo",
+    "importOpenapi": "Importa OpenAPI",
+    "viewActionsTip": "Azioni di vista",
     "newCollectionTip": "Nuova collection",
     "expandAllTip": "Espandi tutte le cartelle",
     "collapseAllTip": "Collassa tutte le cartelle",

@@ -24,8 +24,9 @@ test.describe("E9 · collection", () => {
   const folderBadge = (name) => row(name).first().locator("ui-badge");
   const kebab = (text) => row(text).first().locator('button:has(ng-icon[name="lucideEllipsisVertical"])');
 
-  test("crea una collection dall'header del catalogo", async () => {
-    await catalog.locator('button:has(ng-icon[name="lucideFolderPlus"])').first().click();
+  test("crea una collection dall'header del catalogo", async ({ page }) => {
+    await catalog.getByRole("button", { name: "Nuovo", exact: true }).click();
+    await page.getByRole("menuitem", { name: "Nuova collection" }).click();
     await catalog.getByPlaceholder(/Nome collection/).fill("E2E coll");
     await catalog.getByPlaceholder(/Nome collection/).press("Enter");
 
@@ -54,16 +55,18 @@ test.describe("E9 · collection", () => {
     await expect(statusBar.getByText(/4\s+collection/)).toBeVisible();
   });
 
-  test("collassa e riespande tutte le cartelle", async () => {
+  test("collassa e riespande tutte le cartelle", async ({ page }) => {
     // di partenza gli endpoint dentro le collezioni sono visibili
     await expect(catalog.getByText("/api/users", { exact: true })).toBeVisible();
 
-    await catalog.locator('button:has(ng-icon[name="lucideShrink"])').click();
+    await catalog.getByRole("button", { name: "Azioni di vista" }).click();
+    await page.getByRole("menuitem", { name: "Collassa tutte le cartelle" }).click();
     await expect(catalog.getByText("/api/users", { exact: true })).toHaveCount(0);
     // le cartelle restano
     await expect(catalog.getByText("Core API")).toBeVisible();
 
-    await catalog.locator('button:has(ng-icon[name="lucideExpand"])').click();
+    await catalog.getByRole("button", { name: "Azioni di vista" }).click();
+    await page.getByRole("menuitem", { name: "Espandi tutte le cartelle" }).click();
     await expect(catalog.getByText("/api/users", { exact: true })).toBeVisible();
   });
 

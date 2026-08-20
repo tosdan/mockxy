@@ -300,14 +300,14 @@
     "toastNoMocksCreated": "No mocks created"
   },
   "mocks": {
-    "subtitle": "Catalog",
-    "importOpenapi": "Import OpenAPI",
-    "new": "New",
     "resizeHint": "Drag to resize · double-click to reset"
   },
   "catalog": {
     "title": "Catalog",
     "reloadTip": "Reload from disk",
+    "new": "New",
+    "importOpenapi": "Import OpenAPI",
+    "viewActionsTip": "View actions",
     "newCollectionTip": "New collection",
     "expandAllTip": "Expand all folders",
     "collapseAllTip": "Collapse all folders",

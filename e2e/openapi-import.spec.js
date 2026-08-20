@@ -32,7 +32,8 @@ test.describe("E11 · import OpenAPI", () => {
   });
 
   async function openDialogAndLoadSpec(page, spec = SPEC) {
-    await page.getByRole("button", { name: "Importa OpenAPI" }).click();
+    await page.getByRole("button", { name: "Nuovo", exact: true }).click();
+    await page.getByRole("menuitem", { name: "Importa OpenAPI" }).click();
     const dialog = page.locator("cdk-dialog-container");
     await expect(dialog).toBeVisible();
     await dialog.locator('input[type="file"]').setInputFiles({
