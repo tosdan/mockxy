@@ -135,6 +135,112 @@ describe('MocksNextCatalog', () => {
     });
   });
 
+  // Selezione multipla: la barra delle azioni di massa compare solo quando c'e' una selezione, e
+  // le azioni riguardano solo cio' che si vede — sotto filtro non si tocca l'invisibile.
+  describe('selezione multipla', () => {
+    function seedCatalog(store: ReturnType<typeof create>['store']) {
+      store.mocks.set([
+        { id: 'uno', type: 'mock', method: 'GET', path: '/uno', status: 200, disabled: false, configFilePath: 'uno' },
+        { id: 'due', type: 'handler', method: 'GET', path: '/due', status: null, disabled: false, configFilePath: 'due' },
+        { id: 'tre', type: 'mock', method: 'GET', path: '/tre', status: 200, disabled: false, configFilePath: 'tre' },
+      ] as never);
+    }
+    function boxes(fixture: ReturnType<typeof create>['fixture']): HTMLElement[] {
+      return Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('[role="checkbox"]'));
+    }
+    function bulkBarText(fixture: ReturnType<typeof create>['fixture']): string {
+      return (fixture.nativeElement as HTMLElement).textContent ?? '';
+    }
+
+    it('la barra compare solo con una selezione, e conta al singolare quando è uno', () => {
+      const { fixture, store } = create();
+      seedCatalog(store);
+      fixture.detectChanges();
+
+      expect(bulkBarText(fixture)).not.toContain('selezionat');
+
+      boxes(fixture)[0].click();
+      fixture.detectChanges();
+      expect(bulkBarText(fixture)).toContain('1 selezionato');
+
+      boxes(fixture)[1].click();
+      fixture.detectChanges();
+      expect(bulkBarText(fixture)).toContain('2 selezionati');
+    });
+
+    it('shift-click estende dall ultimo spuntato', () => {
+      const { fixture, store } = create();
+      seedCatalog(store);
+      fixture.detectChanges();
+
+      boxes(fixture)[0].click();
+      boxes(fixture)[2].dispatchEvent(new MouseEvent('click', { bubbles: true, shiftKey: true }));
+      fixture.detectChanges();
+
+      expect(boxes(fixture).filter((b) => b.getAttribute('aria-checked') === 'true')).toHaveLength(3);
+    });
+
+    it('abilita e disabilita passano dalla rotta di massa, in una chiamata sola', () => {
+      const { fixture, store } = create();
+      seedCatalog(store);
+      fixture.detectChanges();
+      const spy = vi.spyOn(store, 'setEndpointsEnabled').mockImplementation(() => {});
+
+      boxes(fixture)[0].click();
+      boxes(fixture)[1].click();
+      fixture.detectChanges();
+      Array.from((fixture.nativeElement as HTMLElement).querySelectorAll<HTMLButtonElement>('button'))
+        .find((b) => b.textContent?.trim() === 'Disabilita')!
+        .click();
+
+      expect(spy).toHaveBeenCalledTimes(1);
+      expect(spy).toHaveBeenCalledWith(['uno', 'due'], false);
+    });
+
+    it('sotto filtro le azioni non toccano gli endpoint nascosti', () => {
+      const { fixture, store } = create();
+      seedCatalog(store);
+      fixture.detectChanges();
+
+      boxes(fixture).forEach((b) => b.click());
+      fixture.detectChanges();
+
+      // Il filtro per tipo lascia visibile il solo handler: la selezione resta, ma l'azione
+      // riguarda cio' che si vede.
+      store.typeFilter.set('handler');
+      fixture.detectChanges();
+
+      const spy = vi.spyOn(store, 'setEndpointsEnabled').mockImplementation(() => {});
+      Array.from((fixture.nativeElement as HTMLElement).querySelectorAll<HTMLButtonElement>('button'))
+        .find((b) => b.textContent?.trim() === 'Abilita')!
+        .click();
+
+      expect(spy).toHaveBeenCalledWith(['due'], true);
+    });
+
+    it('l eliminazione chiede conferma prima di procedere', () => {
+      const { fixture, store } = create();
+      seedCatalog(store);
+      fixture.detectChanges();
+      const spy = vi.spyOn(store, 'removeEndpoints').mockImplementation(() => {});
+
+      boxes(fixture)[0].click();
+      fixture.detectChanges();
+      (fixture.nativeElement as HTMLElement)
+        .querySelector<HTMLButtonElement>('button[aria-label="Elimina i selezionati"]')!
+        .click();
+      fixture.detectChanges();
+
+      expect(spy).not.toHaveBeenCalled();
+      expect(bulkBarText(fixture)).toContain('Elimina 1');
+
+      Array.from((fixture.nativeElement as HTMLElement).querySelectorAll<HTMLButtonElement>('button'))
+        .find((b) => b.textContent?.trim() === 'Elimina 1')!
+        .click();
+      expect(spy).toHaveBeenCalledWith(['uno'], expect.any(Function));
+    });
+  });
+
   // I filtri stanno in chiaro nella testata: prima erano chiusi in un menu e li segnalava solo un
   // pallino rosso, quindi non si poteva sapere COSA fosse filtrato senza aprirlo.
   describe('filtri in chiaro', () => {

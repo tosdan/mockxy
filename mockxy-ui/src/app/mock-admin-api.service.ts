@@ -14,6 +14,7 @@ import {
   CreateResponseRequest,
   EndpointCopyRequest,
   EndpointCopyPreview,
+  EndpointsEnabledUpdateRequest,
   EndpointUpdateRequest,
   HandlerCreateRequest,
   MiddlewareCreateRequest,
@@ -153,6 +154,11 @@ export class MockAdminApiService {
   }
 
   /** Abilita o disabilita massivamente gli endpoint dentro una collection persistita e le sue sotto-collection. */
+  /** Accende o spegne un elenco arbitrario di endpoint: una chiamata, un solo reload del motore. */
+  setEndpointsEnabled(request: EndpointsEnabledUpdateRequest): Observable<MockListResponse> {
+    return this.http.patch<MockListResponse>(`${this.baseUrl}/mocks/enabled`, request);
+  }
+
   updateCollectionEnabled(id: string, request: CollectionEnabledUpdateRequest): Observable<MockListResponse> {
     return this.http.patch<MockListResponse>(
       `${this.baseUrl}/mocks/collections/${encodeURIComponent(id)}/enabled`,

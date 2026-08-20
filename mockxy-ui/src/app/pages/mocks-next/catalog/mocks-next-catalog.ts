@@ -319,6 +319,45 @@ const COLLAPSED_COLLECTIONS_STATE_KEY = 'mocks-collapsed';
       }
     </div>
 
+    <!-- Azioni di massa: compaiono solo con una selezione, in fondo al pannello che le riguarda. -->
+    @if (selection().size > 0) {
+    <div class="flex shrink-0 items-center gap-1.5 border-t border-border bg-[color-mix(in_srgb,var(--brand)_12%,transparent)] px-2.5 py-2">
+      <span class="text-[11.5px] font-bold text-foreground">{{ (selection().size === 1 ? 'catalog.selectedOne' : 'catalog.selectedCount') | transloco: { count: selection().size } }}</span>
+      <span class="flex-1"></span>
+      @if (confirmingBulkDelete()) {
+      <button ui-button variant="destructive" size="xs" (click)="confirmBulkDelete()">{{ 'catalog.confirmBulkDelete' | transloco: { count: selection().size } }}</button>
+      <button ui-button variant="outline" size="xs" (click)="confirmingBulkDelete.set(false)">{{ 'catalog.cancel' | transloco }}</button>
+      } @else {
+      <button ui-button variant="outline" size="xs" (click)="bulkEnabled(true)">{{ 'catalog.bulkEnable' | transloco }}</button>
+      <button ui-button variant="outline" size="xs" (click)="bulkEnabled(false)">{{ 'catalog.bulkDisable' | transloco }}</button>
+      <button ui-button variant="outline" size="xs" [cdkMenuTriggerFor]="bulkMoveMenu">
+        {{ 'catalog.moveToLabel' | transloco }}
+        <ng-icon name="lucideChevronDown" size="0.7rem" class="opacity-70" />
+      </button>
+      <button ui-button variant="destructive" size="xs" [uiTooltip]="'catalog.deleteSelectedTip' | transloco" [attr.aria-label]="'catalog.deleteSelectedTip' | transloco" (click)="confirmingBulkDelete.set(true)">
+        <ng-icon name="lucideTrash2" size="0.75rem" />
+      </button>
+      <button ui-button variant="ghost" size="xs" [uiTooltip]="'catalog.clearSelectionTip' | transloco" [attr.aria-label]="'catalog.clearSelectionTip' | transloco" (click)="clearSelection()">
+        <ng-icon name="lucideX" size="0.75rem" />
+      </button>
+      }
+    </div>
+    }
+
+    <!-- destinazioni dello spostamento di massa -->
+    <ng-template #bulkMoveMenu>
+      <div ui-menu>
+        <button ui-menu-item (click)="bulkAssign(undefined)">
+          <span class="flex-1">Unsorted</span>
+        </button>
+        @for (c of store.collections(); track c.id) {
+        <button ui-menu-item (click)="bulkAssign(c.id)">
+          <span class="flex-1 truncate">{{ c.label }}</span>
+        </button>
+        }
+      </div>
+    </ng-template>
+
     <!-- linea di inserimento: proiettata nella posizione "to-be"; la lista resta statica (sorting CDK disabilitato) -->
     @if (dropLine(); as line) {
     <div class="pointer-events-none fixed z-50 h-0.5 rounded-full bg-brand" [style.top.px]="line.top" [style.left.px]="line.left" [style.width.px]="line.width"></div>
@@ -376,6 +415,23 @@ const COLLAPSED_COLLECTIONS_STATE_KEY = 'mocks-collapsed';
         @for (guide of guides(depth); track guide) {
         <span class="mx-tree-line" [style.left.px]="guide"></span>
         }
+        <!-- La spunta ha un bersaglio suo: cliccare la riga apre l'endpoint, come prima. -->
+        <span
+          role="checkbox"
+          tabindex="0"
+          [attr.aria-checked]="selection().has(ep.id)"
+          [attr.aria-label]="'catalog.selectEndpointAria' | transloco: { path: ep.path }"
+          class="grid size-3.5 shrink-0 place-items-center rounded transition"
+          [class]="selection().has(ep.id) ? 'bg-brand text-background' : 'shadow-[inset_0_0_0_1px_var(--input)] opacity-0 group-hover:opacity-100 focus-visible:opacity-100'"
+          [class.opacity-100]="selection().size > 0"
+          (click)="$event.stopPropagation(); onSelectionClick(ep.id, $event)"
+          (keydown.enter)="$event.stopPropagation(); onSelectionClick(ep.id, $event)"
+          (keydown.space)="$event.preventDefault(); $event.stopPropagation(); onSelectionClick(ep.id, $event)"
+        >
+          @if (selection().has(ep.id)) {
+          <ng-icon name="lucideCheck" size="0.6rem" />
+          }
+        </span>
         <ui-badge [tone]="methodTone(ep.method)" class="w-[42px] shrink-0">{{ ep.method }}</ui-badge>
         <div class="min-w-0 flex-1">
           <span class="block truncate font-mono text-[12px] leading-tight" [class]="ep.id === store.selectedId() ? 'text-foreground' : 'text-foreground/80'" [title]="ep.path">{{ ep.path }}</span>
@@ -604,6 +660,75 @@ export class MocksNextCatalog {
   protected clearSearch(input: HTMLInputElement): void {
     this.store.searchTerm.set('');
     input.focus();
+  }
+
+  /**
+   * Selezione multipla del catalogo: id degli endpoint spuntati. Vive qui e non nello store perché
+   * è stato di questa vista, non del workspace — cambiando view si riparte puliti.
+   */
+  protected readonly selection = signal<ReadonlySet<string>>(new Set());
+  /** Ultimo id spuntato: l'ancora dell'intervallo per shift-click. */
+  private lastSelectedId: string | null = null;
+  protected readonly confirmingBulkDelete = signal(false);
+
+  /**
+   * Spunta un endpoint. Con shift estende dall'ultimo spuntato **fra le righe visibili**: sotto
+   * filtro l'intervallo è quello che si vede, non quello nascosto.
+   */
+  protected onSelectionClick(id: string, event: Event): void {
+    const next = new Set(this.selection());
+    const visibleIds = this.flatRows()
+      .filter((row) => row.kind === 'endpoint')
+      .map((row) => row.endpoint.id);
+
+    const withShift = (event as MouseEvent | KeyboardEvent).shiftKey === true;
+    if (withShift && this.lastSelectedId != null) {
+      const from = visibleIds.indexOf(this.lastSelectedId);
+      const to = visibleIds.indexOf(id);
+      if (from >= 0 && to >= 0) {
+        const [start, end] = from <= to ? [from, to] : [to, from];
+        for (const rangeId of visibleIds.slice(start, end + 1)) {
+          next.add(rangeId);
+        }
+        this.selection.set(next);
+        this.lastSelectedId = id;
+        return;
+      }
+    }
+
+    if (next.has(id)) {
+      next.delete(id);
+    } else {
+      next.add(id);
+    }
+    this.selection.set(next);
+    this.lastSelectedId = id;
+  }
+
+  protected clearSelection(): void {
+    this.selection.set(new Set());
+    this.lastSelectedId = null;
+    this.confirmingBulkDelete.set(false);
+  }
+
+  /** Id spuntati che sono ancora visibili: un'azione di massa non tocca ciò che il filtro nasconde. */
+  private selectedVisibleIds(): string[] {
+    const selected = this.selection();
+    return this.flatRows()
+      .filter((row) => row.kind === 'endpoint' && selected.has(row.endpoint.id))
+      .map((row) => (row as { endpoint: { id: string } }).endpoint.id);
+  }
+
+  protected bulkEnabled(enabled: boolean): void {
+    this.store.setEndpointsEnabled(this.selectedVisibleIds(), enabled);
+  }
+
+  protected bulkAssign(collectionId: string | undefined): void {
+    this.store.assignCollectionToMany(this.selectedVisibleIds(), collectionId, () => this.clearSelection());
+  }
+
+  protected confirmBulkDelete(): void {
+    this.store.removeEndpoints(this.selectedVisibleIds(), () => this.clearSelection());
   }
 
   protected readonly creatingCollection = signal(false);

@@ -354,6 +354,14 @@
     "confirmDissolve": "Dissolve {{count}}",
     "confirmErase": "Erase {{count}}",
     "moveToLabel": "Move to",
+    "selectEndpointAria": "Select {{path}}",
+    "selectedCount": "{{count}} selected",
+    "selectedOne": "1 selected",
+    "bulkEnable": "Enable",
+    "bulkDisable": "Disable",
+    "confirmBulkDelete": "Delete {{count}}",
+    "deleteSelectedTip": "Delete the selected ones",
+    "clearSelectionTip": "Clear the selection",
     "rootLevel": "Top level"
   },
   "detail": {
