@@ -1,11 +1,7 @@
-import { ChangeDetectionStrategy, Component, effect, inject, OnInit, signal, ViewContainerRef } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, effect, inject, OnInit, signal, ViewContainerRef } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ActivatedRoute } from '@angular/router';
-import { CdkMenuTrigger } from '@angular/cdk/menu';
-import { NgIcon, provideIcons } from '@ng-icons/core';
-import { lucideActivity, lucideCheck, lucideChevronDown, lucideCog, lucideFileCode, lucideFolderOpen, lucideLayers, lucideListTree, lucidePlus, lucideUpload } from '@ng-icons/lucide';
 import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
-import { UiButton } from '../../ui/ui-button/ui-button';
-import { UiMenu, UiMenuItem } from '../../ui/ui-menu/ui-menu';
 import { UiDialog } from '../../ui/ui-dialog/ui-dialog';
 import { ToastService } from '../../ui/ui-toast/ui-toast';
 import { MocksNextCatalog } from './catalog/mocks-next-catalog';
@@ -13,20 +9,18 @@ import { MocksNextCreateDialog, type CreateDialogData } from './create/mocks-nex
 import { OpenapiImportDialog } from './openapi-import/openapi-import-dialog';
 import { MocksNextDetail } from './detail/mocks-next-detail';
 import { MocksStore } from './mocks-next.store';
-import { ViewSwitcher } from '../../shared/view-switcher';
+import { WorkspaceSummaryStore } from '../../shared/workspace-summary.store';
 import type { EndpointCreateType } from '../../mock-admin-api.types';
 
 /**
  * Schermata Mocks: catalogo + dettaglio cablati ai dati REALI via MocksStore.
- * Topbar + status strip inline; catalogo e dettaglio sono componenti dedicati.
+ * Nessuna topbar propria: la pagina è i due pannelli e il divisore fra loro. Creazione e import
+ * partono dalla testata del catalogo e arrivano qui, che possiede i dialog.
  */
 @Component({
   selector: 'app-mocks-next',
-  imports: [ViewSwitcher, CdkMenuTrigger, NgIcon, TranslocoPipe, UiButton, UiMenu, UiMenuItem, MocksNextCatalog, MocksNextDetail],
-  providers: [
-    MocksStore,
-    provideIcons({ lucideActivity, lucideCheck, lucideChevronDown, lucideCog, lucideFileCode, lucideFolderOpen, lucideLayers, lucideListTree, lucidePlus, lucideUpload }),
-  ],
+  imports: [TranslocoPipe, MocksNextCatalog, MocksNextDetail],
+  providers: [MocksStore],
   templateUrl: './mocks-next.page.html',
   styleUrl: './mocks-next.page.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -38,10 +32,25 @@ export class MocksNextPage implements OnInit {
   private readonly toast = inject(ToastService);
   private readonly route = inject(ActivatedRoute);
   private readonly transloco = inject(TranslocoService);
+  private readonly workspaceSummary = inject(WorkspaceSummaryStore);
+  private readonly destroyRef = inject(DestroyRef);
+  /** Il primo passaggio dei query param carica il catalogo; i successivi spostano solo la selezione. */
+  private catalogLoaded = false;
   /** Larghezza del catalogo (px), ridimensionabile col divisore e persistita in localStorage. */
   protected readonly catalogWidth = signal(clampCatalogWidth(readStoredCatalogWidth()));
 
   constructor() {
+    // Questa e' l'unica schermata che carica l'elenco: da qui il riepilogo raggiunge la status
+    // bar della shell, che lo tiene anche quando si passa a un'altra view.
+    effect(() => {
+      this.workspaceSummary.set({
+        endpoints: this.store.totalEndpoints(),
+        collections: this.store.totalCollections(),
+        active: this.store.activeEndpoints(),
+        loadErrors: this.store.loadErrors(),
+      });
+    });
+
     // Gli errori dello store diventano toast (bottom-right), piu' visibili dello status strip.
     effect(() => {
       const err = this.store.error();
@@ -52,11 +61,33 @@ export class MocksNextPage implements OnInit {
   }
 
   ngOnInit(): void {
-    // "Vai al mock" dal monitor: ?m=METODO&p=ROUTE preseleziona la definizione corrispondente.
-    const params = this.route.snapshot.queryParamMap;
-    const method = params.get('m');
-    const path = params.get('p');
-    this.store.loadCatalog(method && path ? { method, path } : undefined);
+    // "Vai al mock": ?m=METODO&p=ROUTE preseleziona la definizione corrispondente. Arriva dal
+    // monitor e dalla palette dei comandi.
+    //
+    // Si ascoltano i CAMBI dei parametri, non solo lo snapshot iniziale: chi salta a un endpoint
+    // mentre è già sul catalogo non fa rimontare la pagina, quindi con il solo snapshot la
+    // navigazione cambiava l'URL e nient'altro.
+    this.route.queryParamMap.pipe(takeUntilDestroyed(this.destroyRef)).subscribe((params) => {
+      const method = params.get('m');
+      const path = params.get('p');
+      const preselect = method && path ? { method, path } : undefined;
+
+      if (!this.catalogLoaded) {
+        this.catalogLoaded = true;
+        this.store.loadCatalog(preselect);
+        return;
+      }
+
+      // Catalogo già in mano: basta spostare la selezione, senza rileggerlo tutto.
+      if (preselect) {
+        const target = this.store
+          .mocks()
+          .find((item) => item.method === preselect.method && item.path === preselect.path);
+        if (target) {
+          this.store.selectMock(target.id);
+        }
+      }
+    });
   }
 
   /** Apre il dialog "Nuovo" per il tipo scelto (vcr → il dialog vede lo store page-scoped). */

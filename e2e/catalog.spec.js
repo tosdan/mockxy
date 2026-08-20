@@ -27,12 +27,12 @@ test.describe("E1 · catalogo", () => {
     }
   });
 
-  test("il footer riporta i conteggi e gli attivi corretti", async ({ page }) => {
+  test("la status bar riporta i conteggi e gli attivi corretti", async ({ page }) => {
     const catalog = page.locator("mocks-next-catalog");
-    await expect(catalog.getByText(/8\s+endpoint/)).toBeVisible();
-    await expect(catalog.getByText(/3\s+collection/)).toBeVisible();
-    // 8 endpoint, 1 disabilitato (legacy) → "7 / 8 attivi" (lingua fissata a IT dall'helper)
-    await expect(catalog.getByText(/7\s*\/\s*8\s+attivi/)).toBeVisible();
+    await expect(page.locator("app-status-bar").getByText(/8\s+endpoint/)).toBeVisible();
+    await expect(page.locator("app-status-bar").getByText(/3\s+collection/)).toBeVisible();
+    // 8 endpoint, 1 disabilitato (legacy) → "7 attivi" (lingua fissata a IT dall'helper)
+    await expect(page.locator("app-status-bar").getByText(/7\s+attivi/)).toBeVisible();
   });
 
   test("mostra le tre collezioni e il gruppo Unsorted", async ({ page }) => {

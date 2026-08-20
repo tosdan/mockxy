@@ -30,12 +30,11 @@ test.describe("E16 · monitor → crea mock", () => {
     // Feedback di successo.
     await expect(page.locator("ui-toaster").getByText("Mock creati")).toBeVisible();
 
-    // Il mock è stato scritto su disco: navigo al catalogo (via view-switcher, non gotoMocks che
+    // Il mock è stato scritto su disco: navigo al catalogo (dal rail, non con gotoMocks che
     // attende 8 endpoint) e verifico che compaia (8 → 9).
-    await monitor.getByRole("button", { name: "Cambia vista" }).click();
-    await page.getByRole("menuitem", { name: "Catalogo" }).click();
+    await page.getByRole("navigation", { name: "Viste" }).getByRole("link", { name: "Catalogo" }).click();
     const catalog = page.locator("mocks-next-catalog");
     await expect(catalog.getByText("/api/catturato-e2e", { exact: true })).toBeVisible();
-    await expect(catalog.getByText(/9\s+endpoint/)).toBeVisible();
+    await expect(page.locator("app-status-bar").getByText(/9\s+endpoint/)).toBeVisible();
   });
 });

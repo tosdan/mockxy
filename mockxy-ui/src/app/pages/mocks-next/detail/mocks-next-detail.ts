@@ -1,8 +1,9 @@
 import { ChangeDetectionStrategy, Component, computed, effect, inject, signal, ViewContainerRef } from '@angular/core';
 import { CdkMenuTrigger } from '@angular/cdk/menu';
+import { CdkCopyToClipboard } from '@angular/cdk/clipboard';
 import { NgIcon, provideIcons } from '@ng-icons/core';
 import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
-import { lucideCable, lucideCheck, lucideCog, lucideCopy, lucideFile, lucideFileCode, lucideLayers, lucideListOrdered, lucideMessageSquare, lucidePencil, lucidePlus, lucideRadio, lucideTrash2, lucideTriangleAlert, lucideX } from '@ng-icons/lucide';
+import { lucideCable, lucideCheck, lucideCog, lucideCopy, lucideEllipsisVertical, lucideFile, lucideFolder, lucideFileCode, lucideLayers, lucideListOrdered, lucideMessageSquare, lucidePencil, lucidePlus, lucideRadio, lucideTrash2, lucideTriangleAlert, lucideX } from '@ng-icons/lucide';
 import { UiBadge, type BadgeTone } from '../../../ui/ui-badge/ui-badge';
 import { UiButton } from '../../../ui/ui-button/ui-button';
 import { UiChip } from '../../../ui/ui-chip/ui-chip';
@@ -21,10 +22,12 @@ import { MocksStore } from '../mocks-next.store';
 import { StatusCombobox, isValidStatus } from '../status-combobox/status-combobox';
 import { MocksNextCopyDialog, type CopyDialogData } from '../copy/mocks-next-copy-dialog';
 import { MocksNextSequenceDialog, type SequenceDialogData } from '../sequence/mocks-next-sequence-dialog';
+import { MocksNextSequenceSummary } from '../sequence/mocks-next-sequence-summary';
 import { MocksNextSseConsole } from '../sse/mocks-next-sse-console';
 import { MocksNextWsConsole } from '../ws/mocks-next-ws-console';
 import { MocksNextResponseForm } from './response-form';
 import { ResponseDraft, type DraftPayloadType, type DraftScriptType } from './response-draft';
+import { mockIdToWorkspacePath, shortenWorkspacePath } from '../../../mock-id';
 import type { EndpointCreateType } from '../../../mock-admin-api.types';
 
 const METHOD_TONES: ReadonlySet<string> = new Set(['get', 'post', 'put', 'delete', 'patch']);
@@ -38,8 +41,8 @@ const METHOD_TONES: ReadonlySet<string> = new Set(['get', 'post', 'put', 'delete
  */
 @Component({
   selector: 'mocks-next-detail',
-  imports: [CdkMenuTrigger, NgIcon, StatusCombobox, TranslocoPipe, UiBadge, UiButton, UiChip, UiCode, UiCollapsible, UiInput, UiMenu, UiMenuItem, UiSelect, UiSkeleton, UiSwitch, UiTable, UiTooltip, MocksNextResponseForm, MocksNextSseConsole, MocksNextWsConsole],
-  providers: [provideIcons({ lucideCable, lucideCheck, lucideCog, lucideCopy, lucideFile, lucideFileCode, lucideLayers, lucideListOrdered, lucideMessageSquare, lucidePencil, lucidePlus, lucideRadio, lucideTrash2, lucideTriangleAlert, lucideX })],
+  imports: [CdkMenuTrigger, CdkCopyToClipboard, NgIcon, StatusCombobox, TranslocoPipe, UiBadge, UiButton, UiChip, UiCode, UiCollapsible, UiInput, UiMenu, UiMenuItem, UiSelect, UiSkeleton, UiSwitch, UiTable, UiTooltip, MocksNextResponseForm, MocksNextSequenceSummary, MocksNextSseConsole, MocksNextWsConsole],
+  providers: [provideIcons({ lucideCable, lucideCheck, lucideCog, lucideCopy, lucideEllipsisVertical, lucideFile, lucideFolder, lucideFileCode, lucideLayers, lucideListOrdered, lucideMessageSquare, lucidePencil, lucidePlus, lucideRadio, lucideTrash2, lucideTriangleAlert, lucideX })],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { class: 'relative flex min-w-0 flex-1 flex-col overflow-hidden bg-muted' },
   template: `
@@ -64,6 +67,17 @@ const METHOD_TONES: ReadonlySet<string> = new Set(['get', 'post', 'put', 'delete
     <div class="relative z-10 shrink-0 border-b border-border px-6 pb-4 pt-4">
       <div class="flex flex-wrap items-start gap-x-4 gap-y-3">
         <div class="min-w-0 flex-1">
+          <!-- Dove vive l'endpoint, e da dove lo si sposta: prima la collection si vedeva solo nel
+               catalogo, e cambiarla passava dal menu della riga. -->
+          <button
+            class="-ml-1 mb-1.5 flex items-center gap-1.5 rounded px-1 py-0.5 text-[11.5px] text-muted-foreground transition hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+            [cdkMenuTriggerFor]="collectionMenu"
+            [attr.aria-label]="'detail.collectionOf' | transloco"
+          >
+            <ng-icon name="lucideFolder" size="0.75rem" class="text-brand" />
+            <span class="font-semibold text-foreground/85">{{ collectionLabel() }}</span>
+            <ng-icon name="lucideChevronDown" size="0.7rem" />
+          </button>
           <div class="flex flex-wrap items-center gap-3">
             <ui-badge [tone]="methodTone(d.method)" size="md">{{ d.method }}</ui-badge>
             <h1 class="min-w-0 truncate font-mono text-[22px] font-bold tracking-tight text-foreground">{{ d.path }}</h1>
@@ -95,10 +109,22 @@ const METHOD_TONES: ReadonlySet<string> = new Set(['get', 'post', 'put', 'delete
           }
 
           @if (filePath()) {
-          <p class="mt-1.5 inline-flex items-center gap-1.5 font-mono text-[11px] text-[var(--foreground-faint)]" [uiTooltip]="'detail.filePathTip' | transloco">
-            <ng-icon name="lucideFile" size="0.75rem" />
-            {{ filePath() }}
-          </p>
+          <div class="mt-1.5 flex items-center gap-1.5 text-[11px] text-[var(--foreground-faint)]">
+            <ng-icon name="lucideFile" size="0.75rem" class="shrink-0" />
+            <!-- Relativo alla cartella dei mock: l'assoluto ripete il root del workspace su ogni
+                 endpoint ed e' diverso su ogni macchina. Nel tooltip resta per intero. -->
+            <span class="min-w-0 truncate font-mono" [uiTooltip]="filePath()" [showDelay]="250">{{ displayedFilePath() }}</span>
+            <button
+              type="button"
+              class="grid size-5 shrink-0 place-items-center rounded text-muted-foreground/70 transition hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+              [cdkCopyToClipboard]="filePath()"
+              (cdkCopyToClipboardCopied)="onPathCopied($event)"
+              [uiTooltip]="'detail.copyFilePath' | transloco"
+              [attr.aria-label]="'detail.copyFilePath' | transloco"
+            >
+              <ng-icon [name]="pathCopied() ? 'lucideCheck' : 'lucideCopy'" size="0.7rem" />
+            </button>
+          </div>
           }
         </div>
 
@@ -107,25 +133,23 @@ const METHOD_TONES: ReadonlySet<string> = new Set(['get', 'post', 'put', 'delete
             <ui-switch [checked]="!d.disabled" [disabled]="busy()" size="sm" (checkedChange)="store.toggleEnabled(d.id, $event)" [ariaLabel]="'detail.endpointActive' | transloco" />
             {{ (d.disabled ? 'detail.inactive' : 'detail.active') | transloco }}
           </span>
-          @if (d.editable) {
-            @if (confirmingDeleteEndpoint()) {
-            <span class="inline-flex items-center gap-2 rounded-lg border border-destructive/40 bg-destructive/10 px-2.5 py-1 text-[12.5px]">
-              <span class="text-destructive-soft">{{ 'detail.deleteEndpointConfirm' | transloco }}</span>
-              <button ui-button variant="destructive" size="sm" [disabled]="busy()" (click)="confirmDeleteEndpoint()">{{ 'detail.delete' | transloco }}</button>
-              <button ui-button variant="outline" size="sm" (click)="cancelDeleteEndpoint()">{{ 'detail.cancel' | transloco }}</button>
-            </span>
-            } @else {
-            <button ui-button variant="destructive" (click)="askDeleteEndpoint()"><ng-icon name="lucideTrash2" size="0.85rem" /> {{ 'detail.delete' | transloco }}</button>
-            }
-          }
+          <!-- La conferma prende il posto delle azioni finché non si decide. -->
+          @if (d.editable && confirmingDeleteEndpoint()) {
+          <span class="inline-flex items-center gap-2 rounded-lg border border-destructive/40 bg-destructive/10 px-2.5 py-1 text-[12.5px]">
+            <span class="text-destructive-soft">{{ 'detail.deleteEndpointConfirm' | transloco }}</span>
+            <button ui-button variant="destructive" size="sm" [disabled]="busy()" (click)="confirmDeleteEndpoint()">{{ 'detail.delete' | transloco }}</button>
+            <button ui-button variant="outline" size="sm" (click)="cancelDeleteEndpoint()">{{ 'detail.cancel' | transloco }}</button>
+          </span>
+          } @else {
           <button ui-button variant="outline" (click)="openCopy()" [uiTooltip]="'detail.copyEndpointTip' | transloco"><ng-icon name="lucideCopy" size="0.85rem" /> {{ 'detail.copy' | transloco }}</button>
-          <!-- Il chip SEQ (stesso segnale del catalogo) rende evidente la sequenza attiva. -->
-          <button ui-button variant="outline" (click)="openSequence()" [uiTooltip]="(d.sequenceActive ? 'detail.sequenceTipActive' : 'detail.sequenceTip') | transloco">
-            <ng-icon name="lucideListOrdered" size="0.85rem" [class.text-sequence]="d.sequenceActive" /> {{ 'detail.sequence' | transloco }}
-            @if (d.sequenceActive) {
-            <span class="rounded bg-[color-mix(in_srgb,var(--sequence)_16%,transparent)] px-1 text-[0.7rem] font-bold tracking-wide text-sequence">SEQ</span>
-            }
+          <!-- Niente pulsante "Sequenza": faceva tre cose che hanno gia' un'altra casa. Crearne una
+               sta nel menu "+" delle varianti, modificarla nel menu "…" della variante scelta, e il
+               segnale che una sequenza e' attiva e' il chip SEQ accanto alla tendina (piu' il badge
+               nella riga del catalogo). Un quarto punto d'ingresso confondeva soltanto. -->
+          <button ui-button variant="outline" size="icon" [cdkMenuTriggerFor]="endpointMenu" [uiTooltip]="'detail.moreActions' | transloco" [attr.aria-label]="'detail.moreActions' | transloco">
+            <ng-icon name="lucideEllipsisVertical" size="0.9rem" />
           </button>
+          }
         </div>
       </div>
     </div>
@@ -159,9 +183,12 @@ const METHOD_TONES: ReadonlySet<string> = new Set(['get', 'post', 'put', 'delete
             <button ui-button variant="outline" [disabled]="busy()" (click)="cancelDeleteResponse()">{{ 'detail.cancel' | transloco }}</button>
           </div>
           } @else {
-          <div class="flex items-center gap-2">
+          <!-- La tendina si adatta: larga fissa 512 px sprecava spazio coi titoli corti e troncava
+               comunque quelli lunghi. Status e delay le stanno accanto invece che spinti al lato
+               opposto della riga: sono attributi della variante scelta, non della barra. -->
+          <div class="flex min-w-0 flex-1 items-center gap-2">
             <ui-select
-              class="w-128"
+              class="min-w-0 flex-1 max-w-[27rem]"
               [options]="responseOptions()"
               [value]="d.selectedResponseFile ?? null"
               (valueChange)="store.selectResponse($any($event))"
@@ -169,34 +196,110 @@ const METHOD_TONES: ReadonlySet<string> = new Set(['get', 'post', 'put', 'delete
               [placeholder]="'detail.responseTitlePlaceholder' | transloco"
             />
             @if (d.editable) {
-            <button ui-button variant="outline" size="icon" [cdkMenuTriggerFor]="addResponseMenu" [disabled]="busy()" [uiTooltip]="'detail.addResponseTip' | transloco"><ng-icon name="lucidePlus" size="0.95rem" /></button>
-            @if (d.type === 'sequence') {
-            <button ui-button variant="outline" size="icon" (click)="openSequence('edit')" [uiTooltip]="'detail.editSelectedResponseTip' | transloco"><ng-icon name="lucidePencil" size="0.95rem" /></button>
-            } @else if (responseEditable()) {
-            <button ui-button variant="outline" size="icon" (click)="startEditResponse()" [uiTooltip]="'detail.editSelectedResponseTip' | transloco"><ng-icon name="lucidePencil" size="0.95rem" /></button>
+            <button ui-button variant="outline" size="icon" [cdkMenuTriggerFor]="addResponseMenu" [disabled]="busy()" [uiTooltip]="'detail.addResponseTip' | transloco" [attr.aria-label]="'detail.addResponseTip' | transloco"><ng-icon name="lucidePlus" size="0.95rem" /></button>
+            <button ui-button variant="outline" size="icon" [cdkMenuTriggerFor]="responseMenu" [disabled]="busy()" [uiTooltip]="'detail.responseActions' | transloco" [attr.aria-label]="'detail.responseActions' | transloco"><ng-icon name="lucideEllipsisVertical" size="0.9rem" /></button>
             }
-            <button ui-button variant="destructive" size="icon" (click)="askDeleteResponse()" [disabled]="(d.responses?.length ?? 0) <= 1" [uiTooltip]="((d.responses?.length ?? 0) <= 1 ? 'detail.atLeastOneResponseTip' : 'detail.deleteSelectedResponseTip') | transloco"><ng-icon name="lucideTrash2" size="0.95rem" /></button>
-            }
-          </div>
 
-          <div class="ml-auto flex flex-wrap items-center gap-2">
+            <span class="mx-0.5 h-5 w-px shrink-0 bg-border"></span>
+
             @if (d.type === 'sequence' && d.sequence; as sequence) {
-            <ui-chip>
+            <ui-chip class="shrink-0">
               <span class="font-semibold text-sequence">SEQ</span>
               <span class="font-mono font-semibold tabular-nums text-foreground">{{ sequence.steps.length }} {{ 'sequenceDialog.steps' | transloco }}</span>
             </ui-chip>
             } @else if (selectedStatus() !== null) {
-            <mocks-next-status-combobox [value]="selectedStatus()" [readOnly]="true" />
+            <!-- Status e delay sono le due cose che si ritoccano di continuo: cambiarle qui evita
+                 di aprire il form della response per un solo numero. La PUT è parziale, e il
+                 backend la fonde sulla variante esistente. -->
+            <mocks-next-status-combobox
+              class="shrink-0"
+              [value]="selectedStatus()"
+              (valueChange)="onStatusChange($event)"
+              [readOnly]="!inlineEditable()"
+              [disabled]="busy()"
+            />
             }
             @if (d.type !== 'sequence') {
-            <ui-chip>
-              <span class="text-[10px] font-semibold uppercase tracking-wide">delay</span>
-              <span class="font-mono font-semibold tabular-nums text-foreground">{{ d.config?.delayMs ?? 0 }} ms</span>
-            </ui-chip>
+            <span class="inline-flex shrink-0 items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+              delay
+              @if (inlineEditable()) {
+              <input
+                ui-input
+                type="number"
+                min="0"
+                step="50"
+                class="w-[4.5rem] px-2 py-1 text-center font-mono text-[12px] tabular-nums"
+                [value]="d.config?.delayMs ?? 0"
+                [disabled]="busy()"
+                [attr.aria-label]="'detail.delayAria' | transloco"
+                (change)="onDelayChange($any($event.target).value)"
+              />
+              } @else {
+              <span class="font-mono tabular-nums text-foreground">{{ d.config?.delayMs ?? 0 }}</span>
+              }
+              ms
+            </span>
             }
           </div>
           }
         </div>
+
+        <!-- azioni sulla variante scelta: al posto della matita e del cestino sciolti in barra -->
+        <ng-template #responseMenu>
+          <div ui-menu class="min-w-[15rem]">
+            @if (detail()?.type === 'sequence') {
+            <button ui-menu-item (click)="openSequence('edit')">
+              <ng-icon name="lucidePencil" size="0.85rem" class="text-muted-foreground" />
+              <span class="flex-1">{{ 'detail.editSelectedResponseTip' | transloco }}</span>
+            </button>
+            } @else if (responseEditable()) {
+            <button ui-menu-item (click)="startEditResponse()">
+              <ng-icon name="lucidePencil" size="0.85rem" class="text-muted-foreground" />
+              <span class="flex-1">{{ 'detail.editSelectedResponseTip' | transloco }}</span>
+            </button>
+            }
+            <div class="my-1 h-px bg-border"></div>
+            <!-- L'ultima variante non si elimina: un endpoint senza response non risponderebbe. -->
+            <button ui-menu-item [disabled]="(detail()?.responses?.length ?? 0) <= 1" (click)="askDeleteResponse()">
+              <ng-icon name="lucideTrash2" size="0.85rem" class="text-destructive-soft" />
+              <span class="flex-1 text-destructive-soft">{{ 'detail.deleteSelectedResponseTip' | transloco }}</span>
+            </button>
+          </div>
+        </ng-template>
+
+        <!-- collection dell'endpoint: sceglierne un'altra lo sposta -->
+        <ng-template #collectionMenu>
+          <div ui-menu class="min-w-[14rem]">
+            <div class="px-2 pb-1 pt-0.5 text-[10px] font-bold uppercase tracking-[0.14em] text-muted-foreground">{{ 'catalog.moveToLabel' | transloco }}</div>
+            <button ui-menu-item (click)="moveToCollection(undefined)">
+              <span class="flex-1">Unsorted</span>
+              @if (!detail()?.collectionId) { <ng-icon name="lucideCheck" size="0.85rem" class="text-brand" /> }
+            </button>
+            @for (c of store.collections(); track c.id) {
+            <button ui-menu-item (click)="moveToCollection(c.id)">
+              <span class="flex-1 truncate">{{ c.label }}</span>
+              @if (detail()?.collectionId === c.id) { <ng-icon name="lucideCheck" size="0.85rem" class="text-brand" /> }
+            </button>
+            }
+          </div>
+        </ng-template>
+
+        <!-- azioni rare e quella distruttiva, fuori dalla prima fila -->
+        <ng-template #endpointMenu>
+          <div ui-menu class="min-w-[15rem]">
+            <button ui-menu-item [cdkCopyToClipboard]="filePath()" (cdkCopyToClipboardCopied)="onPathCopied($event)">
+              <ng-icon name="lucideCopy" size="0.85rem" class="text-muted-foreground" />
+              <span class="flex-1">{{ 'detail.copyFilePath' | transloco }}</span>
+            </button>
+            @if (detail()?.editable) {
+            <div class="my-1 h-px bg-border"></div>
+            <button ui-menu-item (click)="askDeleteEndpoint()">
+              <ng-icon name="lucideTrash2" size="0.85rem" class="text-destructive-soft" />
+              <span class="flex-1 text-destructive-soft">{{ 'detail.deleteEndpoint' | transloco }}</span>
+            </button>
+            }
+          </div>
+        </ng-template>
 
         <!-- menu "aggiungi response": nuovo mock + (clona dalla mock) + nuovi script vanilla -->
         <ng-template #addResponseMenu>
@@ -253,31 +356,9 @@ const METHOD_TONES: ReadonlySet<string> = new Set(['get', 'post', 'put', 'delete
         } @else if (d.type === 'ws') {
         <!-- Variante WS: console con transcript bidirezionale (regia manuale). -->
         <mocks-next-ws-console [detail]="d" />
-        } @else if (d.type === 'sequence' && d.sequence; as sequence) {
-        <div class="min-h-0 flex-1 overflow-y-auto px-6 py-5 mx-scroll">
-          <div class="mx-auto flex max-w-3xl flex-col gap-4">
-            <div class="flex flex-wrap items-center gap-2">
-              <ui-badge tone="neutral">{{ sequence.onEnd === 'loop' ? ('sequenceDialog.onEndLoop' | transloco) : ('sequenceDialog.onEndStay' | transloco) }}</ui-badge>
-              <ui-chip>
-                <span class="text-[10px] font-semibold uppercase tracking-wide">{{ 'sequenceDialog.autoReset' | transloco }}</span>
-                <span class="font-mono font-semibold text-foreground">{{ sequence.resetAfterMs == null ? ('sequenceDialog.autoResetNever' | transloco) : sequence.resetAfterMs + ' ms' }}</span>
-              </ui-chip>
-            </div>
-            <ol class="flex flex-col gap-2" [attr.aria-label]="'sequenceDialog.steps' | transloco">
-              @for (step of sequence.steps; track $index) {
-              <li class="flex items-center gap-3 rounded-lg border border-border bg-black/20 px-3 py-2.5">
-                <span class="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-[color-mix(in_srgb,var(--sequence)_16%,transparent)] font-mono text-[11px] font-bold text-sequence">{{ $index + 1 }}</span>
-                <span class="min-w-0 flex-1 truncate font-mono text-[12px] text-foreground">{{ step.response }}</span>
-                <span class="text-[12px] text-muted-foreground">
-                  @if (step.times != null) { {{ step.times }} {{ 'sequenceDialog.unitTimes' | transloco }} }
-                  @else if (step.forMs != null) { {{ step.forMs }} ms }
-                  @else { {{ 'sequenceDialog.finalStep' | transloco }} }
-                </span>
-              </li>
-              }
-            </ol>
-          </div>
-        </div>
+        } @else if (d.type === 'sequence' && d.sequence) {
+        <!-- Variante sequence: definizione degli step e cursore runtime nello stesso riepilogo. -->
+        <mocks-next-sequence-summary [detail]="d" />
         } @else {
         @if (headerEntries().length) {
         <div class="shrink-0 border-b border-border">
@@ -306,6 +387,26 @@ const METHOD_TONES: ReadonlySet<string> = new Set(['get', 'post', 'put', 'delete
           <div class="flex shrink-0 items-center gap-3 bg-black/20 px-6 py-2.5">
             <h3 class="text-[12px] font-bold uppercase tracking-[0.14em] text-foreground/80">{{ (body().kind === 'source' ? 'detail.sourceLabel' : 'detail.bodyLabel') | transloco }}</h3>
             <span class="font-mono text-[11px] text-muted-foreground">{{ d.selectedResponseFile }}</span>
+            <!-- Il flag templated cambia il significato di quello che si sta leggendo: senza, i
+                 {{ '{{' }}...{{ '}}' }} nel body sono testo letterale. Viveva solo dentro il form di modifica,
+                 quindi in vista il body era ambiguo. -->
+            @if (templateApplies()) {
+            <span
+              class="inline-flex items-center gap-2 rounded-md px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.1em] ring-1 transition"
+              [class]="templated() ? 'bg-brand/15 text-brand-soft ring-brand/40' : 'text-muted-foreground ring-border'"
+              [uiTooltip]="'detail.templatedTip' | transloco"
+              [showDelay]="250"
+            >
+              {{ 'detail.templatedLabel' | transloco }}
+              <ui-switch
+                [checked]="templated()"
+                [disabled]="!d.editable || busy()"
+                size="sm"
+                (checkedChange)="onTemplatedChange($event)"
+                [ariaLabel]="'detail.templatedLabel' | transloco"
+              />
+            </span>
+            }
           </div>
           <div class="min-h-0 flex-1 overflow-y-auto px-6 py-4 mx-scroll">
             @if (body().kind === 'file') {
@@ -385,10 +486,103 @@ export class MocksNextDetail {
     return d.payloadType === 'json' || d.payloadType === 'text' || d.payloadType === 'file' || d.payloadType == null;
   });
 
+  /**
+   * Percorso della definizione. Preferisce quello relativo alla cartella dei mock, ricavato
+   * dall'id senza chiedere niente al backend; se l'id non decodifica come previsto ripiega
+   * sull'assoluto, che è lungo ma vero.
+   */
   protected readonly filePath = computed(() => {
     const d = this.detail();
-    return d?.definitionFilePath || d?.configFilePath || '';
+    if (!d) {
+      return '';
+    }
+    return mockIdToWorkspacePath(d.id) ?? d.definitionFilePath ?? d.configFilePath ?? '';
   });
+
+  /** Lo stesso percorso accorciato dal centro: il file e la sua cartella restano leggibili. */
+  protected readonly displayedFilePath = computed(() => shortenWorkspacePath(this.filePath()));
+
+  /** Collection in cui vive l'endpoint, per il breadcrumb. */
+  protected readonly collectionLabel = computed(() => {
+    const collectionId = this.detail()?.collectionId;
+    if (collectionId == null) {
+      return 'Unsorted';
+    }
+    return this.store.collections().find((c) => c.id === collectionId)?.label ?? 'Unsorted';
+  });
+
+  /**
+   * Status e delay si modificano in posto solo dove hanno un significato: una variante `mock` di
+   * un endpoint modificabile, e non mentre il form della response è aperto (lì li governa il form).
+   * Handler e middleware non hanno uno status proprio da riscrivere; sse, ws e sequence nemmeno.
+   */
+  protected readonly inlineEditable = computed(() => {
+    const d = this.detail();
+    return d?.editable === true && d.type === 'mock' && !this.responseFormOpen();
+  });
+
+  /**
+   * Riscrive lo status della variante con una PUT parziale: il backend fonde il payload su quella
+   * esistente, quindi body, headers, delay e il flag template restano dove sono.
+   */
+  protected onStatusChange(status: number | null): void {
+    if (status == null || status === this.selectedStatus() || !this.inlineEditable()) {
+      return;
+    }
+    this.store.saveResponse({ type: 'mock', status });
+  }
+
+  /** Come lo status. Lo status corrente va rispedito: il tipo della richiesta lo vuole sempre. */
+  protected onDelayChange(raw: string): void {
+    const delayMs = Number(raw);
+    const current = this.detail()?.config?.delayMs ?? 0;
+    if (!Number.isFinite(delayMs) || delayMs < 0 || delayMs === current || !this.inlineEditable()) {
+      return;
+    }
+    this.store.saveResponse({ type: 'mock', status: this.selectedStatus() ?? 200, delayMs });
+  }
+
+  /** Flag `templated` della variante selezionata: i segnaposto nel body e negli header sono attivi. */
+  protected readonly templated = computed(() => this.detail()?.config?.templated === true);
+
+  /**
+   * Dove ha senso mostrarlo. Solo sulle varianti `mock`: handler e middleware producono la risposta
+   * da codice, sse e ws hanno un copione, sequence rimanda ad altre varianti.
+   *
+   * Escluse anche quelle agganciate a un file: i payload file sono serviti in streaming e il
+   * backend cancella `templated` quando la response resta file-backed. Mostrare un interruttore
+   * che non può restare acceso sarebbe peggio che non mostrarlo.
+   */
+  protected readonly templateApplies = computed(() => {
+    const d = this.detail();
+    return d?.type === 'mock' && this.body().kind !== 'file' && (d.editable === true || this.templated());
+  });
+
+  /** Accende o spegne il templating con una PUT parziale: il resto della variante non si tocca. */
+  protected onTemplatedChange(templated: boolean): void {
+    const d = this.detail();
+    if (!d?.editable || templated === this.templated()) {
+      return;
+    }
+    this.store.saveResponse({ type: 'mock', status: this.selectedStatus() ?? 200, templated });
+  }
+
+  protected readonly pathCopied = signal(false);
+
+  protected onPathCopied(copied: boolean): void {
+    if (!copied) {
+      return;
+    }
+    this.pathCopied.set(true);
+    setTimeout(() => this.pathCopied.set(false), 1500);
+  }
+
+  protected moveToCollection(collectionId: string | undefined): void {
+    const d = this.detail();
+    if (d) {
+      this.store.assignCollection(d.id, collectionId);
+    }
+  }
 
   protected readonly headerEntries = computed<readonly [string, string][]>(() => {
     const headers = this.detail()?.config?.headers ?? {};

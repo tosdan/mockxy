@@ -16,11 +16,9 @@ test.describe("E19 · stato delle view preservato tra le navigazioni", () => {
     await expect(catalog.getByText("/api/users", { exact: true })).toHaveCount(0);
 
     // Monitor e ritorno.
-    await page.getByRole("button", { name: "Cambia vista" }).click();
-    await page.getByRole("menuitem", { name: "Monitor" }).click();
+    await page.getByRole("navigation", { name: "Viste" }).getByRole("link", { name: "Monitor" }).click();
     await expect(page).toHaveURL(/\/monitor/);
-    await page.getByRole("button", { name: "Cambia vista" }).click();
-    await page.getByRole("menuitem", { name: "Catalogo" }).click();
+    await page.getByRole("navigation", { name: "Viste" }).getByRole("link", { name: "Catalogo" }).click();
     await expect(page).toHaveURL(/\/mocks/);
 
     // Stato ritrovato: stesso selezionato, stessa cartella collassata.
@@ -48,11 +46,9 @@ test.describe("E19 · stato delle view preservato tra le navigazioni", () => {
       await expect(dati.locator(".mx-selected")).toContainText("alfa");
 
       // Catalogo e ritorno.
-      await page.getByRole("button", { name: "Cambia vista" }).click();
-      await page.getByRole("menuitem", { name: "Catalogo" }).click();
+      await page.getByRole("navigation", { name: "Viste" }).getByRole("link", { name: "Catalogo" }).click();
       await expect(page).toHaveURL(/\/mocks/);
-      await page.getByRole("button", { name: "Cambia vista" }).click();
-      await page.getByRole("menuitem", { name: "Dati" }).click();
+      await page.getByRole("navigation", { name: "Viste" }).getByRole("link", { name: "Dati" }).click();
       await expect(page).toHaveURL(/\/dati/);
 
       // Stato ritrovato: stesso file selezionato, con l'anteprima caricata.

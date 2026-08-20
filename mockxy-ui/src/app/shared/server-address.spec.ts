@@ -1,4 +1,4 @@
-import { resolveDesktopBindAddress, resolveServerAddress } from './runtime-bar';
+import { resolveDesktopBindAddress, resolveServerAddress } from './server-address';
 
 // L'indirizzo nella barra runtime deve essere quello VERO quando la pagina è servita dal
 // motore (desktop o UI compilata sotto /_admin/ui/): il default cablato localhost:3000 vale

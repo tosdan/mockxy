@@ -422,6 +422,12 @@ export type CreateResponseRequest =
   | ResponseSequenceCreateRequest
   | { title?: string };
 
+/** Accende o spegne un elenco arbitrario di endpoint in una sola chiamata, tutto-o-niente. */
+export interface EndpointsEnabledUpdateRequest {
+  ids: string[];
+  enabled: boolean;
+}
+
 export interface CollectionReorderRequest {
   collectionIds: string[];
   parentId?: string;

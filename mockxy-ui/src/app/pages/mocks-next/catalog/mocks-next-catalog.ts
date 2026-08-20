@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, ElementRef, computed, effect, inject, signal, viewChild } from '@angular/core';
+import { ChangeDetectionStrategy, Component, ElementRef, computed, effect, inject, output, signal, viewChild } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
 import { CdkMenuTrigger } from '@angular/cdk/menu';
 import {
@@ -13,30 +13,35 @@ import {
   lucideArrowDown,
   lucideArrowUp,
   lucideCheck,
+  lucideChevronDown,
   lucideChevronRight,
   lucideEllipsisVertical,
   lucideExpand,
   lucideFilter,
   lucideFilterX,
+  lucideFileCode,
   lucideFolder,
   lucideFolderPlus,
   lucideGripVertical,
   lucideInfo,
+  lucideLayers,
   lucideMessageSquare,
+  lucidePlus,
   lucidePower,
   lucidePowerOff,
   lucideRefreshCw,
   lucideSearch,
   lucideShrink,
   lucideTrash2,
-  lucideTriangleAlert,
   lucideUngroup,
+  lucideUpload,
   lucideX,
 } from '@ng-icons/lucide';
 import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
 import { UiBadge, type BadgeTone } from '../../../ui/ui-badge/ui-badge';
 import { UiButton } from '../../../ui/ui-button/ui-button';
 import { UiInput } from '../../../ui/ui-input/ui-input';
+import { UiKbd } from '../../../ui/ui-kbd/ui-kbd';
 import { UiMenu, UiMenuItem } from '../../../ui/ui-menu/ui-menu';
 import { UiSwitch } from '../../../ui/ui-switch/ui-switch';
 import { UiTooltip } from '../../../ui/ui-tooltip/ui-tooltip';
@@ -46,7 +51,7 @@ import {
   type StatusFilter,
   type TypeFilter,
 } from '../mocks-next.store';
-import { UNSORTED_COLLECTION_ID, type MockType } from '../../../mock-admin-api.types';
+import { UNSORTED_COLLECTION_ID, type EndpointCreateType, type MockType } from '../../../mock-admin-api.types';
 import { ViewStateService } from '../../../shared/view-state.service';
 import {
   ROOT_ORDER_KEY,
@@ -59,6 +64,9 @@ import {
 } from './catalog-dnd';
 
 const METHOD_TONES: ReadonlySet<string> = new Set(['get', 'post', 'put', 'delete', 'patch']);
+
+/** Oltre questa profondità le linee guida smettono di aggiungersi: l'indentazione basta da sola. */
+const MAX_GUIDE_DEPTH = 12;
 
 /** Chiave (ViewStateService) delle collection collassate, ritrovate tornando sulla view. */
 const COLLAPSED_COLLECTIONS_STATE_KEY = 'mocks-collapsed';
@@ -81,6 +89,7 @@ const COLLAPSED_COLLECTIONS_STATE_KEY = 'mocks-collapsed';
     UiBadge,
     UiButton,
     UiInput,
+    UiKbd,
     UiMenu,
     UiMenuItem,
     UiSwitch,
@@ -92,29 +101,36 @@ const COLLAPSED_COLLECTIONS_STATE_KEY = 'mocks-collapsed';
       lucideArrowDown,
       lucideArrowUp,
       lucideCheck,
+      lucideChevronDown,
       lucideChevronRight,
       lucideEllipsisVertical,
       lucideExpand,
       lucideFilter,
       lucideFilterX,
+      lucideFileCode,
       lucideFolder,
       lucideFolderPlus,
       lucideGripVertical,
       lucideInfo,
+      lucideLayers,
       lucideMessageSquare,
+      lucidePlus,
       lucidePower,
       lucidePowerOff,
       lucideRefreshCw,
       lucideSearch,
       lucideShrink,
       lucideTrash2,
-      lucideTriangleAlert,
       lucideUngroup,
+      lucideUpload,
       lucideX,
     }),
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  host: { class: 'flex min-w-0 flex-col border-r border-border bg-card' },
+  host: {
+    class: 'flex min-w-0 flex-col border-r border-border bg-card',
+    '(document:keydown)': 'onDocumentKeydown($event)',
+  },
   styles: [
     // Il segnaposto (clone all'origine, lista statica) è attenuato per indicare la sorgente del drag.
     '.cdk-drag-placeholder { opacity: 0.4; }',
@@ -133,24 +149,17 @@ const COLLAPSED_COLLECTIONS_STATE_KEY = 'mocks-collapsed';
           <h2 class="text-[11px] font-bold uppercase tracking-[0.16em] text-muted-foreground">{{ 'catalog.title' | transloco }}</h2>
           <ui-badge tone="neutral">{{ store.totalEndpoints() }}</ui-badge>
         </div>
-        <div class="flex items-center gap-1">
-          <button ui-button variant="outline" size="icon" [uiTooltip]="'catalog.reloadTip' | transloco" (click)="store.reload()">
-            <ng-icon name="lucideRefreshCw" size="0.95rem" />
+        <div class="flex items-center gap-1.5">
+          <!-- Un solo punto di creazione: qui nasce tutto quello che comparira' nell'albero
+               sotto, invece che sparso fra la topbar di pagina e le icone della testata. -->
+          <button ui-button size="sm" [cdkMenuTriggerFor]="newMenu">
+            <ng-icon name="lucidePlus" size="0.9rem" />
+            {{ 'catalog.new' | transloco }}
+            <ng-icon name="lucideChevronDown" size="0.75rem" class="opacity-70" />
           </button>
-          <button ui-button variant="outline" size="icon" [uiTooltip]="'catalog.newCollectionTip' | transloco" (click)="startCreateCollection()">
-            <ng-icon name="lucideFolderPlus" size="0.95rem" />
-          </button>
-          <button ui-button variant="outline" size="icon" [uiTooltip]="'catalog.expandAllTip' | transloco" (click)="expandAll()">
-            <ng-icon name="lucideExpand" size="0.95rem" />
-          </button>
-          <button ui-button variant="outline" size="icon" [uiTooltip]="'catalog.collapseAllTip' | transloco" (click)="collapseAll()">
-            <ng-icon name="lucideShrink" size="0.95rem" />
-          </button>
-          <button ui-button variant="outline" size="icon" class="relative" [uiTooltip]="'catalog.filtersTip' | transloco" [cdkMenuTriggerFor]="filterMenu">
-            <ng-icon name="lucideFilter" size="0.95rem" />
-            @if (store.hasMenuFilter()) {
-            <span class="absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-[var(--destructive)]/70"></span>
-            }
+          <!-- Ricarica, espandi e collassa: rare, quindi in secondo piano. -->
+          <button ui-button variant="outline" size="icon" class="size-7" [uiTooltip]="'catalog.viewActionsTip' | transloco" [attr.aria-label]="'catalog.viewActionsTip' | transloco" [cdkMenuTriggerFor]="viewMenu">
+            <ng-icon name="lucideEllipsisVertical" size="0.95rem" />
           </button>
         </div>
       </div>
@@ -167,8 +176,57 @@ const COLLAPSED_COLLECTIONS_STATE_KEY = 'mocks-collapsed';
         >
           <ng-icon name="lucideX" size="0.7rem" />
         </button>
+        } @else {
+        <!-- La scorciatoia si annuncia dove si usa; sparisce appena il campo ha del testo,
+             perche' li' quel posto serve alla "x" che lo svuota. -->
+        <ui-kbd class="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2">/</ui-kbd>
         }
       </label>
+      <!-- Filtri in chiaro: prima erano chiusi in un menu e li segnalava solo un pallino, quindi
+           lo stato del catalogo non era leggibile senza aprirlo. -->
+      <div class="mt-2 flex items-center gap-2">
+        <div role="radiogroup" [attr.aria-label]="'catalog.filterStatusLabel' | transloco" class="flex items-center gap-0.5 rounded-lg border border-input bg-black/30 p-0.5">
+          @for (s of statusOptions; track s.value) {
+          <button
+            type="button"
+            role="radio"
+            [attr.aria-checked]="store.statusFilter() === s.value"
+            class="rounded-md px-2.5 py-1 text-[11.5px] font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+            [class]="store.statusFilter() === s.value ? 'bg-accent text-foreground shadow-[0_0_0_1px_var(--border)]' : 'text-muted-foreground hover:text-foreground'"
+            (click)="store.statusFilter.set(s.value)"
+          >
+            {{ s.labelKey | transloco }}
+          </button>
+          }
+        </div>
+
+        <button ui-button variant="outline" size="sm" class="h-7 px-2.5" [cdkMenuTriggerFor]="typeMenu">
+          <ng-icon name="lucideFilter" size="0.8rem" />
+          {{ 'catalog.filterTypeLabel' | transloco }}: {{ currentTypeLabel() | transloco }}
+          <ng-icon name="lucideChevronDown" size="0.7rem" class="opacity-70" />
+        </button>
+
+        @if (store.hasMenuFilter()) {
+        <button
+          type="button"
+          class="grid size-7 shrink-0 place-items-center rounded-lg text-muted-foreground transition hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+          [uiTooltip]="'catalog.resetFilters' | transloco"
+          [attr.aria-label]="'catalog.resetFilters' | transloco"
+          (click)="resetFilters()"
+        >
+          <ng-icon name="lucideFilterX" size="0.85rem" />
+        </button>
+        }
+      </div>
+
+      <!-- Sotto filtro il riordino e' sospeso (cdkDragDisabled): prima spariva in silenzio. -->
+      @if (store.hasActiveFilter()) {
+      <p class="mt-2 flex items-center gap-1.5 rounded-md bg-muted px-2 py-1 text-[11px] text-muted-foreground">
+        <ng-icon name="lucideInfo" size="0.75rem" class="shrink-0" />
+        {{ 'catalog.reorderSuspended' | transloco }}
+      </p>
+      }
+
       @if (creatingCollection() && creatingParentId() === undefined) {
       <div class="mt-2 flex items-center gap-1.5">
         <ng-icon name="lucideFolderPlus" size="0.85rem" class="shrink-0 text-brand" />
@@ -261,28 +319,49 @@ const COLLAPSED_COLLECTIONS_STATE_KEY = 'mocks-collapsed';
       }
     </div>
 
+    <!-- Azioni di massa: compaiono solo con una selezione, in fondo al pannello che le riguarda. -->
+    @if (selection().size > 0) {
+    <div class="flex shrink-0 items-center gap-1.5 border-t border-border bg-[color-mix(in_srgb,var(--brand)_12%,transparent)] px-2.5 py-2">
+      <span class="text-[11.5px] font-bold text-foreground">{{ (selection().size === 1 ? 'catalog.selectedOne' : 'catalog.selectedCount') | transloco: { count: selection().size } }}</span>
+      <span class="flex-1"></span>
+      @if (confirmingBulkDelete()) {
+      <button ui-button variant="destructive" size="xs" (click)="confirmBulkDelete()">{{ 'catalog.confirmBulkDelete' | transloco: { count: selection().size } }}</button>
+      <button ui-button variant="outline" size="xs" (click)="confirmingBulkDelete.set(false)">{{ 'catalog.cancel' | transloco }}</button>
+      } @else {
+      <button ui-button variant="outline" size="xs" (click)="bulkEnabled(true)">{{ 'catalog.bulkEnable' | transloco }}</button>
+      <button ui-button variant="outline" size="xs" (click)="bulkEnabled(false)">{{ 'catalog.bulkDisable' | transloco }}</button>
+      <button ui-button variant="outline" size="xs" [cdkMenuTriggerFor]="bulkMoveMenu">
+        {{ 'catalog.moveToLabel' | transloco }}
+        <ng-icon name="lucideChevronDown" size="0.7rem" class="opacity-70" />
+      </button>
+      <button ui-button variant="destructive" size="xs" [uiTooltip]="'catalog.deleteSelectedTip' | transloco" [attr.aria-label]="'catalog.deleteSelectedTip' | transloco" (click)="confirmingBulkDelete.set(true)">
+        <ng-icon name="lucideTrash2" size="0.75rem" />
+      </button>
+      <button ui-button variant="ghost" size="xs" [uiTooltip]="'catalog.clearSelectionTip' | transloco" [attr.aria-label]="'catalog.clearSelectionTip' | transloco" (click)="clearSelection()">
+        <ng-icon name="lucideX" size="0.75rem" />
+      </button>
+      }
+    </div>
+    }
+
+    <!-- destinazioni dello spostamento di massa -->
+    <ng-template #bulkMoveMenu>
+      <div ui-menu>
+        <button ui-menu-item (click)="bulkAssign(undefined)">
+          <span class="flex-1">Unsorted</span>
+        </button>
+        @for (c of store.collections(); track c.id) {
+        <button ui-menu-item (click)="bulkAssign(c.id)">
+          <span class="flex-1 truncate">{{ c.label }}</span>
+        </button>
+        }
+      </div>
+    </ng-template>
+
     <!-- linea di inserimento: proiettata nella posizione "to-be"; la lista resta statica (sorting CDK disabilitato) -->
     @if (dropLine(); as line) {
     <div class="pointer-events-none fixed z-50 h-0.5 rounded-full bg-brand" [style.top.px]="line.top" [style.left.px]="line.left" [style.width.px]="line.width"></div>
     }
-
-    <!-- footer -->
-    <div class="flex shrink-0 items-center gap-2 border-t border-border px-4 py-2 text-[11px] text-muted-foreground">
-      <span class="font-mono tabular-nums">{{ 'catalog.footerCounts' | transloco: { endpoints: store.totalEndpoints(), collections: store.totalCollections() } }}</span>
-      <span class="h-3 w-px bg-border"></span>
-      <span class="tabular-nums text-foreground/70">{{ 'catalog.footerActive' | transloco: { active: store.activeEndpoints(), total: store.totalEndpoints() } }}</span>
-      @if (store.loadErrors().length > 0) {
-      <span class="h-3 w-px bg-border"></span>
-      <span
-        class="flex items-center gap-1 font-semibold tabular-nums text-[color:var(--status-4xx)]"
-        [uiTooltip]="loadErrorsTooltip()"
-        [showDelay]="250"
-      >
-        <ng-icon name="lucideTriangleAlert" size="0.8rem" />
-        {{ 'catalog.footerLoadErrors' | transloco: { count: store.loadErrors().length } }}
-      </span>
-      }
-    </div>
 
     <!-- INTESTAZIONE COLLECTION (riga cartella) -->
     <ng-template #folderHeaderTpl let-col let-depth="depth">
@@ -292,6 +371,9 @@ const COLLAPSED_COLLECTIONS_STATE_KEY = 'mocks-collapsed';
         [style.padding-left.px]="8 + depth * 14"
         (click)="toggleCollapse(col.id)"
       >
+        @for (guide of guides(depth); track guide) {
+        <span class="mx-tree-line" [style.left.px]="guide"></span>
+        }
         @if (!isUnsorted(col)) {
         <span class="shrink-0 cursor-grab text-muted-foreground/40 opacity-0 transition group-hover/folder:opacity-100">
           <ng-icon name="lucideGripVertical" size="0.85rem" />
@@ -330,6 +412,26 @@ const COLLAPSED_COLLECTIONS_STATE_KEY = 'mocks-collapsed';
         [class]="ep.id === store.selectedId() ? 'mx-selected' : 'hover:bg-accent'"
         [class.mx-muted]="!ep.enabled"
       >
+        @for (guide of guides(depth); track guide) {
+        <span class="mx-tree-line" [style.left.px]="guide"></span>
+        }
+        <!-- La spunta ha un bersaglio suo: cliccare la riga apre l'endpoint, come prima. -->
+        <span
+          role="checkbox"
+          tabindex="0"
+          [attr.aria-checked]="selection().has(ep.id)"
+          [attr.aria-label]="'catalog.selectEndpointAria' | transloco: { path: ep.path }"
+          class="grid size-3.5 shrink-0 place-items-center rounded transition"
+          [class]="selection().has(ep.id) ? 'bg-brand text-background' : 'shadow-[inset_0_0_0_1px_var(--input)] opacity-0 group-hover:opacity-100 focus-visible:opacity-100'"
+          [class.opacity-100]="selection().size > 0"
+          (click)="$event.stopPropagation(); onSelectionClick(ep.id, $event)"
+          (keydown.enter)="$event.stopPropagation(); onSelectionClick(ep.id, $event)"
+          (keydown.space)="$event.preventDefault(); $event.stopPropagation(); onSelectionClick(ep.id, $event)"
+        >
+          @if (selection().has(ep.id)) {
+          <ng-icon name="lucideCheck" size="0.6rem" />
+          }
+        </span>
         <ui-badge [tone]="methodTone(ep.method)" class="w-[42px] shrink-0">{{ ep.method }}</ui-badge>
         <div class="min-w-0 flex-1">
           <span class="block truncate font-mono text-[12px] leading-tight" [class]="ep.id === store.selectedId() ? 'text-foreground' : 'text-foreground/80'" [title]="ep.path">{{ ep.path }}</span>
@@ -374,29 +476,60 @@ const COLLAPSED_COLLECTIONS_STATE_KEY = 'mocks-collapsed';
       </div>
     </ng-template>
 
-    <!-- menu filtri (tipo + stato) -->
-    <ng-template #filterMenu>
-      <div ui-menu>
-        <button ui-menu-item [disabled]="!store.hasMenuFilter()" (click)="resetFilters()">
-          <ng-icon name="lucideFilterX" size="0.85rem" class="text-muted-foreground" />
-          <span class="flex-1">{{ 'catalog.resetFilters' | transloco }}</span>
+    <!-- menu "Nuovo": tutto cio' che puo' comparire nell'albero, in un posto solo -->
+    <ng-template #newMenu>
+      <div ui-menu class="min-w-[15rem]">
+        <button ui-menu-item (click)="create.emit('mock')">
+          <ng-icon name="lucideLayers" size="0.9rem" class="text-type-mock" />
+          <span class="flex-1">Mock</span>
+        </button>
+        <button ui-menu-item (click)="create.emit('handler')">
+          <ng-icon name="lucideFileCode" size="0.9rem" class="text-type-handler" />
+          <span class="flex-1">Handler</span>
+        </button>
+        <button ui-menu-item (click)="create.emit('middleware')">
+          <ng-icon name="lucideCog" size="0.9rem" class="text-type-middleware" />
+          <span class="flex-1">Middleware</span>
         </button>
         <div class="my-1 h-px bg-border"></div>
-        <div class="px-2 pb-1 pt-0.5 text-[10px] font-bold uppercase tracking-[0.14em] text-muted-foreground">{{ 'catalog.filterTypeLabel' | transloco }}</div>
+        <button ui-menu-item (click)="startCreateCollection()">
+          <ng-icon name="lucideFolderPlus" size="0.9rem" class="text-brand" />
+          <span class="flex-1">{{ 'catalog.newCollectionTip' | transloco }}</span>
+        </button>
+        <div class="my-1 h-px bg-border"></div>
+        <button ui-menu-item (click)="importOpenapi.emit()">
+          <ng-icon name="lucideUpload" size="0.9rem" class="text-muted-foreground" />
+          <span class="flex-1">{{ 'catalog.importOpenapi' | transloco }}</span>
+        </button>
+      </div>
+    </ng-template>
+
+    <!-- menu delle azioni di vista: rare, quindi qui invece che in barra -->
+    <ng-template #viewMenu>
+      <div ui-menu class="min-w-[14rem]">
+        <button ui-menu-item (click)="store.reload()">
+          <ng-icon name="lucideRefreshCw" size="0.9rem" class="text-muted-foreground" />
+          <span class="flex-1">{{ 'catalog.reloadTip' | transloco }}</span>
+        </button>
+        <div class="my-1 h-px bg-border"></div>
+        <button ui-menu-item (click)="expandAll()">
+          <ng-icon name="lucideExpand" size="0.9rem" class="text-muted-foreground" />
+          <span class="flex-1">{{ 'catalog.expandAllTip' | transloco }}</span>
+        </button>
+        <button ui-menu-item (click)="collapseAll()">
+          <ng-icon name="lucideShrink" size="0.9rem" class="text-muted-foreground" />
+          <span class="flex-1">{{ 'catalog.collapseAllTip' | transloco }}</span>
+        </button>
+      </div>
+    </ng-template>
+
+    <!-- menu del tipo: lo stato e il reset stanno in riga, qui resta la sola scelta del tipo -->
+    <ng-template #typeMenu>
+      <div ui-menu>
         @for (t of typeOptions; track t.value) {
         <button ui-menu-item (click)="store.typeFilter.set(t.value)">
           <span class="flex-1">{{ t.labelKey | transloco }}</span>
           @if (store.typeFilter() === t.value) {
-          <ng-icon name="lucideCheck" size="0.85rem" class="text-brand" />
-          }
-        </button>
-        }
-        <div class="my-1 h-px bg-border"></div>
-        <div class="px-2 pb-1 text-[10px] font-bold uppercase tracking-[0.14em] text-muted-foreground">{{ 'catalog.filterStatusLabel' | transloco }}</div>
-        @for (s of statusOptions; track s.value) {
-        <button ui-menu-item (click)="store.statusFilter.set(s.value)">
-          <span class="flex-1">{{ s.labelKey | transloco }}</span>
-          @if (store.statusFilter() === s.value) {
           <ng-icon name="lucideCheck" size="0.85rem" class="text-brand" />
           }
         </button>
@@ -487,9 +620,38 @@ const COLLAPSED_COLLECTIONS_STATE_KEY = 'mocks-collapsed';
   `,
 })
 export class MocksNextCatalog {
+  /**
+   * Creazione di un endpoint e import OpenAPI restano alla pagina, che possiede i dialog e il
+   * ViewContainerRef da cui vedono lo store page-scoped: il catalogo si limita a chiederli.
+   */
+  readonly create = output<EndpointCreateType>();
+  readonly importOpenapi = output<void>();
+
   protected readonly store = inject(MocksStore);
   private readonly transloco = inject(TranslocoService);
   private readonly viewState = inject(ViewStateService);
+
+  /**
+   * "/" porta al filtro del catalogo, come in git, less e nella maggior parte dei tool a lista.
+   * Non intercetta nulla mentre si sta scrivendo altrove (campi, editor di codice, aree
+   * modificabili) ne' quando accompagna un modificatore, che sarebbe una scorciatoia diversa.
+   */
+  protected onDocumentKeydown(event: KeyboardEvent): void {
+    if (event.key !== '/' || event.ctrlKey || event.metaKey || event.altKey) {
+      return;
+    }
+    const target = event.target as HTMLElement | null;
+    if (target?.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target?.tagName ?? '')) {
+      return;
+    }
+    const input = this.searchInput()?.nativeElement;
+    if (!input) {
+      return;
+    }
+    event.preventDefault();
+    input.focus();
+    input.select();
+  }
 
   /**
    * Svuota il filtro e rimette il fuoco nel campo: chi lo azzera di solito sta per riscriverci,
@@ -500,13 +662,74 @@ export class MocksNextCatalog {
     input.focus();
   }
 
-  /** Tooltip dell'indicatore nel footer: elenco delle definizioni scartate (file: motivo). */
-  protected readonly loadErrorsTooltip = computed(() =>
-    this.store
-      .loadErrors()
-      .map((loadError) => `${loadError.configFilePath}: ${loadError.message}`)
-      .join('\n'),
-  );
+  /**
+   * Selezione multipla del catalogo: id degli endpoint spuntati. Vive qui e non nello store perché
+   * è stato di questa vista, non del workspace — cambiando view si riparte puliti.
+   */
+  protected readonly selection = signal<ReadonlySet<string>>(new Set());
+  /** Ultimo id spuntato: l'ancora dell'intervallo per shift-click. */
+  private lastSelectedId: string | null = null;
+  protected readonly confirmingBulkDelete = signal(false);
+
+  /**
+   * Spunta un endpoint. Con shift estende dall'ultimo spuntato **fra le righe visibili**: sotto
+   * filtro l'intervallo è quello che si vede, non quello nascosto.
+   */
+  protected onSelectionClick(id: string, event: Event): void {
+    const next = new Set(this.selection());
+    const visibleIds = this.flatRows()
+      .filter((row) => row.kind === 'endpoint')
+      .map((row) => row.endpoint.id);
+
+    const withShift = (event as MouseEvent | KeyboardEvent).shiftKey === true;
+    if (withShift && this.lastSelectedId != null) {
+      const from = visibleIds.indexOf(this.lastSelectedId);
+      const to = visibleIds.indexOf(id);
+      if (from >= 0 && to >= 0) {
+        const [start, end] = from <= to ? [from, to] : [to, from];
+        for (const rangeId of visibleIds.slice(start, end + 1)) {
+          next.add(rangeId);
+        }
+        this.selection.set(next);
+        this.lastSelectedId = id;
+        return;
+      }
+    }
+
+    if (next.has(id)) {
+      next.delete(id);
+    } else {
+      next.add(id);
+    }
+    this.selection.set(next);
+    this.lastSelectedId = id;
+  }
+
+  protected clearSelection(): void {
+    this.selection.set(new Set());
+    this.lastSelectedId = null;
+    this.confirmingBulkDelete.set(false);
+  }
+
+  /** Id spuntati che sono ancora visibili: un'azione di massa non tocca ciò che il filtro nasconde. */
+  private selectedVisibleIds(): string[] {
+    const selected = this.selection();
+    return this.flatRows()
+      .filter((row) => row.kind === 'endpoint' && selected.has(row.endpoint.id))
+      .map((row) => (row as { endpoint: { id: string } }).endpoint.id);
+  }
+
+  protected bulkEnabled(enabled: boolean): void {
+    this.store.setEndpointsEnabled(this.selectedVisibleIds(), enabled);
+  }
+
+  protected bulkAssign(collectionId: string | undefined): void {
+    this.store.assignCollectionToMany(this.selectedVisibleIds(), collectionId, () => this.clearSelection());
+  }
+
+  protected confirmBulkDelete(): void {
+    this.store.removeEndpoints(this.selectedVisibleIds(), () => this.clearSelection());
+  }
 
   protected readonly creatingCollection = signal(false);
   /** Genitore sotto cui creare la collection (undefined = livello root). */
@@ -520,6 +743,8 @@ export class MocksNextCatalog {
   protected readonly dropIntoId = signal<string | null>(null);
   /** Contenitore della drop-list, per leggere le posizioni delle righe durante il drag. */
   private readonly listEl = viewChild<ElementRef<HTMLElement>>('listEl');
+  /** Campo del filtro: bersaglio della scorciatoia "/". */
+  private readonly searchInput = viewChild<ElementRef<HTMLInputElement>>('searchInput');
   /** Input di creazione collection (root o sotto-collection): gli si dà il fuoco appena compare. */
   private readonly createInput = viewChild<ElementRef<HTMLInputElement>>('createInput');
 
@@ -759,6 +984,25 @@ export class MocksNextCatalog {
     const collectionIds = new Set(this.store.collections().map((c) => c.id));
     return refs.filter((ref) => collectionIds.has(ref));
   }
+  /** Etichetta del tipo filtrato, per mostrarla sul pulsante invece di un pallino. */
+  protected readonly currentTypeLabel = computed(
+    () => this.typeOptions.find((option) => option.value === this.store.typeFilter())?.labelKey ?? 'catalog.filterAll',
+  );
+
+  /**
+   * Ascisse dei tratti verticali per una riga a quella profondità: uno per ogni livello di
+   * antenato, allineati al centro dello scalino di indentazione (8 + i*14 + 7). Tabella
+   * precalcolata: la si legge a ogni riga a ogni ciclo di rendering.
+   */
+  private static readonly GUIDE_OFFSETS: readonly (readonly number[])[] = Array.from(
+    { length: MAX_GUIDE_DEPTH + 1 },
+    (_unused, depth) => Array.from({ length: depth }, (_u, level) => 8 + level * 14 + 7),
+  );
+
+  protected guides(depth: number): readonly number[] {
+    return MocksNextCatalog.GUIDE_OFFSETS[Math.min(depth, MAX_GUIDE_DEPTH)];
+  }
+
   protected resetFilters(): void {
     this.store.typeFilter.set('all');
     this.store.statusFilter.set('all');

@@ -87,7 +87,7 @@ async function setEndpointEnabled(request, path, enabled) {
 
 /**
  * Naviga alla schermata Mocks con lingua deterministica e attende che il catalogo si sia popolato
- * dal backend (footer conteggi presente). addInitScript scrive localStorage prima del bootstrap
+ * dal backend (conteggi nella status bar). addInitScript scrive localStorage prima del bootstrap
  * Angular, che legge la lingua salvata all'avvio.
  */
 async function gotoMocks(page, lang = APP_LANG) {
@@ -104,7 +104,7 @@ async function gotoMocks(page, lang = APP_LANG) {
   );
   // UI servita dal backend sotto /_admin/ui (build). Overridabile via env (E2E_UI_PATH).
   await page.goto(process.env.E2E_UI_PATH || "/_admin/ui/mocks");
-  await expect(page.locator("mocks-next-catalog").getByText(/8\s+endpoint/)).toBeVisible();
+  await expect(page.locator("app-status-bar").getByText(/8\s+endpoint/)).toBeVisible();
 }
 
 // Impronta DETTAGLIATA delle fixture: per ogni endpoint percorso#response#stato#collezione, più le
@@ -257,9 +257,18 @@ async function setDumpEnabled(request, enabled) {
   await request.patch(`${E2E_BACKEND}/_admin/api/monitoring/dump`, { data: { enabled } });
 }
 
-/** Forza la scrittura su disco delle request in coda nel dump. Ritorna quante ne ha scritte. */
+/**
+ * Forza la scrittura su disco delle request in coda nel dump. Ritorna quante ne ha scritte.
+ *
+ * Il corpo `{}` non e' decorativo: la rotta e' protetta da requireEmptyJsonObject e senza
+ * content-type application/json risponde 415. Il corpo dell'errore non ha `flushed`, quindi
+ * senza corpo questa funzione restituiva sempre 0 in silenzio.
+ */
 async function flushDump(request) {
-  const res = await request.post(`${E2E_BACKEND}/_admin/api/monitoring/dump/flush`);
+  const res = await request.post(`${E2E_BACKEND}/_admin/api/monitoring/dump/flush`, { data: {} });
+  if (!res.ok()) {
+    throw new Error(`flush del dump rifiutato: ${res.status()} ${await res.text()}`);
+  }
   return (await res.json()).flushed ?? 0;
 }
 

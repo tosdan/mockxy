@@ -38,7 +38,7 @@ test.describe("mock WebSocket · copione, console e regole", () => {
   });
 
   test("il browser si connette al mock, la console fa la regia, le regole rispondono", async ({ page, request }) => {
-    // gotoMocks asserisce il footer delle fixture (8 endpoint): la creazione del nono avviene
+    // gotoMocks asserisce i conteggi delle fixture (8 endpoint): la creazione del nono avviene
     // dopo, e un reload porta il catalogo aggiornato.
     await gotoMocks(page);
     await createWsEndpoint(request);

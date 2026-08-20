@@ -6,11 +6,15 @@ const { gotoMocks, setEndpointEnabled, reloadStable, waitForAdminApiIdle } = req
 // Scrittura: l'afterEach ripristina lo stato delle fixture via API (health attivo, legacy no).
 test.describe("E5 · toggle enabled", () => {
   let catalog;
+
+  let statusBar;
   let detail;
 
   test.beforeEach(async ({ page }) => {
     await gotoMocks(page);
     catalog = page.locator("mocks-next-catalog");
+
+    statusBar = page.locator("app-status-bar");
     detail = page.locator("mocks-next-detail");
   });
 
@@ -20,6 +24,9 @@ test.describe("E5 · toggle enabled", () => {
   });
 
   const rowSwitch = (path) => catalog.locator(".cdk-drag").filter({ hasText: path }).getByRole("switch");
+  // Nel dettaglio ci sono piu' interruttori (endpoint, templating): questo e' quello
+  // che accende e spegne l'endpoint.
+  const detailEndpointSwitch = () => detail.getByRole("switch", { name: "Endpoint attivo" });
 
   test("spegnere un endpoint dal catalogo lo rende muted e abbassa il conteggio attivi", async () => {
     const sw = rowSwitch("/api/health");
@@ -27,7 +34,7 @@ test.describe("E5 · toggle enabled", () => {
     await sw.click();
     await expect(sw).toHaveAttribute("aria-checked", "false");
     await expect(catalog.locator(".mx-muted", { hasText: "/api/health" })).toBeVisible();
-    await expect(catalog.getByText(/6\s*\/\s*8\s+attivi/)).toBeVisible();
+    await expect(statusBar.getByText(/6\s+attivi/)).toBeVisible();
   });
 
   test("accendere l'endpoint disabilitato lo toglie da muted e alza il conteggio", async () => {
@@ -36,12 +43,12 @@ test.describe("E5 · toggle enabled", () => {
     await sw.click();
     await expect(sw).toHaveAttribute("aria-checked", "true");
     await expect(catalog.locator(".mx-muted", { hasText: "/api/legacy" })).toHaveCount(0);
-    await expect(catalog.getByText(/8\s*\/\s*8\s+attivi/)).toBeVisible();
+    await expect(statusBar.getByText(/8\s+attivi/)).toBeVisible();
   });
 
   test("spegnendo dal catalogo, lo switch del dettaglio si allinea", async () => {
     await catalog.getByText("/api/health", { exact: true }).click();
-    const detailSwitch = detail.getByRole("switch");
+    const detailSwitch = detailEndpointSwitch();
     await expect(detailSwitch).toHaveAttribute("aria-checked", "true");
     await rowSwitch("/api/health").click();
     await expect(detailSwitch).toHaveAttribute("aria-checked", "false");
@@ -49,7 +56,7 @@ test.describe("E5 · toggle enabled", () => {
 
   test("spegnendo dal dettaglio, la riga del catalogo si allinea (muted + switch)", async ({ page }) => {
     await catalog.getByText("/api/health", { exact: true }).click();
-    await detail.getByRole("switch").click();
+    await detailEndpointSwitch().click();
     await expect(rowSwitch("/api/health")).toHaveAttribute("aria-checked", "false");
     // Il toggle scatena getMock+updateEndpoint+listMocks: attende il reload prima di verificare la
     // classe muted della riga, altrimenti si legge uno stato transitorio (flaky).

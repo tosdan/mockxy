@@ -50,11 +50,10 @@ test.describe("E17 · storico dump → crea mock", () => {
     await expect(page.locator("ui-toaster").getByText("Mock creati")).toBeVisible();
 
     // Il mock compare nel catalogo (8 → 9).
-    await storico.getByRole("button", { name: "Cambia vista" }).click();
-    await page.getByRole("menuitem", { name: "Catalogo" }).click();
+    await page.getByRole("navigation", { name: "Viste" }).getByRole("link", { name: "Catalogo" }).click();
     const catalog = page.locator("mocks-next-catalog");
     await expect(catalog.getByText("/api/dump-e2e", { exact: true })).toBeVisible();
-    await expect(catalog.getByText(/9\s+endpoint/)).toBeVisible();
+    await expect(page.locator("app-status-bar").getByText(/9\s+endpoint/)).toBeVisible();
   });
 
   test("crea mock da tutto il file di dump (menu File)", async ({ page, request }) => {
@@ -70,11 +69,10 @@ test.describe("E17 · storico dump → crea mock", () => {
     await menu.getByRole("button", { name: "Tutto" }).click();
     await expect(page.locator("ui-toaster").getByText("Mock creati")).toBeVisible();
 
-    await storico.getByRole("button", { name: "Cambia vista" }).click();
-    await page.getByRole("menuitem", { name: "Catalogo" }).click();
+    await page.getByRole("navigation", { name: "Viste" }).getByRole("link", { name: "Catalogo" }).click();
     const catalog = page.locator("mocks-next-catalog");
     await expect(catalog.getByText("/api/dump-e2e", { exact: true })).toBeVisible();
-    await expect(catalog.getByText(/9\s+endpoint/)).toBeVisible();
+    await expect(page.locator("app-status-bar").getByText(/9\s+endpoint/)).toBeVisible();
   });
 
   test("elimina un file di dump dal menu File", async ({ page, request }) => {

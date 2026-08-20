@@ -492,6 +492,53 @@ paths:
         "404": { $ref: "#/components/responses/CollectionNotFound" }
 
   # ──────────────────────────────── Endpoints ────────────────────────────────
+  /mocks/enabled:
+    patch:
+      tags: [Mocks]
+      operationId: setEndpointsEnabled
+      summary: Enable or disable a list of endpoints
+      description: |
+        Rewrites the `enabled` flag of every endpoint named in `ids`. Same machinery as
+        `PATCH /mocks/collections/{id}/enabled`, but the caller picks the endpoints instead of
+        taking a whole subtree — this is what backs multi-selection in the catalog.
+
+        All-or-nothing: the whole batch shares a single rollback and a single runtime reload, so a
+        rejected reload leaves every file as it was. An unknown id fails the request before
+        anything is written. Endpoints already in the requested state are left untouched.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ids, enabled]
+              properties:
+                ids:
+                  type: array
+                  minItems: 1
+                  items: { type: string }
+                  description: Endpoint ids. Duplicates are collapsed.
+                enabled: { type: boolean }
+            example: { ids: [YXBpL3VzZXJzL0dFVC5lbmRwb2ludC5qc29u], enabled: false }
+      responses:
+        "200":
+          description: The refreshed catalog
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, collections, childOrder]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/MockSummary" }
+                  collections:
+                    type: array
+                    items: { $ref: "#/components/schemas/CollectionSummary" }
+                  childOrder: { $ref: "#/components/schemas/ChildOrder" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/MockNotFound" }
+
   /mocks/{id}:
     parameters:
       - $ref: "#/components/parameters/MockId"

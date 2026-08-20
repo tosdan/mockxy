@@ -7,9 +7,13 @@ const { gotoMocks, resetWorkspace } = require("./helpers");
 test.describe("E9 · collection", () => {
   let catalog;
 
+  let statusBar;
+
   test.beforeEach(async ({ page }) => {
     await gotoMocks(page);
     catalog = page.locator("mocks-next-catalog");
+
+    statusBar = page.locator("app-status-bar");
   });
 
   test.afterEach(async ({ request, page }) => {
@@ -20,13 +24,14 @@ test.describe("E9 · collection", () => {
   const folderBadge = (name) => row(name).first().locator("ui-badge");
   const kebab = (text) => row(text).first().locator('button:has(ng-icon[name="lucideEllipsisVertical"])');
 
-  test("crea una collection dall'header del catalogo", async () => {
-    await catalog.locator('button:has(ng-icon[name="lucideFolderPlus"])').first().click();
+  test("crea una collection dall'header del catalogo", async ({ page }) => {
+    await catalog.getByRole("button", { name: "Nuovo", exact: true }).click();
+    await page.getByRole("menuitem", { name: "Nuova collection" }).click();
     await catalog.getByPlaceholder(/Nome collection/).fill("E2E coll");
     await catalog.getByPlaceholder(/Nome collection/).press("Enter");
 
     await expect(catalog.getByText("E2E coll")).toBeVisible();
-    await expect(catalog.getByText(/4\s+collection/)).toBeVisible();
+    await expect(statusBar.getByText(/4\s+collection/)).toBeVisible();
   });
 
   test("sposta un endpoint in una collection dal menu della riga", async ({ page }) => {
@@ -47,19 +52,21 @@ test.describe("E9 · collection", () => {
     await catalog.getByPlaceholder(/Nome sotto-collection/).press("Enter");
 
     await expect(catalog.getByText("E2E sub")).toBeVisible();
-    await expect(catalog.getByText(/4\s+collection/)).toBeVisible();
+    await expect(statusBar.getByText(/4\s+collection/)).toBeVisible();
   });
 
-  test("collassa e riespande tutte le cartelle", async () => {
+  test("collassa e riespande tutte le cartelle", async ({ page }) => {
     // di partenza gli endpoint dentro le collezioni sono visibili
     await expect(catalog.getByText("/api/users", { exact: true })).toBeVisible();
 
-    await catalog.locator('button:has(ng-icon[name="lucideShrink"])').click();
+    await catalog.getByRole("button", { name: "Azioni di vista" }).click();
+    await page.getByRole("menuitem", { name: "Collassa tutte le cartelle" }).click();
     await expect(catalog.getByText("/api/users", { exact: true })).toHaveCount(0);
     // le cartelle restano
     await expect(catalog.getByText("Core API")).toBeVisible();
 
-    await catalog.locator('button:has(ng-icon[name="lucideExpand"])').click();
+    await catalog.getByRole("button", { name: "Azioni di vista" }).click();
+    await page.getByRole("menuitem", { name: "Espandi tutte le cartelle" }).click();
     await expect(catalog.getByText("/api/users", { exact: true })).toBeVisible();
   });
 
@@ -75,7 +82,7 @@ test.describe("E9 · collection", () => {
       .click();
 
     await expect(catalog.getByText("Dynamic")).toHaveCount(0);
-    await expect(catalog.getByText(/2\s+collection/)).toBeVisible();
+    await expect(statusBar.getByText(/2\s+collection/)).toBeVisible();
     // echo/enrich restano nel catalogo (tornati fra i non categorizzati)
     await expect(catalog.getByText("/api/echo", { exact: true })).toBeVisible();
   });
@@ -91,10 +98,10 @@ test.describe("E9 · collection", () => {
       .click();
 
     await expect(catalog.getByText("Dynamic")).toHaveCount(0);
-    await expect(catalog.getByText(/2\s+collection/)).toBeVisible();
+    await expect(statusBar.getByText(/2\s+collection/)).toBeVisible();
     // stavolta gli endpoint contenuti sono stati eliminati con la collection
     await expect(catalog.getByText("/api/echo", { exact: true })).toHaveCount(0);
-    await expect(catalog.getByText(/6\s+endpoint/)).toBeVisible();
+    await expect(statusBar.getByText(/6\s+endpoint/)).toBeVisible();
   });
 
   test("disabilita in blocco tutti gli endpoint di una collection", async ({ page }) => {

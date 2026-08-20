@@ -32,7 +32,8 @@ test.describe("E11 · import OpenAPI", () => {
   });
 
   async function openDialogAndLoadSpec(page, spec = SPEC) {
-    await page.getByRole("button", { name: "Importa OpenAPI" }).click();
+    await page.getByRole("button", { name: "Nuovo", exact: true }).click();
+    await page.getByRole("menuitem", { name: "Importa OpenAPI" }).click();
     const dialog = page.locator("cdk-dialog-container");
     await expect(dialog).toBeVisible();
     await dialog.locator('input[type="file"]').setInputFiles({
@@ -54,7 +55,7 @@ test.describe("E11 · import OpenAPI", () => {
     // Annulla: nulla è stato creato nel catalogo.
     await dialog.getByRole("button", { name: "Annulla" }).click();
     await expect(catalog.getByText("/e2e/imported", { exact: true })).toHaveCount(0);
-    await expect(catalog.getByText(/8\s+endpoint/)).toBeVisible();
+    await expect(page.locator("app-status-bar").getByText(/8\s+endpoint/)).toBeVisible();
   });
 
   test("importa gli endpoint e compaiono nel catalogo", async ({ page }) => {
@@ -67,7 +68,7 @@ test.describe("E11 · import OpenAPI", () => {
     // Il dialog si chiude e i due endpoint compaiono nel catalogo (8 → 10).
     await expect(catalog.getByText("/e2e/imported", { exact: true })).toBeVisible();
     await expect(catalog.getByText("/e2e/altro", { exact: true })).toBeVisible();
-    await expect(catalog.getByText(/10\s+endpoint/)).toBeVisible();
+    await expect(page.locator("app-status-bar").getByText(/10\s+endpoint/)).toBeVisible();
   });
 
   test("il prefisso suggerito dai servers si applica all'anteprima e all'import", async ({ page }) => {
@@ -88,6 +89,6 @@ test.describe("E11 · import OpenAPI", () => {
 
     await expect(catalog.getByText("/api-be/e2e/imported", { exact: true })).toBeVisible();
     await expect(catalog.getByText("/api-be/e2e/altro", { exact: true })).toBeVisible();
-    await expect(catalog.getByText(/10\s+endpoint/)).toBeVisible();
+    await expect(page.locator("app-status-bar").getByText(/10\s+endpoint/)).toBeVisible();
   });
 });

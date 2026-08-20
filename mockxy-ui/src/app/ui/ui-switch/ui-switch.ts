@@ -14,11 +14,14 @@ export type UiSwitchSize = 'default' | 'sm';
   imports: [BrnSwitch, BrnSwitchThumb],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
+    <!-- aria-label passa come INPUT di BrnSwitch (alias "aria-label"), non come attributo
+         dell'host: e' il primitivo a portarlo sull'elemento che ha role="switch". Con
+         [attr.aria-label] finiva sull'host e lo switch restava senza nome accessibile. -->
     <brn-switch
       [checked]="checked()"
       (checkedChange)="checked.set($event)"
       [disabled]="disabled()"
-      [attr.aria-label]="ariaLabel()"
+      [aria-label]="ariaLabel()"
       [class]="trackClass()"
     >
       <brn-switch-thumb [class]="thumbClass()" />

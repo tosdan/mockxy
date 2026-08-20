@@ -5,11 +5,15 @@ const { gotoMocks, resetWorkspace } = require("./helpers");
 // un nuovo metodo+path. Scrittura: l'afterEach ripristina la run dir dalle fixture.
 test.describe("E7 · CRUD endpoint", () => {
   let catalog;
+
+  let statusBar;
   let detail;
 
   test.beforeEach(async ({ page }) => {
     await gotoMocks(page);
     catalog = page.locator("mocks-next-catalog");
+
+    statusBar = page.locator("app-status-bar");
     detail = page.locator("mocks-next-detail");
   });
 
@@ -24,7 +28,7 @@ test.describe("E7 · CRUD endpoint", () => {
     await page.getByRole("button", { name: "Crea", exact: true }).click();
 
     await expect(catalog.getByText("/api/nuovo-mock", { exact: true })).toBeVisible();
-    await expect(catalog.getByText(/9\s+endpoint/)).toBeVisible();
+    await expect(statusBar.getByText(/9\s+endpoint/)).toBeVisible();
   });
 
   test("crea un nuovo endpoint handler dal dialog Nuovo", async ({ page }) => {
@@ -40,14 +44,16 @@ test.describe("E7 · CRUD endpoint", () => {
     ).toBeVisible();
   });
 
-  test("elimina un endpoint dal dettaglio", async () => {
+  test("elimina un endpoint dal dettaglio", async ({ page }) => {
     await catalog.getByText("/api/health", { exact: true }).click();
-    await detail.getByRole("button", { name: "Elimina", exact: true }).click();
+    // L'eliminazione e' scesa nel menu "..." della testata: azione rara e distruttiva.
+    await detail.getByRole("button", { name: "Altre azioni" }).click();
+    await page.getByRole("menuitem", { name: "Elimina endpoint" }).click();
     await expect(detail.getByText(/Eliminare l'endpoint/)).toBeVisible();
     await detail.getByRole("button", { name: "Elimina", exact: true }).click();
 
     await expect(catalog.getByText("/api/health", { exact: true })).toHaveCount(0);
-    await expect(catalog.getByText(/7\s+endpoint/)).toBeVisible();
+    await expect(statusBar.getByText(/7\s+endpoint/)).toBeVisible();
   });
 
   test("copia un endpoint verso un nuovo path", async ({ page }) => {
@@ -61,6 +67,6 @@ test.describe("E7 · CRUD endpoint", () => {
     await dialog.getByRole("button", { name: "Copia", exact: true }).click();
 
     await expect(catalog.getByText("/api/users-copia", { exact: true })).toBeVisible();
-    await expect(catalog.getByText(/9\s+endpoint/)).toBeVisible();
+    await expect(statusBar.getByText(/9\s+endpoint/)).toBeVisible();
   });
 });

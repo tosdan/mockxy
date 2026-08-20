@@ -1,5 +1,5 @@
 import { computed, inject, Injectable, signal } from '@angular/core';
-import { finalize, map, Observable, switchMap } from 'rxjs';
+import { Observable, concatMap, finalize, from, map, switchMap, toArray } from 'rxjs';
 import { TranslocoService } from '@jsverse/transloco';
 import { MockAdminApiService } from '../../mock-admin-api.service';
 import { ViewStateService } from '../../shared/view-state.service';
@@ -483,6 +483,85 @@ export class MocksStore {
       },
       error: (e) => this.error.set(readErrorMessage(e) ?? this.transloco.translate('common.unexpectedError')),
     });
+  }
+
+  /**
+   * Accende o spegne un elenco di endpoint in una sola chiamata (PATCH /mocks/enabled): il
+   * backend la tratta come tutto-o-niente, con un solo reload del motore. Da qui passano le
+   * azioni di massa della selezione multipla.
+   */
+  setEndpointsEnabled(ids: readonly string[], enabled: boolean, onSuccess?: () => void): void {
+    if (ids.length === 0) {
+      return;
+    }
+    this.error.set(undefined);
+    this.api.setEndpointsEnabled({ ids: [...ids], enabled }).subscribe({
+      next: (res) => {
+        this.applyCatalogResponse(res);
+        // Il dettaglio aperto potrebbe essere uno di quelli toccati: allinea il suo interruttore.
+        const sel = this.selected();
+        if (sel) {
+          const updated = res.items.find((item) => item.id === sel.id);
+          if (updated) {
+            this.setSelected({ ...sel, disabled: updated.disabled });
+          }
+        }
+        onSuccess?.();
+      },
+      error: (e) => this.error.set(readErrorMessage(e) ?? this.transloco.translate('common.unexpectedError')),
+    });
+  }
+
+  /**
+   * Sposta più endpoint in una collection. Qui non c'è una rotta di massa: sono N chiamate in
+   * sequenza (concatMap, non merge: l'ordine di inserimento conta) e un solo ricaricamento finale.
+   */
+  assignCollectionToMany(ids: readonly string[], collectionId: string | undefined, onSuccess?: () => void): void {
+    if (ids.length === 0) {
+      return;
+    }
+    this.error.set(undefined);
+    from(ids)
+      .pipe(
+        concatMap((id) => this.api.assignDefinitionCollection(id, { collectionId })),
+        toArray(),
+        switchMap(() => this.api.listMocks()),
+      )
+      .subscribe({
+        next: (res) => {
+          this.applyCatalogResponse(res);
+          onSuccess?.();
+        },
+        error: (e) => this.error.set(readErrorMessage(e) ?? this.transloco.translate('common.unexpectedError')),
+      });
+  }
+
+  /**
+   * Elimina più endpoint. Come lo spostamento, N chiamate: se una fallisce le precedenti restano
+   * eliminate, quindi l'elenco si ricarica comunque per mostrare lo stato reale.
+   */
+  removeEndpoints(ids: readonly string[], onSuccess?: () => void): void {
+    if (ids.length === 0) {
+      return;
+    }
+    this.error.set(undefined);
+    const selectedId = this.selected()?.id;
+    from(ids)
+      .pipe(
+        concatMap((id) => this.api.deleteDefinition(id)),
+        toArray(),
+        finalize(() => this.loadCatalog()),
+      )
+      .subscribe({
+        next: () => {
+          // Il dettaglio aperto è appena sparito: loadCatalog ne selezionerà un altro.
+          if (selectedId != null && ids.includes(selectedId)) {
+            this.selected.set(undefined);
+          }
+          onSuccess?.();
+        },
+        error: (e) => this.error.set(readErrorMessage(e) ?? this.transloco.translate('common.unexpectedError')),
+      });
   }
 
   /** Riordina le collection sorelle di un dato parent (l'API vuole i soli fratelli + parentId) e ricarica. */

@@ -33,24 +33,30 @@ test.describe("E13 · robustezza ed errori", () => {
 
     // Nessun endpoint creato: il catalogo resta a 8.
     await dialog.getByRole("button", { name: "Annulla" }).click();
-    await expect(catalog.getByText(/8\s+endpoint/)).toBeVisible();
+    await expect(page.locator("app-status-bar").getByText(/8\s+endpoint/)).toBeVisible();
   });
 
-  test("copiare un endpoint verso un path esistente mostra un errore", async ({ page }) => {
+  // Il conflitto lo dice l'ANTEPRIMA, mentre si digita: il dialog fa un dry-run della copia, il
+  // server risponde 409 e il pulsante resta disabilitato. Non si arriva mai a inviare la copia —
+  // ed e' il punto: te lo dice prima, invece di lasciarti cliccare e fallire.
+  test("copiare un endpoint verso un path esistente e' impedito prima di inviare", async ({ page }) => {
     await catalog.getByText("/api/users", { exact: true }).click();
     await detail.getByRole("button", { name: "Copia", exact: true }).click();
 
     const dialog = page.locator("cdk-dialog-container");
     await expect(dialog).toBeVisible();
+    const confirm = dialog.getByRole("button", { name: "Copia", exact: true });
+
+    // Un path libero: l'anteprima arriva e il pulsante si accende.
+    await dialog.locator("input[ui-input]").fill("/api/libero-e2e");
+    await expect(confirm).toBeEnabled();
+
     // GET /api/health esiste già → la copia (stesso metodo GET dell'origine) va in conflitto.
     await dialog.locator("input[ui-input]").fill("/api/health");
-    await dialog.getByRole("button", { name: "Copia", exact: true }).click();
-
-    // Errore: dialog ancora aperto + toast.
-    await expect(dialog).toBeVisible();
-    await expect(page.locator("ui-toaster").getByText("Errore")).toBeVisible();
+    await expect(dialog.getByText(/already exists/i)).toBeVisible();
+    await expect(confirm).toBeDisabled();
 
     await dialog.getByRole("button", { name: "Annulla" }).click();
-    await expect(catalog.getByText(/8\s+endpoint/)).toBeVisible();
+    await expect(page.locator("app-status-bar").getByText(/8\s+endpoint/)).toBeVisible();
   });
 });

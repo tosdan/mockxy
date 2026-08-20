@@ -2,7 +2,7 @@ const { test, expect } = require("@playwright/test");
 const { gotoMocks, mockIdByPath, resetWorkspace, E2E_BACKEND } = require("./helpers");
 
 // SEQ come segnale visivo unico della sequence selezionata: badge nella riga del catalogo e chip
-// nel pulsante Sequenza del dettaglio, entrambi nel verde del token --sequence. La response viene
+// accanto alla tendina delle varianti, entrambi nel verde del token --sequence. La response viene
 // creata e quindi selezionata via admin API su /api/status (l'unica fixture con due varianti);
 // scrittura su file → afterEach resetWorkspace.
 const SEQUENCE = {
@@ -32,7 +32,7 @@ async function selectResponse(request, id, responseFileName) {
   expect(response.ok()).toBeTruthy();
 }
 
-test.describe("SEQ · badge nel catalogo e chip sul pulsante Sequenza", () => {
+test.describe("SEQ · badge nel catalogo e chip nella barra delle varianti", () => {
   test.afterEach(async ({ request, page }) => {
     await resetWorkspace(request, page);
   });
@@ -45,10 +45,9 @@ test.describe("SEQ · badge nel catalogo e chip sul pulsante Sequenza", () => {
     const row = page.locator("mocks-next-catalog div.cursor-pointer", { hasText: "/api/status" }).first();
     await expect(row.getByText("SEQ", { exact: true })).toBeVisible();
 
-    // Dettaglio: il pulsante Sequenza porta il chip SEQ.
+    // Dettaglio: il chip SEQ sta nella barra delle varianti, accanto alla tendina.
     await page.locator("mocks-next-catalog").getByText("/api/status", { exact: true }).click();
-    const sequenceButton = page.locator("mocks-next-detail").getByRole("button", { name: /Sequenza/ });
-    const chip = sequenceButton.getByText("SEQ", { exact: true });
+    const chip = page.locator("mocks-next-detail ui-chip").getByText("SEQ", { exact: true });
     await expect(chip).toBeVisible();
 
     // Il chip usa il verde del token --sequence, non la tinta brand: è il segnale "ben visibile".
@@ -65,9 +64,7 @@ test.describe("SEQ · badge nel catalogo e chip sul pulsante Sequenza", () => {
     await expect(row.getByText("SEQ", { exact: true })).toHaveCount(0);
 
     await page.locator("mocks-next-catalog").getByText("/api/status", { exact: true }).click();
-    const sequenceButton = page.locator("mocks-next-detail").getByRole("button", { name: /Sequenza/ });
-    await expect(sequenceButton).toBeVisible();
-    await expect(sequenceButton.getByText("SEQ", { exact: true })).toHaveCount(0);
+    await expect(page.locator("mocks-next-detail").getByText("SEQ", { exact: true })).toHaveCount(0);
   });
 
   test("eliminando la response sequence selezionata, badge e chip spariscono", async ({ page, request }) => {
@@ -84,8 +81,6 @@ test.describe("SEQ · badge nel catalogo e chip sul pulsante Sequenza", () => {
 
     await expect(catalog.getByText("SEQ", { exact: true })).toHaveCount(0);
     await catalog.getByText("/api/status", { exact: true }).click();
-    const sequenceButton = page.locator("mocks-next-detail").getByRole("button", { name: /Sequenza/ });
-    await expect(sequenceButton).toBeVisible();
-    await expect(sequenceButton.getByText("SEQ", { exact: true })).toHaveCount(0);
+    await expect(page.locator("mocks-next-detail").getByText("SEQ", { exact: true })).toHaveCount(0);
   });
 });

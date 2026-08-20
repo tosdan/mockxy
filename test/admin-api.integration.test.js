@@ -1569,6 +1569,138 @@ describe("admin API", () => {
     expect(outsideEndpoint.enabled).toBe(true);
   });
 
+  test("toggles enabled on an arbitrary list of endpoints in one shot", async () => {
+    for (const folder of ["bulk-one", "bulk-two", "bulk-untouched"]) {
+      await writeMock({ mocksDir, folder, method: "GET", routePath: `/${folder}`, body: { folder } });
+    }
+
+    const app = await buildApp();
+    const oneId = encodeMockId("bulk-one/GET.endpoint.json");
+    const twoId = encodeMockId("bulk-two/GET.endpoint.json");
+    const untouchedId = encodeMockId("bulk-untouched/GET.endpoint.json");
+
+    const response = await request(app)
+      .patch("/_admin/api/mocks/enabled")
+      .send({ ids: [oneId, twoId], enabled: false });
+
+    expect(response.status).toBe(200);
+    const itemsById = new Map(response.body.items.map((item) => [item.id, item]));
+    expect(itemsById.get(oneId).disabled).toBe(true);
+    expect(itemsById.get(twoId).disabled).toBe(true);
+    // Fuori dall'elenco non si tocca nulla: è il punto della rotta.
+    expect(itemsById.get(untouchedId).disabled).toBe(false);
+    // Risponde come la rotta per collection, così il client ricarica tutto con una sola chiamata.
+    expect(response.body).toHaveProperty("collections");
+    expect(response.body).toHaveProperty("childOrder");
+
+    const onDisk = async (folder) =>
+      JSON.parse(await fs.promises.readFile(path.join(mocksDir, folder, "GET.endpoint.json"), "utf8"));
+    expect((await onDisk("bulk-one")).enabled).toBe(false);
+    expect((await onDisk("bulk-two")).enabled).toBe(false);
+    expect((await onDisk("bulk-untouched")).enabled).toBe(true);
+  });
+
+  test("leaves untouched the endpoints already in the requested state", async () => {
+    await writeMock({ mocksDir, folder: "bulk-already", method: "GET", routePath: "/bulk-already", body: {} });
+
+    const app = await buildApp();
+    const id = encodeMockId("bulk-already/GET.endpoint.json");
+    const endpointPath = path.join(mocksDir, "bulk-already", "GET.endpoint.json");
+    const before = await fs.promises.stat(endpointPath);
+
+    const response = await request(app)
+      .patch("/_admin/api/mocks/enabled")
+      .send({ ids: [id], enabled: true });
+
+    expect(response.status).toBe(200);
+    // Nessuna riscrittura: un mtime nuovo su un file identico farebbe lavorare il watch a vuoto.
+    const after = await fs.promises.stat(endpointPath);
+    expect(after.mtimeMs).toBe(before.mtimeMs);
+  });
+
+  test("rejects a bulk enabled request that names an unknown endpoint, writing nothing", async () => {
+    await writeMock({ mocksDir, folder: "bulk-real", method: "GET", routePath: "/bulk-real", body: {} });
+
+    const app = await buildApp();
+    const realId = encodeMockId("bulk-real/GET.endpoint.json");
+    const ghostId = encodeMockId("bulk-ghost/GET.endpoint.json");
+
+    const response = await request(app)
+      .patch("/_admin/api/mocks/enabled")
+      .send({ ids: [realId, ghostId], enabled: false });
+
+    expect(response.status).toBe(404);
+    // Tutto-o-niente: l'endpoint valido dell'elenco non deve essere stato toccato.
+    const real = JSON.parse(
+      await fs.promises.readFile(path.join(mocksDir, "bulk-real", "GET.endpoint.json"), "utf8")
+    );
+    expect(real.enabled).toBe(true);
+  });
+
+  test("rejects malformed bulk enabled payloads", async () => {
+    await writeMock({ mocksDir, folder: "bulk-guard", method: "GET", routePath: "/bulk-guard", body: {} });
+    const app = await buildApp();
+    const id = encodeMockId("bulk-guard/GET.endpoint.json");
+
+    const cases = [
+      { ids: [], enabled: true },
+      { ids: [id] },
+      { ids: [id], enabled: "yes" },
+      { enabled: true },
+      { ids: [id], enabled: true, extra: 1 },
+      { ids: [""], enabled: true },
+    ];
+
+    for (const payload of cases) {
+      const response = await request(app).patch("/_admin/api/mocks/enabled").send(payload);
+      expect(response.status).toBe(400);
+    }
+  });
+
+  test("refuses ids that escape the mocks directory", async () => {
+    const app = await buildApp();
+    const escaping = Buffer.from("../outside/GET.endpoint.json", "utf8").toString("base64url");
+
+    const response = await request(app)
+      .patch("/_admin/api/mocks/enabled")
+      .send({ ids: [escaping], enabled: false });
+
+    expect(response.status).toBe(400);
+  });
+
+  // La suite esterna (mockxy-acceptance-tests) verifica che l'admin API non sia raggiungibile
+  // cross-origin ne' con una richiesta "semplice" text/plain, che parte senza preflight ed e' il
+  // vettore CSRF. Sono proprieta' del router, non della singola rotta: qui si controlla che la
+  // rotta bulk — che spegne endpoint, quindi vale la pena — le erediti davvero.
+  test("bulk enabled ignores a text/plain body and never decorates the response for CORS", async () => {
+    await writeMock({ mocksDir, folder: "bulk-csrf", method: "GET", routePath: "/bulk-csrf", body: {} });
+
+    const app = await buildApp();
+    const id = encodeMockId("bulk-csrf/GET.endpoint.json");
+
+    const simpleRequest = await request(app)
+      .patch("/_admin/api/mocks/enabled")
+      .set("Content-Type", "text/plain")
+      .set("Origin", "http://attaccante.example")
+      .send(JSON.stringify({ ids: [id], enabled: false }));
+
+    // express.json non interpreta text/plain: il corpo non arriva e la richiesta cade sulla
+    // validazione, senza scrivere nulla.
+    expect(simpleRequest.status).toBe(400);
+    const untouched = JSON.parse(
+      await fs.promises.readFile(path.join(mocksDir, "bulk-csrf", "GET.endpoint.json"), "utf8")
+    );
+    expect(untouched.enabled).toBe(true);
+
+    // E la risposta resta opaca per il JS di un'altra origin.
+    const legit = await request(app)
+      .patch("/_admin/api/mocks/enabled")
+      .set("Origin", "http://attaccante.example")
+      .send({ ids: [id], enabled: false });
+    expect(legit.status).toBe(200);
+    expect(legit.headers["access-control-allow-origin"]).toBeUndefined();
+  });
+
   test("returns handler source as a read-only admin detail", async () => {
     await writeHandler({
       mocksDir,
