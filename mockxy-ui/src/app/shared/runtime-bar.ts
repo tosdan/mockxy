@@ -10,7 +10,6 @@ import { MonitorStreamStore } from './monitor-stream.store';
 import { MonitorDumpStore } from './monitor-dump.store';
 import { DesktopService } from './desktop.service';
 import { WorkspaceControls } from './workspace-controls';
-import { LanguageSwitcher } from './language-switcher';
 
 /**
  * Barra di stato runtime, montata UNA volta nella shell e quindi visibile in tutte le view. A destra
@@ -20,7 +19,7 @@ import { LanguageSwitcher } from './language-switcher';
  */
 @Component({
   selector: 'app-runtime-bar',
-  imports: [NgIcon, UiButton, UiSwitch, UiTooltip, WorkspaceControls, LanguageSwitcher, TranslocoPipe],
+  imports: [NgIcon, UiButton, UiSwitch, UiTooltip, WorkspaceControls, TranslocoPipe],
   providers: [provideIcons({ lucideActivity, lucideDatabase, lucideSave })],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -30,7 +29,9 @@ import { LanguageSwitcher } from './language-switcher';
       <span class="h-3.5 w-px bg-border"></span>
       }
 
-      <div class="flex flex-wrap items-center gap-x-3 gap-y-1.5" [class.ml-auto]="desktop.isDesktop">
+      <!-- Il cluster runtime sta a destra in entrambe le modalità: prima ce lo teneva il selettore
+           di lingua che lo seguiva, ora passato in fondo al rail delle view. -->
+      <div class="ml-auto flex flex-wrap items-center gap-x-3 gap-y-1.5">
         <!-- Server on/off -->
         <span class="inline-flex items-center gap-2">
           <ui-switch [checked]="server.serverEnabled()" (checkedChange)="server.setServerEnabled($event)" size="sm" ariaLabel="Server" />
@@ -80,9 +81,6 @@ import { LanguageSwitcher } from './language-switcher';
         <span class="ml-auto text-muted-foreground">{{ 'runtimeBar.loading' | transloco }}</span>
         }
       </div>
-
-      <!-- Selettore di lingua: ultimo a destra, sempre visibile (browser e desktop). -->
-      <app-language-switcher [class.ml-auto]="!desktop.isDesktop" />
     </div>
   `,
 })

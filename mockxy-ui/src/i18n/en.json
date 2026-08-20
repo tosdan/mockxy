@@ -139,7 +139,6 @@
   "workspaceControls": {
     "settings": "Workspace settings",
     "appPreferences": "App preferences",
-    "settingsMenuTip": "Settings and preferences",
     "open": "Open…",
     "recent": "Recent",
     "recentAria": "Recent workspaces",
