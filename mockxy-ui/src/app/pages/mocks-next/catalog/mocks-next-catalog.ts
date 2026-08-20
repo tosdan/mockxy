@@ -65,6 +65,9 @@ import {
 
 const METHOD_TONES: ReadonlySet<string> = new Set(['get', 'post', 'put', 'delete', 'patch']);
 
+/** Oltre questa profondità le linee guida smettono di aggiungersi: l'indentazione basta da sola. */
+const MAX_GUIDE_DEPTH = 12;
+
 /** Chiave (ViewStateService) delle collection collassate, ritrovate tornando sulla view. */
 const COLLAPSED_COLLECTIONS_STATE_KEY = 'mocks-collapsed';
 
@@ -158,12 +161,6 @@ const COLLAPSED_COLLECTIONS_STATE_KEY = 'mocks-collapsed';
           <button ui-button variant="outline" size="icon" class="size-7" [uiTooltip]="'catalog.viewActionsTip' | transloco" [attr.aria-label]="'catalog.viewActionsTip' | transloco" [cdkMenuTriggerFor]="viewMenu">
             <ng-icon name="lucideEllipsisVertical" size="0.95rem" />
           </button>
-          <button ui-button variant="outline" size="icon" class="relative size-7" [uiTooltip]="'catalog.filtersTip' | transloco" [attr.aria-label]="'catalog.filtersTip' | transloco" [cdkMenuTriggerFor]="filterMenu">
-            <ng-icon name="lucideFilter" size="0.95rem" />
-            @if (store.hasMenuFilter()) {
-            <span class="absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-[var(--destructive)]/70"></span>
-            }
-          </button>
         </div>
       </div>
       <label class="relative mt-2.5 block">
@@ -185,6 +182,51 @@ const COLLAPSED_COLLECTIONS_STATE_KEY = 'mocks-collapsed';
         <ui-kbd class="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2">/</ui-kbd>
         }
       </label>
+      <!-- Filtri in chiaro: prima erano chiusi in un menu e li segnalava solo un pallino, quindi
+           lo stato del catalogo non era leggibile senza aprirlo. -->
+      <div class="mt-2 flex items-center gap-2">
+        <div role="radiogroup" [attr.aria-label]="'catalog.filterStatusLabel' | transloco" class="flex items-center gap-0.5 rounded-lg border border-input bg-black/30 p-0.5">
+          @for (s of statusOptions; track s.value) {
+          <button
+            type="button"
+            role="radio"
+            [attr.aria-checked]="store.statusFilter() === s.value"
+            class="rounded-md px-2.5 py-1 text-[11.5px] font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+            [class]="store.statusFilter() === s.value ? 'bg-accent text-foreground shadow-[0_0_0_1px_var(--border)]' : 'text-muted-foreground hover:text-foreground'"
+            (click)="store.statusFilter.set(s.value)"
+          >
+            {{ s.labelKey | transloco }}
+          </button>
+          }
+        </div>
+
+        <button ui-button variant="outline" size="sm" class="h-7 px-2.5" [cdkMenuTriggerFor]="typeMenu">
+          <ng-icon name="lucideFilter" size="0.8rem" />
+          {{ 'catalog.filterTypeLabel' | transloco }}: {{ currentTypeLabel() | transloco }}
+          <ng-icon name="lucideChevronDown" size="0.7rem" class="opacity-70" />
+        </button>
+
+        @if (store.hasMenuFilter()) {
+        <button
+          type="button"
+          class="grid size-7 shrink-0 place-items-center rounded-lg text-muted-foreground transition hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+          [uiTooltip]="'catalog.resetFilters' | transloco"
+          [attr.aria-label]="'catalog.resetFilters' | transloco"
+          (click)="resetFilters()"
+        >
+          <ng-icon name="lucideFilterX" size="0.85rem" />
+        </button>
+        }
+      </div>
+
+      <!-- Sotto filtro il riordino e' sospeso (cdkDragDisabled): prima spariva in silenzio. -->
+      @if (store.hasActiveFilter()) {
+      <p class="mt-2 flex items-center gap-1.5 rounded-md bg-muted px-2 py-1 text-[11px] text-muted-foreground">
+        <ng-icon name="lucideInfo" size="0.75rem" class="shrink-0" />
+        {{ 'catalog.reorderSuspended' | transloco }}
+      </p>
+      }
+
       @if (creatingCollection() && creatingParentId() === undefined) {
       <div class="mt-2 flex items-center gap-1.5">
         <ng-icon name="lucideFolderPlus" size="0.85rem" class="shrink-0 text-brand" />
@@ -290,6 +332,9 @@ const COLLAPSED_COLLECTIONS_STATE_KEY = 'mocks-collapsed';
         [style.padding-left.px]="8 + depth * 14"
         (click)="toggleCollapse(col.id)"
       >
+        @for (guide of guides(depth); track guide) {
+        <span class="mx-tree-line" [style.left.px]="guide"></span>
+        }
         @if (!isUnsorted(col)) {
         <span class="shrink-0 cursor-grab text-muted-foreground/40 opacity-0 transition group-hover/folder:opacity-100">
           <ng-icon name="lucideGripVertical" size="0.85rem" />
@@ -328,6 +373,9 @@ const COLLAPSED_COLLECTIONS_STATE_KEY = 'mocks-collapsed';
         [class]="ep.id === store.selectedId() ? 'mx-selected' : 'hover:bg-accent'"
         [class.mx-muted]="!ep.enabled"
       >
+        @for (guide of guides(depth); track guide) {
+        <span class="mx-tree-line" [style.left.px]="guide"></span>
+        }
         <ui-badge [tone]="methodTone(ep.method)" class="w-[42px] shrink-0">{{ ep.method }}</ui-badge>
         <div class="min-w-0 flex-1">
           <span class="block truncate font-mono text-[12px] leading-tight" [class]="ep.id === store.selectedId() ? 'text-foreground' : 'text-foreground/80'" [title]="ep.path">{{ ep.path }}</span>
@@ -419,29 +467,13 @@ const COLLAPSED_COLLECTIONS_STATE_KEY = 'mocks-collapsed';
       </div>
     </ng-template>
 
-    <!-- menu filtri (tipo + stato) -->
-    <ng-template #filterMenu>
+    <!-- menu del tipo: lo stato e il reset stanno in riga, qui resta la sola scelta del tipo -->
+    <ng-template #typeMenu>
       <div ui-menu>
-        <button ui-menu-item [disabled]="!store.hasMenuFilter()" (click)="resetFilters()">
-          <ng-icon name="lucideFilterX" size="0.85rem" class="text-muted-foreground" />
-          <span class="flex-1">{{ 'catalog.resetFilters' | transloco }}</span>
-        </button>
-        <div class="my-1 h-px bg-border"></div>
-        <div class="px-2 pb-1 pt-0.5 text-[10px] font-bold uppercase tracking-[0.14em] text-muted-foreground">{{ 'catalog.filterTypeLabel' | transloco }}</div>
         @for (t of typeOptions; track t.value) {
         <button ui-menu-item (click)="store.typeFilter.set(t.value)">
           <span class="flex-1">{{ t.labelKey | transloco }}</span>
           @if (store.typeFilter() === t.value) {
-          <ng-icon name="lucideCheck" size="0.85rem" class="text-brand" />
-          }
-        </button>
-        }
-        <div class="my-1 h-px bg-border"></div>
-        <div class="px-2 pb-1 text-[10px] font-bold uppercase tracking-[0.14em] text-muted-foreground">{{ 'catalog.filterStatusLabel' | transloco }}</div>
-        @for (s of statusOptions; track s.value) {
-        <button ui-menu-item (click)="store.statusFilter.set(s.value)">
-          <span class="flex-1">{{ s.labelKey | transloco }}</span>
-          @if (store.statusFilter() === s.value) {
           <ng-icon name="lucideCheck" size="0.85rem" class="text-brand" />
           }
         </button>
@@ -827,6 +859,25 @@ export class MocksNextCatalog {
     const collectionIds = new Set(this.store.collections().map((c) => c.id));
     return refs.filter((ref) => collectionIds.has(ref));
   }
+  /** Etichetta del tipo filtrato, per mostrarla sul pulsante invece di un pallino. */
+  protected readonly currentTypeLabel = computed(
+    () => this.typeOptions.find((option) => option.value === this.store.typeFilter())?.labelKey ?? 'catalog.filterAll',
+  );
+
+  /**
+   * Ascisse dei tratti verticali per una riga a quella profondità: uno per ogni livello di
+   * antenato, allineati al centro dello scalino di indentazione (8 + i*14 + 7). Tabella
+   * precalcolata: la si legge a ogni riga a ogni ciclo di rendering.
+   */
+  private static readonly GUIDE_OFFSETS: readonly (readonly number[])[] = Array.from(
+    { length: MAX_GUIDE_DEPTH + 1 },
+    (_unused, depth) => Array.from({ length: depth }, (_u, level) => 8 + level * 14 + 7),
+  );
+
+  protected guides(depth: number): readonly number[] {
+    return MocksNextCatalog.GUIDE_OFFSETS[Math.min(depth, MAX_GUIDE_DEPTH)];
+  }
+
   protected resetFilters(): void {
     this.store.typeFilter.set('all');
     this.store.statusFilter.set('all');

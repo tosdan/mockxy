@@ -135,6 +135,80 @@ describe('MocksNextCatalog', () => {
     });
   });
 
+  // I filtri stanno in chiaro nella testata: prima erano chiusi in un menu e li segnalava solo un
+  // pallino rosso, quindi non si poteva sapere COSA fosse filtrato senza aprirlo.
+  describe('filtri in chiaro', () => {
+    function radios(fixture: ReturnType<typeof create>['fixture']): HTMLButtonElement[] {
+      return Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('[role="radio"]'));
+    }
+    function typeButton(fixture: ReturnType<typeof create>['fixture']): HTMLButtonElement {
+      return Array.from(
+        (fixture.nativeElement as HTMLElement).querySelectorAll<HTMLButtonElement>('button'),
+      ).find((b) => b.textContent?.includes('Tipo:'))!;
+    }
+    function resetButton(fixture: ReturnType<typeof create>['fixture']): HTMLButtonElement | null {
+      return (fixture.nativeElement as HTMLElement).querySelector('button[aria-label="Reimposta filtri"]');
+    }
+
+    it('lo stato è un segmentato che dice quale voce è scelta', () => {
+      const { fixture, store } = create();
+      expect(radios(fixture).map((b) => b.textContent?.trim())).toEqual(['Tutti', 'Attivi', 'Disattivi']);
+      expect(radios(fixture).map((b) => b.getAttribute('aria-checked'))).toEqual(['true', 'false', 'false']);
+
+      store.statusFilter.set('off');
+      fixture.detectChanges();
+      expect(radios(fixture).map((b) => b.getAttribute('aria-checked'))).toEqual(['false', 'false', 'true']);
+    });
+
+    it('il segmentato scrive sullo stato del catalogo', () => {
+      const { fixture, store } = create();
+      radios(fixture).find((b) => b.textContent?.trim() === 'Attivi')!.click();
+      fixture.detectChanges();
+      expect(store.statusFilter()).toBe('on');
+    });
+
+    it('il pulsante del tipo mostra il tipo scelto, non un pallino', () => {
+      const { fixture, store } = create();
+      expect(typeButton(fixture).textContent).toContain('Tutti');
+
+      store.typeFilter.set('handler');
+      fixture.detectChanges();
+      expect(typeButton(fixture).textContent).toContain('Handler');
+    });
+
+    it('il reset compare solo con un filtro acceso, e li riporta entrambi a "tutti"', () => {
+      const { fixture, store } = create();
+      expect(resetButton(fixture)).toBeNull();
+
+      store.typeFilter.set('handler');
+      store.statusFilter.set('off');
+      fixture.detectChanges();
+
+      resetButton(fixture)!.click();
+      fixture.detectChanges();
+
+      expect(store.typeFilter()).toBe('all');
+      expect(store.statusFilter()).toBe('all');
+      expect(resetButton(fixture)).toBeNull();
+    });
+
+    // Il riordino e' davvero sospeso sotto filtro (cdkDragDisabled): prima lo era in silenzio.
+    it('dichiara il riordino sospeso quando un filtro è acceso, ricerca inclusa', () => {
+      const { fixture, store } = create();
+      const text = () => (fixture.nativeElement as HTMLElement).textContent ?? '';
+      expect(text()).not.toContain('Riordino sospeso');
+
+      store.searchTerm.set('utenti');
+      fixture.detectChanges();
+      expect(text()).toContain('Riordino sospeso');
+
+      store.searchTerm.set('');
+      store.typeFilter.set('mock');
+      fixture.detectChanges();
+      expect(text()).toContain('Riordino sospeso');
+    });
+  });
+
   // "/" e' la scorciatoia di ricerca dei tool a lista (git, less, GitHub): qui porta al filtro.
   describe('scorciatoia "/"', () => {
     function searchInput(fixture: ReturnType<typeof create>['fixture']): HTMLInputElement {

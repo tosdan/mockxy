@@ -330,6 +330,7 @@
     "filterSequence": "Sequence",
     "enableEndpointAria": "Enable endpoint",
     "resetFilters": "Reset filters",
+    "reorderSuspended": "Reordering paused while filtering",
     "filterTypeLabel": "Type",
     "filterStatusLabel": "Status",
     "filterAll": "All",
