@@ -413,6 +413,26 @@ const METHOD_TONES: ReadonlySet<string> = new Set(['get', 'post', 'put', 'delete
           <div class="flex shrink-0 items-center gap-3 bg-black/20 px-6 py-2.5">
             <h3 class="text-[12px] font-bold uppercase tracking-[0.14em] text-foreground/80">{{ (body().kind === 'source' ? 'detail.sourceLabel' : 'detail.bodyLabel') | transloco }}</h3>
             <span class="font-mono text-[11px] text-muted-foreground">{{ d.selectedResponseFile }}</span>
+            <!-- Il flag templated cambia il significato di quello che si sta leggendo: senza, i
+                 {{ '{{' }}...{{ '}}' }} nel body sono testo letterale. Viveva solo dentro il form di modifica,
+                 quindi in vista il body era ambiguo. -->
+            @if (templateApplies()) {
+            <span
+              class="inline-flex items-center gap-2 rounded-md px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.1em] ring-1 transition"
+              [class]="templated() ? 'bg-brand/15 text-brand-soft ring-brand/40' : 'text-muted-foreground ring-border'"
+              [uiTooltip]="'detail.templatedTip' | transloco"
+              [showDelay]="250"
+            >
+              {{ 'detail.templatedLabel' | transloco }}
+              <ui-switch
+                [checked]="templated()"
+                [disabled]="!d.editable || busy()"
+                size="sm"
+                (checkedChange)="onTemplatedChange($event)"
+                [ariaLabel]="'detail.templatedLabel' | transloco"
+              />
+            </span>
+            }
           </div>
           <div class="min-h-0 flex-1 overflow-y-auto px-6 py-4 mx-scroll">
             @if (body().kind === 'file') {
@@ -546,6 +566,31 @@ export class MocksNextDetail {
       return;
     }
     this.store.saveResponse({ type: 'mock', status: this.selectedStatus() ?? 200, delayMs });
+  }
+
+  /** Flag `templated` della variante selezionata: i segnaposto nel body e negli header sono attivi. */
+  protected readonly templated = computed(() => this.detail()?.config?.templated === true);
+
+  /**
+   * Dove ha senso mostrarlo. Solo sulle varianti `mock`: handler e middleware producono la risposta
+   * da codice, sse e ws hanno un copione, sequence rimanda ad altre varianti.
+   *
+   * Escluse anche quelle agganciate a un file: i payload file sono serviti in streaming e il
+   * backend cancella `templated` quando la response resta file-backed. Mostrare un interruttore
+   * che non può restare acceso sarebbe peggio che non mostrarlo.
+   */
+  protected readonly templateApplies = computed(() => {
+    const d = this.detail();
+    return d?.type === 'mock' && this.body().kind !== 'file' && (d.editable === true || this.templated());
+  });
+
+  /** Accende o spegne il templating con una PUT parziale: il resto della variante non si tocca. */
+  protected onTemplatedChange(templated: boolean): void {
+    const d = this.detail();
+    if (!d?.editable || templated === this.templated()) {
+      return;
+    }
+    this.store.saveResponse({ type: 'mock', status: this.selectedStatus() ?? 200, templated });
   }
 
   protected readonly pathCopied = signal(false);

@@ -179,10 +179,10 @@ al «per lista di id».
 
 ## 9. Stato «Template» nella testata del body
 
-- [ ] Indicatore di stato accanto al nome del file della variante.
-- [ ] Commutabile in posto, con la spiegazione dei segnaposto nel tooltip.
-- [ ] Nascosto per le varianti file-backed e per i tipi che non lo supportano.
-- [ ] Test: il flag persiste, e sparisce dove il backend non lo conserva.
+- [x] Indicatore di stato accanto al nome del file della variante.
+- [x] Commutabile in posto, con la spiegazione dei segnaposto nel tooltip.
+- [x] Nascosto per le varianti file-backed e per i tipi che non lo supportano.
+- [x] Test: il flag persiste, e sparisce dove il backend non lo conserva.
 - [ ] **Anteprima e ok.**
 
 ## 10. Palette comandi

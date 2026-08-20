@@ -71,6 +71,65 @@ describe('MocksNextDetail', () => {
     return fixture;
   }
 
+  // Il flag templated cambia il significato del body che si sta guardando: senza, i segnaposto
+  // sono testo letterale. Viveva solo dentro il form di modifica, quindi in vista il body era
+  // ambiguo. Il backend lo cancella sulle varianti file-backed: li' il controllo non va mostrato.
+  describe('stato Template nella testata del body', () => {
+    function chip(fixture: ReturnType<typeof create>): HTMLElement | null {
+      return Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('span')).find(
+        (el) => /Template/i.test(el.textContent ?? '') && el.querySelector('ui-switch') != null,
+      ) as HTMLElement | undefined ?? null;
+    }
+
+    it('compare su una variante mock e riflette il flag', () => {
+      const fixture = create();
+      expect(chip(fixture)).not.toBeNull();
+      expect(chip(fixture)!.querySelector('[role="switch"]')!.getAttribute('aria-checked')).toBe('false');
+
+      store.selected.set(detail({ config: { method: 'GET', path: '/api/operazioni', status: 200, disabled: false, headers: {}, delayMs: 0, templated: true } }));
+      fixture.detectChanges();
+      expect(chip(fixture)!.querySelector('[role="switch"]')!.getAttribute('aria-checked')).toBe('true');
+    });
+
+    it('commutarlo manda una PUT parziale, senza toccare il resto della variante', () => {
+      const fixture = create();
+      (fixture.componentInstance as unknown as { onTemplatedChange(v: boolean): void }).onTemplatedChange(true);
+
+      expect(store.saveResponse).toHaveBeenCalledWith({ type: 'mock', status: 200, templated: true });
+    });
+
+    it('non compare su una variante agganciata a un file: li il backend cancella il flag', () => {
+      const fixture = create();
+      store.selected.set(detail({ payloadType: 'file', fileInfo: { name: 'logo.png' } } as never));
+      fixture.detectChanges();
+
+      expect(chip(fixture)).toBeNull();
+    });
+
+    it('non compare su handler e middleware, che la risposta la producono da codice', () => {
+      const fixture = create();
+      for (const type of ['handler', 'middleware'] as const) {
+        store.selected.set(detail({ type, source: 'module.exports = {};' }));
+        fixture.detectChanges();
+        expect(chip(fixture)).toBeNull();
+      }
+    });
+
+    it('su un endpoint non modificabile lo mostra solo se acceso, e non lo lascia commutare', () => {
+      const fixture = create();
+      store.selected.set(detail({ editable: false }));
+      fixture.detectChanges();
+      expect(chip(fixture)).toBeNull();
+
+      store.selected.set(detail({ editable: false, config: { method: 'GET', path: '/api/operazioni', status: 200, disabled: false, headers: {}, delayMs: 0, templated: true } }));
+      fixture.detectChanges();
+      expect(chip(fixture)).not.toBeNull();
+      // Che sia disabilitato si vede dal fatto che non scrive: e' quello che conta.
+      chip(fixture)!.querySelector<HTMLElement>('[role="switch"]')!.click();
+      expect(store.saveResponse).not.toHaveBeenCalled();
+    });
+  });
+
   // Status e delay sono le due cose che si ritoccano di continuo: modificarle qui deve costare una
   // PUT PARZIALE, cosi' il merge del backend lascia intatti body, headers, titolo e flag template.
   describe('status e delay modificabili in posto', () => {
