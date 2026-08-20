@@ -257,9 +257,18 @@ async function setDumpEnabled(request, enabled) {
   await request.patch(`${E2E_BACKEND}/_admin/api/monitoring/dump`, { data: { enabled } });
 }
 
-/** Forza la scrittura su disco delle request in coda nel dump. Ritorna quante ne ha scritte. */
+/**
+ * Forza la scrittura su disco delle request in coda nel dump. Ritorna quante ne ha scritte.
+ *
+ * Il corpo `{}` non e' decorativo: la rotta e' protetta da requireEmptyJsonObject e senza
+ * content-type application/json risponde 415. Il corpo dell'errore non ha `flushed`, quindi
+ * senza corpo questa funzione restituiva sempre 0 in silenzio.
+ */
 async function flushDump(request) {
-  const res = await request.post(`${E2E_BACKEND}/_admin/api/monitoring/dump/flush`);
+  const res = await request.post(`${E2E_BACKEND}/_admin/api/monitoring/dump/flush`, { data: {} });
+  if (!res.ok()) {
+    throw new Error(`flush del dump rifiutato: ${res.status()} ${await res.text()}`);
+  }
   return (await res.json()).flushed ?? 0;
 }
 
