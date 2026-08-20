@@ -63,6 +63,12 @@ Ogni funzione va al livello della cosa su cui agisce. Corollari usati per decide
   ripiegare su N chiamate dal client: N chiamate possono riuscire a metà e fanno N reload, la
   rotta bulk è tutto-o-niente con un reload solo.
 
+- **La suite esterna `mockxy-acceptance-tests` non guarda la UI admin.** I suoi test navigano
+  solo sulla pagina client (nginx :8081) e parlano con Mockxy via HTTP e via le rotte JSON
+  `_admin/api/*`: zero riferimenti a `_admin/ui`, ai selettori dei componenti o ai testi della
+  UI. Il lavoro dei gruppi 1-9 non li tocca. L'unico punto di contatto e' il gruppo 6a, che
+  aggiunge una rotta admin: li' vale la pena rileggere `tests/admin-api.spec.js`, che asserisce
+  che la superficie CORS non copra mai l'admin API.
 ## 1. Rail delle view
 
 Sostituisce lo `ViewSwitcher` a tendina; sposta impostazioni e lingua fuori dalla barra runtime.
@@ -133,6 +139,8 @@ al «per lista di id».
 - [ ] Validare gli id: lista non vuota, id noti, nessun percorso fuori da `mocksDir`.
 - [ ] Riusare la rotta per collection sopra la stessa funzione, senza cambiarne il contratto.
 - [ ] Aggiornare `docs/admin-api.openapi.yaml`.
+- [ ] Rileggere `tests/admin-api.spec.js` della suite esterna: la nuova rotta deve restare fuori
+      dalla superficie CORS come le altre dell'admin API.
 - [ ] Test backend: successo, id sconosciuto, rollback su reload rifiutato, nessuna modifica
       quando gli endpoint sono già nello stato richiesto.
 
