@@ -169,12 +169,12 @@ al «per lista di id».
 
 ## 8. Barra delle varianti
 
-- [ ] Tendina elastica (`flex` con tetto) al posto della larghezza fissa da 512 px.
-- [ ] «+» e menu «…» al posto dei tre pulsanti icona.
-- [ ] Status modificabile in posto (PUT parziale).
-- [ ] Delay modificabile in posto (PUT parziale, rispedendo lo status corrente).
-- [ ] Status e delay accanto alla tendina, non spinti al lato opposto della riga.
-- [ ] Test: modifica dello status non perde body, headers, delay né il flag template.
+- [x] Tendina elastica (`flex` con tetto) al posto della larghezza fissa da 512 px.
+- [x] «+» e menu «…» al posto dei tre pulsanti icona.
+- [x] Status modificabile in posto (PUT parziale).
+- [x] Delay modificabile in posto (PUT parziale, rispedendo lo status corrente).
+- [x] Status e delay accanto alla tendina, non spinti al lato opposto della riga.
+- [x] Test: modifica dello status non perde body, headers, delay né il flag template.
 - [ ] **Anteprima e ok.**
 
 ## 9. Stato «Template» nella testata del body
