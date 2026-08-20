@@ -54,7 +54,7 @@ const {
   removeRefFromChildOrder,
   serializedByWorkspace,
 } = require("./collections-state");
-const { getAdminMockDetailAfterCommit } = require("./mock-catalog");
+const { listAdminMocks, getAdminMockDetailAfterCommit } = require("./mock-catalog");
 const { normalizeSequenceResponse, computeSequenceSignature } = require("../mocks/sequence-config");
 const { normalizeSseConfig, validateSseMessage } = require("../mocks/sse-config");
 const { normalizeWsConfig, validateWsMessage } = require("../mocks/ws-config");
@@ -632,6 +632,89 @@ async function createAdminResponse(mocksDir, id, payload, reloadRuntime, scenari
   invalidateScenario(scenarioStates, endpoint.method, endpoint.path);
 
   return getAdminMockDetailAfterCommit(mocksDir, id);
+}
+
+/**
+ * Scrive `enabled` su un elenco di endpoint in un colpo solo: backup di tutti, scrittura atomica
+ * di ciascuno e UN solo reload del runtime, con rollback se il reload rifiuta. È tutto-o-niente:
+ * N chiamate separate potrebbero riuscire a metà e farebbero N reload.
+ *
+ * Gli endpoint già nello stato richiesto non vengono riscritti: niente mtime nuovi da far digerire
+ * al watch per file che non cambiano.
+ */
+async function setEndpointsEnabledAtomically(mocksDir, endpointPaths, enabled, reloadRuntime, rejectionLabel) {
+  const backups = await Promise.all(endpointPaths.map((endpointPath) => readBackup(endpointPath)));
+
+  await commitWithRollback({
+    backups,
+    reloadRuntime,
+    rejectionLabel,
+    commit: async () => {
+      for (const endpointPath of endpointPaths) {
+        const endpoint = await readEndpointConfig(endpointPath);
+        if (endpoint.enabled === enabled) {
+          continue;
+        }
+
+        await writeFileAtomic(endpointPath, `${JSON.stringify({ ...endpoint, enabled }, null, 2)}
+`, "utf8");
+      }
+    },
+  });
+
+  return listAdminMocks(mocksDir);
+}
+
+/** Valida il corpo di PATCH /mocks/enabled: solo `ids` (non vuoti, senza duplicati) e `enabled`. */
+function normalizeEndpointsEnabledPayload(payload) {
+  if (payload == null || typeof payload !== "object" || Array.isArray(payload)) {
+    throw createAdminError(400, "Body must be an object.");
+  }
+
+  const unsupportedFields = Object.keys(payload).filter(
+    (fieldName) => fieldName !== "ids" && fieldName !== "enabled"
+  );
+  if (unsupportedFields.length > 0) {
+    throw createAdminError(400, "Only ids and enabled can be sent.");
+  }
+
+  if (typeof payload.enabled !== "boolean") {
+    throw createAdminError(400, "enabled must be a boolean.");
+  }
+
+  if (!Array.isArray(payload.ids) || payload.ids.length === 0) {
+    throw createAdminError(400, "ids must be a non-empty array.");
+  }
+
+  if (payload.ids.some((id) => typeof id !== "string" || id.trim() === "")) {
+    throw createAdminError(400, "ids must contain non-empty strings.");
+  }
+
+  return { ids: [...new Set(payload.ids)], enabled: payload.enabled };
+}
+
+/**
+ * Accende o spegne un elenco arbitrario di endpoint. La variante "per collection"
+ * (updateAdminCollectionEnabled) sceglie gli item dal sottoalbero; qui li sceglie il chiamante.
+ */
+async function updateAdminEndpointsEnabled(mocksDir, payload, reloadRuntime) {
+  const { ids, enabled } = normalizeEndpointsEnabledPayload(payload);
+  const endpointPaths = ids.map((id) => {
+    // resolveAdminFilePath rifiuta con 400 gli id malformati e i percorsi fuori da mocksDir.
+    const endpointPath = resolveAdminFilePath(mocksDir, id);
+    if (!fs.existsSync(endpointPath)) {
+      throw createAdminError(404, "Endpoint definition not found.");
+    }
+    return endpointPath;
+  });
+
+  return setEndpointsEnabledAtomically(
+    mocksDir,
+    endpointPaths,
+    enabled,
+    reloadRuntime,
+    "Endpoints enabled update rejected"
+  );
 }
 
 async function updateAdminResponse(mocksDir, id, responseFileName, payload, reloadRuntime, scenarioStates) {
@@ -1441,6 +1524,8 @@ async function copyAdminEndpoint(mocksDir, id, payload, reloadRuntime) {
 module.exports = {
   createAdminMock,
   createAdminResponse,
+  updateAdminEndpointsEnabled,
+  setEndpointsEnabledAtomically,
   updateAdminResponse,
   setAdminResponseFile,
   deleteAdminResponse,

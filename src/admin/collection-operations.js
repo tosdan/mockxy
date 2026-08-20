@@ -28,7 +28,7 @@ const {
   createCollectionSummary,
 } = require("./collections-state");
 const { listAdminMocks, listAdminCollections, getAdminMockDetailAfterCommit } = require("./mock-catalog");
-const { deleteAdminMocksUnlocked } = require("./endpoint-operations");
+const { deleteAdminMocksUnlocked, setEndpointsEnabledAtomically } = require("./endpoint-operations");
 
 // Operazioni admin sulle collection: CRUD, riordini, assegnazione degli endpoint e
 // abilitazione di massa. Le mutazioni dello stato passano tutte dalle versioni serializzate
@@ -518,25 +518,15 @@ async function updateAdminCollectionEnabled(mocksDir, collectionId, payload, rel
     }
     return endpointPath;
   });
-  const backups = await Promise.all(endpointPaths.map((endpointPath) => readBackup(endpointPath)));
-
-  await commitWithRollback({
-    backups,
+  // Da qui in giù è lo stesso lavoro di PATCH /mocks/enabled: cambia solo come si scelgono gli
+  // endpoint — qui il sottoalbero della collection, là un elenco di id.
+  return setEndpointsEnabledAtomically(
+    mocksDir,
+    endpointPaths,
+    enabled,
     reloadRuntime,
-    rejectionLabel: "Collection endpoint update rejected",
-    commit: async () => {
-      for (const endpointPath of endpointPaths) {
-        const endpoint = await readEndpointConfig(endpointPath);
-        if (endpoint.enabled === enabled) {
-          continue;
-        }
-
-        await writeFileAtomic(endpointPath, `${JSON.stringify({ ...endpoint, enabled }, null, 2)}\n`, "utf8");
-      }
-    },
-  });
-
-  return listAdminMocks(mocksDir);
+    "Collection endpoint update rejected"
+  );
 }
 
 module.exports = {

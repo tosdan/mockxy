@@ -23,6 +23,7 @@ const {
   listAdminSseState,
   pushAdminWsMessage,
   listAdminWsState,
+  updateAdminEndpointsEnabled,
 } = require("./endpoint-operations");
 const {
   assignAdminCollection,
@@ -338,6 +339,14 @@ function createAdminApiRouter({ config, reloadRuntime, requestMonitor, serverSta
       reloadRuntime
     );
     sendJson(res, 200, result);
+  });
+
+  // Registrata prima di /mocks/:id: "enabled" non è l'id di una definizione.
+  router.patch("/mocks/enabled", async (req, res) => {
+    const items = await updateAdminEndpointsEnabled(config.mocksDir, req.body, reloadRuntime);
+    const collections = await listAdminCollections(config.mocksDir, items);
+    const childOrder = await listAdminChildOrder(config.mocksDir, items);
+    sendJson(res, 200, { items, collections, childOrder });
   });
 
   router.get("/mocks/:id", async (req, res) => {
