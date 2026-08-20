@@ -68,13 +68,13 @@ Ogni funzione va al livello della cosa su cui agisce. Corollari usati per decide
 Sostituisce lo `ViewSwitcher` a tendina; sposta impostazioni e lingua fuori dalla barra runtime.
 Tocca anche Monitor / Storico / Dati, ma solo per togliere il pulsante dalle loro topbar.
 
-- [ ] Componente `app-view-rail`: 4 voci con icona + etichetta, voce attiva evidenziata.
-- [ ] Badge di stato sulle voci (pallino «live» su Monitor).
-- [ ] Impostazioni e selettore lingua in fondo al rail.
-- [ ] Rimuovere `app-view-switcher` dalle topbar delle quattro pagine.
-- [ ] Rimuovere il selettore lingua dalla barra runtime.
-- [ ] Navigazione da tastiera e `aria-current` sulla voce attiva.
-- [ ] Test: rail rende le 4 voci, evidenzia la corrente, naviga al click.
+- [x] Componente `app-view-rail`: 4 voci con icona + etichetta, voce attiva evidenziata.
+- [x] Badge di stato sulle voci (pallino «live» su Monitor).
+- [x] Impostazioni e selettore lingua in fondo al rail.
+- [x] Rimuovere `app-view-switcher` dalle topbar delle quattro pagine.
+- [x] Rimuovere il selettore lingua dalla barra runtime.
+- [x] Navigazione da tastiera e `aria-current` sulla voce attiva.
+- [x] Test: rail rende le 4 voci, evidenzia la corrente, naviga al click.
 - [ ] **Anteprima e ok.**
 
 ## 2. Barra unica in cima
