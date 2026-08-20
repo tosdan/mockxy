@@ -141,15 +141,10 @@ const METHOD_TONES: ReadonlySet<string> = new Set(['get', 'post', 'put', 'delete
           </span>
           } @else {
           <button ui-button variant="outline" (click)="openCopy()" [uiTooltip]="'detail.copyEndpointTip' | transloco"><ng-icon name="lucideCopy" size="0.85rem" /> {{ 'detail.copy' | transloco }}</button>
-          <!-- Il chip SEQ (stesso segnale del catalogo) rende evidente la sequenza attiva. -->
-          <button ui-button variant="outline" (click)="openSequence()" [uiTooltip]="(d.sequenceActive ? 'detail.sequenceTipActive' : 'detail.sequenceTip') | transloco">
-            <ng-icon name="lucideListOrdered" size="0.85rem" [class.text-sequence]="d.sequenceActive" /> {{ 'detail.sequence' | transloco }}
-            @if (d.sequenceActive) {
-            <span class="rounded bg-[color-mix(in_srgb,var(--sequence)_16%,transparent)] px-1 text-[0.7rem] font-bold tracking-wide text-sequence">SEQ</span>
-            }
-          </button>
-          <!-- Copia e Sequenza restano in chiaro: la prima costruisce, la seconda porta un badge
-               da vedere. Nel menu ciò che si usa di rado, e l'unica azione distruttiva. -->
+          <!-- Niente pulsante "Sequenza": faceva tre cose che hanno gia' un'altra casa. Crearne una
+               sta nel menu "+" delle varianti, modificarla nel menu "…" della variante scelta, e il
+               segnale che una sequenza e' attiva e' il chip SEQ accanto alla tendina (piu' il badge
+               nella riga del catalogo). Un quarto punto d'ingresso confondeva soltanto. -->
           <button ui-button variant="outline" size="icon" [cdkMenuTriggerFor]="endpointMenu" [uiTooltip]="'detail.moreActions' | transloco" [attr.aria-label]="'detail.moreActions' | transloco">
             <ng-icon name="lucideEllipsisVertical" size="0.9rem" />
           </button>
