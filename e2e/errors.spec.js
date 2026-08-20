@@ -33,7 +33,7 @@ test.describe("E13 · robustezza ed errori", () => {
 
     // Nessun endpoint creato: il catalogo resta a 8.
     await dialog.getByRole("button", { name: "Annulla" }).click();
-    await expect(catalog.getByText(/8\s+endpoint/)).toBeVisible();
+    await expect(page.locator("app-status-bar").getByText(/8\s+endpoint/)).toBeVisible();
   });
 
   test("copiare un endpoint verso un path esistente mostra un errore", async ({ page }) => {
@@ -51,6 +51,6 @@ test.describe("E13 · robustezza ed errori", () => {
     await expect(page.locator("ui-toaster").getByText("Errore")).toBeVisible();
 
     await dialog.getByRole("button", { name: "Annulla" }).click();
-    await expect(catalog.getByText(/8\s+endpoint/)).toBeVisible();
+    await expect(page.locator("app-status-bar").getByText(/8\s+endpoint/)).toBeVisible();
   });
 });

@@ -13,6 +13,7 @@ import { MocksNextCreateDialog, type CreateDialogData } from './create/mocks-nex
 import { OpenapiImportDialog } from './openapi-import/openapi-import-dialog';
 import { MocksNextDetail } from './detail/mocks-next-detail';
 import { MocksStore } from './mocks-next.store';
+import { WorkspaceSummaryStore } from '../../shared/workspace-summary.store';
 import type { EndpointCreateType } from '../../mock-admin-api.types';
 
 /**
@@ -37,10 +38,22 @@ export class MocksNextPage implements OnInit {
   private readonly toast = inject(ToastService);
   private readonly route = inject(ActivatedRoute);
   private readonly transloco = inject(TranslocoService);
+  private readonly workspaceSummary = inject(WorkspaceSummaryStore);
   /** Larghezza del catalogo (px), ridimensionabile col divisore e persistita in localStorage. */
   protected readonly catalogWidth = signal(clampCatalogWidth(readStoredCatalogWidth()));
 
   constructor() {
+    // Questa e' l'unica schermata che carica l'elenco: da qui il riepilogo raggiunge la status
+    // bar della shell, che lo tiene anche quando si passa a un'altra view.
+    effect(() => {
+      this.workspaceSummary.set({
+        endpoints: this.store.totalEndpoints(),
+        collections: this.store.totalCollections(),
+        active: this.store.activeEndpoints(),
+        loadErrors: this.store.loadErrors(),
+      });
+    });
+
     // Gli errori dello store diventano toast (bottom-right), piu' visibili dello status strip.
     effect(() => {
       const err = this.store.error();

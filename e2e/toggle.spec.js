@@ -6,11 +6,15 @@ const { gotoMocks, setEndpointEnabled, reloadStable, waitForAdminApiIdle } = req
 // Scrittura: l'afterEach ripristina lo stato delle fixture via API (health attivo, legacy no).
 test.describe("E5 · toggle enabled", () => {
   let catalog;
+
+  let statusBar;
   let detail;
 
   test.beforeEach(async ({ page }) => {
     await gotoMocks(page);
     catalog = page.locator("mocks-next-catalog");
+
+    statusBar = page.locator("app-status-bar");
     detail = page.locator("mocks-next-detail");
   });
 
@@ -27,7 +31,7 @@ test.describe("E5 · toggle enabled", () => {
     await sw.click();
     await expect(sw).toHaveAttribute("aria-checked", "false");
     await expect(catalog.locator(".mx-muted", { hasText: "/api/health" })).toBeVisible();
-    await expect(catalog.getByText(/6\s*\/\s*8\s+attivi/)).toBeVisible();
+    await expect(statusBar.getByText(/6\s+attivi/)).toBeVisible();
   });
 
   test("accendere l'endpoint disabilitato lo toglie da muted e alza il conteggio", async () => {
@@ -36,7 +40,7 @@ test.describe("E5 · toggle enabled", () => {
     await sw.click();
     await expect(sw).toHaveAttribute("aria-checked", "true");
     await expect(catalog.locator(".mx-muted", { hasText: "/api/legacy" })).toHaveCount(0);
-    await expect(catalog.getByText(/8\s*\/\s*8\s+attivi/)).toBeVisible();
+    await expect(statusBar.getByText(/8\s+attivi/)).toBeVisible();
   });
 
   test("spegnendo dal catalogo, lo switch del dettaglio si allinea", async () => {

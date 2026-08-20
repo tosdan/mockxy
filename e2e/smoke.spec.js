@@ -13,7 +13,7 @@ test.describe("smoke", () => {
 
     await gotoMocks(page);
 
-    // Il footer riassume i conteggi: è l'assert più forte che backend→UI funziona.
+    // La status bar riassume i conteggi: è l'assert più forte che backend→UI funziona.
     await expect(page.getByText(/3\s+collection/)).toBeVisible();
 
     // Alcuni percorsi delle fixture (first(): il selezionato appare anche nel dettaglio).

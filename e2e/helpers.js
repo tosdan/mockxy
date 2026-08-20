@@ -87,7 +87,7 @@ async function setEndpointEnabled(request, path, enabled) {
 
 /**
  * Naviga alla schermata Mocks con lingua deterministica e attende che il catalogo si sia popolato
- * dal backend (footer conteggi presente). addInitScript scrive localStorage prima del bootstrap
+ * dal backend (conteggi nella status bar). addInitScript scrive localStorage prima del bootstrap
  * Angular, che legge la lingua salvata all'avvio.
  */
 async function gotoMocks(page, lang = APP_LANG) {
@@ -104,7 +104,7 @@ async function gotoMocks(page, lang = APP_LANG) {
   );
   // UI servita dal backend sotto /_admin/ui (build). Overridabile via env (E2E_UI_PATH).
   await page.goto(process.env.E2E_UI_PATH || "/_admin/ui/mocks");
-  await expect(page.locator("mocks-next-catalog").getByText(/8\s+endpoint/)).toBeVisible();
+  await expect(page.locator("app-status-bar").getByText(/8\s+endpoint/)).toBeVisible();
 }
 
 // Impronta DETTAGLIATA delle fixture: per ogni endpoint percorso#response#stato#collezione, più le

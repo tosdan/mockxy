@@ -106,6 +106,13 @@
     "runtimeAlreadyAbsent": "Resource {{name}} was already absent.",
     "runtimeResetAllDone": "Reset {{count}} runtime resources."
   },
+  "statusBar": {
+    "counts": "{{endpoints}} endpoints · {{collections}} collections · {{active}} active",
+    "loadErrorsOne": "1 definition not loaded",
+    "loadErrors": "{{count}} definitions not loaded",
+    "loadErrorsTitle": "Definitions not loaded",
+    "loadErrorsHint": "These files are in the workspace but the engine discarded them: their endpoints do not appear in the catalog."
+  },
   "runtimeStatus": {
     "title": "Runtime",
     "openTip": "Runtime state — open the controls",
@@ -313,9 +320,6 @@
     "noFilterMatch": "No endpoint matches the filters.",
     "emptyWorkspaceTitle": "Empty workspace",
     "emptyWorkspaceHint": "No mocks here yet. Create the first one with «New» or import from OpenAPI.",
-    "footerCounts": "{{endpoints}} endpoint · {{collections}} collection",
-    "footerActive": "{{active}} / {{total}} active",
-    "footerLoadErrors": "{{count}} not loaded",
     "delete": "Delete",
     "cancel": "Cancel",
     "collectionActionsTip": "Collection actions",

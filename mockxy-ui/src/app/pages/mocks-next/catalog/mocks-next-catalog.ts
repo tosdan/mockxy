@@ -29,7 +29,6 @@ import {
   lucideSearch,
   lucideShrink,
   lucideTrash2,
-  lucideTriangleAlert,
   lucideUngroup,
   lucideX,
 } from '@ng-icons/lucide';
@@ -108,7 +107,6 @@ const COLLAPSED_COLLECTIONS_STATE_KEY = 'mocks-collapsed';
       lucideSearch,
       lucideShrink,
       lucideTrash2,
-      lucideTriangleAlert,
       lucideUngroup,
       lucideX,
     }),
@@ -265,24 +263,6 @@ const COLLAPSED_COLLECTIONS_STATE_KEY = 'mocks-collapsed';
     @if (dropLine(); as line) {
     <div class="pointer-events-none fixed z-50 h-0.5 rounded-full bg-brand" [style.top.px]="line.top" [style.left.px]="line.left" [style.width.px]="line.width"></div>
     }
-
-    <!-- footer -->
-    <div class="flex shrink-0 items-center gap-2 border-t border-border px-4 py-2 text-[11px] text-muted-foreground">
-      <span class="font-mono tabular-nums">{{ 'catalog.footerCounts' | transloco: { endpoints: store.totalEndpoints(), collections: store.totalCollections() } }}</span>
-      <span class="h-3 w-px bg-border"></span>
-      <span class="tabular-nums text-foreground/70">{{ 'catalog.footerActive' | transloco: { active: store.activeEndpoints(), total: store.totalEndpoints() } }}</span>
-      @if (store.loadErrors().length > 0) {
-      <span class="h-3 w-px bg-border"></span>
-      <span
-        class="flex items-center gap-1 font-semibold tabular-nums text-[color:var(--status-4xx)]"
-        [uiTooltip]="loadErrorsTooltip()"
-        [showDelay]="250"
-      >
-        <ng-icon name="lucideTriangleAlert" size="0.8rem" />
-        {{ 'catalog.footerLoadErrors' | transloco: { count: store.loadErrors().length } }}
-      </span>
-      }
-    </div>
 
     <!-- INTESTAZIONE COLLECTION (riga cartella) -->
     <ng-template #folderHeaderTpl let-col let-depth="depth">
@@ -499,14 +479,6 @@ export class MocksNextCatalog {
     this.store.searchTerm.set('');
     input.focus();
   }
-
-  /** Tooltip dell'indicatore nel footer: elenco delle definizioni scartate (file: motivo). */
-  protected readonly loadErrorsTooltip = computed(() =>
-    this.store
-      .loadErrors()
-      .map((loadError) => `${loadError.configFilePath}: ${loadError.message}`)
-      .join('\n'),
-  );
 
   protected readonly creatingCollection = signal(false);
   /** Genitore sotto cui creare la collection (undefined = livello root). */

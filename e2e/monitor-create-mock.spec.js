@@ -35,6 +35,6 @@ test.describe("E16 · monitor → crea mock", () => {
     await page.getByRole("navigation", { name: "Viste" }).getByRole("link", { name: "Catalogo" }).click();
     const catalog = page.locator("mocks-next-catalog");
     await expect(catalog.getByText("/api/catturato-e2e", { exact: true })).toBeVisible();
-    await expect(catalog.getByText(/9\s+endpoint/)).toBeVisible();
+    await expect(page.locator("app-status-bar").getByText(/9\s+endpoint/)).toBeVisible();
   });
 });

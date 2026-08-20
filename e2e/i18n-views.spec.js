@@ -12,19 +12,19 @@ test.describe("E14 · i18n e viste", () => {
   });
 
   test("cambia lingua IT→EN e i testi si aggiornano, poi torna a IT", async ({ page }) => {
-    await expect(catalog.getByText(/attivi/)).toBeVisible(); // IT di partenza
+    await expect(page.locator("app-status-bar").getByText(/attivi/)).toBeVisible(); // IT di partenza
 
     await page.getByRole("button", { name: "Lingua" }).click();
     await page.getByRole("menuitem", { name: "English" }).click();
 
-    // Il footer passa a EN ("active") e l'italiano sparisce.
-    await expect(catalog.getByText(/active/)).toBeVisible();
-    await expect(catalog.getByText(/attivi/)).toHaveCount(0);
+    // La status bar passa a EN ("active") e l'italiano sparisce.
+    await expect(page.locator("app-status-bar").getByText(/active/)).toBeVisible();
+    await expect(page.locator("app-status-bar").getByText(/attivi/)).toHaveCount(0);
 
     // Ritorno a IT (in EN l'aria-label del pulsante è "Language").
     await page.getByRole("button", { name: "Language" }).click();
     await page.getByRole("menuitem", { name: "Italiano" }).click();
-    await expect(catalog.getByText(/attivi/)).toBeVisible();
+    await expect(page.locator("app-status-bar").getByText(/attivi/)).toBeVisible();
   });
 
   test("naviga da Catalogo a Monitor e ritorna", async ({ page }) => {
@@ -33,7 +33,7 @@ test.describe("E14 · i18n e viste", () => {
 
     await page.getByRole("navigation", { name: "Viste" }).getByRole("link", { name: "Catalogo" }).click();
     await expect(page).toHaveURL(/\/mocks/);
-    await expect(catalog.getByText(/8\s+endpoint/)).toBeVisible();
+    await expect(page.locator("app-status-bar").getByText(/8\s+endpoint/)).toBeVisible();
   });
 
   test("naviga da Catalogo a Storico dump e ritorna", async ({ page }) => {

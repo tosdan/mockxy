@@ -106,6 +106,13 @@
     "runtimeAlreadyAbsent": "La risorsa {{name}} era già assente.",
     "runtimeResetAllDone": "Azzerate {{count}} risorse runtime."
   },
+  "statusBar": {
+    "counts": "{{endpoints}} endpoint · {{collections}} collection · {{active}} attivi",
+    "loadErrorsOne": "1 definizione non caricata",
+    "loadErrors": "{{count}} definizioni non caricate",
+    "loadErrorsTitle": "Definizioni non caricate",
+    "loadErrorsHint": "Questi file stanno nel workspace ma il motore li ha scartati: i loro endpoint non compaiono nel catalogo."
+  },
   "runtimeStatus": {
     "title": "Runtime",
     "openTip": "Stato runtime — apri i controlli",
@@ -313,9 +320,6 @@
     "noFilterMatch": "Nessun endpoint corrisponde ai filtri.",
     "emptyWorkspaceTitle": "Workspace vuoto",
     "emptyWorkspaceHint": "Non c'è ancora nessun mock qui. Crea il primo con «Nuovo» o importa da OpenAPI.",
-    "footerCounts": "{{endpoints}} endpoint · {{collections}} collection",
-    "footerActive": "{{active}} / {{total}} attivi",
-    "footerLoadErrors": "{{count}} non caricati",
     "delete": "Elimina",
     "cancel": "Annulla",
     "collectionActionsTip": "Azioni collection",

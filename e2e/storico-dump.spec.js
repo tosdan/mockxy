@@ -53,7 +53,7 @@ test.describe("E17 · storico dump → crea mock", () => {
     await page.getByRole("navigation", { name: "Viste" }).getByRole("link", { name: "Catalogo" }).click();
     const catalog = page.locator("mocks-next-catalog");
     await expect(catalog.getByText("/api/dump-e2e", { exact: true })).toBeVisible();
-    await expect(catalog.getByText(/9\s+endpoint/)).toBeVisible();
+    await expect(page.locator("app-status-bar").getByText(/9\s+endpoint/)).toBeVisible();
   });
 
   test("crea mock da tutto il file di dump (menu File)", async ({ page, request }) => {
@@ -72,7 +72,7 @@ test.describe("E17 · storico dump → crea mock", () => {
     await page.getByRole("navigation", { name: "Viste" }).getByRole("link", { name: "Catalogo" }).click();
     const catalog = page.locator("mocks-next-catalog");
     await expect(catalog.getByText("/api/dump-e2e", { exact: true })).toBeVisible();
-    await expect(catalog.getByText(/9\s+endpoint/)).toBeVisible();
+    await expect(page.locator("app-status-bar").getByText(/9\s+endpoint/)).toBeVisible();
   });
 
   test("elimina un file di dump dal menu File", async ({ page, request }) => {
