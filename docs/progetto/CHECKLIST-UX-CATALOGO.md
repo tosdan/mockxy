@@ -156,12 +156,15 @@ al «per lista di id».
 
 ## 7. Testata del dettaglio
 
-- [ ] Breadcrumb della collection, con tendina per spostare l'endpoint.
-- [ ] Azioni in chiaro: Attivo, Copia, Sequenza; menu «…» con sposta, apri cartella, copia
-      percorso, elimina.
-- [ ] Percorso file relativo al workspace, decodificato dall'id, a tutta larghezza.
-- [ ] Ellissi centrale e valore intero nel tooltip quando il percorso non entra.
-- [ ] Test: il percorso relativo si deriva dall'id; «elimina» conferma come prima.
+- [x] Breadcrumb della collection, con tendina per spostare l'endpoint.
+- [x] Azioni in chiaro: Attivo, Copia, Sequenza; menu «…» con copia percorso ed elimina.
+      «Apri cartella» non c'è: il bridge desktop espone solo `shell.openExternal` per URL, e
+      aggiungere un `showItemInFolder` vuol dire toccare main process, preload e IPC — una
+      funzione nuova, non un riposizionamento. Da valutare a parte.
+      Lo spostamento sta nel breadcrumb, non nel menu: è l´dove vive´ dell'endpoint.
+- [x] Percorso file relativo al workspace, decodificato dall'id, a tutta larghezza.
+- [x] Ellissi centrale e valore intero nel tooltip quando il percorso non entra.
+- [x] Test: il percorso relativo si deriva dall'id; «elimina» conferma come prima.
 - [ ] **Anteprima e ok.**
 
 ## 8. Barra delle varianti

@@ -1,8 +1,9 @@
 import { ChangeDetectionStrategy, Component, computed, effect, inject, signal, ViewContainerRef } from '@angular/core';
 import { CdkMenuTrigger } from '@angular/cdk/menu';
+import { CdkCopyToClipboard } from '@angular/cdk/clipboard';
 import { NgIcon, provideIcons } from '@ng-icons/core';
 import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
-import { lucideCable, lucideCheck, lucideCog, lucideCopy, lucideFile, lucideFileCode, lucideLayers, lucideListOrdered, lucideMessageSquare, lucidePencil, lucidePlus, lucideRadio, lucideTrash2, lucideTriangleAlert, lucideX } from '@ng-icons/lucide';
+import { lucideCable, lucideCheck, lucideCog, lucideCopy, lucideEllipsisVertical, lucideFile, lucideFolder, lucideFileCode, lucideLayers, lucideListOrdered, lucideMessageSquare, lucidePencil, lucidePlus, lucideRadio, lucideTrash2, lucideTriangleAlert, lucideX } from '@ng-icons/lucide';
 import { UiBadge, type BadgeTone } from '../../../ui/ui-badge/ui-badge';
 import { UiButton } from '../../../ui/ui-button/ui-button';
 import { UiChip } from '../../../ui/ui-chip/ui-chip';
@@ -25,6 +26,7 @@ import { MocksNextSseConsole } from '../sse/mocks-next-sse-console';
 import { MocksNextWsConsole } from '../ws/mocks-next-ws-console';
 import { MocksNextResponseForm } from './response-form';
 import { ResponseDraft, type DraftPayloadType, type DraftScriptType } from './response-draft';
+import { mockIdToWorkspacePath, shortenWorkspacePath } from '../../../mock-id';
 import type { EndpointCreateType } from '../../../mock-admin-api.types';
 
 const METHOD_TONES: ReadonlySet<string> = new Set(['get', 'post', 'put', 'delete', 'patch']);
@@ -38,8 +40,8 @@ const METHOD_TONES: ReadonlySet<string> = new Set(['get', 'post', 'put', 'delete
  */
 @Component({
   selector: 'mocks-next-detail',
-  imports: [CdkMenuTrigger, NgIcon, StatusCombobox, TranslocoPipe, UiBadge, UiButton, UiChip, UiCode, UiCollapsible, UiInput, UiMenu, UiMenuItem, UiSelect, UiSkeleton, UiSwitch, UiTable, UiTooltip, MocksNextResponseForm, MocksNextSseConsole, MocksNextWsConsole],
-  providers: [provideIcons({ lucideCable, lucideCheck, lucideCog, lucideCopy, lucideFile, lucideFileCode, lucideLayers, lucideListOrdered, lucideMessageSquare, lucidePencil, lucidePlus, lucideRadio, lucideTrash2, lucideTriangleAlert, lucideX })],
+  imports: [CdkMenuTrigger, CdkCopyToClipboard, NgIcon, StatusCombobox, TranslocoPipe, UiBadge, UiButton, UiChip, UiCode, UiCollapsible, UiInput, UiMenu, UiMenuItem, UiSelect, UiSkeleton, UiSwitch, UiTable, UiTooltip, MocksNextResponseForm, MocksNextSseConsole, MocksNextWsConsole],
+  providers: [provideIcons({ lucideCable, lucideCheck, lucideCog, lucideCopy, lucideEllipsisVertical, lucideFile, lucideFolder, lucideFileCode, lucideLayers, lucideListOrdered, lucideMessageSquare, lucidePencil, lucidePlus, lucideRadio, lucideTrash2, lucideTriangleAlert, lucideX })],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { class: 'relative flex min-w-0 flex-1 flex-col overflow-hidden bg-muted' },
   template: `
@@ -64,6 +66,17 @@ const METHOD_TONES: ReadonlySet<string> = new Set(['get', 'post', 'put', 'delete
     <div class="relative z-10 shrink-0 border-b border-border px-6 pb-4 pt-4">
       <div class="flex flex-wrap items-start gap-x-4 gap-y-3">
         <div class="min-w-0 flex-1">
+          <!-- Dove vive l'endpoint, e da dove lo si sposta: prima la collection si vedeva solo nel
+               catalogo, e cambiarla passava dal menu della riga. -->
+          <button
+            class="-ml-1 mb-1.5 flex items-center gap-1.5 rounded px-1 py-0.5 text-[11.5px] text-muted-foreground transition hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+            [cdkMenuTriggerFor]="collectionMenu"
+            [attr.aria-label]="'detail.collectionOf' | transloco"
+          >
+            <ng-icon name="lucideFolder" size="0.75rem" class="text-brand" />
+            <span class="font-semibold text-foreground/85">{{ collectionLabel() }}</span>
+            <ng-icon name="lucideChevronDown" size="0.7rem" />
+          </button>
           <div class="flex flex-wrap items-center gap-3">
             <ui-badge [tone]="methodTone(d.method)" size="md">{{ d.method }}</ui-badge>
             <h1 class="min-w-0 truncate font-mono text-[22px] font-bold tracking-tight text-foreground">{{ d.path }}</h1>
@@ -95,10 +108,22 @@ const METHOD_TONES: ReadonlySet<string> = new Set(['get', 'post', 'put', 'delete
           }
 
           @if (filePath()) {
-          <p class="mt-1.5 inline-flex items-center gap-1.5 font-mono text-[11px] text-[var(--foreground-faint)]" [uiTooltip]="'detail.filePathTip' | transloco">
-            <ng-icon name="lucideFile" size="0.75rem" />
-            {{ filePath() }}
-          </p>
+          <div class="mt-1.5 flex items-center gap-1.5 text-[11px] text-[var(--foreground-faint)]">
+            <ng-icon name="lucideFile" size="0.75rem" class="shrink-0" />
+            <!-- Relativo alla cartella dei mock: l'assoluto ripete il root del workspace su ogni
+                 endpoint ed e' diverso su ogni macchina. Nel tooltip resta per intero. -->
+            <span class="min-w-0 truncate font-mono" [uiTooltip]="filePath()" [showDelay]="250">{{ displayedFilePath() }}</span>
+            <button
+              type="button"
+              class="grid size-5 shrink-0 place-items-center rounded text-muted-foreground/70 transition hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+              [cdkCopyToClipboard]="filePath()"
+              (cdkCopyToClipboardCopied)="onPathCopied($event)"
+              [uiTooltip]="'detail.copyFilePath' | transloco"
+              [attr.aria-label]="'detail.copyFilePath' | transloco"
+            >
+              <ng-icon [name]="pathCopied() ? 'lucideCheck' : 'lucideCopy'" size="0.7rem" />
+            </button>
+          </div>
           }
         </div>
 
@@ -107,17 +132,14 @@ const METHOD_TONES: ReadonlySet<string> = new Set(['get', 'post', 'put', 'delete
             <ui-switch [checked]="!d.disabled" [disabled]="busy()" size="sm" (checkedChange)="store.toggleEnabled(d.id, $event)" [ariaLabel]="'detail.endpointActive' | transloco" />
             {{ (d.disabled ? 'detail.inactive' : 'detail.active') | transloco }}
           </span>
-          @if (d.editable) {
-            @if (confirmingDeleteEndpoint()) {
-            <span class="inline-flex items-center gap-2 rounded-lg border border-destructive/40 bg-destructive/10 px-2.5 py-1 text-[12.5px]">
-              <span class="text-destructive-soft">{{ 'detail.deleteEndpointConfirm' | transloco }}</span>
-              <button ui-button variant="destructive" size="sm" [disabled]="busy()" (click)="confirmDeleteEndpoint()">{{ 'detail.delete' | transloco }}</button>
-              <button ui-button variant="outline" size="sm" (click)="cancelDeleteEndpoint()">{{ 'detail.cancel' | transloco }}</button>
-            </span>
-            } @else {
-            <button ui-button variant="destructive" (click)="askDeleteEndpoint()"><ng-icon name="lucideTrash2" size="0.85rem" /> {{ 'detail.delete' | transloco }}</button>
-            }
-          }
+          <!-- La conferma prende il posto delle azioni finché non si decide. -->
+          @if (d.editable && confirmingDeleteEndpoint()) {
+          <span class="inline-flex items-center gap-2 rounded-lg border border-destructive/40 bg-destructive/10 px-2.5 py-1 text-[12.5px]">
+            <span class="text-destructive-soft">{{ 'detail.deleteEndpointConfirm' | transloco }}</span>
+            <button ui-button variant="destructive" size="sm" [disabled]="busy()" (click)="confirmDeleteEndpoint()">{{ 'detail.delete' | transloco }}</button>
+            <button ui-button variant="outline" size="sm" (click)="cancelDeleteEndpoint()">{{ 'detail.cancel' | transloco }}</button>
+          </span>
+          } @else {
           <button ui-button variant="outline" (click)="openCopy()" [uiTooltip]="'detail.copyEndpointTip' | transloco"><ng-icon name="lucideCopy" size="0.85rem" /> {{ 'detail.copy' | transloco }}</button>
           <!-- Il chip SEQ (stesso segnale del catalogo) rende evidente la sequenza attiva. -->
           <button ui-button variant="outline" (click)="openSequence()" [uiTooltip]="(d.sequenceActive ? 'detail.sequenceTipActive' : 'detail.sequenceTip') | transloco">
@@ -126,6 +148,12 @@ const METHOD_TONES: ReadonlySet<string> = new Set(['get', 'post', 'put', 'delete
             <span class="rounded bg-[color-mix(in_srgb,var(--sequence)_16%,transparent)] px-1 text-[0.7rem] font-bold tracking-wide text-sequence">SEQ</span>
             }
           </button>
+          <!-- Copia e Sequenza restano in chiaro: la prima costruisce, la seconda porta un badge
+               da vedere. Nel menu ciò che si usa di rado, e l'unica azione distruttiva. -->
+          <button ui-button variant="outline" size="icon" [cdkMenuTriggerFor]="endpointMenu" [uiTooltip]="'detail.moreActions' | transloco" [attr.aria-label]="'detail.moreActions' | transloco">
+            <ng-icon name="lucideEllipsisVertical" size="0.9rem" />
+          </button>
+          }
         </div>
       </div>
     </div>
@@ -197,6 +225,40 @@ const METHOD_TONES: ReadonlySet<string> = new Set(['get', 'post', 'put', 'delete
           </div>
           }
         </div>
+
+        <!-- collection dell'endpoint: sceglierne un'altra lo sposta -->
+        <ng-template #collectionMenu>
+          <div ui-menu class="min-w-[14rem]">
+            <div class="px-2 pb-1 pt-0.5 text-[10px] font-bold uppercase tracking-[0.14em] text-muted-foreground">{{ 'catalog.moveToLabel' | transloco }}</div>
+            <button ui-menu-item (click)="moveToCollection(undefined)">
+              <span class="flex-1">Unsorted</span>
+              @if (!detail()?.collectionId) { <ng-icon name="lucideCheck" size="0.85rem" class="text-brand" /> }
+            </button>
+            @for (c of store.collections(); track c.id) {
+            <button ui-menu-item (click)="moveToCollection(c.id)">
+              <span class="flex-1 truncate">{{ c.label }}</span>
+              @if (detail()?.collectionId === c.id) { <ng-icon name="lucideCheck" size="0.85rem" class="text-brand" /> }
+            </button>
+            }
+          </div>
+        </ng-template>
+
+        <!-- azioni rare e quella distruttiva, fuori dalla prima fila -->
+        <ng-template #endpointMenu>
+          <div ui-menu class="min-w-[15rem]">
+            <button ui-menu-item [cdkCopyToClipboard]="filePath()" (cdkCopyToClipboardCopied)="onPathCopied($event)">
+              <ng-icon name="lucideCopy" size="0.85rem" class="text-muted-foreground" />
+              <span class="flex-1">{{ 'detail.copyFilePath' | transloco }}</span>
+            </button>
+            @if (detail()?.editable) {
+            <div class="my-1 h-px bg-border"></div>
+            <button ui-menu-item (click)="askDeleteEndpoint()">
+              <ng-icon name="lucideTrash2" size="0.85rem" class="text-destructive-soft" />
+              <span class="flex-1 text-destructive-soft">{{ 'detail.deleteEndpoint' | transloco }}</span>
+            </button>
+            }
+          </div>
+        </ng-template>
 
         <!-- menu "aggiungi response": nuovo mock + (clona dalla mock) + nuovi script vanilla -->
         <ng-template #addResponseMenu>
@@ -385,10 +447,47 @@ export class MocksNextDetail {
     return d.payloadType === 'json' || d.payloadType === 'text' || d.payloadType === 'file' || d.payloadType == null;
   });
 
+  /**
+   * Percorso della definizione. Preferisce quello relativo alla cartella dei mock, ricavato
+   * dall'id senza chiedere niente al backend; se l'id non decodifica come previsto ripiega
+   * sull'assoluto, che è lungo ma vero.
+   */
   protected readonly filePath = computed(() => {
     const d = this.detail();
-    return d?.definitionFilePath || d?.configFilePath || '';
+    if (!d) {
+      return '';
+    }
+    return mockIdToWorkspacePath(d.id) ?? d.definitionFilePath ?? d.configFilePath ?? '';
   });
+
+  /** Lo stesso percorso accorciato dal centro: il file e la sua cartella restano leggibili. */
+  protected readonly displayedFilePath = computed(() => shortenWorkspacePath(this.filePath()));
+
+  /** Collection in cui vive l'endpoint, per il breadcrumb. */
+  protected readonly collectionLabel = computed(() => {
+    const collectionId = this.detail()?.collectionId;
+    if (collectionId == null) {
+      return 'Unsorted';
+    }
+    return this.store.collections().find((c) => c.id === collectionId)?.label ?? 'Unsorted';
+  });
+
+  protected readonly pathCopied = signal(false);
+
+  protected onPathCopied(copied: boolean): void {
+    if (!copied) {
+      return;
+    }
+    this.pathCopied.set(true);
+    setTimeout(() => this.pathCopied.set(false), 1500);
+  }
+
+  protected moveToCollection(collectionId: string | undefined): void {
+    const d = this.detail();
+    if (d) {
+      this.store.assignCollection(d.id, collectionId);
+    }
+  }
 
   protected readonly headerEntries = computed<readonly [string, string][]>(() => {
     const headers = this.detail()?.config?.headers ?? {};

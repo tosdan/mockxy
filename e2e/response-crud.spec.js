@@ -93,14 +93,14 @@ test.describe("E6 · CRUD response", () => {
     await select("/api/status");
     await expectResponseOptions(page, 2);
 
-    // Cestino della response (icon-only, distinto dall'"Elimina" endpoint che ha testo).
+    // Cestino della response: icon-only nella toolbar delle response.
     await detail
       .locator('button[ui-button]:has(ng-icon[name="lucideTrash2"])')
       .filter({ hasNotText: /\w/ })
       .click();
     // La conferma inline è apparsa nella toolbar response.
     await expect(detail.getByText(/Eliminare la response/)).toBeVisible();
-    // "Elimina" della conferma (nel div che contiene anche "Annulla"), non quello dell'endpoint.
+    // "Elimina" della conferma, nel div che contiene anche "Annulla".
     await detail
       .locator('div:has(> button:has-text("Annulla"))')
       .getByRole("button", { name: "Elimina", exact: true })

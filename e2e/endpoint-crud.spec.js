@@ -44,9 +44,11 @@ test.describe("E7 · CRUD endpoint", () => {
     ).toBeVisible();
   });
 
-  test("elimina un endpoint dal dettaglio", async () => {
+  test("elimina un endpoint dal dettaglio", async ({ page }) => {
     await catalog.getByText("/api/health", { exact: true }).click();
-    await detail.getByRole("button", { name: "Elimina", exact: true }).click();
+    // L'eliminazione e' scesa nel menu "..." della testata: azione rara e distruttiva.
+    await detail.getByRole("button", { name: "Altre azioni" }).click();
+    await page.getByRole("menuitem", { name: "Elimina endpoint" }).click();
     await expect(detail.getByText(/Eliminare l'endpoint/)).toBeVisible();
     await detail.getByRole("button", { name: "Elimina", exact: true }).click();
 
