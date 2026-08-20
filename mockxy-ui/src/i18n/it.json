@@ -106,21 +106,6 @@
     "runtimeAlreadyAbsent": "La risorsa {{name}} era già assente.",
     "runtimeResetAllDone": "Azzerate {{count}} risorse runtime."
   },
-  "runtimeBar": {
-    "serverOn": "Server attivo",
-    "serverOff": "Server spento",
-    "monitorTip": "Cattura live del traffico (attiva in tutte le view finché non in pausa)",
-    "monitorAria": "Monitor live",
-    "monitorPaused": "in pausa",
-    "monitorLive": "live",
-    "proxyAllOn": "dritto al backend",
-    "proxyAllOff": "mock attivi",
-    "dumpTipOn": "Dump su disco attivo — {{count}} in coda",
-    "dumpTipOff": "Salva su disco lo storico (oltre le 250 tenute in RAM)",
-    "dumpAria": "Dump su disco",
-    "flushTip": "Scrivi subito su disco le request in coda",
-    "loading": "Caricamento…"
-  },
   "runtimeStatus": {
     "title": "Runtime",
     "openTip": "Stato runtime — apri i controlli",
@@ -146,6 +131,16 @@
     "copyAddress": "Copia l'indirizzo di Mockxy",
     "loading": "Caricamento…"
   },
+  "workspaceTabs": {
+    "closeWs": "Chiudi workspace",
+    "noneOpen": "Nessun workspace aperto",
+    "open": "Apri un workspace…",
+    "recent": "Workspace recenti",
+    "recentAria": "Workspace recenti",
+    "recentlyOpened": "Aperti di recente",
+    "none": "Nessuno",
+    "removeRecentTip": "Rimuovi dai recenti"
+  },
   "viewRail": {
     "catalogo": "Catalogo",
     "monitor": "Monitor",
@@ -154,22 +149,10 @@
     "nav": "Viste"
   },
   "settingsMenu": {
-    "label": "Impostaz.",
-    "tip": "Impostazioni e preferenze"
-  },
-  "workspaceBar": {
-    "closeWs": "Chiudi workspace",
-    "noneOpen": "Nessun workspace aperto"
-  },
-  "workspaceControls": {
     "settings": "Impostazioni workspace",
     "appPreferences": "Preferenze dell'app",
-    "open": "Apri…",
-    "recent": "Recenti",
-    "recentAria": "Workspace recenti",
-    "recentlyOpened": "Aperti di recente",
-    "none": "Nessuno",
-    "removeRecentTip": "Rimuovi dai recenti"
+    "label": "Impostaz.",
+    "tip": "Impostazioni e preferenze"
   },
   "appPreferences": {
     "title": "Preferenze dell'app",

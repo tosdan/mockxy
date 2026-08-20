@@ -34,11 +34,11 @@ import { AppPreferencesDialog } from './app-preferences-dialog';
       <div ui-menu class="min-w-[14rem]">
         <button ui-menu-item (click)="openSettings()">
           <ng-icon name="lucideCog" size="0.85rem" class="text-muted-foreground" />
-          <span>{{ 'workspaceControls.settings' | transloco }}</span>
+          <span>{{ 'settingsMenu.settings' | transloco }}</span>
         </button>
         <button ui-menu-item (click)="openPreferences()">
           <ng-icon name="lucideSlidersHorizontal" size="0.85rem" class="text-muted-foreground" />
-          <span>{{ 'workspaceControls.appPreferences' | transloco }}</span>
+          <span>{{ 'settingsMenu.appPreferences' | transloco }}</span>
         </button>
       </div>
     </ng-template>

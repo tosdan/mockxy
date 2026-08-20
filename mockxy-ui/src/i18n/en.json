@@ -106,21 +106,6 @@
     "runtimeAlreadyAbsent": "Resource {{name}} was already absent.",
     "runtimeResetAllDone": "Reset {{count}} runtime resources."
   },
-  "runtimeBar": {
-    "serverOn": "Server on",
-    "serverOff": "Server off",
-    "monitorTip": "Live traffic capture (active across all views until paused)",
-    "monitorAria": "Live monitor",
-    "monitorPaused": "paused",
-    "monitorLive": "live",
-    "proxyAllOn": "straight to backend",
-    "proxyAllOff": "mocking active",
-    "dumpTipOn": "Disk dump active — {{count}} queued",
-    "dumpTipOff": "Save the history to disk (beyond the 250 kept in RAM)",
-    "dumpAria": "Disk dump",
-    "flushTip": "Write queued requests to disk now",
-    "loading": "Loading…"
-  },
   "runtimeStatus": {
     "title": "Runtime",
     "openTip": "Runtime state — open the controls",
@@ -146,6 +131,16 @@
     "copyAddress": "Copy the Mockxy address",
     "loading": "Loading…"
   },
+  "workspaceTabs": {
+    "closeWs": "Close workspace",
+    "noneOpen": "No workspace open",
+    "open": "Open a workspace…",
+    "recent": "Recent workspaces",
+    "recentAria": "Recent workspaces",
+    "recentlyOpened": "Recently opened",
+    "none": "None",
+    "removeRecentTip": "Remove from recent"
+  },
   "viewRail": {
     "catalogo": "Catalog",
     "monitor": "Monitor",
@@ -154,22 +149,10 @@
     "nav": "Views"
   },
   "settingsMenu": {
-    "label": "Settings",
-    "tip": "Settings and preferences"
-  },
-  "workspaceBar": {
-    "closeWs": "Close workspace",
-    "noneOpen": "No workspace open"
-  },
-  "workspaceControls": {
     "settings": "Workspace settings",
     "appPreferences": "App preferences",
-    "open": "Open…",
-    "recent": "Recent",
-    "recentAria": "Recent workspaces",
-    "recentlyOpened": "Recently opened",
-    "none": "None",
-    "removeRecentTip": "Remove from recent"
+    "label": "Settings",
+    "tip": "Settings and preferences"
   },
   "appPreferences": {
     "title": "App preferences",
