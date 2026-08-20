@@ -118,11 +118,11 @@ Qui atterrano «Importa OpenAPI» e «Nuovo», quindi qui la topbar di pagina pu
 
 ## 5. Filtri sempre visibili
 
-- [ ] Segmentato Tutti / Attivi / Disattivi legato a `statusFilter`.
-- [ ] Selettore «Tipo: …» che mostra il valore corrente invece di un pallino.
-- [ ] Rendere esplicito che con un filtro attivo il riordino è sospeso (oggi sparisce in silenzio).
-- [ ] Linee guida verticali dell'albero.
-- [ ] Test: i filtri restano leggibili dallo stato; il reset li riporta a «tutti».
+- [x] Segmentato Tutti / Attivi / Disattivi legato a `statusFilter`.
+- [x] Selettore «Tipo: …» che mostra il valore corrente invece di un pallino.
+- [x] Rendere esplicito che con un filtro attivo il riordino è sospeso (oggi sparisce in silenzio).
+- [x] Linee guida verticali dell'albero.
+- [x] Test: i filtri restano leggibili dallo stato; il reset li riporta a «tutti».
 - [ ] **Anteprima e ok.**
 
 ## 6. Selezione multipla e azioni di massa
