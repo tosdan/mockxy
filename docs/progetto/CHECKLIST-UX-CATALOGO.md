@@ -194,24 +194,26 @@ al «per lista di id».
 - [x] Test: apertura, ricerca, esecuzione, chiusura con Esc.
 - [ ] **Anteprima e ok.**
 
-## Test e2e rossi gia' prima di questo lavoro
+## Test e2e: com'e' finita
 
-Verificati su `main` con lo stesso comando: falliscono identici, quindi non li ha rotti la
-razionalizzazione. Da affrontare a parte, non dentro i gruppi.
+Erano quattro rossi, tutti presenti anche su `main`. Chiusi.
 
-- `errors.spec.js` — «copiare un endpoint verso un path esistente mostra un errore»: il test
-  aspetta l'errore dal server, ma il pulsante «Copia» del dialog resta disabilitato finche'
-  l'anteprima dry-run non arriva, e su un path in conflitto non arriva mai.
-- `storico-dump.spec.js` — i tre scenari «storico dump → crea mock».
+- `storico-dump.spec.js` (tre scenari) — era l'helper `flushDump`: mandava la POST senza corpo, la
+  rotta e' protetta da `requireEmptyJsonObject` e rispondeva 415, e il `?? 0` sul corpo dell'errore
+  trasformava il rifiuto in "zero scritte". La poll non poteva mai salire sopra zero. Ora manda
+  `{}` e alza se la rotta rifiuta.
+- `errors.spec.js` — il test aspettava l'errore dal server dopo il click, ma il conflitto lo dice
+  l'anteprima dry-run mentre si digita, e il pulsante resta disabilitato. La UI ha ragione a
+  fermarti prima: il test e' stato riscritto su quel comportamento.
 
-Fuori conteggio: `drag-drop.spec.js` «annida una collection sotto un'altra» e' flaky (passa al
-retry), coerente con la nota su `retries` in playwright.config.js.
+Anche i due `drag-drop.spec.js` che erano flaky passano al primo colpo.
 
 ## Chiusura
 
-- [ ] Traduzioni `it` ed `en` allineate per tutte le nuove stringhe.
-- [ ] Passata di accessibilità (focus, contrasto, ARIA) sui nuovi controlli.
-- [ ] E2E aggiornati dove toccano le topbar rimosse.
+- [x] Traduzioni `it` ed `en` allineate per tutte le nuove stringhe.
+- [~] Passata di accessibilità: rimandata a un lavoro suo, fuori da questo branch. Resta
+      dentro solo il nome accessibile degli switch, che era rotto per tutta l'app.
+- [x] E2E aggiornati dove toccano le topbar rimosse.
 - [ ] Screenshot del README rifatto.
 - [ ] Questo file cancellato: serve a tracciare il lavoro nel branch, non a finire in main.
 - [ ] Squash merge della PR.
