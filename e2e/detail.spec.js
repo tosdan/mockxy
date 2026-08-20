@@ -30,7 +30,7 @@ test.describe("E3 · dettaglio", () => {
 
   test("mostra lo status e il body JSON della response", async () => {
     await select("/api/users");
-    await expect(detail.getByText(/200/).first()).toBeVisible();
+    await expect(detail.locator("mocks-next-status-combobox input")).toHaveValue(/200/);
     await expect(detail.getByText(/Ada Lovelace/)).toBeVisible();
     await expect(detail.getByText(/Alan Turing/)).toBeVisible();
   });

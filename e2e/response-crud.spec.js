@@ -20,7 +20,8 @@ test.describe("E6 · CRUD response", () => {
 
   const select = (p) => catalog.getByText(p, { exact: true }).click();
   const addBtn = () => detail.locator('button[ui-button]:has(ng-icon[name="lucidePlus"])').first();
-  const editBtn = () => detail.locator('button[ui-button]:has(ng-icon[name="lucidePencil"])');
+  // Modifica ed eliminazione della variante vivono nel menu "..." della barra response.
+  const openResponseMenu = () => detail.getByRole("button", { name: "Azioni sulla variante" }).click();
   const saveBtn = () => detail.getByRole("button", { name: "Salva", exact: true });
 
   // Numero di response = numero di opzioni nel selettore titolo (aperto → conta → chiude).
@@ -55,21 +56,28 @@ test.describe("E6 · CRUD response", () => {
 
   test("modifica lo status di una response e persiste dopo reload", async ({ page }) => {
     await select("/api/health");
-    await editBtn().click();
-    await detail.locator("mocks-next-status-combobox input").fill("418");
+    await openResponseMenu();
+    await page.getByRole("menuitem", { name: "Modifica la response selezionata" }).click();
+    // Digitare invece di fill(): il combobox reagisce a ogni input, e lo svuotamento che fill()
+    // fa prima di scrivere lo lascia per un istante senza status valido.
+    const statusField = detail.locator("mocks-next-status-combobox input");
+    await statusField.click();
+    await statusField.pressSequentially("418");
+    await statusField.press("Escape");
     await saveBtn().click();
 
-    await expect(detail.getByText(/418/).first()).toBeVisible();
+    await expect(detail.locator("mocks-next-status-combobox input")).toHaveValue(/418/);
 
     // Persistenza: reload, riseleziona, lo status è ancora 418 (scritto su disco).
     await reloadStable(page);
     await select("/api/health");
-    await expect(detail.getByText(/418/).first()).toBeVisible();
+    await expect(detail.locator("mocks-next-status-combobox input")).toHaveValue(/418/);
   });
 
   test("aggiunge un header alla response e lo mostra in vista", async ({ page }) => {
     await select("/api/health");
-    await editBtn().click();
+    await openResponseMenu();
+    await page.getByRole("menuitem", { name: "Modifica la response selezionata" }).click();
     await detail.getByRole("button", { name: "Aggiungi header" }).click();
     // Su un input Angular appena renderizzato, `fill` (un solo evento) può arrivare prima che
     // l'handler sia agganciato e venire perso, con un re-render che azzera il campo (flaky).
@@ -93,11 +101,8 @@ test.describe("E6 · CRUD response", () => {
     await select("/api/status");
     await expectResponseOptions(page, 2);
 
-    // Cestino della response: icon-only nella toolbar delle response.
-    await detail
-      .locator('button[ui-button]:has(ng-icon[name="lucideTrash2"])')
-      .filter({ hasNotText: /\w/ })
-      .click();
+    await openResponseMenu();
+    await page.getByRole("menuitem", { name: "Elimina la response selezionata" }).click();
     // La conferma inline è apparsa nella toolbar response.
     await expect(detail.getByText(/Eliminare la response/)).toBeVisible();
     // "Elimina" della conferma, nel div che contiene anche "Annulla".

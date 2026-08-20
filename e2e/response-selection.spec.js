@@ -35,7 +35,7 @@ test.describe("E4 · response multiple", () => {
   }
 
   test("all'apertura mostra la response di default (OK, 200)", async () => {
-    await expect(detail.getByText(/200/).first()).toBeVisible();
+    await expect(detail.locator("mocks-next-status-combobox input")).toHaveValue(/200/);
     await expect(detail.getByText(/not found/)).toHaveCount(0);
   });
 
@@ -49,12 +49,12 @@ test.describe("E4 · response multiple", () => {
   test("cambiando response, status e body si aggiornano e tornano indietro", async ({ page }) => {
     // → seconda response (Non trovato, 404)
     await pickResponse(page, /Non trovato/);
-    await expect(detail.getByText(/404/).first()).toBeVisible();
+    await expect(detail.locator("mocks-next-status-combobox input")).toHaveValue(/404/);
     await expect(detail.getByText(/not found/)).toBeVisible();
 
     // ← ritorno alla prima (OK, 200): copre entrambe le direzioni e ripristina
     await pickResponse(page, /OK/);
-    await expect(detail.getByText(/200/).first()).toBeVisible();
+    await expect(detail.locator("mocks-next-status-combobox input")).toHaveValue(/200/);
     await expect(detail.getByText(/not found/)).toHaveCount(0);
   });
 
@@ -67,6 +67,6 @@ test.describe("E4 · response multiple", () => {
     await catalog.getByText("/api/status", { exact: true }).click();
     await expect(detail.getByRole("heading", { name: "/api/status", exact: true })).toBeVisible();
     await expect(detail.getByText(/not found/)).toBeVisible(); // 404 persistito
-    await expect(detail.getByText(/404/).first()).toBeVisible();
+    await expect(detail.locator("mocks-next-status-combobox input")).toHaveValue(/404/);
   });
 });

@@ -187,9 +187,12 @@ const METHOD_TONES: ReadonlySet<string> = new Set(['get', 'post', 'put', 'delete
             <button ui-button variant="outline" [disabled]="busy()" (click)="cancelDeleteResponse()">{{ 'detail.cancel' | transloco }}</button>
           </div>
           } @else {
-          <div class="flex items-center gap-2">
+          <!-- La tendina si adatta: larga fissa 512 px sprecava spazio coi titoli corti e troncava
+               comunque quelli lunghi. Status e delay le stanno accanto invece che spinti al lato
+               opposto della riga: sono attributi della variante scelta, non della barra. -->
+          <div class="flex min-w-0 flex-1 items-center gap-2">
             <ui-select
-              class="w-128"
+              class="min-w-0 flex-1 max-w-[27rem]"
               [options]="responseOptions()"
               [value]="d.selectedResponseFile ?? null"
               (valueChange)="store.selectResponse($any($event))"
@@ -197,34 +200,76 @@ const METHOD_TONES: ReadonlySet<string> = new Set(['get', 'post', 'put', 'delete
               [placeholder]="'detail.responseTitlePlaceholder' | transloco"
             />
             @if (d.editable) {
-            <button ui-button variant="outline" size="icon" [cdkMenuTriggerFor]="addResponseMenu" [disabled]="busy()" [uiTooltip]="'detail.addResponseTip' | transloco"><ng-icon name="lucidePlus" size="0.95rem" /></button>
-            @if (d.type === 'sequence') {
-            <button ui-button variant="outline" size="icon" (click)="openSequence('edit')" [uiTooltip]="'detail.editSelectedResponseTip' | transloco"><ng-icon name="lucidePencil" size="0.95rem" /></button>
-            } @else if (responseEditable()) {
-            <button ui-button variant="outline" size="icon" (click)="startEditResponse()" [uiTooltip]="'detail.editSelectedResponseTip' | transloco"><ng-icon name="lucidePencil" size="0.95rem" /></button>
+            <button ui-button variant="outline" size="icon" [cdkMenuTriggerFor]="addResponseMenu" [disabled]="busy()" [uiTooltip]="'detail.addResponseTip' | transloco" [attr.aria-label]="'detail.addResponseTip' | transloco"><ng-icon name="lucidePlus" size="0.95rem" /></button>
+            <button ui-button variant="outline" size="icon" [cdkMenuTriggerFor]="responseMenu" [disabled]="busy()" [uiTooltip]="'detail.responseActions' | transloco" [attr.aria-label]="'detail.responseActions' | transloco"><ng-icon name="lucideEllipsisVertical" size="0.9rem" /></button>
             }
-            <button ui-button variant="destructive" size="icon" (click)="askDeleteResponse()" [disabled]="(d.responses?.length ?? 0) <= 1" [uiTooltip]="((d.responses?.length ?? 0) <= 1 ? 'detail.atLeastOneResponseTip' : 'detail.deleteSelectedResponseTip') | transloco"><ng-icon name="lucideTrash2" size="0.95rem" /></button>
-            }
-          </div>
 
-          <div class="ml-auto flex flex-wrap items-center gap-2">
+            <span class="mx-0.5 h-5 w-px shrink-0 bg-border"></span>
+
             @if (d.type === 'sequence' && d.sequence; as sequence) {
-            <ui-chip>
+            <ui-chip class="shrink-0">
               <span class="font-semibold text-sequence">SEQ</span>
               <span class="font-mono font-semibold tabular-nums text-foreground">{{ sequence.steps.length }} {{ 'sequenceDialog.steps' | transloco }}</span>
             </ui-chip>
             } @else if (selectedStatus() !== null) {
-            <mocks-next-status-combobox [value]="selectedStatus()" [readOnly]="true" />
+            <!-- Status e delay sono le due cose che si ritoccano di continuo: cambiarle qui evita
+                 di aprire il form della response per un solo numero. La PUT è parziale, e il
+                 backend la fonde sulla variante esistente. -->
+            <mocks-next-status-combobox
+              class="shrink-0"
+              [value]="selectedStatus()"
+              (valueChange)="onStatusChange($event)"
+              [readOnly]="!inlineEditable()"
+              [disabled]="busy()"
+            />
             }
             @if (d.type !== 'sequence') {
-            <ui-chip>
-              <span class="text-[10px] font-semibold uppercase tracking-wide">delay</span>
-              <span class="font-mono font-semibold tabular-nums text-foreground">{{ d.config?.delayMs ?? 0 }} ms</span>
-            </ui-chip>
+            <span class="inline-flex shrink-0 items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+              delay
+              @if (inlineEditable()) {
+              <input
+                ui-input
+                type="number"
+                min="0"
+                step="50"
+                class="w-[4.5rem] px-2 py-1 text-center font-mono text-[12px] tabular-nums"
+                [value]="d.config?.delayMs ?? 0"
+                [disabled]="busy()"
+                [attr.aria-label]="'detail.delayAria' | transloco"
+                (change)="onDelayChange($any($event.target).value)"
+              />
+              } @else {
+              <span class="font-mono tabular-nums text-foreground">{{ d.config?.delayMs ?? 0 }}</span>
+              }
+              ms
+            </span>
             }
           </div>
           }
         </div>
+
+        <!-- azioni sulla variante scelta: al posto della matita e del cestino sciolti in barra -->
+        <ng-template #responseMenu>
+          <div ui-menu class="min-w-[15rem]">
+            @if (detail()?.type === 'sequence') {
+            <button ui-menu-item (click)="openSequence('edit')">
+              <ng-icon name="lucidePencil" size="0.85rem" class="text-muted-foreground" />
+              <span class="flex-1">{{ 'detail.editSelectedResponseTip' | transloco }}</span>
+            </button>
+            } @else if (responseEditable()) {
+            <button ui-menu-item (click)="startEditResponse()">
+              <ng-icon name="lucidePencil" size="0.85rem" class="text-muted-foreground" />
+              <span class="flex-1">{{ 'detail.editSelectedResponseTip' | transloco }}</span>
+            </button>
+            }
+            <div class="my-1 h-px bg-border"></div>
+            <!-- L'ultima variante non si elimina: un endpoint senza response non risponderebbe. -->
+            <button ui-menu-item [disabled]="(detail()?.responses?.length ?? 0) <= 1" (click)="askDeleteResponse()">
+              <ng-icon name="lucideTrash2" size="0.85rem" class="text-destructive-soft" />
+              <span class="flex-1 text-destructive-soft">{{ 'detail.deleteSelectedResponseTip' | transloco }}</span>
+            </button>
+          </div>
+        </ng-template>
 
         <!-- collection dell'endpoint: sceglierne un'altra lo sposta -->
         <ng-template #collectionMenu>
@@ -471,6 +516,37 @@ export class MocksNextDetail {
     }
     return this.store.collections().find((c) => c.id === collectionId)?.label ?? 'Unsorted';
   });
+
+  /**
+   * Status e delay si modificano in posto solo dove hanno un significato: una variante `mock` di
+   * un endpoint modificabile, e non mentre il form della response è aperto (lì li governa il form).
+   * Handler e middleware non hanno uno status proprio da riscrivere; sse, ws e sequence nemmeno.
+   */
+  protected readonly inlineEditable = computed(() => {
+    const d = this.detail();
+    return d?.editable === true && d.type === 'mock' && !this.responseFormOpen();
+  });
+
+  /**
+   * Riscrive lo status della variante con una PUT parziale: il backend fonde il payload su quella
+   * esistente, quindi body, headers, delay e il flag template restano dove sono.
+   */
+  protected onStatusChange(status: number | null): void {
+    if (status == null || status === this.selectedStatus() || !this.inlineEditable()) {
+      return;
+    }
+    this.store.saveResponse({ type: 'mock', status });
+  }
+
+  /** Come lo status. Lo status corrente va rispedito: il tipo della richiesta lo vuole sempre. */
+  protected onDelayChange(raw: string): void {
+    const delayMs = Number(raw);
+    const current = this.detail()?.config?.delayMs ?? 0;
+    if (!Number.isFinite(delayMs) || delayMs < 0 || delayMs === current || !this.inlineEditable()) {
+      return;
+    }
+    this.store.saveResponse({ type: 'mock', status: this.selectedStatus() ?? 200, delayMs });
+  }
 
   protected readonly pathCopied = signal(false);
 

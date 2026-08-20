@@ -41,6 +41,9 @@ describe('MocksNextDetail', () => {
     savingId: ReturnType<typeof signal<string | undefined>>;
     error: ReturnType<typeof signal<string | undefined>>;
     reloadSelectedDetail: ReturnType<typeof vi.fn>;
+    collections: ReturnType<typeof signal<{ id: string; label: string }[]>>;
+    saveResponse: ReturnType<typeof vi.fn>;
+    assignCollection: ReturnType<typeof vi.fn>;
   };
 
   function create() {
@@ -51,6 +54,9 @@ describe('MocksNextDetail', () => {
       savingId: signal<string | undefined>(undefined),
       error: signal<string | undefined>(undefined),
       reloadSelectedDetail: vi.fn(),
+      collections: signal<{ id: string; label: string }[]>([]),
+      saveResponse: vi.fn(),
+      assignCollection: vi.fn(),
     };
     TestBed.configureTestingModule({
       imports: [MocksNextDetail, translocoTesting()],
@@ -64,6 +70,66 @@ describe('MocksNextDetail', () => {
     fixture.detectChanges();
     return fixture;
   }
+
+  // Status e delay sono le due cose che si ritoccano di continuo: modificarle qui deve costare una
+  // PUT PARZIALE, cosi' il merge del backend lascia intatti body, headers, titolo e flag template.
+  describe('status e delay modificabili in posto', () => {
+    function statusButton(fixture: ReturnType<typeof create>): HTMLButtonElement {
+      return (fixture.nativeElement as HTMLElement).querySelector('mocks-next-status-combobox button')!;
+    }
+    function delayInput(fixture: ReturnType<typeof create>): HTMLInputElement | null {
+      return (fixture.nativeElement as HTMLElement).querySelector('input[type="number"]');
+    }
+
+    it('cambiare lo status manda solo tipo e status', () => {
+      const fixture = create();
+      (fixture.componentInstance as unknown as { onStatusChange(s: number | null): void }).onStatusChange(500);
+
+      expect(store.saveResponse).toHaveBeenCalledTimes(1);
+      expect(store.saveResponse).toHaveBeenCalledWith({ type: 'mock', status: 500 });
+    });
+
+    it('cambiare il delay rispedisce lo status corrente, che il tipo della richiesta esige', () => {
+      const fixture = create();
+      (fixture.componentInstance as unknown as { onDelayChange(v: string): void }).onDelayChange('250');
+
+      expect(store.saveResponse).toHaveBeenCalledWith({ type: 'mock', status: 200, delayMs: 250 });
+    });
+
+    it('non manda nulla per un valore uguale a quello corrente o non valido', () => {
+      const fixture = create();
+      const api = fixture.componentInstance as unknown as {
+        onStatusChange(s: number | null): void;
+        onDelayChange(v: string): void;
+      };
+
+      api.onStatusChange(200);
+      api.onStatusChange(null);
+      api.onDelayChange('0');
+      api.onDelayChange('-5');
+      api.onDelayChange('abc');
+
+      expect(store.saveResponse).not.toHaveBeenCalled();
+    });
+
+    it('un handler non offre i controlli in posto: non ha uno status suo da riscrivere', () => {
+      const fixture = create();
+      store.selected.set(detail({ type: 'handler', source: 'module.exports = {};' }));
+      fixture.detectChanges();
+
+      expect(delayInput(fixture)).toBeNull();
+      expect(statusButton(fixture)?.getAttribute('aria-disabled') ?? 'assente').toBeDefined();
+    });
+
+    it('un endpoint non modificabile li mostra in sola lettura', () => {
+      const fixture = create();
+      store.selected.set(detail({ editable: false }));
+      fixture.detectChanges();
+
+      expect(delayInput(fixture)).toBeNull();
+      expect((fixture.nativeElement as HTMLElement).textContent).toContain('delay');
+    });
+  });
 
   it('con dettaglio leggibile mostra l’endpoint', () => {
     const fixture = create();

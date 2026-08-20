@@ -393,6 +393,8 @@
     "deleteResponseConfirm": "Eliminare la response \"{{title}}\"?",
     "responseTitlePlaceholder": "Titolo della response",
     "addResponseTip": "Aggiungi una response (mock / handler / middleware)",
+    "responseActions": "Azioni sulla variante",
+    "delayAria": "Ritardo della risposta in millisecondi",
     "editSelectedResponseTip": "Modifica la response selezionata",
     "atLeastOneResponseTip": "Deve restare almeno una response",
     "deleteSelectedResponseTip": "Elimina la response selezionata",
