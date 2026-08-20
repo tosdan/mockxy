@@ -132,26 +132,26 @@ al «per lista di id».
 
 ### 6a. API bulk (backend)
 
-- [ ] Estrarre da `updateAdminCollectionEnabled` la parte comune: da un elenco di item a scrittura
+- [x] Estrarre da `updateAdminCollectionEnabled` la parte comune: da un elenco di item a scrittura
       atomica con backup, rollback e un solo reload.
-- [ ] `PATCH /mocks/enabled` con `{ ids, enabled }`, che risponde come la rotta per collection
+- [x] `PATCH /mocks/enabled` con `{ ids, enabled }`, che risponde come la rotta per collection
       (`items` + `collections` + `childOrder`).
-- [ ] Validare gli id: lista non vuota, id noti, nessun percorso fuori da `mocksDir`.
-- [ ] Riusare la rotta per collection sopra la stessa funzione, senza cambiarne il contratto.
-- [ ] Aggiornare `docs/admin-api.openapi.yaml`.
-- [ ] Rileggere `tests/admin-api.spec.js` della suite esterna: la nuova rotta deve restare fuori
+- [x] Validare gli id: lista non vuota, id noti, nessun percorso fuori da `mocksDir`.
+- [x] Riusare la rotta per collection sopra la stessa funzione, senza cambiarne il contratto.
+- [x] Aggiornare `docs/admin-api.openapi.yaml`.
+- [x] Rileggere `tests/admin-api.spec.js` della suite esterna: la nuova rotta deve restare fuori
       dalla superficie CORS come le altre dell'admin API.
-- [ ] Test backend: successo, id sconosciuto, rollback su reload rifiutato, nessuna modifica
+- [x] Test backend: successo, id sconosciuto, rollback su reload rifiutato, nessuna modifica
       quando gli endpoint sono già nello stato richiesto.
 
 ### 6b. Selezione e barra contestuale (UI)
 
-- [ ] Metodo `setEndpointsEnabled(ids, enabled)` sul client admin e sullo store.
-- [ ] Checkbox sulle righe endpoint, con shift-click per intervalli.
-- [ ] Barra contestuale in fondo al pannello: abilita, disabilita, sposta in…, elimina.
-- [ ] Conferma esplicita per l'eliminazione multipla.
-- [ ] Interazione con i filtri: la selezione riguarda solo le righe visibili.
-- [ ] Test: selezione, azione, annullamento, selezione che sopravvive (o no) al cambio filtro.
+- [x] Metodo `setEndpointsEnabled(ids, enabled)` sul client admin e sullo store.
+- [x] Checkbox sulle righe endpoint, con shift-click per intervalli.
+- [x] Barra contestuale in fondo al pannello: abilita, disabilita, sposta in…, elimina.
+- [x] Conferma esplicita per l'eliminazione multipla.
+- [x] Interazione con i filtri: la selezione riguarda solo le righe visibili.
+- [x] Test: selezione, azione, annullamento, selezione che sopravvive (o no) al cambio filtro.
 - [ ] **Anteprima e ok.**
 
 ## 7. Testata del dettaglio
