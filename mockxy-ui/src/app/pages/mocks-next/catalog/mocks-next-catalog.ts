@@ -183,8 +183,13 @@ const COLLAPSED_COLLECTIONS_STATE_KEY = 'mocks-collapsed';
         }
       </label>
       <!-- Filtri in chiaro: prima erano chiusi in un menu e li segnalava solo un pallino, quindi
-           lo stato del catalogo non era leggibile senza aprirlo. -->
-      <div class="mt-2 flex items-center gap-2">
+           lo stato del catalogo non era leggibile senza aprirlo.
+           L'andare a capo non e' decorativo: l'etichetta del tipo cambia larghezza col tipo
+           scelto ("Tipo: Middleware" e' 45 px piu' larga di "Tipo: SSE") e i font di sistema la
+           allargano ancora. Senza wrap la riga sborda dal pannello e l'ultimo pulsante finisce
+           sotto il divisore trascinabile, che gli sta sopra: invisibile ai click, non solo ai
+           test. -->
+      <div class="mt-2 flex flex-wrap items-center gap-2">
         <div role="radiogroup" [attr.aria-label]="'catalog.filterStatusLabel' | transloco" class="flex items-center gap-0.5 rounded-lg border border-input bg-black/30 p-0.5">
           @for (s of statusOptions; track s.value) {
           <button
