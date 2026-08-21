@@ -88,6 +88,30 @@ test.describe("E2 · ricerca e filtri", () => {
     await expect(path("/api/echo")).toHaveCount(0);
   });
 
+  // Regressione: la riga dei filtri sbordava dal pannello quando l'etichetta del tipo era lunga,
+  // e l'ultimo pulsante finiva sotto il divisore trascinabile — che ha z-20 e intercetta i click.
+  // "Middleware" e' l'etichetta piu' larga: bastava quella a superare la larghezza disponibile.
+  test("con l'etichetta di tipo piu' lunga i filtri restano dentro il pannello", async ({ page }) => {
+    await typeButton.click();
+    await page.getByRole("menuitem", { name: "Middleware" }).click();
+
+    const reset = catalog.getByRole("button", { name: "Reimposta filtri" });
+    const dentro = await reset.evaluate((btn) => {
+      const pannello = btn.closest("mocks-next-catalog").getBoundingClientRect();
+      const riga = btn.parentElement;
+      return {
+        sbordo: riga.scrollWidth - riga.clientWidth,
+        oltreIlBordo: Math.round(btn.getBoundingClientRect().right - pannello.right),
+      };
+    });
+    expect(dentro.sbordo).toBe(0);
+    expect(dentro.oltreIlBordo).toBeLessThanOrEqual(0);
+
+    // E il click deve arrivarci davvero: se il divisore lo copre, Playwright va in timeout.
+    await reset.click();
+    await expect(typeButton).toHaveText(/Tutti/);
+  });
+
   test("Reimposta filtri riporta il catalogo completo e riazzera i controlli", async ({ page }) => {
     await typeButton.click();
     await page.getByRole("menuitem", { name: "Handler" }).click();
