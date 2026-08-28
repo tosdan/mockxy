@@ -15,6 +15,8 @@ completata e superata dagli eventi. Non deve essere usata come procedura di rila
 - issue: `https://github.com/tosdan/mockxy/issues`;
 - release: `https://github.com/tosdan/mockxy/releases`;
 - convenzione dei tag stabili: `v<major>.<minor>.<patch>`;
+- procedura operativa di rilascio:
+  [PROCEDURA-RILASCIO.md](PROCEDURA-RILASCIO.md);
 - piano per release e distribuzioni desktop:
   [PIANO-DISTRIBUZIONE-DESKTOP.md](PIANO-DISTRIBUZIONE-DESKTOP.md).
 
