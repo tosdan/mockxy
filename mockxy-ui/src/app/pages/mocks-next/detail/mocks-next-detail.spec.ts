@@ -1,6 +1,7 @@
 import '@angular/compiler';
 import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
+import { By } from '@angular/platform-browser';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { MocksNextDetail } from './mocks-next-detail';
 import { translocoTesting } from '../../../testing/transloco-testing';
@@ -194,6 +195,22 @@ describe('MocksNextDetail', () => {
     const fixture = create();
     const root = fixture.nativeElement as HTMLElement;
     expect(root.textContent).toContain('/api/operazioni');
+  });
+
+  it('mostra la sorgente di un handler con il linguaggio JavaScript', () => {
+    const fixture = create();
+    store.selected.set(
+      detail({
+        type: 'handler',
+        source: 'module.exports = { async resolveResponse() { return { status: 200 }; } };',
+      }),
+    );
+    fixture.detectChanges();
+
+    const code = fixture.debugElement.query(By.css('ui-code'));
+    expect(code).not.toBeNull();
+    expect(code.componentInstance.language()).toBe('javascript');
+    expect(code.nativeElement.querySelector('[style*="--json-key"]')).not.toBeNull();
   });
 
   // Il pannello non deve mostrare il dettaglio precedente dopo una mutazione riuscita di cui non

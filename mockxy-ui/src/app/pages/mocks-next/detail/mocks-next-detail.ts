@@ -414,7 +414,7 @@ const METHOD_TONES: ReadonlySet<string> = new Set(['get', 'post', 'put', 'delete
             } @else if (body().kind === 'none') {
             <p class="text-[13px] text-muted-foreground">{{ 'detail.noBody' | transloco }}</p>
             } @else {
-            <ui-code [code]="body().text" [language]="body().kind === 'json' ? 'json' : 'text'" />
+            <ui-code [code]="body().text" [language]="bodyLanguage()" />
             }
           </div>
         </div>
@@ -641,6 +641,11 @@ export class MocksNextDetail {
     if (raw == null) return { kind: 'none', text: '' };
     const text = typeof raw === 'string' ? raw : JSON.stringify(raw, null, 2);
     return { kind: d.payloadType === 'text' ? 'text' : 'json', text };
+  });
+
+  protected readonly bodyLanguage = computed<'json' | 'javascript' | 'text'>(() => {
+    const kind = this.body().kind;
+    return kind === 'json' ? 'json' : kind === 'source' ? 'javascript' : 'text';
   });
 
   /** True se la response selezionata è un mock con body inline (JSON/testo): seminabile in uno script. */

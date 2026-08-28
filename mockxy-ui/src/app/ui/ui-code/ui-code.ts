@@ -4,6 +4,8 @@ import { CdkCopyToClipboard } from '@angular/cdk/clipboard';
 import { NgIcon, provideIcons } from '@ng-icons/core';
 import { lucideCheck, lucideCopy } from '@ng-icons/lucide';
 import { TranslocoPipe } from '@jsverse/transloco';
+import { javascriptLanguage } from '@codemirror/lang-javascript';
+import { highlightCode, tagHighlighter, tags as t } from '@lezer/highlight';
 
 function escapeHtml(value: string): string {
   return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -41,8 +43,55 @@ function jsonLineHtml(line: string): string {
   return out;
 }
 
+const JAVASCRIPT_TOKEN_STYLES: Readonly<Record<string, string>> = {
+  key: 'color:var(--json-key)',
+  string: 'color:var(--json-string)',
+  number: 'color:var(--json-number)',
+  comment: 'color:var(--json-gutter);font-style:italic',
+  punctuation: 'color:var(--json-punct)',
+};
+
+/** Stessa tavolozza dell'editor CodeMirror, applicata al renderer statico della vista dettaglio. */
+const javascriptHighlighter = tagHighlighter([
+  { tag: t.propertyName, class: 'key' },
+  { tag: [t.string, t.special(t.string), t.regexp], class: 'string' },
+  { tag: [t.number, t.bool, t.null, t.atom], class: 'number' },
+  {
+    tag: [t.keyword, t.controlKeyword, t.operatorKeyword, t.definitionKeyword, t.moduleKeyword, t.self],
+    class: 'key',
+  },
+  { tag: [t.comment, t.lineComment, t.blockComment], class: 'comment' },
+  {
+    tag: [t.punctuation, t.separator, t.bracket, t.brace, t.squareBracket, t.paren],
+    class: 'punctuation',
+  },
+  { tag: t.operator, class: 'punctuation' },
+  { tag: [t.typeName, t.className, t.definition(t.variableName)], class: 'key' },
+]);
+
+/** Evidenzia JavaScript con il parser Lezer gia' usato da CodeMirror, senza montare un editor. */
+function javascriptLinesHtml(code: string): string[] {
+  const lines = [''];
+  highlightCode(
+    code,
+    javascriptLanguage.parser.parse(code),
+    javascriptHighlighter,
+    (text, classes) => {
+      const style = classes
+        .split(/\s+/)
+        .map((name) => JAVASCRIPT_TOKEN_STYLES[name])
+        .filter((value): value is string => value != null)
+        .join(';');
+      const escaped = escapeHtml(text);
+      lines[lines.length - 1] += style ? `<span style="${style}">${escaped}</span>` : escaped;
+    },
+    () => lines.push(''),
+  );
+  return lines;
+}
+
 /**
- * Code block con numeri di riga ed evidenziazione JSON, sui token (--json-*, --code).
+ * Code block con numeri di riga ed evidenziazione JSON/JavaScript, sui token (--json-*, --code).
  * L'HTML e' generato internamente ed escapato, quindi il bypass del sanitizer e' sicuro.
  * Pulsante "copia" via @angular/cdk/clipboard (appare su hover/focus), con feedback locale.
  */
@@ -91,7 +140,7 @@ export class UiCode {
   private readonly sanitizer = inject(DomSanitizer);
 
   readonly code = input('');
-  readonly language = input<'json' | 'text'>('json');
+  readonly language = input<'json' | 'javascript' | 'text'>('json');
   /** Mostra il pulsante "copia" (default: true). */
   readonly copyable = input(true);
 
@@ -112,10 +161,13 @@ export class UiCode {
   });
 
   protected readonly lines = computed<SafeHtml[]>(() => {
-    const isJson = this.language() === 'json';
-    return this.code()
-      .split('\n')
-      .map((line) => this.sanitizer.bypassSecurityTrustHtml(isJson ? jsonLineHtml(line) : escapeHtml(line)));
+    const language = this.language();
+    const lines = language === 'javascript' ? javascriptLinesHtml(this.code()) : this.code().split('\n');
+    return lines.map((line) =>
+      this.sanitizer.bypassSecurityTrustHtml(
+        language === 'json' ? jsonLineHtml(line) : language === 'javascript' ? line : escapeHtml(line),
+      ),
+    );
   });
 
   protected onCopied(success: boolean): void {
