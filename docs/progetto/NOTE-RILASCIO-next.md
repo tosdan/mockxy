@@ -1,41 +1,17 @@
-# Note di rilascio — prossima versione
+# Note di rilascio — v1.3.2
 
-Documento provvisorio per la prossima release; il numero di versione verrà assegnato durante la
-procedura di pubblicazione.
+## Evidenziazione degli handler
 
-## Stato runtime condiviso degli handler
+- La sorgente JavaScript di handler e middleware ora usa l'evidenziazione della sintassi anche
+  nella vista di dettaglio del Catalogo.
+- Il renderer rimane quello statico della vista: numeri di riga, dimensioni, scorrimento e azione
+  di copia non cambiano.
+- Colori e parser sono coerenti con l'editor già disponibile nelle finestre di creazione e
+  modifica.
 
-- Gli handler ricevono `sharedState`, uno store JSON effimero condiviso per nome fra endpoint.
-  `open(name, { seedKey, initialize })` restituisce un handle con `read()`, `mutate()` e
-  `replace()`; consente scenari come POST → GET senza modificare i file del workspace.
-- Lo stato sopravvive al reload a caldo ma non a riavvio o cambio workspace. Quote predefinite:
-  256 risorse, 3 MiB per risorsa, 25 MiB complessivi e profondità JSON 100.
-- La pagina Dati include il tab **Stato runtime** con metadati e reset singolo/globale. Il
-  Monitor conserva i metadati diagnostici degli errori e offre il collegamento alla risorsa,
-  senza esporre valori nel body pubblico.
-- Le risposte handler possono attivare filtri e paginazione delle liste con
-  `applyListQuery: true`.
-- L'anteprima della copia endpoint (`POST /mocks/:id/copy?dryRun=true`) mostra file, asset e
-  riferimenti letterali allo stato condiviso che la copia continuerà a usare.
+## Documentazione del rilascio
 
-## Admin API: cambiamento incompatibile circoscritto
+- Aggiunto un runbook operativo dedicato alla preparazione, creazione, verifica e pubblicazione
+  delle release stabili.
 
-Le quattro POST amministrative senza parametri richiedono ora sempre
-`Content-Type: application/json` e un body reale esattamente uguale a `{}`:
-
-- `POST /mocks/:id/sequence/reset`;
-- `POST /monitoring/dump/flush`;
-- `POST /runtime/shared-state/:name/reset`;
-- `POST /runtime/shared-state/reset`.
-
-Per le prime due rotte, già pubbliche, un client che prima inviava zero byte deve essere
-aggiornato. Esempio:
-
-```bash
-curl -X POST http://localhost:3000/_admin/api/monitoring/dump/flush \
-  -H 'content-type: application/json' \
-  -d '{}'
-```
-
-Body assente/vuoto, `null`, array, scalari e oggetti non vuoti rispondono `400`; media type
-diversi rispondono `415`.
+Questa patch non introduce cambiamenti incompatibili alle API o al formato dei workspace.
