@@ -715,3 +715,12 @@ Dani ha riportato un'ulteriore valutazione di Opus: copertura R01–R11 e rispet
 I token descrivono il contenuto corrente, non la cronologia. Un nuovo runtime richiede risincronizzazione e verifica dell'identità, ma non genera da solo un conflitto sulla bozza immutata. Le scritture esterne rimangono fuori dalla coda e dalla garanzia D01 anche se il confronto del contenuto può rilevarne gli effetti prima del salvataggio.
 
 Le cinque integrazioni sono recepite nell'analisi e nel piano; non richiedono nuovi arbitraggi sulle decisioni D01–D04. I contratti delle guide utente, le note di rilascio e gli skill saranno aggiornati insieme alle rispettive implementazioni, evitando di documentare come disponibili comportamenti ancora pianificati. Il suggerimento di registrare i tre documenti in un commit dedicato riguarda il checkpoint documentale, non l'avvio dell'implementazione.
+
+
+### Precisazione esecutiva del piano — Codex
+
+Su richiesta di Dani, il [piano](PIANO-PILOTAGGIO-DA-AGENT.md) ora distingue le decisioni sul comportamento osservabile dai dettagli interni lasciati all’implementazione. Il nuovo §13 definisce contratti C0–C8: esiti e rollback delle mutazioni, schemi di identità/configurazione/diagnostica, revisioni informative, lettura delle varianti e firma degli stream, precondizioni delle bozze, paginazione del Monitor, collaudo ripetibile, conversione del traffico e override runtime.
+
+Sono risolte anche le alternative precedentemente aperte: stessa definizione SSE/WS su filename diverso conserva la connessione; raw upload usa un header di revisione e conflitto 409; il Monitor mantiene la forma legacy senza query e introduce la modalità esplicita view=page; la configurazione usa set/unset. Il setup prepara prima di selezionare e attivare. Il collaudo indica fixture, stati iniziali e risposte browser attese, senza ripristino intermedio.
+
+Queste sono precisazioni tecniche di Codex nel perimetro D01–D04, non un nuovo accordo attribuito a Opus. Non modificano l’arbitraggio, non aggiungono undo e non avviano l’implementazione. La diagnosi rinvia ai contratti correnti; la cronologia del confronto rimane intatta.

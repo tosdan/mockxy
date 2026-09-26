@@ -8,7 +8,9 @@ Base del codice esaminato: `ace8860c9d5b2d019147e0a090bad9ab1c0d5713`.
 La [review](REVIEW-ANALISI-PILOTAGGIO-DA-AGENT.md) conserva i riscontri e la storia del confronto
 Codex–Opus; le decisioni di Dani D01–D04 prevalgono sulle proposte precedenti.
 Il [piano di implementazione](PIANO-PILOTAGGIO-DA-AGENT.md) traduce questa diagnosi in passi e
-criteri di accettazione. Le API indicate come proposte non sono ancora disponibili.
+criteri di accettazione. Il §13 del piano fissa contratti e casi limite di implementazione;
+le alternative storiche della diagnosi vanno lette alla luce di quelle scelte.
+Le API nuove descritte nei documenti non sono ancora disponibili.
 
 Ambito: admin API, UI Angular, app desktop (Electron), documentazione, skill `mockxy-skills`.
 
