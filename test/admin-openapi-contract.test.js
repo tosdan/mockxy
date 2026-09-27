@@ -1,11 +1,14 @@
 const { spawnSync } = require("child_process");
 const fs = require("fs");
 const path = require("path");
+const express = require("express");
 const yaml = require("js-yaml");
 const { createAdminApiRouter } = require("../src/admin/admin-api");
 
 const SPEC_PATH = path.join(__dirname, "..", "docs", "admin-api.openapi.yaml");
-const SPEC_METHODS = ["get", "post", "put", "patch", "delete"];
+// Tutte le chiavi di operazione di un Path Item OpenAPI 3.1: un'operazione dichiarata solo nello
+// spec con un metodo meno comune deve emergere dal confronto, non essere scartata in silenzio.
+const SPEC_METHODS = ["get", "put", "post", "delete", "options", "head", "patch", "trace"];
 
 // Router e spec chiamano i parametri in modo diverso (`:parentKey` e `{parentKey}`, ma anche
 // `:responseFileName`): il confronto riguarda metodo e forma del percorso, non i nomi.
@@ -71,5 +74,40 @@ describe("Admin API OpenAPI contract", () => {
     });
     expect(normalizeOperation("patch", "/mocks/collections/:parentKey/children/order"))
       .toBe(normalizeOperation("PATCH", "/mocks/collections/{id}/children/order"));
+  });
+
+  test("l'estrazione dallo spec considera ogni metodo OpenAPI", () => {
+    const spec = {
+      paths: {
+        "/probe/{id}": {
+          parameters: [],
+          summary: "campi non operativi da ignorare",
+          get: {}, put: {}, post: {}, delete: {}, options: {}, head: {}, patch: {}, trace: {},
+        },
+      },
+    };
+
+    expect(listSpecOperations(spec).sort()).toEqual(
+      ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT", "TRACE"].map((method) => `${method} /probe/{}`)
+    );
+  });
+
+  test("un'operazione HEAD presente solo nello spec reale emerge dal confronto", () => {
+    const router = createAdminApiRouter({ config: {}, sharedStates: {} });
+    const spec = yaml.safeLoad(fs.readFileSync(SPEC_PATH, "utf8"));
+    spec.paths["/spec-only-probe"] = { head: { responses: {} } };
+
+    expect(diffOperations(listRouterOperations(router), listSpecOperations(spec)).missingFromRouter)
+      .toEqual(["HEAD /spec-only-probe"]);
+  });
+
+  test("l'estrazione dal router considera ogni metodo registrato", () => {
+    const router = express.Router();
+    router.head("/probe/:id", () => {});
+    router.options("/probe/:id", () => {});
+    router.get("/probe", () => {});
+    router.use(() => {});
+
+    expect(listRouterOperations(router).sort()).toEqual(["GET /probe", "HEAD /probe/{}", "OPTIONS /probe/{}"]);
   });
 });
