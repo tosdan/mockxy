@@ -30,7 +30,9 @@ esistenti restano compatibili: nessuna migrazione richiesta.
   mock e, con il proxy fallback attivo, arrivavano al backend reale senza comparire nel Monitor.
   Un mock dichiarato sotto `/_admin/api` veniva servito per i percorsi non usati dall'admin.
 - **Ora:** rispondono `404` con `details.code: "ADMIN_ROUTE_NOT_FOUND"`; non raggiungono né i
-  mock né il backend.
+  mock né il backend. Vale anche per gli upgrade WebSocket: un mock ws dichiarato sotto
+  `/_admin/api` non esegue l'handshake, e la guardia degli upgrade non distingue più maiuscole e
+  minuscole nel percorso, come il routing HTTP dell'admin.
 - **Per i client:** correggere metodo e percorso delle chiamate che ricevono questo errore. Un
   mock sotto `/_admin/api` va spostato su un altro percorso: il namespace non è più disponibile
   per i mock.

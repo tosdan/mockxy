@@ -12,7 +12,7 @@ resettano lo stato tra i test, pipeline che importano una specifica aggiornata.
 - Il namespace `/_admin/api` è **riservato**: un metodo o un percorso che non compare qui
   sotto risponde `404` con `details.code: "ADMIN_ROUTE_NOT_FOUND"`. Non prosegue mai nel
   serving dei mock né nel proxy verso il backend, e un mock dichiarato sotto `/_admin/api` non
-  viene servito.
+  viene servito, nemmeno come WebSocket.
 - **Niente autenticazione**: crea handler, cioè scrive file ed esegue codice. Le protezioni e
   le regole di esposizione sono nella pagina sull'[esposizione in rete](RETE.md) (guardia
   anti DNS rebinding sull'header `Host`, avviso su bind non-loopback).

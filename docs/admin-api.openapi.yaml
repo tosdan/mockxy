@@ -47,7 +47,8 @@ info:
       `details.code` so a client does not have to parse the message.
     - **Reserved namespace**: a method or path under `/_admin/api` that is not described here
       answers `404` with `details.code: "ADMIN_ROUTE_NOT_FOUND"`. It never falls through to mock
-      serving or to the backend proxy, and a mock declared under `/_admin/api` is never served.
+      serving or to the backend proxy, and a mock declared under `/_admin/api` is never served,
+      WebSocket upgrades included.
     - **Reload semantics**: catalog mutations reload the runtime *before responding*, so the
       change is live for the very next request — no restart. A mutation that leaves the runtime
       unable to load is rolled back on disk and reported as an error. Data-file writes reload

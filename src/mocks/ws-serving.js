@@ -9,6 +9,14 @@ const { wsWirePayload } = require("./ws-connections");
 
 const WS_PING_INTERVAL_MS = 30_000;
 
+// Il namespace admin è riservato anche per gli upgrade, come per l'HTTP (dove Express confronta
+// il mount senza distinguere maiuscole): lì nessun mock ws viene servito e la richiesta prosegue
+// al passthrough, che la rifiuta con il 404 admin.
+function isAdminApiPath(pathname) {
+  const normalized = pathname.toLowerCase();
+  return normalized === "/_admin/api" || normalized.startsWith("/_admin/api/");
+}
+
 /**
  * Crea il dispatcher dell'evento `upgrade`: consulta il registry e serve localmente le
  * varianti ws, delegando ogni altro caso a `fallback` (il tunnel verso il backend).
@@ -20,10 +28,10 @@ function createWsUpgradeDispatcher({ registry, serverState, wsConnections, logge
   const effectivePingIntervalMs = pingIntervalMs ?? WS_PING_INTERVAL_MS;
 
   const dispatcher = (req, socket, head) => {
+    const requestPath = String(req.url || "");
+    const pathname = requestPath.split("?")[0];
     // A server spento (o proxy totale) i mock non esistono: tutto al passthrough, come per l'HTTP.
-    if (serverState.usesMocks()) {
-      const requestPath = String(req.url || "");
-      const pathname = requestPath.split("?")[0];
+    if (serverState.usesMocks() && !isAdminApiPath(pathname)) {
       const decision = registry.matchRequest(req.method || "GET", pathname, requestPath);
       if (decision.mode === "ws") {
         wss.handleUpgrade(req, socket, head, (client) => {

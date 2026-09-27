@@ -11,7 +11,8 @@ state between tests, pipelines that import an updated spec.
   every route answers `404` with an explicit message.
 - The `/_admin/api` namespace is **reserved**: a method or path that is not listed below
   answers `404` with `details.code: "ADMIN_ROUTE_NOT_FOUND"`. It never falls through to mock
-  serving or to the backend proxy, and a mock declared under `/_admin/api` is never served.
+  serving or to the backend proxy, and a mock declared under `/_admin/api` is never served,
+  WebSocket upgrades included.
 - **No authentication**: it creates handlers, i.e. it writes files and executes code. The
   protections and the exposure rules are in the page on [network exposure](RETE.md) (anti
   DNS-rebinding guard on the `Host` header, warning on non-loopback binds).

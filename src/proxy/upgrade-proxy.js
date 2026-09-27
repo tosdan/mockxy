@@ -21,8 +21,8 @@ const MAX_REFUSAL_BODY_BYTES = 64 * 1024;
  */
 
 // Risposta HTTP minimale scritta sul socket grezzo (siamo prima dell'upgrade: niente res).
-function writeSocketResponse(socket, status, reason, message) {
-  const body = JSON.stringify({ error: reason, message });
+function writeSocketResponse(socket, status, reason, message, details) {
+  const body = JSON.stringify(details == null ? { error: reason, message } : { error: reason, message, details });
   socket.end(
     `HTTP/1.1 ${status} ${reason}\r\n` +
       "content-type: application/json\r\n" +
@@ -70,8 +70,12 @@ function createUpgradeHandler({ config, serverState, logger }) {
     socket.on("error", () => {});
 
     const requestPath = String(req.url || "");
-    if (requestPath.startsWith("/_admin")) {
-      writeSocketResponse(socket, 404, "Not Found", "The admin API has no upgrade endpoints.");
+    // Senza distinguere maiuscole, come il mount Express dell'admin: `/_ADMIN/API/...` non deve
+    // sfuggire alla guardia e raggiungere il backend.
+    if (requestPath.toLowerCase().startsWith("/_admin")) {
+      writeSocketResponse(socket, 404, "Not Found", "The admin API has no upgrade endpoints.", {
+        code: "ADMIN_ROUTE_NOT_FOUND",
+      });
       return;
     }
     if (!config.backendUrl) {
