@@ -1,3 +1,4 @@
+const path = require("path");
 const { createPathParamsMatcher } = require("./route-groups");
 
 class MockRegistry {
@@ -9,6 +10,20 @@ class MockRegistry {
     // sequenze (test/usi legacy): lì una sequenza serve sempre il primo step.
     this.sequenceStates = sequenceStates;
     this.setRouteGroups(routeGroups);
+  }
+
+  // Definizione installata del file endpoint indicato, anche quando è una versione mantenuta
+  // nonostante un errore di caricamento; null se il runtime non la serve.
+  findEndpointByConfigFile(configFilePath) {
+    const target = path.resolve(configFilePath);
+    for (const group of this.routeGroups) {
+      for (const endpoint of group.methods.values()) {
+        if (endpoint.configFilePath != null && path.resolve(endpoint.configFilePath) === target) {
+          return endpoint;
+        }
+      }
+    }
+    return null;
   }
 
   setRouteGroups(routeGroups) {

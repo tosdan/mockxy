@@ -53,6 +53,13 @@ resettano lo stato tra i test, pipeline che importano una specifica aggiornata.
 - **Una mutazione alla volta** per workspace: le mutazioni vengono messe in coda, mentre letture,
   traffico e push delle console SSE/WS non le aspettano. Un client che si disconnette non
   interrompe una mutazione già partita.
+- **Letture durante una modifica:** il dettaglio di un endpoint non è una fotografia atomica di
+  più file. Se durante la lettura manca un file, il dettaglio viene ricomposto una volta dalla
+  definizione riletta, seguendone la selezione; un endpoint eliminato nel frattempo risponde
+  `404`. Se il file manca ancora, la risposta è `409` con
+  `details: { code: "READ_INCONSISTENT", retryable: true }` e nessun dettaglio parziale: si
+  ripete la lettura al massimo una volta in automatico. Il messaggio nomina il file mancante,
+  che può anche essere stato cancellato a mano.
 - I file dati non ricaricano nulla ([`data()` rilegge a ogni chiamata](DATI.md)), con
   un'eccezione: la rinomina con riscrittura dei riferimenti ricarica, perché ha toccato i
   sorgenti degli handler, e verifica gli handler riscritti come ogni altra mutazione.
@@ -64,11 +71,11 @@ resettano lo stato tra i test, pipeline che importano una specifica aggiornata.
 | `GET /mocks` | l'intero catalogo: endpoint, collezioni e ordinamenti; ogni endpoint espone anche `sequenceActive` per il badge SEQ. Un file endpoint illeggibile (JSON invalido, variante selezionata mancante) non fa fallire la richiesta: quell'endpoint viene saltato e segnalato in `loadErrors` (`[{ configFilePath, message }]`), come fa il runtime al caricamento |
 | `GET /mocks/resolve?method&path` | l'endpoint che oggi coprirebbe una richiesta concreta (path con eventuale query), disabilitati inclusi; `{ mock: null }` se nessuno. Fatto derivato col matching del serving, usato dal monitor per "vai al mock" |
 | `POST /mocks` | crea un endpoint (mock statico, o handler/middleware con sorgente); se per rotta+metodo esiste già risponde `409` con `details.existingMockId`, così il client può proporre l'aggiunta di una variante a quell'endpoint |
-| `GET /mocks/:id` | dettaglio con varianti e configurazione normalizzata della response selezionata; con `type: sequence` espone `sequence` e `sequenceState`, mai `endpoint.sequence` |
+| `GET /mocks/:id` | dettaglio con varianti e configurazione normalizzata della response selezionata; con `type: sequence` espone `sequence` e `sequenceState`, mai `endpoint.sequence`. `409 READ_INCONSISTENT` se un file referenziato manca anche al secondo tentativo |
 | `PUT /mocks/:id` | seleziona una response con `{ selectedResponseFile }`, oppure aggiorna la response ordinaria selezionata; il vecchio body `{ sequence }` è rifiutato |
 | `GET /mocks/:id/sequence/state` | stato live leggero della sequence selezionata: `{ sequenceFile, sequenceState }`; `400` su un altro tipo |
 | `POST /mocks/:id/sequence/reset` | azzera cursore e memoria handler della sequence selezionata; body `{}`; risponde `{ sequenceFile, sequenceState }` |
-| `POST /mocks/:id/sse/push` | push manuale della console [SSE](RESPONSE.md): body `{ data, event?, id? }`, broadcast a tutte le connessioni aperte — risponde `{ delivered, connections }` |
+| `POST /mocks/:id/sse/push` | push manuale della console [SSE](RESPONSE.md): body `{ data, event?, id? }`, broadcast a tutte le connessioni aperte — risponde `{ delivered, connections }`. Il bersaglio è la definizione servita dal runtime, anche la vecchia rotta mantenuta quando una nuova selezione non si carica, non la selezione su disco: `404` se il runtime non serve l'endpoint, `400` se la serve con un altro tipo. Vale anche per le altre tre rotte delle console |
 | `GET /mocks/:id/sse/connections` | stato della console SSE: connessioni aperte (con posizione nel copione) e storico dei messaggi usciti |
 | `POST /mocks/:id/ws/push` | push manuale della console [WS](RESPONSE.md): body `{ data }`, broadcast a tutte le connessioni aperte — risponde `{ delivered, connections }` |
 | `GET /mocks/:id/ws/connections` | stato della console WS: connessioni aperte (con posizione nel copione) e transcript bidirezionale (usciti e ricevuti) |

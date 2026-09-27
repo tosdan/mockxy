@@ -4,6 +4,8 @@ const path = require("path");
 const request = require("supertest");
 const { createApp } = require("../src/app");
 const { encodeMockId } = require("../src/admin/mock-ids");
+const { loadEndpointRouteGroups } = require("../src/mocks/endpoint-loader");
+const { mergeLocalRouteGroups } = require("../src/mocks/local-route-groups");
 const { MockRegistry } = require("../src/mocks/mock-registry");
 const { SharedStateStore } = require("../src/mocks/shared-state");
 const { ProxyMiddlewareRegistry } = require("../src/proxy/proxy-middleware-registry");
@@ -41,9 +43,9 @@ describe("coda delle mutazioni admin", () => {
     return { reload, release: () => release() };
   }
 
-  function buildApp(reloadRuntime) {
+  function buildApp(reloadRuntime, registry = new MockRegistry([])) {
     return createApp({
-      registry: new MockRegistry([]),
+      registry,
       config: { mocksDir, adminApiEnabled: true, proxyFallbackEnabled: false },
       logger: createNoopLogger(),
       proxyMiddlewareRegistry: new ProxyMiddlewareRegistry([]),
@@ -161,7 +163,9 @@ describe("coda delle mutazioni admin", () => {
       JSON.stringify({ type: "sse", title: "", script: [] })
     );
     const { reload, release } = createHeldReload();
-    const app = buildApp(reload);
+    // Il push risolve il bersaglio dal runtime installato: lo stream deve essere caricato.
+    const { sseRouteGroups } = await loadEndpointRouteGroups(mocksDir);
+    const app = buildApp(reload, new MockRegistry(mergeLocalRouteGroups({ sseRouteGroups })));
 
     const held = request(app).put(`/_admin/api/mocks/${endpointId}/endpoint`).send({ description: "A" }).then((r) => r);
     await waitFor(() => reload.mock.calls.length === 1);

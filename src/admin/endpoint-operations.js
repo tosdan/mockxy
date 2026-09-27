@@ -1228,24 +1228,29 @@ async function getAdminSequenceState(mocksDir, id, sequenceStates) {
   };
 }
 
-// Risolve l'endpoint per le operazioni SSE runtime: la variante SELEZIONATA deve essere sse
-// (console e push hanno senso solo mentre l'endpoint sta servendo lo stream).
-async function resolveAdminSseEndpoint(mocksDir, id) {
+// Risolve il bersaglio di push e stato delle console SSE/WS dalla definizione INSTALLATA, non
+// dalla selezione su disco: è quella che serve le connessioni aperte, anche quando una nuova
+// selezione non si è caricata e il runtime mantiene la vecchia rotta. Sincrona: fra questa
+// verifica e il push non ci sono attese.
+function resolveInstalledStreamEndpoint(registry, mocksDir, id, protocol) {
   const endpointPath = resolveAdminFilePath(mocksDir, id);
-  if (!fs.existsSync(endpointPath)) {
-    throw createAdminError(404, "Endpoint definition not found.");
+  const endpoint = registry?.findEndpointByConfigFile(endpointPath) ?? null;
+  if (endpoint == null) {
+    throw createAdminError(
+      404,
+      fs.existsSync(endpointPath) ? "The runtime does not serve this endpoint." : "Endpoint definition not found."
+    );
   }
-  const { endpoint, response } = await readEndpointSelectedResponse(endpointPath);
-  if (response.type !== "sse") {
-    throw createAdminError(400, "The selected response of this endpoint is not an sse variant.");
+  if (endpoint.type !== protocol) {
+    throw createAdminError(400, `The response served by this endpoint is not ${protocol === "ws" ? "a ws" : "an sse"} variant.`);
   }
-  return { key: `${endpoint.method} ${endpoint.path}`, endpoint, response };
+  return { key: `${endpoint.method} ${endpoint.path}`, endpoint };
 }
 
 // Push manuale della console: invia un messaggio ({ data, event?, id? }) a tutte le
 // connessioni aperte dell'endpoint. Azione runtime immediata, nessun file toccato.
-async function pushAdminSseMessage(mocksDir, id, payload, sseConnections) {
-  const { key } = await resolveAdminSseEndpoint(mocksDir, id);
+function pushAdminSseMessage(registry, mocksDir, id, payload, sseConnections) {
+  const { key } = resolveInstalledStreamEndpoint(registry, mocksDir, id, "sse");
   const errors = [];
   const message = validateSseMessage(payload == null ? {} : payload, "message", errors);
   if (errors.length > 0 || message == null) {
@@ -1259,32 +1264,18 @@ async function pushAdminSseMessage(mocksDir, id, payload, sseConnections) {
 }
 
 // Stato della console: connessioni aperte e storico dei messaggi usciti (copione e manuali).
-async function listAdminSseState(mocksDir, id, sseConnections) {
-  const { key } = await resolveAdminSseEndpoint(mocksDir, id);
+function listAdminSseState(registry, mocksDir, id, sseConnections) {
+  const { key } = resolveInstalledStreamEndpoint(registry, mocksDir, id, "sse");
   return {
     connections: sseConnections != null ? sseConnections.listConnections(key) : [],
     history: sseConnections != null ? sseConnections.listHistory(key) : [],
   };
 }
 
-// Risolve l'endpoint per le operazioni WS runtime: la variante SELEZIONATA deve essere ws
-// (console e push hanno senso solo mentre l'endpoint sta servendo il canale).
-async function resolveAdminWsEndpoint(mocksDir, id) {
-  const endpointPath = resolveAdminFilePath(mocksDir, id);
-  if (!fs.existsSync(endpointPath)) {
-    throw createAdminError(404, "Endpoint definition not found.");
-  }
-  const { endpoint, response } = await readEndpointSelectedResponse(endpointPath);
-  if (response.type !== "ws") {
-    throw createAdminError(400, "The selected response of this endpoint is not a ws variant.");
-  }
-  return { key: `${endpoint.method} ${endpoint.path}`, endpoint, response };
-}
-
 // Push manuale della console WS: invia { data } in broadcast a tutte le connessioni aperte.
 // Azione runtime immediata, nessun file toccato.
-async function pushAdminWsMessage(mocksDir, id, payload, wsConnections) {
-  const { key } = await resolveAdminWsEndpoint(mocksDir, id);
+function pushAdminWsMessage(registry, mocksDir, id, payload, wsConnections) {
+  const { key } = resolveInstalledStreamEndpoint(registry, mocksDir, id, "ws");
   const errors = [];
   const message = validateWsMessage(payload == null ? {} : payload, "message", errors);
   if (errors.length > 0 || message == null) {
@@ -1298,8 +1289,8 @@ async function pushAdminWsMessage(mocksDir, id, payload, wsConnections) {
 }
 
 // Stato della console WS: connessioni aperte e transcript bidirezionale (usciti e ricevuti).
-async function listAdminWsState(mocksDir, id, wsConnections) {
-  const { key } = await resolveAdminWsEndpoint(mocksDir, id);
+function listAdminWsState(registry, mocksDir, id, wsConnections) {
+  const { key } = resolveInstalledStreamEndpoint(registry, mocksDir, id, "ws");
   return {
     connections: wsConnections != null ? wsConnections.listConnections(key) : [],
     transcript: wsConnections != null ? wsConnections.listTranscript(key) : [],

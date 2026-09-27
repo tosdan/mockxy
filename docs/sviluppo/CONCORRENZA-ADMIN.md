@@ -22,7 +22,11 @@ Garanzie e limiti, per non leggerle più ampie di quanto sono:
   workspace; nessuna coda li governa;
 - **bozze stantie:** la coda non impedisce che un salvataggio basato su una lettura vecchia
   sovrascriva una modifica più recente. Le revisioni attese che lo rilevano arrivano con S4;
-- **azioni immediate** (toggle, selezione, riordini): vince l'ultima, per scelta dichiarata.
+- **azioni immediate** (toggle, selezione, riordini): vince l'ultima, per scelta dichiarata;
+- **letture:** il dettaglio di un endpoint non è una fotografia atomica. Un file mancante durante
+  la lettura provoca un solo secondo tentativo completo, poi `409 READ_INCONSISTENT`
+  (`getAdminMockDetail` in `src/admin/mock-catalog.js`). Push e stato delle console SSE/WS
+  risolvono il bersaglio dal registro installato, in modo sincrono, senza leggere il disco.
 
 Il resto del documento conserva l'analisi del 9 luglio.
 

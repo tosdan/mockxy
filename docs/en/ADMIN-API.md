@@ -52,6 +52,12 @@ state between tests, pipelines that import an updated spec.
 - **One mutation at a time** per workspace: mutations are queued, while reads, traffic and the
   SSE/WS console pushes do not wait for them. A client that disconnects does not cut a running
   mutation short.
+- **Reads during a change:** an endpoint's detail is not an atomic snapshot of several files. If
+  a file is missing during the read, the detail is built once more from the definition read
+  again, following its selection; an endpoint deleted meanwhile answers `404`. If the file is
+  still missing, the answer is `409` with `details: { code: "READ_INCONSISTENT", retryable: true }`
+  and no partial detail: repeat the read at most once automatically. The message names the
+  missing file, which may also have been deleted by hand.
 - Data files reload nothing ([`data()` re-reads on every call](DATI.md)), with one exception:
   the rename with reference rewriting reloads, because it touched the handlers' sources, and
   checks the rewritten handlers like any other mutation.
@@ -63,11 +69,11 @@ state between tests, pipelines that import an updated spec.
 | `GET /mocks` | the whole catalog: endpoints, collections and orderings; each endpoint also exposes `sequenceActive` for the SEQ badge. An unreadable endpoint file (invalid JSON, missing selected variant) doesn't fail the request: that endpoint is skipped and reported in `loadErrors` (`[{ configFilePath, message }]`), as the runtime does at load time |
 | `GET /mocks/resolve?method&path` | the endpoint that would cover a concrete request today (path with optional query), disabled ones included; `{ mock: null }` if none. A derived fact using the serving's matching, used by the monitor for "go to mock" |
 | `POST /mocks` | creates an endpoint (static mock, or handler/middleware with source); if one already exists for route+method it answers `409` with `details.existingMockId`, so the client can offer to add a variant to that endpoint |
-| `GET /mocks/:id` | detail with variants and normalized configuration of the selected response; with `type: sequence` it exposes `sequence` and `sequenceState`, never `endpoint.sequence` |
+| `GET /mocks/:id` | detail with variants and normalized configuration of the selected response; with `type: sequence` it exposes `sequence` and `sequenceState`, never `endpoint.sequence`. `409 READ_INCONSISTENT` if a referenced file is still missing on the second attempt |
 | `PUT /mocks/:id` | selects a response with `{ selectedResponseFile }`, or updates the selected ordinary response; the legacy `{ sequence }` body is rejected |
 | `GET /mocks/:id/sequence/state` | lightweight live state of the selected sequence: `{ sequenceFile, sequenceState }`; `400` on another type |
 | `POST /mocks/:id/sequence/reset` | clears cursor and handler memory for the selected sequence; body `{}`; responds `{ sequenceFile, sequenceState }` |
-| `POST /mocks/:id/sse/push` | manual push of the [SSE](RESPONSE.md) console: body `{ data, event?, id? }`, broadcast to every open connection — responds `{ delivered, connections }` |
+| `POST /mocks/:id/sse/push` | manual push of the [SSE](RESPONSE.md) console: body `{ data, event?, id? }`, broadcast to every open connection — responds `{ delivered, connections }`. The target is the definition the runtime serves, including the previous route kept when a new selection fails to load, not the selection on disk: `404` if the runtime does not serve the endpoint, `400` if it serves it with another type. The same holds for the other three console routes |
 | `GET /mocks/:id/sse/connections` | SSE console state: open connections (with script position) and history of sent messages |
 | `POST /mocks/:id/ws/push` | manual push of the [WS](RESPONSE.md) console: body `{ data }`, broadcast to every open connection — responds `{ delivered, connections }` |
 | `GET /mocks/:id/ws/connections` | WS console state: open connections (with script position) and the bidirectional transcript (sent and received) |

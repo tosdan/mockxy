@@ -144,7 +144,7 @@ function sendJson(res, status, payload) {
   res.status(status).json(payload);
 }
 
-function createAdminApiRouter({ config, reloadRuntime, requestMonitor, serverState, monitorDump, sequenceStates, handlerStates, sharedStates, sseConnections, wsConnections }) {
+function createAdminApiRouter({ config, registry, reloadRuntime, requestMonitor, serverState, monitorDump, sequenceStates, handlerStates, sharedStates, sseConnections, wsConnections }) {
   const router = express.Router();
   // Store dello scenario runtime, passati alle mutazioni che possono invalidarlo: il reload da
   // solo non basta, perche' aggrega piu' scritture in un giro unico (vedi invalidateScenario).
@@ -420,23 +420,24 @@ function createAdminApiRouter({ config, reloadRuntime, requestMonitor, serverSta
     sendJson(res, 200, result);
   }));
 
-  // Console SSE: push manuale broadcast e stato (connessioni aperte + storico) dell'endpoint
-  // la cui variante selezionata è di tipo sse. Azioni runtime, nessun file toccato.
-  router.post("/mocks/:id/sse/push", async (req, res) => {
-    const result = await pushAdminSseMessage(config.mocksDir, req.params.id, req.body, sseConnections);
+  // Console SSE/WS: push manuale broadcast e stato (connessioni aperte + storico/transcript)
+  // dell'endpoint che il runtime installato serve come sse o ws. Azioni runtime, nessun file
+  // toccato, fuori dalla coda delle mutazioni.
+  router.post("/mocks/:id/sse/push", (req, res) => {
+    const result = pushAdminSseMessage(registry, config.mocksDir, req.params.id, req.body, sseConnections);
     sendJson(res, 200, result);
   });
-  router.get("/mocks/:id/sse/connections", async (req, res) => {
-    const result = await listAdminSseState(config.mocksDir, req.params.id, sseConnections);
+  router.get("/mocks/:id/sse/connections", (req, res) => {
+    const result = listAdminSseState(registry, config.mocksDir, req.params.id, sseConnections);
     sendJson(res, 200, result);
   });
 
-  router.post("/mocks/:id/ws/push", async (req, res) => {
-    const result = await pushAdminWsMessage(config.mocksDir, req.params.id, req.body, wsConnections);
+  router.post("/mocks/:id/ws/push", (req, res) => {
+    const result = pushAdminWsMessage(registry, config.mocksDir, req.params.id, req.body, wsConnections);
     sendJson(res, 200, result);
   });
-  router.get("/mocks/:id/ws/connections", async (req, res) => {
-    const result = await listAdminWsState(config.mocksDir, req.params.id, wsConnections);
+  router.get("/mocks/:id/ws/connections", (req, res) => {
+    const result = listAdminWsState(registry, config.mocksDir, req.params.id, wsConnections);
     sendJson(res, 200, result);
   });
 

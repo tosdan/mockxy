@@ -62,6 +62,30 @@ esistenti restano compatibili: nessuna migrazione richiesta.
   `items[].runtimeOutcome` anche con `201`. Chi distingueva un reload fallito dal `400` deve
   gestire il `500 RUNTIME_APPLY_FAILED`.
 
+#### Console SSE/WS sul runtime installato
+
+- **Prima:** push e stato delle console SSE/WS leggevano la selezione su disco. Se una nuova
+  selezione non si caricava e il runtime manteneva la vecchia rotta, le console rispondevano
+  con un errore pur avendo connessioni aperte; un endpoint disabilitato su disco ma ancora
+  servito, o viceversa, dava l'esito sbagliato.
+- **Ora:** il bersaglio è la definizione servita dal runtime installato. Un endpoint che il
+  runtime non serve risponde `404` (`The runtime does not serve this endpoint.`), uno servito con
+  un altro tipo `400`, con il messaggio `The response served by this endpoint is not ...`.
+- **Per i client:** dopo aver cambiato la selezione su disco senza reload, le console seguono
+  ancora la variante servita.
+
+#### Letture del dettaglio durante una modifica
+
+- **Prima:** un file che spariva mentre si leggeva il dettaglio di un endpoint dava un `404`
+  specifico o, nei casi di corsa, un `500`. Un asset o un sorgente cancellati a mano davano
+  `404` con un messaggio esplicito.
+- **Ora:** `GET /mocks/:id` ricompone il dettaglio una volta dalla definizione riletta. Un
+  endpoint eliminato nel frattempo risponde `404`; un file ancora mancante risponde `409` con
+  `details: { code: "READ_INCONSISTENT", retryable: true }`, senza dettaglio parziale, e il
+  messaggio conserva quello specifico (per esempio `Response asset file not found on disk.`).
+- **Per i client:** su `READ_INCONSISTENT` ripetere la lettura al massimo una volta in
+  automatico; chi riconosceva il `404` di un asset o sorgente mancante deve gestire il `409`.
+
 ---
 
 ## v1.3.2 (pubblicata)
