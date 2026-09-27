@@ -10,6 +10,7 @@ const {
   commitWithRollback,
   resolvePayloadPath,
   removeEmptyDirectory,
+  validateReloadedEndpoints,
 } = require("./admin-fs");
 const {
   resolveAdminFilePath,
@@ -109,16 +110,19 @@ async function createAdminEndpointFromMock(mocksDir, payload, reloadRuntime) {
   };
   const backups = [await readBackup(endpointPath), await readBackup(responsePath)];
 
-  await fs.promises.mkdir(responseDir, { recursive: true });
-  await writeFileAtomic(responsePath, `${JSON.stringify(response, null, 2)}\n`, "utf8");
-  await writeFileAtomic(endpointPath, `${JSON.stringify(endpoint, null, 2)}\n`, "utf8");
-
   const relativePath = toPosixRelativePath(path.relative(mocksDir, endpointPath));
   await commitWithRollback({
     backups,
     reloadRuntime,
     rejectionLabel: "Endpoint create rejected",
-    validateReloadResult: validateEndpointReload(endpointPath),
+    commit: async () => {
+      await fs.promises.mkdir(responseDir, { recursive: true });
+      await writeFileAtomic(responsePath, `${JSON.stringify(response, null, 2)}\n`, "utf8");
+      await writeFileAtomic(endpointPath, `${JSON.stringify(endpoint, null, 2)}\n`, "utf8");
+    },
+    validateReloadResult: validateEndpointReload(endpointPath, mocksDir),
+    involved: [endpointPath],
+    baseDir: mocksDir,
   });
 
   return getAdminMockDetailAfterCommit(mocksDir, encodeMockId(relativePath));
@@ -159,18 +163,21 @@ async function createAdminEndpointFromScript(mocksDir, payload, reloadRuntime, t
   const source = normalizeEndpointSource(payload?.source, type);
   const backups = [await readBackup(endpointPath), await readBackup(responsePath), await readBackup(sourcePath)];
 
-  await fs.promises.mkdir(responseDir, { recursive: true });
-  await writeFileAtomic(sourcePath, source, "utf8");
-  await writeFileAtomic(responsePath, `${JSON.stringify(response, null, 2)}\n`, "utf8");
-  await writeFileAtomic(endpointPath, `${JSON.stringify(endpoint, null, 2)}\n`, "utf8");
-
   const relativePath = toPosixRelativePath(path.relative(mocksDir, endpointPath));
   await commitWithRollback({
     backups,
     reloadRuntime,
     rejectionLabel: "Endpoint create rejected",
-    commit: () => assertEndpointSourceIsValid(sourcePath, type),
-    validateReloadResult: validateEndpointReload(endpointPath),
+    commit: async () => {
+      await fs.promises.mkdir(responseDir, { recursive: true });
+      await writeFileAtomic(sourcePath, source, "utf8");
+      await writeFileAtomic(responsePath, `${JSON.stringify(response, null, 2)}\n`, "utf8");
+      await writeFileAtomic(endpointPath, `${JSON.stringify(endpoint, null, 2)}\n`, "utf8");
+      await assertEndpointSourceIsValid(sourcePath, type);
+    },
+    validateReloadResult: validateEndpointReload(endpointPath, mocksDir),
+    involved: [endpointPath],
+    baseDir: mocksDir,
   });
 
   return getAdminMockDetailAfterCommit(mocksDir, encodeMockId(relativePath));
@@ -529,18 +536,15 @@ async function validateSequenceGraph(endpointPath, endpoint, response) {
   }
 }
 
-function validateEndpointReload(endpointPath) {
-  const expectedPath = path.resolve(endpointPath);
-  return (reloadResult) => {
-    if (reloadResult?.fatalError != null) {
-      throw reloadResult.fatalError;
-    }
-    const loadError = reloadResult?.loadErrors?.find(
-      (candidate) => path.resolve(candidate.filePath) === expectedPath
-    );
-    if (loadError != null) {
-      throw new Error(loadError.message);
-    }
+// Verifica del reload per una mutazione su un singolo endpoint: nessun errore di caricamento su
+// quel file e, a seconda dello stato scritto, endpoint installato (abilitato) o assente
+// (disabilitato). Il fallimento globale del reload lo gestisce già commitWithRollback.
+function validateEndpointReload(endpointPath, mocksDir) {
+  return async (reloadResult) => {
+    const endpoint = await readEndpointConfig(endpointPath);
+    validateReloadedEndpoints(reloadResult, endpoint.enabled === true
+      ? { checked: [endpointPath], installed: [endpointPath], baseDir: mocksDir }
+      : { checked: [endpointPath], absent: [endpointPath], baseDir: mocksDir });
   };
 }
 
@@ -597,27 +601,27 @@ async function createAdminResponse(mocksDir, id, payload, reloadRuntime, scenari
     backups.push(await readBackup(assetWrite.targetPath));
   }
 
-  await fs.promises.mkdir(responseDir, { recursive: true });
-  for (const assetCopy of assetCopies) {
-    await fs.promises.copyFile(assetCopy.sourcePath, assetCopy.targetPath);
-  }
-  for (const assetWrite of assetWrites) {
-    await writeFileAtomic(assetWrite.targetPath, assetWrite.content, "utf8");
-  }
-  await writeFileAtomic(responseFilePath, `${JSON.stringify(nextResponse, null, 2)}\n`, "utf8");
-
   const nextEndpoint = {
     ...endpoint,
     responseFiles: [...endpoint.responseFiles, responseFileName],
     selectedResponseFile: responseFileName,
   };
-  await writeFileAtomic(endpointPath, `${JSON.stringify(nextEndpoint, null, 2)}\n`, "utf8");
 
   await commitWithRollback({
     backups,
     reloadRuntime,
     rejectionLabel: "Endpoint response create rejected",
     commit: async () => {
+      await fs.promises.mkdir(responseDir, { recursive: true });
+      for (const assetCopy of assetCopies) {
+        await fs.promises.copyFile(assetCopy.sourcePath, assetCopy.targetPath);
+      }
+      for (const assetWrite of assetWrites) {
+        await writeFileAtomic(assetWrite.targetPath, assetWrite.content, "utf8");
+      }
+      await writeFileAtomic(responseFilePath, `${JSON.stringify(nextResponse, null, 2)}\n`, "utf8");
+      await writeFileAtomic(endpointPath, `${JSON.stringify(nextEndpoint, null, 2)}\n`, "utf8");
+
       const validatedResponse = await readEndpointResponse(responseFilePath, nextEndpoint);
       await validateSequenceGraph(endpointPath, nextEndpoint, validatedResponse);
       if (nextResponse.type === "handler" || nextResponse.type === "middleware") {
@@ -625,7 +629,9 @@ async function createAdminResponse(mocksDir, id, payload, reloadRuntime, scenari
         assertEndpointSourceIsValid(sourcePath, nextResponse.type);
       }
     },
-    validateReloadResult: validateEndpointReload(endpointPath),
+    validateReloadResult: validateEndpointReload(endpointPath, mocksDir),
+    involved: [endpointPath],
+    baseDir: mocksDir,
   });
 
   // La variante creata diventa la selezionata: lo scenario precedente non vale piu'.
@@ -660,6 +666,14 @@ async function setEndpointsEnabledAtomically(mocksDir, endpointPaths, enabled, r
 `, "utf8");
       }
     },
+    // Tutto il gruppo è coinvolto, anche gli endpoint già nello stato richiesto: accenderli
+    // significa che devono essere serviti senza errori, spegnerli che non lo siano più.
+    validateReloadResult: (reloadResult) =>
+      validateReloadedEndpoints(reloadResult, enabled
+        ? { checked: endpointPaths, installed: endpointPaths, baseDir: mocksDir }
+        : { absent: endpointPaths, baseDir: mocksDir }),
+    involved: endpointPaths,
+    baseDir: mocksDir,
   });
 
   return listAdminMocks(mocksDir);
@@ -727,6 +741,7 @@ async function updateAdminResponse(mocksDir, id, responseFileName, payload, relo
   const nextResponse = buildUpdatedEndpointResponse(response, payload, endpoint);
   const backups = [await readBackup(responseFilePath)];
   let sourcePath;
+  let nextSource;
 
   if (nextResponse.type === "handler" || nextResponse.type === "middleware") {
     sourcePath = resolvePayloadPath(responseDir, nextResponse.sourceFile);
@@ -738,24 +753,29 @@ async function updateAdminResponse(mocksDir, id, responseFileName, payload, relo
       if (typeof payload.source !== "string" || payload.source.trim() === "") {
         throw createAdminError(400, "source must be a non-empty string.");
       }
-      await writeFileAtomic(sourcePath, payload.source, "utf8");
+      nextSource = payload.source;
     }
   }
-
-  await writeFileAtomic(responseFilePath, `${JSON.stringify(nextResponse, null, 2)}\n`, "utf8");
 
   await commitWithRollback({
     backups,
     reloadRuntime,
     rejectionLabel: "Endpoint response update rejected",
     commit: async () => {
+      if (nextSource != null) {
+        await writeFileAtomic(sourcePath, nextSource, "utf8");
+      }
+      await writeFileAtomic(responseFilePath, `${JSON.stringify(nextResponse, null, 2)}\n`, "utf8");
+
       const validatedResponse = await readEndpointResponse(responseFilePath, endpoint);
       await validateSequenceGraph(endpointPath, endpoint, validatedResponse);
       if (sourcePath != null) {
         assertEndpointSourceIsValid(sourcePath, nextResponse.type);
       }
     },
-    validateReloadResult: validateEndpointReload(endpointPath),
+    validateReloadResult: validateEndpointReload(endpointPath, mocksDir),
+    involved: [endpointPath],
+    baseDir: mocksDir,
   });
 
   // Switch via dal file (es. file→body): rimuove l'asset orfano se non più referenziato.
@@ -828,16 +848,19 @@ async function setAdminResponseFile(mocksDir, id, responseFileName, fileBuffer, 
   const oldAsset = response.file && response.file !== assetFile ? response.file : null;
   const backups = [await readBackup(responseFilePath), await readBackup(assetPath)];
 
-  await fs.promises.mkdir(responseDir, { recursive: true });
-  await writeFileAtomic(assetPath, fileBuffer);
-  await writeFileAtomic(responseFilePath, `${JSON.stringify(nextResponse, null, 2)}\n`, "utf8");
-
   await commitWithRollback({
     backups,
     reloadRuntime,
     rejectionLabel: "Response file update rejected",
-    commit: () => readEndpointResponse(responseFilePath, endpoint),
-    validateReloadResult: validateEndpointReload(endpointPath),
+    commit: async () => {
+      await fs.promises.mkdir(responseDir, { recursive: true });
+      await writeFileAtomic(assetPath, fileBuffer);
+      await writeFileAtomic(responseFilePath, `${JSON.stringify(nextResponse, null, 2)}\n`, "utf8");
+      await readEndpointResponse(responseFilePath, endpoint);
+    },
+    validateReloadResult: validateEndpointReload(endpointPath, mocksDir),
+    involved: [endpointPath],
+    baseDir: mocksDir,
   });
 
   if (oldAsset) {
@@ -913,17 +936,20 @@ async function deleteAdminResponse(mocksDir, id, responseFileName, reloadRuntime
     backups.push(await readBackup(assetPath));
   }
 
-  await writeFileAtomic(endpointPath, `${JSON.stringify(nextEndpoint, null, 2)}\n`, "utf8");
-  await fs.promises.rm(responseFilePath, { force: true });
-  if (assetPath != null) {
-    await fs.promises.rm(assetPath, { force: true });
-  }
-
   await commitWithRollback({
     backups,
     reloadRuntime,
     rejectionLabel: "Endpoint response delete rejected",
-    validateReloadResult: validateEndpointReload(endpointPath),
+    commit: async () => {
+      await writeFileAtomic(endpointPath, `${JSON.stringify(nextEndpoint, null, 2)}\n`, "utf8");
+      await fs.promises.rm(responseFilePath, { force: true });
+      if (assetPath != null) {
+        await fs.promises.rm(assetPath, { force: true });
+      }
+    },
+    validateReloadResult: validateEndpointReload(endpointPath, mocksDir),
+    involved: [endpointPath],
+    baseDir: mocksDir,
   });
 
   // Cancellare la variante selezionata ne promuove un'altra: e' un cambio di selezione.
@@ -981,14 +1007,17 @@ async function updateAdminEndpoint(mocksDir, id, payload, reloadRuntime) {
   const nextEndpoint = buildUpdatedEndpointConfig(endpoint, payload);
   const backups = [await readBackup(endpointPath)];
 
-  await writeFileAtomic(endpointPath, `${JSON.stringify(nextEndpoint, null, 2)}\n`, "utf8");
-
   await commitWithRollback({
     backups,
     reloadRuntime,
     rejectionLabel: "Endpoint update rejected",
-    commit: () => readEndpointConfig(endpointPath),
-    validateReloadResult: validateEndpointReload(endpointPath),
+    commit: async () => {
+      await writeFileAtomic(endpointPath, `${JSON.stringify(nextEndpoint, null, 2)}\n`, "utf8");
+      await readEndpointConfig(endpointPath);
+    },
+    validateReloadResult: validateEndpointReload(endpointPath, mocksDir),
+    involved: [endpointPath],
+    baseDir: mocksDir,
   });
 
   return getAdminMockDetailAfterCommit(mocksDir, id);
@@ -1046,13 +1075,15 @@ async function updateAdminMock(mocksDir, id, payload, reloadRuntime, scenarioSta
       selectedResponseFile,
     };
     const backups = [await readBackup(endpointPath)];
-    await writeFileAtomic(endpointPath, `${JSON.stringify(nextEndpoint, null, 2)}\n`, "utf8");
 
     await commitWithRollback({
       backups,
       reloadRuntime,
       rejectionLabel: "Endpoint response selection rejected",
-      validateReloadResult: validateEndpointReload(endpointPath),
+      commit: () => writeFileAtomic(endpointPath, `${JSON.stringify(nextEndpoint, null, 2)}\n`, "utf8"),
+      validateReloadResult: validateEndpointReload(endpointPath, mocksDir),
+      involved: [endpointPath],
+      baseDir: mocksDir,
     });
 
     // Entrare in una sequence, uscirne o passare a un'altra azzera lo scenario; riselezionare la
@@ -1079,6 +1110,7 @@ async function updateAdminMock(mocksDir, id, payload, reloadRuntime, scenarioSta
   const nextEndpoint = { ...endpoint };
   let nextResponse;
   let sourcePath;
+  let nextSource;
 
   const requestedType = payload?.type || response.type;
   if (requestedType === "handler" || requestedType === "middleware") {
@@ -1102,7 +1134,7 @@ async function updateAdminMock(mocksDir, id, payload, reloadRuntime, scenarioSta
       title: response.title || "",
       sourceFile,
     };
-    await writeFileAtomic(sourcePath, normalizeEndpointSource(payload?.source, requestedType), "utf8");
+    nextSource = normalizeEndpointSource(payload?.source, requestedType);
   } else {
     const config = normalizeMockConfig({
       ...(payload?.config || {}),
@@ -1126,19 +1158,23 @@ async function updateAdminMock(mocksDir, id, payload, reloadRuntime, scenarioSta
     }
   }
 
-  await writeFileAtomic(responseFilePath, `${JSON.stringify(nextResponse, null, 2)}\n`, "utf8");
-  await writeFileAtomic(endpointPath, `${JSON.stringify(nextEndpoint, null, 2)}\n`, "utf8");
-
   await commitWithRollback({
     backups,
     reloadRuntime,
     rejectionLabel: "Endpoint update rejected",
-    commit: () => {
+    commit: async () => {
+      if (sourcePath != null) {
+        await writeFileAtomic(sourcePath, nextSource, "utf8");
+      }
+      await writeFileAtomic(responseFilePath, `${JSON.stringify(nextResponse, null, 2)}\n`, "utf8");
+      await writeFileAtomic(endpointPath, `${JSON.stringify(nextEndpoint, null, 2)}\n`, "utf8");
       if (sourcePath != null) {
         assertEndpointSourceIsValid(sourcePath, requestedType);
       }
     },
-    validateReloadResult: validateEndpointReload(endpointPath),
+    validateReloadResult: validateEndpointReload(endpointPath, mocksDir),
+    involved: [endpointPath],
+    baseDir: mocksDir,
   });
 
   return getAdminMockDetailAfterCommit(mocksDir, id);
@@ -1337,6 +1373,15 @@ async function deleteAdminMocksUnlocked(
         }
       }
     },
+    // L'effetto richiesto è che nessuna delle definizioni eliminate resti installata: cercare
+    // errori sul loro percorso non proverebbe nulla, visto che il file non esiste più.
+    validateReloadResult: (reloadResult) =>
+      validateReloadedEndpoints(reloadResult, {
+        absent: targets.map(({ endpointPath }) => endpointPath),
+        baseDir: mocksDir,
+      }),
+    involved: targets.map(({ endpointPath }) => endpointPath),
+    baseDir: mocksDir,
   });
 
   return { deleted: targets.length };
@@ -1515,7 +1560,9 @@ async function copyAdminEndpoint(mocksDir, id, payload, reloadRuntime) {
         await validateSequenceGraph(targetEndpointPath, targetEndpoint, copiedResponse);
       }
     },
-    validateReloadResult: validateEndpointReload(targetEndpointPath),
+    validateReloadResult: validateEndpointReload(targetEndpointPath, mocksDir),
+    involved: [targetEndpointPath],
+    baseDir: mocksDir,
   });
 
   return getAdminMockDetailAfterCommit(mocksDir, encodeMockId(relativePath));

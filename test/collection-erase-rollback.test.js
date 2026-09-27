@@ -42,8 +42,9 @@ describe("eraseAdminCollection: rollback atomico del sottoalbero", () => {
     await expect(
       eraseAdminCollection(mocksDir, "collection-parent", failingReload)
     ).rejects.toMatchObject({
-      status: 400,
-      message: "Collection erase rejected: boom",
+      status: 500,
+      message: "Collection erase rejected: runtime reload failed: boom",
+      details: { code: "RUNTIME_APPLY_FAILED", rollback: "restored" },
     });
 
     expect(fs.existsSync(path.join(mocksDir, "parent", "GET.endpoint.json"))).toBe(true);

@@ -33,11 +33,28 @@ state between tests, pipelines that import an updated spec.
   (`400` invalid input, `403` unexpected `Host` header, `404` not found, `409` conflict,
   `415` unsupported media type, `500` unexpected failure). Newer errors add a stable code in
   `details.code`, so a client does not have to parse the text.
-- Catalog mutations **wait for the reload pass containing their write**: the next request sees
-  the change; a load error on the mutated endpoint triggers rollback and a non-`2xx` response.
-  Data files reload nothing ([`data()`
-  re-reads on every call](DATI.md)), with one exception: the rename with reference rewriting
-  reloads, because it touched the handlers' sources.
+- Catalog mutations **wait for the reload pass containing their write and check its
+  outcome**: the next request sees the change. A `2xx` means the files are written **and** the
+  runtime reflects the requested effect on the endpoints involved: served when enabled, gone
+  when disabled or deleted. A load error on those endpoints, a failed reload or a write error
+  undoes the change; errors of unrelated endpoints do not fail a valid mutation. There is no
+  isolation from traffic while writing: the guarantee is a consistent state at the end.
+- **Failed mutations** carry `details.code` and `details.rollback` (`not_needed`, `restored`
+  or `failed`):
+  - `400 MUTATION_REJECTED`: invalid input (nothing to restore) or a change the runtime cannot
+    apply (files restored);
+  - `500 RUNTIME_APPLY_FAILED`: the runtime reload failed as a whole; files restored;
+  - `500 MUTATION_FAILED`: unexpected error while writing; files restored;
+  - `500 ROLLBACK_FAILED`: the restore failed too (`rollback: "failed"`, with `cause` and
+    `recoveryError`), even just because after the restore an endpoint involved is not served as
+    it was before: it is no longer served, or the rejected version is still served because the
+    restore could not reload it. The workspace state must not be assumed consistent.
+- **One mutation at a time** per workspace: mutations are queued, while reads, traffic and the
+  SSE/WS console pushes do not wait for them. A client that disconnects does not cut a running
+  mutation short.
+- Data files reload nothing ([`data()` re-reads on every call](DATI.md)), with one exception:
+  the rename with reference rewriting reloads, because it touched the handlers' sources, and
+  checks the rewritten handlers like any other mutation.
 
 ## Catalog and endpoints
 
@@ -86,7 +103,7 @@ state between tests, pipelines that import an updated spec.
 
 | Method and path | What it does |
 |---|---|
-| `POST /mocks/import/openapi` | imports the spec (raw JSON/YAML body, up to 12 MB) — [generation rules](OPENAPI.md) |
+| `POST /mocks/import/openapi` | imports the spec (raw JSON/YAML body, up to 12 MB) — [generation rules](OPENAPI.md). It goes item by item: `items` reports `writeOutcome` and `runtimeOutcome` for each operation, `runtime.status` says whether the runtime is `applied` or `degraded`; if the final reload fails it answers `500 BATCH_RUNTIME_FAILED` with the full result in `details.result`. If restoring a failed item does not succeed, it stops there and answers `500 ROLLBACK_FAILED`, with the items processed so far in `details.result`. A collection that cannot be assigned does not undo the endpoint: it ends up in the item's `error` |
 | `POST /mocks/import/openapi?dryRun=true` | just the plan with the counts, without writing anything |
 | `POST /mocks/import/openapi?prefix=/be` | prepends `/be` to every imported path (works with `dryRun` too); the plan reports the applied `prefix` and the `suggestedPrefix` derived from `servers` |
 
@@ -129,7 +146,7 @@ then start the scenario.
 | `POST /monitoring/dump/flush` | manual flush; body `{}`; answers with the number of entries written |
 | `GET /monitoring/dumps` | list of the dump files |
 | `GET /monitoring/dumps/read` | cursor-paginated reading (`?fileIndex&lineIndex&limit`) |
-| `POST /monitoring/dumps/create-mocks` | creates mocks in bulk from a file or from a selection of entries |
+| `POST /monitoring/dumps/create-mocks` | creates mocks in bulk from a file or from a selection of entries; like the import, it reports `items` (with each entry's `key`) and `runtime`, and answers the same batch errors |
 | `DELETE /monitoring/dumps/:file` | deletes a dump file |
 
 ## Server state

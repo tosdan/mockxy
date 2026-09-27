@@ -33,11 +33,29 @@ resettano lo stato tra i test, pipeline che importano una specifica aggiornata.
   (`400` input invalido, `403` header `Host` inatteso, `404` non trovato, `409` conflitto,
   `415` media type non supportato, `500` fallimento imprevisto). Gli errori più recenti
   aggiungono un codice stabile in `details.code`, così il client non deve interpretare il testo.
-- Le mutazioni sul catalogo **attendono il giro di reload che contiene la scrittura**: la
-  modifica è servita dalla richiesta successiva; un errore di caricamento sul file mutato
-  provoca rollback e risposta non-`2xx`. I file dati non ricaricano nulla ([`data()`
-  rilegge a ogni chiamata](DATI.md)), con un'eccezione: la rinomina con riscrittura dei
-  riferimenti ricarica, perché ha toccato i sorgenti degli handler.
+- Le mutazioni sul catalogo **attendono il giro di reload che contiene la scrittura e ne
+  verificano l'esito**: la modifica è servita dalla richiesta successiva. Un `2xx` significa che
+  i file sono scritti **e** che il runtime riflette l'effetto richiesto sugli endpoint coinvolti:
+  serviti se abilitati, spariti se disabilitati o eliminati. Un errore di caricamento su quegli
+  endpoint, un reload fallito o un errore di scrittura annullano la modifica; gli errori di
+  endpoint estranei non fanno fallire una mutazione valida. Non c'è isolamento dal traffico
+  durante la scrittura: la garanzia è uno stato coerente al termine.
+- Gli **esiti negativi delle mutazioni** portano `details.code` e `details.rollback`
+  (`not_needed`, `restored` o `failed`):
+  - `400 MUTATION_REJECTED`: input non valido (niente da ripristinare) oppure modifica che il
+    runtime non riesce ad applicare (file ripristinati);
+  - `500 RUNTIME_APPLY_FAILED`: il reload del runtime è fallito nel suo insieme; file ripristinati;
+  - `500 MUTATION_FAILED`: errore imprevisto durante la scrittura; file ripristinati;
+  - `500 ROLLBACK_FAILED`: è fallito anche il ripristino (`rollback: "failed"`, con `cause` e
+    `recoveryError`), anche solo perché dopo il ripristino un endpoint coinvolto non è servito
+    com'era prima: non è più servito, oppure resta la versione della modifica rifiutata perché il
+    ripristino non è riuscito a ricaricarlo. Lo stato del workspace non va considerato coerente.
+- **Una mutazione alla volta** per workspace: le mutazioni vengono messe in coda, mentre letture,
+  traffico e push delle console SSE/WS non le aspettano. Un client che si disconnette non
+  interrompe una mutazione già partita.
+- I file dati non ricaricano nulla ([`data()` rilegge a ogni chiamata](DATI.md)), con
+  un'eccezione: la rinomina con riscrittura dei riferimenti ricarica, perché ha toccato i
+  sorgenti degli handler, e verifica gli handler riscritti come ogni altra mutazione.
 
 ## Catalogo ed endpoint
 
@@ -86,7 +104,7 @@ resettano lo stato tra i test, pipeline che importano una specifica aggiornata.
 
 | Metodo e percorso | Cosa fa |
 |---|---|
-| `POST /mocks/import/openapi` | importa la specifica (body grezzo JSON/YAML, fino a 12 MB) — [regole di generazione](OPENAPI.md) |
+| `POST /mocks/import/openapi` | importa la specifica (body grezzo JSON/YAML, fino a 12 MB) — [regole di generazione](OPENAPI.md). Procede per elemento: `items` riporta per ogni operazione `writeOutcome` e `runtimeOutcome`, `runtime.status` dice se il runtime è `applied` o `degraded`; se fallisce il reload finale risponde `500 BATCH_RUNTIME_FAILED` con il risultato completo in `details.result`. Se il ripristino di un elemento fallito non riesce, si ferma lì e risponde `500 ROLLBACK_FAILED`, con gli elementi elaborati fino a quel punto in `details.result`. Una collection non assegnata non annulla l'endpoint: finisce nell'`error` dell'elemento |
 | `POST /mocks/import/openapi?dryRun=true` | solo il piano con i conteggi, senza scrivere nulla |
 | `POST /mocks/import/openapi?prefix=/be` | antepone `/be` a tutti i percorsi importati (vale anche con `dryRun`); il piano riporta `prefix` applicato e `suggestedPrefix` ricavato dai `servers` |
 
@@ -130,7 +148,7 @@ client e polling, eseguire il reset, poi avviare lo scenario.
 | `POST /monitoring/dump/flush` | flush manuale; body `{}`; risponde con il numero di voci scritte |
 | `GET /monitoring/dumps` | elenco dei file di dump |
 | `GET /monitoring/dumps/read` | lettura paginata a cursore (`?fileIndex&lineIndex&limit`) |
-| `POST /monitoring/dumps/create-mocks` | crea mock in blocco da un file o da una selezione di voci |
+| `POST /monitoring/dumps/create-mocks` | crea mock in blocco da un file o da una selezione di voci; come l'import, riporta `items` (con la `key` della voce) e `runtime`, e risponde agli stessi errori di batch |
 | `DELETE /monitoring/dumps/:file` | elimina un file di dump |
 
 ## Stato del server

@@ -1,4 +1,5 @@
 const fs = require("fs");
+const path = require("path");
 const chokidar = require("chokidar");
 const { createApp } = require("./app");
 const { loadConfig, WORKSPACE_SETTING_DEFAULTS } = require("./config");
@@ -44,6 +45,25 @@ function graftPreviousRoutes(nextRouteGroups, previousRouteGroups, erroredFilePa
   }
 
   return grafted ? sortRouteGroups(Array.from(groupsByPath.values())) : nextRouteGroups;
+}
+
+// Definizioni installate, per file di configurazione. Il graft conserva gli oggetti entry per
+// riferimento: la loro identità dice quale versione di una definizione è servita.
+function collectInstalledDefinitions(routeGroups) {
+  const installed = new Map();
+  for (const group of routeGroups) {
+    for (const entry of group.methods.values()) {
+      if (entry.configFilePath == null) {
+        continue;
+      }
+      const filePath = path.resolve(entry.configFilePath);
+      if (!installed.has(filePath)) {
+        installed.set(filePath, new Set());
+      }
+      installed.get(filePath).add(entry);
+    }
+  }
+  return installed;
 }
 
 function createReloadHandler({ mocksDir, registry, proxyMiddlewareRegistry, logger, handlerStates, sseConnections, wsConnections }) {
@@ -92,7 +112,16 @@ function createReloadHandler({ mocksDir, registry, proxyMiddlewareRegistry, logg
         proxyMiddlewareCount: middlewareRouteGroups.length,
         endpointLoadErrors: loadErrors.length,
       });
-      return { applied: true, loadErrors, fatalError: null };
+      // Le definizioni davvero installate (versioni reinnestate comprese): le mutazioni admin le
+      // confrontano con l'effetto richiesto, perché l'assenza di errori non basta a provarlo.
+      const installedDefinitions = collectInstalledDefinitions([...routeGroups, ...middlewareRouteGroups]);
+      return {
+        applied: true,
+        loadErrors,
+        fatalError: null,
+        installedConfigFilePaths: new Set(installedDefinitions.keys()),
+        installedDefinitions,
+      };
     } catch (error) {
       logger.error("Runtime reload failed. Keeping previous configuration.", {
         error: error.message,
@@ -116,12 +145,17 @@ function createReloadHandler({ mocksDir, registry, proxyMiddlewareRegistry, logg
     drainPromise = null;
   };
 
-  return () => new Promise((resolve) => {
+  const reload = () => new Promise((resolve) => {
     queuedWaiters.push(resolve);
     if (drainPromise == null) {
       drainPromise = drainReloadQueue();
     }
   });
+  // Fotografia delle definizioni servite in questo momento: le mutazioni admin la prendono prima
+  // di scrivere, per verificare che un eventuale ripristino riporti le stesse versioni.
+  reload.installedDefinitions = () =>
+    collectInstalledDefinitions([...registry.routeGroups, ...proxyMiddlewareRegistry.routeGroups]);
+  return reload;
 }
 
 // Canonicalizza il percorso da osservare (alias corti 8.3 di Windows, symlink) prima di

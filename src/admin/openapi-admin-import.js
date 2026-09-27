@@ -1,5 +1,6 @@
 const { planFromDocument } = require("../mocks/openapi-import");
-const { runReload } = require("./admin-fs");
+const { finalizeBatch } = require("./admin-fs");
+const { resolveAdminFilePath } = require("./mock-ids");
 const { createAdminCollection, assignAdminCollection } = require("./collection-operations");
 const { DEFAULT_COLLECTION_LABEL, compareCollectionLabels } = require("./collections-state");
 const { listAdminMocks, listAdminCollections } = require("./mock-catalog");
@@ -53,13 +54,34 @@ async function importAdminOpenapi(mocksDir, document, reloadRuntime, options = {
     }
   }
 
-  // Crea i mock; reload una sola volta a fine batch (non per ogni endpoint).
+  // Crea i mock; reload una sola volta a fine batch (non per ogni endpoint). Ogni elemento del
+  // piano diventa un esito: un fallimento in scrittura ripristina i soli file di quell'elemento.
   const noReload = async () => {};
   const failed = [];
   let created = 0;
+  // Un elemento il cui ripristino fallisce (ROLLBACK_FAILED) ferma il batch: lo stato del
+  // workspace non è più garantito e continuare peggiorerebbe l'incertezza.
+  let interruption = null;
+  let processed = 0;
+  const assignments = [];
+  const items = plan.items
+    .filter((item) => item.action !== "create")
+    .map((item) => ({
+      method: item.method,
+      path: item.path,
+      id: null,
+      responseFile: null,
+      writeOutcome: "skipped",
+      runtimeOutcome: "not_applicable",
+      error: null,
+    }));
   for (const item of toCreate) {
+    if (interruption != null) {
+      break;
+    }
+    processed += 1;
     try {
-      await createAdminMock(
+      const detail = await createAdminMock(
         mocksDir,
         {
           config: {
@@ -76,32 +98,68 @@ async function importAdminOpenapi(mocksDir, document, reloadRuntime, options = {
         noReload,
       );
       created += 1;
-    } catch (_error) {
+      const outcome = {
+        method: item.method,
+        path: item.path,
+        id: detail.id,
+        responseFile: "001.response.json",
+        writeOutcome: "created",
+        runtimeOutcome: "not_applied",
+        error: null,
+        endpointPath: resolveAdminFilePath(mocksDir, detail.id),
+        expectServing: true,
+      };
+      items.push(outcome);
+      const collectionId = item.collection ? collectionIdByTag[item.collection] : undefined;
+      if (collectionId != null) {
+        assignments.push({ outcome, collectionId });
+      }
+    } catch (error) {
       failed.push(`${item.method} ${item.path}`);
+      items.push({
+        method: item.method,
+        path: item.path,
+        id: null,
+        responseFile: null,
+        writeOutcome: "failed",
+        runtimeOutcome: "not_applicable",
+        error: error.message,
+      });
+      if (error?.details?.code === "ROLLBACK_FAILED") {
+        interruption = error;
+      }
     }
   }
 
-  // Assegna le collection ai nuovi mock (ri-listo per ricavare gli id per method+path).
-  const itemsAfter = await listAdminMocks(mocksDir);
-  const idByKey = new Map(itemsAfter.map((item) => [`${item.method} ${item.path}`, item.id]));
-  for (const item of toCreate) {
-    const collectionId = item.collection ? collectionIdByTag[item.collection] : undefined;
-    const id = idByKey.get(`${item.method} ${item.path}`);
-    if (id && collectionId) {
-      await assignAdminCollection(mocksDir, id, { collectionId });
+  // Assegna le collection ai mock creati. Un errore qui non annulla l'endpoint, già scritto:
+  // resta nell'esito dell'elemento, e il batch arriva comunque al reload finale.
+  for (const { outcome, collectionId } of assignments) {
+    try {
+      await assignAdminCollection(mocksDir, outcome.id, { collectionId });
+    } catch (error) {
+      outcome.error = `Created, but the collection could not be assigned: ${error.message}`;
     }
   }
 
-  await runReload(reloadRuntime);
-
-  return {
-    created,
-    skipped: plan.skip,
-    failed: failed.length,
-    total: plan.total,
-    collections: Object.keys(collectionIdByTag).length,
-    prefix: plan.prefix,
-  };
+  // I conteggi conservano il significato storico di creazioni su disco; il servizio effettivo
+  // lo dicono items[].runtimeOutcome e runtime.status.
+  return finalizeBatch({
+    reloadRuntime,
+    mocksDir,
+    rejectionLabel: "OpenAPI import",
+    interruption,
+    processed,
+    total: toCreate.length,
+    result: {
+      created,
+      skipped: plan.skip,
+      failed: failed.length,
+      total: plan.total,
+      collections: Object.keys(collectionIdByTag).length,
+      prefix: plan.prefix,
+      items,
+    },
+  });
 }
 
 module.exports = {

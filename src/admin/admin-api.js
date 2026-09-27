@@ -1,3 +1,5 @@
+const fs = require("fs");
+const path = require("path");
 const express = require("express");
 const {
   getAdminMockDetail,
@@ -38,6 +40,7 @@ const {
 } = require("./collection-operations");
 const { createMocksFromDump } = require("./dump-to-mock");
 const { importAdminOpenapi } = require("./openapi-admin-import");
+const { createAdminError } = require("./admin-errors");
 const {
   listAdminDataFiles,
   readAdminDataFile,
@@ -54,6 +57,47 @@ const {
 } = require("../monitoring/monitor-dump-reader");
 
 const PARSED_JSON_BODY_BYTES = Symbol("parsedJsonBodyBytes");
+
+// Coda delle mutazioni admin per workspace (piano agent/API, §13 C1): una mutazione alla volta
+// per mocksDir canonico, anche fra runtime distinti dello stesso processo. È distinta dalla coda
+// non rientrante di .collections.json, che le operazioni continuano a usare al loro interno. Il
+// turno segue la promise dell'operazione, non la connessione: un client che si disconnette non
+// libera la coda mentre l'operazione sta ancora scrivendo. Letture, serving e push ne restano fuori.
+const mutationQueues = new Map();
+
+function canonicalWorkspaceKey(mocksDir) {
+  if (typeof mocksDir !== "string" || mocksDir === "") {
+    return "";
+  }
+  try {
+    return fs.realpathSync.native(mocksDir);
+  } catch {
+    return path.resolve(mocksDir);
+  }
+}
+
+function runInMutationQueue(key, task) {
+  const previousTail = mutationQueues.get(key) || Promise.resolve();
+  const run = previousTail.then(task);
+  // Un errore chiude il turno senza bloccare le mutazioni successive.
+  const tail = run.catch(() => {});
+  mutationQueues.set(key, tail);
+  tail.then(() => {
+    if (mutationQueues.get(key) === tail) {
+      mutationQueues.delete(key);
+    }
+  });
+  return run;
+}
+
+// Un 400 che esce da una mutazione senza codice è un rifiuto deciso prima di scrivere: gli
+// errori successivi alle scritture passano da commitWithRollback, che dichiara il ripristino.
+function markRejectedBeforeWriting(error) {
+  if (error?.status === 400 && error.details?.code == null) {
+    error.details = { ...(error.details || {}), code: "MUTATION_REJECTED", rollback: "not_needed" };
+  }
+  return error;
+}
 
 function markParsedJsonBodyLength(req, _res, buffer) {
   req[PARSED_JSON_BODY_BYTES] = buffer.length;
@@ -79,9 +123,11 @@ function requireEmptyJsonObject(req, res, next) {
     && Reflect.ownKeys(req.body).length === 0
   );
   if (!isEmptyPlainObject) {
+    // Il middleware protegge solo rotte di mutazione: è un rifiuto prima di scrivere.
     sendJson(res, 400, {
       error: "Bad Request",
       message: "Request body must be an empty JSON object ({}).",
+      details: { code: "MUTATION_REJECTED", rollback: "not_needed" },
     });
     return;
   }
@@ -103,6 +149,13 @@ function createAdminApiRouter({ config, reloadRuntime, requestMonitor, serverSta
   // Store dello scenario runtime, passati alle mutazioni che possono invalidarlo: il reload da
   // solo non basta, perche' aggrega piu' scritture in un giro unico (vedi invalidateScenario).
   const scenarioStates = { sequenceStates, handlerStates };
+  const workspaceKey = canonicalWorkspaceKey(config?.mocksDir);
+  // Esegue il gestore di una rotta di mutazione nel turno del workspace, dopo parsing e limiti
+  // del body (già applicati dai middleware della rotta).
+  const mutation = (handler) => (req, res) =>
+    runInMutationQueue(workspaceKey, () => handler(req, res)).catch((error) => {
+      throw markRejectedBeforeWriting(error);
+    });
 
   router.use(express.json({ limit: "2mb", verify: markParsedJsonBodyLength }));
 
@@ -111,10 +164,10 @@ function createAdminApiRouter({ config, reloadRuntime, requestMonitor, serverSta
     sendJson(res, 200, { items });
   });
 
-  router.delete('/monitoring/requests', (_req, res) => {
+  router.delete('/monitoring/requests', mutation((_req, res) => {
     requestMonitor?.clear();
     sendJson(res, 204);
-  });
+  }));
 
   router.get('/monitoring/requests/stream', (req, res) => {
     res.setHeader('Content-Type', 'text/event-stream');
@@ -146,23 +199,20 @@ function createAdminApiRouter({ config, reloadRuntime, requestMonitor, serverSta
     sendJson(res, 200, monitorDump ? monitorDump.getStatus() : { enabled: false });
   });
 
-  router.patch('/monitoring/dump', async (req, res) => {
+  router.patch('/monitoring/dump', mutation(async (req, res) => {
     if (!monitorDump) {
       sendJson(res, 200, { enabled: false });
       return;
     }
     const body = req.body && typeof req.body === 'object' ? req.body : {};
     if ('enabled' in body && typeof body.enabled !== 'boolean') {
-      sendJson(res, 400, { error: 'Bad Request', message: 'enabled must be a boolean.' });
-      return;
+      throw createAdminError(400, 'enabled must be a boolean.');
     }
     if ('intervalMs' in body && (typeof body.intervalMs !== 'number' || !Number.isFinite(body.intervalMs) || body.intervalMs <= 0)) {
-      sendJson(res, 400, { error: 'Bad Request', message: 'intervalMs must be a positive number.' });
-      return;
+      throw createAdminError(400, 'intervalMs must be a positive number.');
     }
     if ('threshold' in body && (!Number.isInteger(body.threshold) || body.threshold <= 0)) {
-      sendJson(res, 400, { error: 'Bad Request', message: 'threshold must be a positive integer.' });
-      return;
+      throw createAdminError(400, 'threshold must be a positive integer.');
     }
     monitorDump.setConfig({ intervalMs: body.intervalMs, threshold: body.threshold });
     if (body.enabled === true) {
@@ -171,12 +221,12 @@ function createAdminApiRouter({ config, reloadRuntime, requestMonitor, serverSta
       await monitorDump.stop();
     }
     sendJson(res, 200, monitorDump.getStatus());
-  });
+  }));
 
-  router.post('/monitoring/dump/flush', requireEmptyJsonObject, async (_req, res) => {
+  router.post('/monitoring/dump/flush', requireEmptyJsonObject, mutation(async (_req, res) => {
     const flushed = monitorDump ? await monitorDump.flush() : 0;
     sendJson(res, 200, { flushed, ...(monitorDump ? monitorDump.getStatus() : {}) });
-  });
+  }));
 
   router.get('/monitoring/dumps', async (_req, res) => {
     const files = await listDumpFiles(config.monitorDumpDir);
@@ -197,19 +247,18 @@ function createAdminApiRouter({ config, reloadRuntime, requestMonitor, serverSta
   });
 
   // Creazione massiva di mock dal dump, guidata dalla selezione del frontend (file intero o insieme di chiavi).
-  router.post('/monitoring/dumps/create-mocks', async (req, res) => {
+  router.post('/monitoring/dumps/create-mocks', mutation(async (req, res) => {
     const result = await createMocksFromDump(config.mocksDir, config.monitorDumpDir, req.body, reloadRuntime);
     sendJson(res, 201, result);
-  });
+  }));
 
-  router.delete('/monitoring/dumps/:file', async (req, res) => {
+  router.delete('/monitoring/dumps/:file', mutation(async (req, res) => {
     if (!isSafeDumpFileName(req.params.file)) {
-      sendJson(res, 400, { error: 'Bad Request', message: 'Invalid dump file name.' });
-      return;
+      throw createAdminError(400, 'Invalid dump file name.');
     }
     await deleteDumpFile(config.monitorDumpDir, req.params.file);
     sendJson(res, 204);
-  });
+  }));
 
   const DEFAULT_SERVER_STATE = { serverEnabled: true, proxyAll: false };
 
@@ -217,18 +266,16 @@ function createAdminApiRouter({ config, reloadRuntime, requestMonitor, serverSta
     sendJson(res, 200, serverState ? serverState.getState() : DEFAULT_SERVER_STATE);
   });
 
-  router.patch('/server', (req, res) => {
+  router.patch('/server', mutation((req, res) => {
     const body = req.body && typeof req.body === 'object' ? req.body : {};
     if ('serverEnabled' in body && typeof body.serverEnabled !== 'boolean') {
-      sendJson(res, 400, { error: 'Bad Request', message: 'serverEnabled must be a boolean.' });
-      return;
+      throw createAdminError(400, 'serverEnabled must be a boolean.');
     }
     if ('proxyAll' in body && typeof body.proxyAll !== 'boolean') {
-      sendJson(res, 400, { error: 'Bad Request', message: 'proxyAll must be a boolean.' });
-      return;
+      throw createAdminError(400, 'proxyAll must be a boolean.');
     }
     sendJson(res, 200, serverState ? serverState.setState(body) : DEFAULT_SERVER_STATE);
-  });
+  }));
 
   // Runtime shared state is intentionally metadata-only: values remain private to handlers.
   router.get("/runtime/shared-state", (_req, res) => {
@@ -238,27 +285,26 @@ function createAdminApiRouter({ config, reloadRuntime, requestMonitor, serverSta
   router.post(
     "/runtime/shared-state/:name/reset",
     requireEmptyJsonObject,
-    (req, res) => {
+    mutation((req, res) => {
       try {
         const normalizedName = String(req.params.name).trim().toLowerCase();
         const reset = sharedStates.reset(req.params.name);
         sendJson(res, 200, { name: normalizedName, reset });
       } catch (error) {
         if (error?.code === "SHARED_STATE_INVALID_NAME") {
-          sendJson(res, 400, { error: "Bad Request", message: error.message });
-          return;
+          throw createAdminError(400, error.message);
         }
         throw error;
       }
-    }
+    })
   );
 
   router.post(
     "/runtime/shared-state/reset",
     requireEmptyJsonObject,
-    (_req, res) => {
+    mutation((_req, res) => {
       sendJson(res, 200, { resetCount: sharedStates.resetAll() });
-    }
+    })
   );
 
   router.get("/mocks", async (_req, res) => {
@@ -290,32 +336,32 @@ function createAdminApiRouter({ config, reloadRuntime, requestMonitor, serverSta
     sendJson(res, 200, { mock });
   });
 
-  router.post("/mocks/collections", async (req, res) => {
+  router.post("/mocks/collections", mutation(async (req, res) => {
     const collection = await createAdminCollection(config.mocksDir, req.body);
     sendJson(res, 201, collection);
-  });
+  }));
 
-  router.patch("/mocks/collections/order", async (req, res) => {
+  router.patch("/mocks/collections/order", mutation(async (req, res) => {
     const collections = await reorderAdminCollections(config.mocksDir, req.body);
     sendJson(res, 200, collections);
-  });
+  }));
 
-  router.patch("/mocks/collections/:id/parent", async (req, res) => {
+  router.patch("/mocks/collections/:id/parent", mutation(async (req, res) => {
     const collections = await reparentAdminCollection(config.mocksDir, req.params.id, req.body);
     sendJson(res, 200, collections);
-  });
+  }));
 
-  router.patch("/mocks/collections/:id/items/order", async (req, res) => {
+  router.patch("/mocks/collections/:id/items/order", mutation(async (req, res) => {
     const items = await reorderAdminCollectionItems(config.mocksDir, req.params.id, req.body);
     sendJson(res, 200, { items });
-  });
+  }));
 
-  router.patch("/mocks/collections/:parentKey/children/order", async (req, res) => {
+  router.patch("/mocks/collections/:parentKey/children/order", mutation(async (req, res) => {
     const items = await reorderAdminCollectionChildren(config.mocksDir, req.params.parentKey, req.body);
     sendJson(res, 200, { items });
-  });
+  }));
 
-  router.patch("/mocks/collections/:id/enabled", async (req, res) => {
+  router.patch("/mocks/collections/:id/enabled", mutation(async (req, res) => {
     const items = await updateAdminCollectionEnabled(
       config.mocksDir,
       req.params.id,
@@ -325,29 +371,29 @@ function createAdminApiRouter({ config, reloadRuntime, requestMonitor, serverSta
     const collections = await listAdminCollections(config.mocksDir, items);
     const childOrder = await listAdminChildOrder(config.mocksDir, items);
     sendJson(res, 200, { items, collections, childOrder });
-  });
+  }));
 
-  router.delete("/mocks/collections/:id", async (req, res) => {
+  router.delete("/mocks/collections/:id", mutation(async (req, res) => {
     await deleteAdminCollection(config.mocksDir, req.params.id);
     sendJson(res, 204);
-  });
+  }));
 
-  router.delete("/mocks/collections/:id/contents", async (req, res) => {
+  router.delete("/mocks/collections/:id/contents", mutation(async (req, res) => {
     const result = await eraseAdminCollection(
       config.mocksDir,
       req.params.id,
       reloadRuntime
     );
     sendJson(res, 200, result);
-  });
+  }));
 
   // Registrata prima di /mocks/:id: "enabled" non è l'id di una definizione.
-  router.patch("/mocks/enabled", async (req, res) => {
+  router.patch("/mocks/enabled", mutation(async (req, res) => {
     const items = await updateAdminEndpointsEnabled(config.mocksDir, req.body, reloadRuntime);
     const collections = await listAdminCollections(config.mocksDir, items);
     const childOrder = await listAdminChildOrder(config.mocksDir, items);
     sendJson(res, 200, { items, collections, childOrder });
-  });
+  }));
 
   router.get("/mocks/:id", async (req, res) => {
     const detail = await getAdminMockDetail(config.mocksDir, req.params.id);
@@ -369,10 +415,10 @@ function createAdminApiRouter({ config, reloadRuntime, requestMonitor, serverSta
 
   // Reset del cursore della sequenza (e della memoria handler dell'endpoint): azione runtime
   // immediata, nessun file toccato.
-  router.post("/mocks/:id/sequence/reset", requireEmptyJsonObject, async (req, res) => {
+  router.post("/mocks/:id/sequence/reset", requireEmptyJsonObject, mutation(async (req, res) => {
     const result = await resetAdminSequence(config.mocksDir, req.params.id, sequenceStates, handlerStates);
     sendJson(res, 200, result);
-  });
+  }));
 
   // Console SSE: push manuale broadcast e stato (connessioni aperte + storico) dell'endpoint
   // la cui variante selezionata è di tipo sse. Azioni runtime, nessun file toccato.
@@ -394,15 +440,15 @@ function createAdminApiRouter({ config, reloadRuntime, requestMonitor, serverSta
     sendJson(res, 200, result);
   });
 
-  router.put("/mocks/:id/collection", async (req, res) => {
+  router.put("/mocks/:id/collection", mutation(async (req, res) => {
     const detail = await assignAdminCollection(config.mocksDir, req.params.id, req.body);
     sendJson(res, 200, detail);
-  });
+  }));
 
-  router.post("/mocks", async (req, res) => {
+  router.post("/mocks", mutation(async (req, res) => {
     const detail = await createAdminMock(config.mocksDir, req.body, reloadRuntime);
     sendJson(res, 201, detail);
-  });
+  }));
 
   // Import OpenAPI: corpo grezzo (YAML/JSON) come text; ?dryRun=true ritorna solo il piano + conteggi.
   // ?prefix=/be antepone un prefisso ai path importati (il corpo e' il documento, quindi le opzioni
@@ -430,16 +476,16 @@ function createAdminApiRouter({ config, reloadRuntime, requestMonitor, serverSta
       next();
     },
     express.text({ type: OPENAPI_IMPORT_CONTENT_TYPES, limit: "12mb" }),
-    async (req, res) => {
+    mutation(async (req, res) => {
       const dryRun = String(req.query.dryRun) === "true";
       const prefix = typeof req.query.prefix === "string" ? req.query.prefix : "";
       const result = await importAdminOpenapi(config.mocksDir, req.body, reloadRuntime, { dryRun, prefix });
       sendJson(res, dryRun ? 200 : 201, result);
-    }
+    })
   );
 
   // Copia un endpoint verso un nuovo metodo+path; dryRun usa lo stesso planner ma non scrive.
-  router.post("/mocks/:id/copy", async (req, res) => {
+  router.post("/mocks/:id/copy", mutation(async (req, res) => {
     const dryRunValues = new URL(req.originalUrl, "http://mockxy.local")
       .searchParams
       .getAll("dryRun");
@@ -447,11 +493,7 @@ function createAdminApiRouter({ config, reloadRuntime, requestMonitor, serverSta
       dryRunValues.length > 1
       || (dryRunValues.length === 1 && !["true", "false"].includes(dryRunValues[0]))
     ) {
-      sendJson(res, 400, {
-        error: "Bad Request",
-        message: "dryRun must be specified at most once and be exactly true or false.",
-      });
-      return;
+      throw createAdminError(400, "dryRun must be specified at most once and be exactly true or false.");
     }
 
     if (dryRunValues[0] === "true") {
@@ -461,9 +503,9 @@ function createAdminApiRouter({ config, reloadRuntime, requestMonitor, serverSta
     }
     const detail = await copyAdminEndpoint(config.mocksDir, req.params.id, req.body, reloadRuntime);
     sendJson(res, 201, detail);
-  });
+  }));
 
-  router.put("/mocks/:id/endpoint", async (req, res) => {
+  router.put("/mocks/:id/endpoint", mutation(async (req, res) => {
     const detail = await updateAdminEndpoint(
       config.mocksDir,
       req.params.id,
@@ -471,9 +513,9 @@ function createAdminApiRouter({ config, reloadRuntime, requestMonitor, serverSta
       reloadRuntime
     );
     sendJson(res, 200, detail);
-  });
+  }));
 
-  router.post("/mocks/:id/responses", async (req, res) => {
+  router.post("/mocks/:id/responses", mutation(async (req, res) => {
     const detail = await createAdminResponse(
       config.mocksDir,
       req.params.id,
@@ -482,9 +524,9 @@ function createAdminApiRouter({ config, reloadRuntime, requestMonitor, serverSta
       scenarioStates
     );
     sendJson(res, 201, detail);
-  });
+  }));
 
-  router.put("/mocks/:id/responses/:responseFileName", async (req, res) => {
+  router.put("/mocks/:id/responses/:responseFileName", mutation(async (req, res) => {
     const detail = await updateAdminResponse(
       config.mocksDir,
       req.params.id,
@@ -494,7 +536,7 @@ function createAdminApiRouter({ config, reloadRuntime, requestMonitor, serverSta
       scenarioStates
     );
     sendJson(res, 200, detail);
-  });
+  }));
 
   // Upload raw dei bytes per rendere una response file-backed. I bytes arrivano come
   // application/octet-stream (cosi' express.json globale non li intercetta); il MIME reale
@@ -502,7 +544,7 @@ function createAdminApiRouter({ config, reloadRuntime, requestMonitor, serverSta
   router.put(
     "/mocks/:id/responses/:responseFileName/file",
     express.raw({ type: () => true, limit: "12mb" }),
-    async (req, res) => {
+    mutation(async (req, res) => {
       const detail = await setAdminResponseFile(
         config.mocksDir,
         req.params.id,
@@ -512,10 +554,10 @@ function createAdminApiRouter({ config, reloadRuntime, requestMonitor, serverSta
         reloadRuntime
       );
       sendJson(res, 200, detail);
-    }
+    })
   );
 
-  router.delete("/mocks/:id/responses/:responseFileName", async (req, res) => {
+  router.delete("/mocks/:id/responses/:responseFileName", mutation(async (req, res) => {
     const detail = await deleteAdminResponse(
       config.mocksDir,
       req.params.id,
@@ -524,9 +566,9 @@ function createAdminApiRouter({ config, reloadRuntime, requestMonitor, serverSta
       scenarioStates
     );
     sendJson(res, 200, detail);
-  });
+  }));
 
-  router.put("/mocks/:id", async (req, res) => {
+  router.put("/mocks/:id", mutation(async (req, res) => {
     const detail = await updateAdminMock(
       config.mocksDir,
       req.params.id,
@@ -535,12 +577,12 @@ function createAdminApiRouter({ config, reloadRuntime, requestMonitor, serverSta
       scenarioStates
     );
     sendJson(res, 200, detail);
-  });
+  }));
 
-  router.delete("/mocks/:id", async (req, res) => {
+  router.delete("/mocks/:id", mutation(async (req, res) => {
     await deleteAdminMock(config.mocksDir, req.params.id, reloadRuntime);
     sendJson(res, 204);
-  });
+  }));
 
   // File dati JSON riusabili dagli handler/middleware via data() (pagina Dati). Nessun
   // reloadRuntime: i file dati non toccano le rotte, l'accessor li rilegge a ogni chiamata.
@@ -557,28 +599,26 @@ function createAdminApiRouter({ config, reloadRuntime, requestMonitor, serverSta
   router.put(
     "/files/:name",
     express.raw({ type: () => true, limit: "25mb" }),
-    async (req, res) => {
+    mutation(async (req, res) => {
       const { detail, created } = await putAdminDataFile(config.filesDir, req.params.name, req.body);
       sendJson(res, created ? 201 : 200, detail);
-    }
+    })
   );
 
-  router.patch("/files/:name", async (req, res) => {
+  router.patch("/files/:name", mutation(async (req, res) => {
+    // Con la riscrittura dei riferimenti l'operazione ricarica il runtime e ne verifica l'esito:
+    // i moduli già compilati devono puntare al nuovo nome, altrimenti chiamerebbero data('vecchio').
     const detail = await renameAdminDataFile(config.filesDir, config.mocksDir, req.params.name, req.body?.name, {
       rewriteReferences: req.body?.rewriteReferences === true,
+      reloadRuntime,
     });
-    // La riscrittura ha toccato i sorgenti degli handler: ricarica il runtime così i moduli già
-    // compilati puntano al nuovo nome (altrimenti chiamerebbero data('vecchio'), ormai inesistente).
-    if (detail.referencesRewritten > 0 && typeof reloadRuntime === "function") {
-      await reloadRuntime();
-    }
     sendJson(res, 200, detail);
-  });
+  }));
 
-  router.delete("/files/:name", async (req, res) => {
+  router.delete("/files/:name", mutation(async (req, res) => {
     await deleteAdminDataFile(config.filesDir, req.params.name);
     sendJson(res, 204);
-  });
+  }));
 
   // Il namespace /_admin/api è riservato: una rotta o un metodo sconosciuti finiscono qui
   // invece di proseguire nel serving dei mock e nel proxy, dove raggiungerebbero il backend.
