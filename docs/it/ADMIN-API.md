@@ -9,6 +9,10 @@ resettano lo stato tra i test, pipeline che importano una specifica aggiornata.
 
 - Attiva con `ADMIN_API_ENABLED` (default: attiva in sviluppo, spenta in produzione). Da
   spenta, ogni rotta risponde `404` con un messaggio esplicito.
+- Il namespace `/_admin/api` è **riservato**: un metodo o un percorso che non compare qui
+  sotto risponde `404` con `details.code: "ADMIN_ROUTE_NOT_FOUND"`. Non prosegue mai nel
+  serving dei mock né nel proxy verso il backend, e un mock dichiarato sotto `/_admin/api` non
+  viene servito.
 - **Niente autenticazione**: crea handler, cioè scrive file ed esegue codice. Le protezioni e
   le regole di esposizione sono nella pagina sull'[esposizione in rete](RETE.md) (guardia
   anti DNS rebinding sull'header `Host`, avviso su bind non-loopback).
@@ -27,7 +31,8 @@ resettano lo stato tra i test, pipeline che importano una specifica aggiornata.
   ottiene dalle liste e si tratta come **opaco**.
 - Gli **errori** sono JSON `{ error, message, details? }` con lo status appropriato
   (`400` input invalido, `403` header `Host` inatteso, `404` non trovato, `409` conflitto,
-  `415` media type non supportato, `500` fallimento imprevisto).
+  `415` media type non supportato, `500` fallimento imprevisto). Gli errori più recenti
+  aggiungono un codice stabile in `details.code`, così il client non deve interpretare il testo.
 - Le mutazioni sul catalogo **attendono il giro di reload che contiene la scrittura**: la
   modifica è servita dalla richiesta successiva; un errore di caricamento sul file mutato
   provoca rollback e risposta non-`2xx`. I file dati non ricaricano nulla ([`data()`
@@ -51,6 +56,7 @@ resettano lo stato tra i test, pipeline che importano una specifica aggiornata.
 | `GET /mocks/:id/ws/connections` | stato della console WS: connessioni aperte (con posizione nel copione) e transcript bidirezionale (usciti e ricevuti) |
 | `PUT /mocks/:id/endpoint` | aggiorna **solo** `description` ed `enabled` (qualunque altro campo è `400`): metodo e percorso sono fissati alla creazione — il percorso determina la cartella dei file — e si cambiano con `POST /mocks/:id/copy` |
 | `POST /mocks/:id/copy` | duplica su nuovo metodo+percorso — body `{ method, path, copyResponses }`; con `?dryRun=true` restituisce il piano senza scrivere né ricaricare |
+| `PATCH /mocks/enabled` | abilita o disabilita un elenco di endpoint — body `{ ids, enabled }`, con `ids` non vuoto (i duplicati vengono unificati); un id sconosciuto fa fallire la richiesta prima di scrivere; risponde col catalogo aggiornato `{ items, collections, childOrder }`. È la rotta dietro la selezione multipla del catalogo |
 | `PUT /mocks/:id/collection` | assegna l'endpoint a una collezione |
 | `DELETE /mocks/:id` | elimina endpoint e varianti |
 

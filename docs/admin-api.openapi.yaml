@@ -43,7 +43,11 @@ info:
       Obtain it from a listing and treat it as **opaque**; it changes when the endpoint moves.
     - **Errors**: JSON `{ error, message, details? }` with a matching status —
       `400` invalid input, `403` host guard, `404` not found, `409` conflict,
-      `415` unsupported media type, `500` unexpected failure.
+      `415` unsupported media type, `500` unexpected failure. Newer errors carry a stable
+      `details.code` so a client does not have to parse the message.
+    - **Reserved namespace**: a method or path under `/_admin/api` that is not described here
+      answers `404` with `details.code: "ADMIN_ROUTE_NOT_FOUND"`. It never falls through to mock
+      serving or to the backend proxy, and a mock declared under `/_admin/api` is never served.
     - **Reload semantics**: catalog mutations reload the runtime *before responding*, so the
       change is live for the very next request — no restart. A mutation that leaves the runtime
       unable to load is rolled back on disk and reported as an error. Data-file writes reload
@@ -1851,6 +1855,10 @@ components:
         details:
           type: object
           description: Extra machine-readable context, when the failure has any (e.g. `existingMockId` on a `409` from `POST /mocks`).
+          properties:
+            code:
+              type: string
+              description: Stable error code, present on newer errors (e.g. `ADMIN_ROUTE_NOT_FOUND` for an unknown admin route).
       example:
         error: Bad Request
         message: config.status must be an integer HTTP status code.

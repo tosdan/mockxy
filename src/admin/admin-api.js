@@ -580,6 +580,17 @@ function createAdminApiRouter({ config, reloadRuntime, requestMonitor, serverSta
     sendJson(res, 204);
   });
 
+  // Il namespace /_admin/api è riservato: una rotta o un metodo sconosciuti finiscono qui
+  // invece di proseguire nel serving dei mock e nel proxy, dove raggiungerebbero il backend.
+  // Deve restare l'ultima registrazione del router.
+  router.use((req, res) => {
+    sendJson(res, 404, {
+      error: "Not Found",
+      message: `Unknown admin API route: ${req.method} ${req.originalUrl.split("?")[0]}.`,
+      details: { code: "ADMIN_ROUTE_NOT_FOUND" },
+    });
+  });
+
   return router;
 }
 
