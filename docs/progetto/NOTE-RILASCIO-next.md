@@ -86,6 +86,19 @@ esistenti restano compatibili: nessuna migrazione richiesta.
 - **Per i client:** su `READ_INCONSISTENT` ripetere la lettura al massimo una volta in
   automatico; chi riconosceva il `404` di un asset o sorgente mancante deve gestire il `409`.
 
+### Interfaccia
+
+- **Descrizione e abilitazione:** salvare la descrizione invia solo la descrizione, e il toggle
+  solo lo stato di abilitazione. Prima ciascuna azione reinviava anche l'altro campo letto in
+  precedenza: salvare la descrizione poteva riabilitare un endpoint disabilitato nel frattempo, e
+  un toggle poteva riportare indietro una descrizione appena modificata.
+- **Dettaglio in lettura durante una modifica:** su `READ_INCONSISTENT` la lettura si ripete una
+  sola volta in automatico; se non basta, compare un avviso di dettaglio non leggibile e il
+  pannello resta com'era, bozze comprese.
+- **Import OpenAPI e creazione dallo storico:** il riepilogo segnala gli endpoint creati ma non
+  serviti dal runtime e quelli con avvisi (per esempio una collection non assegnata), e in quel
+  caso diventa un avviso invece di una conferma.
+
 ---
 
 ## v1.3.2 (pubblicata)

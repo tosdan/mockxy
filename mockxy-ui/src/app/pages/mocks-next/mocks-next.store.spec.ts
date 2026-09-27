@@ -48,6 +48,17 @@ function detail(id: string, overrides: Partial<MockDetail> = {}): MockDetail {
   };
 }
 
+/** Errore HTTP di una lettura incompleta del dettaglio, come lo propaga HttpClient. */
+function readInconsistent(detailMessage: string) {
+  return {
+    status: 409,
+    error: {
+      message: `The endpoint could not be read consistently: ${detailMessage}`,
+      details: { code: 'READ_INCONSISTENT', retryable: true },
+    },
+  };
+}
+
 function listResponse(
   items: MockSummary[],
   collections: CollectionSummary[] = [],
@@ -283,6 +294,28 @@ describe('MocksStore', () => {
       expect(store.selected()?.id).toBe('e1');
     });
 
+    it('una lettura incompleta del dettaglio aperto lo lascia com’è e la segnala', () => {
+      const store = create();
+      store.selectMock('e1');
+      api.getMock.mockReturnValueOnce(throwError(() => readInconsistent('x')));
+
+      store.reload();
+
+      expect(store.selected()?.id).toBe('e1');
+      expect(store.error()).toContain('Dettaglio non leggibile in questo momento');
+    });
+
+    it('gli altri errori del dettaglio aperto restano silenziosi', () => {
+      const store = create();
+      store.selectMock('e1');
+      api.getMock.mockReturnValueOnce(throwError(() => new Error('404')));
+
+      store.reload();
+
+      expect(store.selected()?.id).toBe('e1');
+      expect(store.error()).toBeUndefined();
+    });
+
     it('se l’endpoint selezionato è sparito apre il primo della nuova lista', () => {
       const store = create();
       store.loadCatalog();
@@ -309,6 +342,18 @@ describe('MocksStore', () => {
       expect(store.detailLoading()).toBe(false);
     });
 
+    it('una lettura incompleta, già ripetuta dal servizio, è segnalata come non disponibile', () => {
+      api.getMock.mockReturnValueOnce(throwError(() => readInconsistent('Response asset file not found on disk.')));
+      const store = create();
+      store.selectMock('e1');
+      expect(store.error()).toBe(
+        "Dettaglio non leggibile in questo momento: l'endpoint sta cambiando o un file che usa manca. Riprova tra poco. " +
+          'The endpoint could not be read consistently: Response asset file not found on disk.',
+      );
+      expect(store.selected()).toBeUndefined();
+      expect(api.getMock).toHaveBeenCalledTimes(1);
+    });
+
     it('persiste l’id selezionato per la visita successiva', () => {
       const store = create();
       store.selectMock('e2');
@@ -317,11 +362,13 @@ describe('MocksStore', () => {
   });
 
   describe('toggleEnabled', () => {
-    it('aggiorna via API preservando la description corrente e riallinea il dettaglio selezionato', () => {
+    it('invia solo enabled, senza rileggere né reinviare la description, e riallinea il dettaglio', () => {
       const store = create();
       store.loadCatalog(); // seleziona e1
+      api.getMock.mockClear();
       store.toggleEnabled('e1', false);
-      expect(api.updateEndpoint).toHaveBeenCalledWith('e1', { description: 'descrizione e1', enabled: false });
+      expect(api.updateEndpoint).toHaveBeenCalledWith('e1', { enabled: false });
+      expect(api.getMock).not.toHaveBeenCalled();
       expect(store.selected()?.id).toBe('e1');
       expect(store.savingId()).toBeUndefined();
     });
@@ -419,6 +466,13 @@ describe('MocksStore', () => {
       expect(api.getMock).toHaveBeenCalledWith('e1');
       expect(store.detailUnavailable()).toBeUndefined();
       expect(store.selected()?.id).toBe('e1');
+    });
+
+    it('saveDescription invia solo description, senza il flag enabled letto col dettaglio', () => {
+      const store = create();
+      store.selected.set(detail('e1', { disabled: true }));
+      store.saveDescription('nuova');
+      expect(api.updateEndpoint).toHaveBeenCalledWith('e1', { description: 'nuova' });
     });
 
     it('senza selezione le mutazioni sono no-op', () => {

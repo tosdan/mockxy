@@ -2,6 +2,7 @@ import { computed, inject, Injectable, signal } from '@angular/core';
 import { Observable, concatMap, finalize, from, map, switchMap, toArray } from 'rxjs';
 import { TranslocoService } from '@jsverse/transloco';
 import { MockAdminApiService } from '../../mock-admin-api.service';
+import { isReadInconsistentError } from '../../shared/read-error-message';
 import { ViewStateService } from '../../shared/view-state.service';
 import {
   CollectionSummary,
@@ -202,7 +203,13 @@ export class MocksStore {
         next: (res) => {
           this.applyCatalogResponse(res);
           if (selId && res.items.some((i) => i.id === selId)) {
-            this.api.getMock(selId).subscribe({ next: (d) => this.setSelected(d), error: () => undefined });
+            // Il dettaglio aperto resta quello di prima; solo una lettura incompleta va segnalata.
+            this.api.getMock(selId).subscribe({
+              next: (d) => this.setSelected(d),
+              error: (e) => {
+                if (isReadInconsistentError(e)) this.error.set(this.detailReadErrorMessage(e));
+              },
+            });
           } else {
             this.selected.set(undefined);
             if (res.items.length > 0) this.selectMock(res.items[0].id);
@@ -224,14 +231,14 @@ export class MocksStore {
       .pipe(finalize(() => this.detailLoading.set(false)))
       .subscribe({
         next: (detail) => this.setSelected(detail),
-        error: (e) => this.error.set(readErrorMessage(e) ?? this.transloco.translate('common.unexpectedError')),
+        error: (e) => this.error.set(this.detailReadErrorMessage(e)),
       });
   }
 
   /**
-   * Abilita/disabilita un endpoint (update ottimistico + `updateEndpoint`, che
-   * richiede anche la description corrente → la legge da getMock). Ricarica il
-   * catalogo e riallinea il dettaglio se l'endpoint toccato e' quello selezionato.
+   * Abilita/disabilita un endpoint (update ottimistico + `updateEndpoint` col solo `enabled`: una
+   * descrizione letta prima dell'azione e reinviata cancellerebbe una modifica concorrente).
+   * Ricarica il catalogo e riallinea il dettaglio se l'endpoint toccato e' quello selezionato.
    */
   toggleEnabled(id: string, enabled: boolean): void {
     const previous = this.mocks();
@@ -239,9 +246,8 @@ export class MocksStore {
     this.savingId.set(id);
     this.error.set(undefined);
     this.api
-      .getMock(id)
+      .updateEndpoint(id, { enabled })
       .pipe(
-        switchMap((detail) => this.api.updateEndpoint(id, { description: detail.endpoint?.description ?? '', enabled })),
         switchMap((updated) => this.api.listMocks().pipe(map((res) => ({ updated, res })))),
         finalize(() => this.savingId.set(undefined)),
       )
@@ -330,17 +336,17 @@ export class MocksStore {
     this.runDetailMutation(sel.id, this.api.uploadResponseFile(sel.id, fileName, file), onSuccess);
   }
 
-  /** Aggiorna la descrizione dell'endpoint selezionato (preserva il flag enabled). */
+  /**
+   * Aggiorna la descrizione dell'endpoint selezionato. Invia solo `description`: il flag `enabled`
+   * letto col dettaglio può essere vecchio, e reinviarlo riabiliterebbe (o disabiliterebbe)
+   * l'endpoint annullando un toggle fatto nel frattempo.
+   */
   saveDescription(description: string, onSuccess?: () => void): void {
     const sel = this.selected();
     if (!sel) {
       return;
     }
-    this.runDetailMutation(
-      sel.id,
-      this.api.updateEndpoint(sel.id, { description, enabled: !sel.disabled }),
-      onSuccess,
-    );
+    this.runDetailMutation(sel.id, this.api.updateEndpoint(sel.id, { description }), onSuccess);
   }
 
   /** Elimina l'endpoint selezionato e apre il primo rimasto. */
@@ -722,8 +728,21 @@ export class MocksStore {
       .pipe(finalize(() => this.detailLoading.set(false)))
       .subscribe({
         next: (detail) => this.setSelected(detail),
-        error: (e) => this.error.set(readErrorMessage(e) ?? this.transloco.translate('common.unexpectedError')),
+        error: (e) => this.error.set(this.detailReadErrorMessage(e)),
       });
+  }
+
+  /**
+   * Messaggio per una lettura del dettaglio non riuscita. `READ_INCONSISTENT` arriva qui dopo il
+   * solo tentativo ripetuto dal servizio: si segnala che la lettura non è disponibile, senza
+   * altri tentativi automatici; il dettaglio aperto e le bozze restano come sono.
+   */
+  detailReadErrorMessage(error: unknown): string {
+    const message = readErrorMessage(error);
+    if (isReadInconsistentError(error)) {
+      return this.transloco.translate('common.detailReadUnavailable', { message: message ?? '' });
+    }
+    return message ?? this.transloco.translate('common.unexpectedError');
   }
 
   private setSelected(detail: MockDetail): void {

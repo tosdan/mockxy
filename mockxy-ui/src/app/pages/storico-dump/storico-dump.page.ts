@@ -22,7 +22,7 @@ import { UiTable } from '../../ui/ui-table/ui-table';
 import { UiTooltip } from '../../ui/ui-tooltip/ui-tooltip';
 import { ToastService } from '../../ui/ui-toast/ui-toast';
 import { MockAdminApiService } from '../../mock-admin-api.service';
-import type { DumpCreateMocksResult, DumpEntry, DumpReadCursor, DumpSelection, MonitorDumpFile } from '../../mock-admin-api.types';
+import { summarizeBatchAttention, type DumpCreateMocksResult, type DumpEntry, type DumpReadCursor, type DumpSelection, type MonitorDumpFile } from '../../mock-admin-api.types';
 
 const PAGE_SIZE = 300;
 
@@ -331,7 +331,10 @@ export class StoricoDumpPage implements OnInit {
       .pipe(finalize(() => this.creating.set(false)))
       .subscribe({
         next: (result) => {
-          this.toast.show({ title: this.transloco.translate('storico.toastMocksCreated'), description: this.summarizeResult(result), tone: result.created + result.createdEmpty > 0 ? 'success' : 'error' });
+          // Anche con 201 un mock creato può non essere servito: lo dicono gli esiti per elemento.
+          const attention = summarizeBatchAttention(result.items);
+          const tone = attention.notServed + attention.withWarnings > 0 ? 'warning' : result.created + result.createdEmpty > 0 ? 'success' : 'error';
+          this.toast.show({ title: this.transloco.translate('storico.toastMocksCreated'), description: this.summarizeResult(result), tone });
           this.clearSelection();
         },
         error: (error: unknown) => this.toast.show({ title: this.transloco.translate('common.error'), description: this.readError(error), tone: 'error' }),
@@ -452,6 +455,9 @@ export class StoricoDumpPage implements OnInit {
     if (result.createdEmpty > 0) parts.push(this.transloco.translate('storico.resultSkeleton', { count: result.createdEmpty }));
     if (result.skippedExisting > 0) parts.push(this.transloco.translate('storico.resultExisting', { count: result.skippedExisting }));
     if (result.failed > 0) parts.push(this.transloco.translate('storico.resultFailed', { count: result.failed }));
+    const { notServed, withWarnings } = summarizeBatchAttention(result.items);
+    if (notServed > 0) parts.push(this.transloco.translate('storico.resultNotServed', { count: notServed }));
+    if (withWarnings > 0) parts.push(this.transloco.translate('storico.resultWarnings', { count: withWarnings }));
     return parts.join(', ');
   }
 

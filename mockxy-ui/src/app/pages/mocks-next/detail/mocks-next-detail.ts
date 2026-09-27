@@ -802,6 +802,7 @@ export class MocksNextDetail {
           autoFocus: 'dialog',
         });
       },
+      error: (e) => this.store.error.set(this.store.detailReadErrorMessage(e)),
     });
   }
 

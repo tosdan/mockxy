@@ -9,7 +9,7 @@ import { ToastService } from '../../../ui/ui-toast/ui-toast';
 import { MockAdminApiService } from '../../../mock-admin-api.service';
 import { MocksStore } from '../mocks-next.store';
 import { routePathError } from '../../../mock-path-convention';
-import type { OpenapiImportPreview } from '../../../mock-admin-api.types';
+import { summarizeBatchAttention, type OpenapiImportPreview, type OpenapiImportResult } from '../../../mock-admin-api.types';
 
 type ImportFilter = 'all' | 'create' | 'skip';
 
@@ -313,10 +313,12 @@ export class OpenapiImportDialog implements OnDestroy {
     this.api.importOpenapi(this.docText, this.prefix().trim()).subscribe({
       next: (result) => {
         this.importing.set(false);
+        // Anche con 201 un endpoint creato può non essere servito: lo dicono gli esiti per elemento.
+        const attention = summarizeBatchAttention(result.items);
         this.toast.show({
           title: this.transloco.translate('openapiImport.toastTitle'),
-          description: this.summarizeImport(result.created, result.skipped, result.failed),
-          tone: result.created > 0 ? 'success' : 'info',
+          description: this.summarizeImport(result),
+          tone: attention.notServed + attention.withWarnings > 0 ? 'warning' : result.created > 0 ? 'success' : 'info',
         });
         this.store.loadCatalog();
         this.dialogRef.close();
@@ -347,13 +349,19 @@ export class OpenapiImportDialog implements OnDestroy {
     return `color-mix(in srgb, ${color} ${pct}%, transparent)`;
   }
 
-  /** Riepilogo dell'esito import (conteggi tradotti) per il toast; il suffisso "falliti" solo se presente. */
-  private summarizeImport(created: number, skipped: number, failed: number): string {
+  /**
+   * Riepilogo dell'esito import (conteggi tradotti) per il toast; "falliti", "non serviti" e
+   * "con avvisi" solo se presenti.
+   */
+  private summarizeImport(result: OpenapiImportResult): string {
+    const { notServed, withWarnings } = summarizeBatchAttention(result.items);
     const parts = [
-      this.transloco.translate('openapiImport.resultCreated', { count: created }),
-      this.transloco.translate('openapiImport.resultSkipped', { count: skipped }),
+      this.transloco.translate('openapiImport.resultCreated', { count: result.created }),
+      this.transloco.translate('openapiImport.resultSkipped', { count: result.skipped }),
     ];
-    if (failed > 0) parts.push(this.transloco.translate('openapiImport.resultFailed', { count: failed }));
+    if (result.failed > 0) parts.push(this.transloco.translate('openapiImport.resultFailed', { count: result.failed }));
+    if (notServed > 0) parts.push(this.transloco.translate('openapiImport.resultNotServed', { count: notServed }));
+    if (withWarnings > 0) parts.push(this.transloco.translate('openapiImport.resultWarnings', { count: withWarnings }));
     return parts.join(', ');
   }
 

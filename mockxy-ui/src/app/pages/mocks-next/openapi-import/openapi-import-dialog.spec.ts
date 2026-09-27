@@ -8,7 +8,7 @@ import { translocoTesting } from '../../../testing/transloco-testing';
 import { MockAdminApiService } from '../../../mock-admin-api.service';
 import { MocksStore } from '../mocks-next.store';
 import { ToastService } from '../../../ui/ui-toast/ui-toast';
-import type { OpenapiImportItem, OpenapiImportPreview } from '../../../mock-admin-api.types';
+import type { OpenapiImportItem, OpenapiImportPreview, OpenapiImportResult } from '../../../mock-admin-api.types';
 
 const PREVIEW: OpenapiImportPreview = {
   items: [
@@ -39,7 +39,7 @@ describe('OpenapiImportDialog', () => {
     // Firme esplicite: i test verificano anche il prefisso inoltrato al servizio.
     previewOpenapi: vi.fn((_document: string, _prefix?: string) => of(PREVIEW)),
     importOpenapi: vi.fn((_document: string, _prefix?: string) =>
-      of({ created: 2, skipped: 1, failed: 0, total: 3, collections: 1, prefix: '' }),
+      of<OpenapiImportResult>({ created: 2, skipped: 1, failed: 0, total: 3, collections: 1, prefix: '', items: [], runtime: { status: 'applied', errors: [] } }),
     ),
   };
   const store = { loadCatalog: vi.fn() };
@@ -97,6 +97,35 @@ describe('OpenapiImportDialog', () => {
     expect(store.loadCatalog).toHaveBeenCalledTimes(1);
     expect(dialogRef.close).toHaveBeenCalledTimes(1);
     expect(toast.show).toHaveBeenCalled();
+  });
+
+  it('import: un endpoint creato ma non servito o con avvisi rende il toast un avviso', () => {
+    const created = { method: 'GET', id: 'x', responseFile: '001.response.json', writeOutcome: 'created' as const };
+    api.importOpenapi.mockReturnValueOnce(
+      of<OpenapiImportResult>({
+        created: 3,
+        skipped: 0,
+        failed: 0,
+        total: 3,
+        collections: 1,
+        prefix: '',
+        items: [
+          { ...created, path: '/a', runtimeOutcome: 'applied', error: null },
+          { ...created, path: '/b', runtimeOutcome: 'not_applied', error: 'Not served after the reload.' },
+          { ...created, path: '/c', runtimeOutcome: 'applied', error: 'Created, but the collection could not be assigned: disco pieno' },
+        ],
+        runtime: { status: 'degraded', errors: [] },
+      }),
+    );
+    const { c } = create();
+    c.docText = '{"openapi":"3.0.0","paths":{}}';
+    c.preview.set(PREVIEW);
+
+    c.runImport();
+
+    expect(toast.show).toHaveBeenCalledWith(
+      expect.objectContaining({ tone: 'warning', description: '3 creati, 0 saltati, 1 non serviti dal runtime, 1 con avvisi' }),
+    );
   });
 
   it('non importa senza documento', () => {

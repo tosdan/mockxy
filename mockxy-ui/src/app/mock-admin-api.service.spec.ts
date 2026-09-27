@@ -111,6 +111,45 @@ describe('MockAdminApiService', () => {
     expect(received?.loadErrors).toEqual([]);
   });
 
+  describe('getMock: lettura incompleta', () => {
+    const url = '/_admin/api/mocks/e1';
+    const readInconsistent = {
+      message: 'The endpoint could not be read consistently: Selected response file not found.',
+      details: { code: 'READ_INCONSISTENT', retryable: true },
+    };
+
+    it('ripete una sola volta una lettura READ_INCONSISTENT e restituisce il dettaglio', () => {
+      let received: MockDetail | undefined;
+      service.getMock('e1').subscribe((detail) => (received = detail));
+
+      http.expectOne(url).flush(readInconsistent, { status: 409, statusText: 'Conflict' });
+      http.expectOne(url).flush({ id: 'e1' });
+
+      expect(received?.id).toBe('e1');
+    });
+
+    it('se anche il secondo tentativo è incompleto propaga l’errore, senza altri tentativi', () => {
+      let failure: { status?: number } | undefined;
+      service.getMock('e1').subscribe({ error: (error) => (failure = error) });
+
+      http.expectOne(url).flush(readInconsistent, { status: 409, statusText: 'Conflict' });
+      http.expectOne(url).flush(readInconsistent, { status: 409, statusText: 'Conflict' });
+
+      expect(failure?.status).toBe(409);
+      http.expectNone(url);
+    });
+
+    it('non ripete gli altri errori', () => {
+      let failure: { status?: number } | undefined;
+      service.getMock('e1').subscribe({ error: (error) => (failure = error) });
+
+      http.expectOne(url).flush({ message: 'Endpoint definition not found.' }, { status: 404, statusText: 'Not Found' });
+
+      expect(failure?.status).toBe(404);
+      http.expectNone(url);
+    });
+  });
+
   it('should resolve a concrete request to the covering mock', () => {
     service.resolveMock('GET', '/users/42?x=1').subscribe((mock) => {
       expect(mock).toEqual({

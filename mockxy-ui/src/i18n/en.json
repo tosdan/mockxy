@@ -9,6 +9,7 @@
     "copied": "Copied",
     "copyCode": "Copy the code",
     "unexpectedError": "Unexpected error.",
+    "detailReadUnavailable": "The detail cannot be read right now: the endpoint is changing or a file it uses is missing. Try again shortly. {{message}}",
     "selectPlaceholder": "Select…",
     "noOptions": "No options",
     "clearFilter": "Clear the filter",
@@ -41,7 +42,9 @@
     "resultCreated": "{{count}} created",
     "resultSkeleton": "{{count}} skeleton",
     "resultExisting": "{{count}} already existing",
-    "resultFailed": "{{count}} failed"
+    "resultFailed": "{{count}} failed",
+    "resultNotServed": "{{count}} not served by the runtime",
+    "resultWarnings": "{{count}} with warnings"
   },
   "dati": {
     "title": "Data",
@@ -609,6 +612,8 @@
     "resultCreated": "{{count}} created",
     "resultSkipped": "{{count}} skipped",
     "resultFailed": "{{count}} failed",
+    "resultNotServed": "{{count}} not served by the runtime",
+    "resultWarnings": "{{count}} with warnings",
     "errUnsupported": "Unsupported format: choose a .json, .yaml or .yml file.",
     "errReadFile": "Unable to read the file.",
     "errImportFailed": "Import failed."

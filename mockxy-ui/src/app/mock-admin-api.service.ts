@@ -1,6 +1,7 @@
 import { HttpClient } from '@angular/common/http';
 import { inject, Injectable } from '@angular/core';
-import { map, Observable } from 'rxjs';
+import { map, Observable, of, retry, throwError } from 'rxjs';
+import { isReadInconsistentError } from './shared/read-error-message';
 import {
   AssignCollectionRequest,
   CollectionChildrenReorderRequest,
@@ -87,9 +88,15 @@ export class MockAdminApiService {
     );
   }
 
-  /** Recupera il dettaglio completo di una singola definizione. */
+  /**
+   * Recupera il dettaglio completo di una singola definizione. Una lettura incompleta
+   * (`READ_INCONSISTENT`) si ripete una sola volta in automatico; se fallisce ancora l'errore
+   * arriva al chiamante, senza altri tentativi. Gli altri errori non si ripetono.
+   */
   getMock(id: string): Observable<MockDetail> {
-    return this.http.get<MockDetail>(`${this.baseUrl}/mocks/${encodeURIComponent(id)}`);
+    return this.http.get<MockDetail>(`${this.baseUrl}/mocks/${encodeURIComponent(id)}`).pipe(
+      retry({ count: 1, delay: (error) => (isReadInconsistentError(error) ? of(true) : throwError(() => error)) }),
+    );
   }
 
   /**

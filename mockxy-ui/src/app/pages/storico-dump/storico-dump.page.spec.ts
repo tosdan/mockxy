@@ -162,6 +162,28 @@ describe('StoricoDumpPage', () => {
       expect(toast.show).toHaveBeenCalledWith(expect.objectContaining({ tone: 'error' }));
     });
 
+    it('un mock creato ma non servito dal runtime rende il toast un avviso, con il conteggio', () => {
+      api.createMocksFromDump.mockReturnValueOnce(
+        of({
+          created: 2,
+          createdEmpty: 0,
+          skippedExisting: 0,
+          failed: 0,
+          items: [
+            { key: 'f#0', method: 'GET', path: '/a', id: 'a', responseFile: '001.response.json', writeOutcome: 'created', runtimeOutcome: 'applied', error: null },
+            { key: 'f#1', method: 'GET', path: '/b', id: 'b', responseFile: '001.response.json', writeOutcome: 'created', runtimeOutcome: 'not_applied', error: 'Not served after the reload.' },
+          ],
+          runtime: { status: 'degraded', errors: [] },
+        }),
+      );
+      const { c } = create();
+      c.selectAllLoaded();
+      c.createFromSelected();
+      expect(toast.show).toHaveBeenCalledWith(
+        expect.objectContaining({ tone: 'warning', description: '2 create, 1 non serviti dal runtime' }),
+      );
+    });
+
     it('"tutto il file" manda il criterio per nome file', () => {
       const { c } = create();
       c.createFromFile(FILE1);
