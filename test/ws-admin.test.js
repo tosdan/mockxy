@@ -90,7 +90,7 @@ describe("ws admin API", () => {
       wsConnections,
       sharedStates: new SharedStateStore(),
     });
-    return { app, wsConnections };
+    return { app, wsConnections, reloadRuntime };
   }
 
   test("catalogo e dettaglio leggono la variante ws senza degradare", async () => {
@@ -242,17 +242,18 @@ describe("ws admin API", () => {
 
   test("push senza data o su variante non ws: 400", async () => {
     await writeWsEndpoint();
-    const { app } = await buildApp();
+    const { app, reloadRuntime } = await buildApp();
 
     const missingData = await request(app).post(`/_admin/api/mocks/${MOCK_ID}/ws/push`).send({});
     expect(missingData.status).toBe(400);
 
-    // La variante selezionata diventa mock: la console ws non ha più senso su questo endpoint.
+    // La variante servita diventa mock: la console ws non ha più senso su questo endpoint.
     await fs.promises.writeFile(
       path.join(mocksDir, "canale", "GET.responses", "001.response.json"),
       `${JSON.stringify({ type: "mock", status: 200, headers: {}, delayMs: 0, body: {} }, null, 2)}\n`,
       "utf8"
     );
+    await reloadRuntime();
     const wrongType = await request(app).post(`/_admin/api/mocks/${MOCK_ID}/ws/push`).send({ data: "x" });
     expect(wrongType.status).toBe(400);
   });

@@ -6,7 +6,7 @@ const {
   countStaticSegments,
   sortRouteGroups,
 } = require("../mocks/route-groups");
-const { createAdminError } = require("./admin-errors");
+const { createAdminError, isMissingFileError, markMissingFile } = require("./admin-errors");
 const { listFiles, resolvePayloadPath } = require("./admin-fs");
 const { encodeMockId, resolveAdminFilePath, toPosixRelativePath } = require("./mock-ids");
 const {
@@ -110,8 +110,38 @@ async function listAdminChildOrder(mocksDir, existingItems) {
   return payload;
 }
 
+// Dettaglio di un endpoint. Le GET non entrano nella coda delle mutazioni e non hanno uno
+// snapshot atomico fra più file: se durante la costruzione manca un file, l'endpoint può essere
+// cambiato mentre lo leggevamo (piano agent/API, §13 C4). Si ricostruisce allora l'intero
+// dettaglio una sola volta, rileggendo la definizione e seguendone la selezione; un endpoint
+// eliminato nel frattempo è un 404. Se manca ancora un file, la lettura è dichiarata incoerente
+// e ripetibile, senza dettaglio parziale. Gli altri errori restano quello che sono.
 async function getAdminMockDetail(mocksDir, id) {
   const filePath = resolveAdminFilePath(mocksDir, id);
+  try {
+    return await buildAdminMockDetail(mocksDir, filePath);
+  } catch (error) {
+    if (!isMissingFileError(error)) {
+      throw error;
+    }
+  }
+  try {
+    return await buildAdminMockDetail(mocksDir, filePath);
+  } catch (error) {
+    if (!isMissingFileError(error)) {
+      throw error;
+    }
+    if (!fs.existsSync(filePath)) {
+      throw createAdminError(404, "Endpoint definition not found.");
+    }
+    throw createAdminError(409, `The endpoint could not be read consistently: ${error.message}`, {
+      code: "READ_INCONSISTENT",
+      retryable: true,
+    });
+  }
+}
+
+async function buildAdminMockDetail(mocksDir, filePath) {
   if (!fs.existsSync(filePath)) {
     throw createAdminError(404, "Endpoint definition not found.");
   }
@@ -158,7 +188,7 @@ async function getAdminMockDetail(mocksDir, id) {
       } catch (error) {
         // Asset sparito da disco (cancellato a mano): 404 esplicito invece di un 500 grezzo.
         if (error.code === "ENOENT") {
-          throw createAdminError(404, "Response asset file not found on disk.");
+          throw markMissingFile(createAdminError(404, "Response asset file not found on disk."));
         }
         throw error;
       }
@@ -220,7 +250,7 @@ async function getAdminMockDetail(mocksDir, id) {
     detail.source = await fs.promises.readFile(sourcePath, "utf8");
   } catch (error) {
     if (error.code === "ENOENT") {
-      throw createAdminError(404, "Response source file not found on disk.");
+      throw markMissingFile(createAdminError(404, "Response source file not found on disk."));
     }
     throw error;
   }

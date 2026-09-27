@@ -1,4 +1,4 @@
-const { createPathParamsMatcher } = require("./route-groups");
+const { createPathParamsMatcher, findEntryByConfigFile } = require("./route-groups");
 
 class MockRegistry {
   constructor(routeGroups = [], sequenceStates = null) {
@@ -9,6 +9,11 @@ class MockRegistry {
     // sequenze (test/usi legacy): lì una sequenza serve sempre il primo step.
     this.sequenceStates = sequenceStates;
     this.setRouteGroups(routeGroups);
+  }
+
+  // Definizione installata del file endpoint indicato (vedi findEntryByConfigFile).
+  findEndpointByConfigFile(configFilePath) {
+    return findEntryByConfigFile(this.routeGroups, configFilePath);
   }
 
   setRouteGroups(routeGroups) {

@@ -1,3 +1,5 @@
+const { findEntryByConfigFile } = require("../mocks/route-groups");
+
 class ProxyMiddlewareRegistry {
   constructor(routeGroups = []) {
     this.routeGroups = routeGroups;
@@ -5,6 +7,11 @@ class ProxyMiddlewareRegistry {
 
   setRouteGroups(routeGroups) {
     this.routeGroups = routeGroups;
+  }
+
+  // Definizione installata del file endpoint indicato (vedi findEntryByConfigFile).
+  findEndpointByConfigFile(configFilePath) {
+    return findEntryByConfigFile(this.routeGroups, configFilePath);
   }
 
   matchRequest(method, requestPath, requestUrl) {

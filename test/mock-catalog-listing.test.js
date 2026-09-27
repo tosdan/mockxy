@@ -82,24 +82,28 @@ describe("catalogo admin: parità col loader e degradazione per-endpoint", () =>
     expect(loadErrors[0].message).toContain("Invalid JSON");
   });
 
-  test("asset sparito da disco: il dettaglio risponde 404 esplicito, non 500", async () => {
+  // Un file referenziato che manca anche al secondo tentativo è una lettura incoerente (piano
+  // agent/API, §13 C4): ripetibile, senza dettaglio parziale, col file mancante nel messaggio.
+  test("asset sparito da disco: il dettaglio risponde READ_INCONSISTENT esplicito, non 500", async () => {
     await fs.promises.rm(path.join(mocksDir, "img", "GET.responses", "assets", "img.png"));
 
     await expect(getAdminMockDetail(mocksDir, encodeMockId("img/GET.endpoint.json"))).rejects.toMatchObject({
-      status: 404,
-      message: "Response asset file not found on disk.",
+      status: 409,
+      message: "The endpoint could not be read consistently: Response asset file not found on disk.",
+      details: { code: "READ_INCONSISTENT", retryable: true },
     });
   });
 
-  test("sorgente script sparito da disco: il dettaglio risponde 404 esplicito, non 500", async () => {
+  test("sorgente script sparito da disco: il dettaglio risponde READ_INCONSISTENT esplicito, non 500", async () => {
     await writeEndpoint("script", { ...imageEndpoint, path: "/script" }, {
       "001.response.json": { type: "handler", title: "", sourceFile: "001.handler.js" },
       // Il file 001.handler.js non viene scritto: sparito.
     });
 
     await expect(getAdminMockDetail(mocksDir, encodeMockId("script/GET.endpoint.json"))).rejects.toMatchObject({
-      status: 404,
-      message: "Response source file not found on disk.",
+      status: 409,
+      message: "The endpoint could not be read consistently: Response source file not found on disk.",
+      details: { code: "READ_INCONSISTENT", retryable: true },
     });
   });
 

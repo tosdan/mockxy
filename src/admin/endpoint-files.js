@@ -2,7 +2,7 @@ const fs = require("fs");
 const path = require("path");
 const { isValidHttpStatus } = require("../utils/http-body-utils");
 const { validatePathFormat } = require("../mocks/route-groups");
-const { createAdminError } = require("./admin-errors");
+const { createAdminError, isMissingFileError, markMissingFile } = require("./admin-errors");
 const { resolvePayloadPath, readJsonFile } = require("./admin-fs");
 const { ENDPOINT_SUFFIX, RESPONSE_SUFFIX, RESPONSES_DIR_SUFFIX } = require("./mock-ids");
 const { HTTP_METHOD_PATTERN, validateHeaderValue } = require("./mock-validation");
@@ -245,7 +245,7 @@ async function readEndpointSelectedResponse(endpointFilePath) {
   const endpoint = await readEndpointConfig(endpointFilePath);
   const responseFilePath = resolveEndpointResponseFilePath(endpointFilePath, endpoint, endpoint.selectedResponseFile);
   if (!fs.existsSync(responseFilePath)) {
-    throw createAdminError(404, "Selected response file not found.");
+    throw markMissingFile(createAdminError(404, "Selected response file not found."));
   }
 
   return {
@@ -276,6 +276,11 @@ async function readEndpointResponseSummaries(endpointFilePath, endpoint) {
     try {
       response = await readEndpointResponse(responseFilePath, endpoint);
     } catch (error) {
+      // Sparita fra il controllo e la lettura: è mancante, non illeggibile.
+      if (isMissingFileError(error)) {
+        summaries.push({ fileName: responseFile, missing: true });
+        continue;
+      }
       summaries.push({
         fileName: responseFile,
         invalid: true,

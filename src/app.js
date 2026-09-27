@@ -990,7 +990,7 @@ function createApp({
   const dataFileReader = createDataFileReader(config?.filesDir);
 
   if (config?.adminApiEnabled !== false) {
-    app.use("/_admin/api", createAdminHostGuard(config), createAdminApiRouter({ config, reloadRuntime, requestMonitor, serverState, monitorDump, sequenceStates, handlerStates, sharedStates, sseConnections, wsConnections }));
+    app.use("/_admin/api", createAdminHostGuard(config), createAdminApiRouter({ config, registry, proxyMiddlewareRegistry, reloadRuntime, requestMonitor, serverState, monitorDump, sequenceStates, handlerStates, sharedStates, sseConnections, wsConnections }));
   } else {
     app.use("/_admin/api", sendAdminApiDisabled);
   }

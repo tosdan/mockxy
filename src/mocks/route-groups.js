@@ -1,3 +1,4 @@
+const path = require("path");
 const { match } = require("path-to-regexp");
 const RESERVED_QUERY_FOLDER_CHAR = "^";
 
@@ -170,8 +171,23 @@ function sortRouteGroups(groups) {
   });
 }
 
+// Definizione installata del file endpoint indicato, anche quando è una versione mantenuta
+// nonostante un errore di caricamento; null se i gruppi non la contengono.
+function findEntryByConfigFile(routeGroups, configFilePath) {
+  const target = path.resolve(configFilePath);
+  for (const group of routeGroups) {
+    for (const entry of group.methods.values()) {
+      if (entry.configFilePath != null && path.resolve(entry.configFilePath) === target) {
+        return entry;
+      }
+    }
+  }
+  return null;
+}
+
 module.exports = {
   countStaticSegments,
+  findEntryByConfigFile,
   createPathMatcher,
   createPathParamsMatcher,
   isDynamicPath,

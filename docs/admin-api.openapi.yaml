@@ -571,6 +571,13 @@ paths:
         variant — including the payload body (or file metadata), the handler source, or the
         SSE/WS script or sequence definition. When the selected variant is a sequence,
         `sequenceState` reports its live cursor.
+
+        Reads do not wait for queued mutations and are not an atomic snapshot of several files.
+        When a file is missing while the detail is built, the endpoint may have changed during
+        the read: the whole detail is built once more from the definition read again,
+        following its current selection. An endpoint deleted meanwhile answers `404`; a file
+        still missing answers `409 READ_INCONSISTENT` with no partial detail. Other errors
+        (invalid JSON, access) keep their own status and are not retried.
       responses:
         "200":
           description: Endpoint detail
@@ -579,6 +586,7 @@ paths:
               schema: { $ref: "#/components/schemas/MockDetail" }
         "400": { $ref: "#/components/responses/BadRequest" }
         "404": { $ref: "#/components/responses/MockNotFound" }
+        "409": { $ref: "#/components/responses/ReadInconsistent" }
     put:
       tags: [Endpoints]
       operationId: updateMock
@@ -816,8 +824,11 @@ paths:
       summary: Broadcast an SSE message to the open connections
       description: |
         Sends one message to **every** connection currently open on this endpoint, on top of
-        whatever its script is doing. Requires the selected variant to be of type `sse`.
-        The message is recorded in the console history even when nobody is listening.
+        whatever its script is doing. The target is the definition the installed runtime
+        serves — including a previous route kept because a newer selection failed to load —
+        not the selection on disk: it must be of type `sse`. It does not wait for queued
+        mutations. The message is recorded in the console history even when nobody is
+        listening.
       requestBody:
         required: true
         content:
@@ -827,11 +838,11 @@ paths:
       responses:
         "200": { $ref: "#/components/responses/PushResult" }
         "400":
-          description: Invalid message, or the selected variant is not an `sse` one.
+          description: Invalid message, or the served variant is not an `sse` one.
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
-        "404": { $ref: "#/components/responses/MockNotFound" }
+        "404": { $ref: "#/components/responses/StreamEndpointNotServed" }
 
   /mocks/{id}/sse/connections:
     parameters:
@@ -840,7 +851,7 @@ paths:
       tags: [Endpoints]
       operationId: listSseState
       summary: SSE console state
-      description: Open connections (with their position in the script) and the history of messages sent out, scripted and manual alike. Requires the selected variant to be of type `sse`.
+      description: Open connections (with their position in the script) and the history of messages sent out, scripted and manual alike. Resolved like `POST /mocks/{id}/sse/push`, from the definition the installed runtime serves, which must be of type `sse`.
       responses:
         "200":
           description: Console state
@@ -858,11 +869,11 @@ paths:
                     description: Oldest first, capped to the most recent messages.
                     items: { $ref: "#/components/schemas/SseHistoryEntry" }
         "400":
-          description: The selected variant is not an `sse` one.
+          description: The served variant is not an `sse` one.
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
-        "404": { $ref: "#/components/responses/MockNotFound" }
+        "404": { $ref: "#/components/responses/StreamEndpointNotServed" }
 
   /mocks/{id}/ws/push:
     parameters:
@@ -871,7 +882,7 @@ paths:
       tags: [Endpoints]
       operationId: pushWsMessage
       summary: Broadcast a WebSocket message to the open connections
-      description: Sends `data` to every open connection of this endpoint. Requires the selected variant to be of type `ws`. Non-string `data` travels as JSON on the wire.
+      description: Sends `data` to every open connection of this endpoint. Resolved like `POST /mocks/{id}/sse/push`, from the definition the installed runtime serves, which must be of type `ws`. Non-string `data` travels as JSON on the wire.
       requestBody:
         required: true
         content:
@@ -881,11 +892,11 @@ paths:
       responses:
         "200": { $ref: "#/components/responses/PushResult" }
         "400":
-          description: Invalid message, or the selected variant is not a `ws` one.
+          description: Invalid message, or the served variant is not a `ws` one.
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
-        "404": { $ref: "#/components/responses/MockNotFound" }
+        "404": { $ref: "#/components/responses/StreamEndpointNotServed" }
 
   /mocks/{id}/ws/connections:
     parameters:
@@ -894,7 +905,7 @@ paths:
       tags: [Endpoints]
       operationId: listWsState
       summary: WebSocket console state
-      description: Open connections and the **bidirectional** transcript (messages sent and received). Requires the selected variant to be of type `ws`.
+      description: Open connections and the **bidirectional** transcript (messages sent and received). Resolved like `POST /mocks/{id}/sse/push`, from the definition the installed runtime serves, which must be of type `ws`.
       responses:
         "200":
           description: Console state
@@ -912,11 +923,11 @@ paths:
                     description: Oldest first, capped to the most recent messages.
                     items: { $ref: "#/components/schemas/WsTranscriptEntry" }
         "400":
-          description: The selected variant is not a `ws` one.
+          description: The served variant is not a `ws` one.
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
-        "404": { $ref: "#/components/responses/MockNotFound" }
+        "404": { $ref: "#/components/responses/StreamEndpointNotServed" }
 
   # ───────────────────────────── Response variants ────────────────────────────
   /mocks/{id}/responses:
@@ -1787,6 +1798,23 @@ components:
       content:
         application/json:
           schema: { $ref: "#/components/schemas/Error" }
+    StreamEndpointNotServed:
+      description: |
+        The endpoint does not exist, or the installed runtime does not serve it (disabled, or
+        never loaded successfully). An installed middleware endpoint is served with another
+        type and answers `400`, not `404`.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    ReadInconsistent:
+      description: |
+        `details.code: READ_INCONSISTENT`, `details.retryable: true`. A file the detail
+        references was still missing after a second complete read: the endpoint is changing,
+        or a referenced file is missing on disk (the message names it). No partial detail is
+        returned. Clients retry automatically at most once.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
     CollectionNotFound:
       description: Collection not found.
       content:
@@ -1935,7 +1963,7 @@ components:
               description: |
                 Stable error code, present on newer errors: `ADMIN_ROUTE_NOT_FOUND`,
                 `MUTATION_REJECTED`, `RUNTIME_APPLY_FAILED`, `MUTATION_FAILED`, `ROLLBACK_FAILED`,
-                `BATCH_RUNTIME_FAILED`.
+                `BATCH_RUNTIME_FAILED`, `READ_INCONSISTENT`.
             rollback:
               type: string
               enum: [not_needed, restored, failed]
@@ -1946,6 +1974,9 @@ components:
             recoveryError:
               type: string
               description: "`ROLLBACK_FAILED` only: the error that failed the restore."
+            retryable:
+              type: boolean
+              description: "`READ_INCONSISTENT` only: repeating the read may succeed."
             result:
               type: object
               description: "Batch errors only (`BATCH_RUNTIME_FAILED`, or `ROLLBACK_FAILED` from a batch): the batch result, as in the 201 response."
