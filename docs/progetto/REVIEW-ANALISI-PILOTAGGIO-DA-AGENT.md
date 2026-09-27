@@ -724,3 +724,25 @@ Su richiesta di Dani, il [piano](PIANO-PILOTAGGIO-DA-AGENT.md) ora distingue le 
 Sono risolte anche le alternative precedentemente aperte: stessa definizione SSE/WS su filename diverso conserva la connessione; raw upload usa un header di revisione e conflitto 409; il Monitor mantiene la forma legacy senza query e introduce la modalità esplicita view=page; la configurazione usa set/unset. Il setup prepara prima di selezionare e attivare. Il collaudo indica fixture, stati iniziali e risposte browser attese, senza ripristino intermedio.
 
 Queste sono precisazioni tecniche di Codex nel perimetro D01–D04, non un nuovo accordo attribuito a Opus. Non modificano l’arbitraggio, non aggiungono undo e non avviano l’implementazione. La diagnosi rinvia ai contratti correnti; la cronologia del confronto rimane intatta.
+
+
+### Convergenza sui contratti esecutivi — 27 settembre 2026
+
+Dani ha riportato un’ulteriore passata di Opus e la sua contro-risposta alle precisazioni di Codex. Opus concorda sui punti riesaminati e propone tre scelte concrete: recupero limitato delle letture incomplete, push SSE/WS basati sul runtime installato e rilettura del dettaglio al focus. Codex le recepisce nel piano, insieme alle correzioni concordate della passata precedente.
+
+- **C1/C4:** GET fuori dalla coda; token e risposta derivano dagli stessi dati acquisiti. Una lettura composta non promette uno snapshot atomico. File mancante → rilettura endpoint, 404 se bersaglio rimosso, altrimenti una ricostruzione aggiuntiva; ulteriore incompletezza → 409 READ_INCONSISTENT, retryable e senza token. GUI/skill ripetono la GET una sola volta; nessun retry automatico del salvataggio in conflitto.
+- **C1:** push fuori dalla coda, bersaglio ricavato dalla definizione installata e verifica al momento dell’invio, compresa la vecchia rotta mantenuta su errore. Nessuna dipendenza dalla selezione desiderata sul disco.
+- **C2/C4:** cache dei metadati per le revisioni informative, invalidazione diretta delle scritture API, hash effettivo per letture protette e autorizzazione del salvataggio. Una modifica esterna a metadati invariati può restare invisibile fino alla rilettura; al focus si rilegge comunque il dettaglio aperto e il bersaglio della bozza se diverso, senza sostituire testo o baseRevision locali.
+- **C0/C5/C6:** eccezione di compatibilità sulle query del Monitor dichiarata nelle note da produrre con S5; sharedStateError nel sommario; HTML del test sulla stessa origine di Mockxy e asserzioni filtrate per i path del caso.
+- **C2/C8 e analisi:** formula precisa dell’identità workspace, reasons multiple per reload aggregati, distinzione fra impostazioni desktop salvate e override runtime con effetti del riavvio, reload esplicito qualificato come evoluzione fuori da S0–S8.
+
+Le garanzie di scrittura riguardano le operazioni protette da revisione e il contenuto coperto dal token; non si estendono ai client legacy senza precondizione, alle azioni immediate o ai writer esterni. Il token non deve mai autorizzare una scrittura sulla base di dati diversi da quelli acquisiti per la lettura del client. Nessuna modifica a D01–D04, nessun nuovo arbitraggio richiesto, nessuna implementazione applicativa avviata. La verifica finale del testo aggiornato da parte di Opus rimane distinta dall’accordo sui comportamenti riportato qui.
+
+
+### Verifica finale di Opus e completamento delle console — 27 settembre 2026
+
+Dani riporta la verifica di Opus sul diff dei documenti: accordo pieno sul testo aggiornato, senza contraddizioni residue nei punti riesaminati. Opus segnala un ultimo completamento: anche GET /mocks/:id/sse/connections e GET /mocks/:id/ws/connections devono usare la definizione installata, come i push, perché oggi condividono la risoluzione dal disco.
+
+Codex ha verificato le due funzioni di lettura e aggiunto in C1 la stessa risoluzione, gli stessi esiti 404/400 e la conservazione dei campi delle risposte. Il criterio di accettazione copre insieme push e lettura della console quando il caricamento della nuova selezione fallisce e la vecchia rotta SSE/WS resta installata. Questo completamento recepisce la richiesta di Opus; non gli attribuisce un’ulteriore lettura del diff successivo.
+
+Il confronto sul piano è concluso. Decisioni D01–D04 invariate; documenti pronti per l’implementazione a partire da S0, che non è stata avviata in questo passaggio.

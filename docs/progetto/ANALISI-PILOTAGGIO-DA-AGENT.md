@@ -2,7 +2,7 @@
 
 Stato: **diagnosi aggiornata dopo review e arbitraggio; implementazione non iniziata**
 
-Analisi iniziale: 25 settembre 2026. Aggiornamento: 26 settembre 2026.
+Analisi iniziale: 25 settembre 2026. Aggiornamento: 27 settembre 2026.
 
 Base del codice esaminato: `ace8860c9d5b2d019147e0a090bad9ab1c0d5713`.
 La [review](REVIEW-ANALISI-PILOTAGGIO-DA-AGENT.md) conserva i riscontri e la storia del confronto
@@ -440,7 +440,7 @@ Le priorità esprimono l'ordine dei casi d'uso; i passi eseguibili sono nel pian
 | 11 | Gate per workspace più revisione attesa per descrizioni e varianti; bersaglio della bozza stabile | Primo caso, prima del polling |
 | 12 | GET della variante per nome e creazione con `select: false` | Anticipata nel primo caso |
 | 13 | Batch sposta/elimina, con atomicità delimitata e verificata per operazione | Rinviabile; non promettere un solo reload totale |
-| 14 | Reload esplicito con esito e diagnostica per sincronizzare scritture su file | Percorso file/live opzionale, dopo la chiusura mirata degli stream |
+| 14 | Reload esplicito con esito e diagnostica per sincronizzare scritture su file | Eventuale evoluzione fuori da S0–S8; non richiesto dal setup via API e non incluso nel piano corrente |
 | 15 | Clonazione lato server fra tipi di variante | Rinviabile |
 | 16 | Scenari attivabili in blocco | Evoluzione eventuale; non prerequisito del setup con API esistenti |
 | 17 | Validazione uniforme dell'esito delle mutazioni, distinguendo rollback e batch parziali | Fondamenta, vedi 5.10 |
