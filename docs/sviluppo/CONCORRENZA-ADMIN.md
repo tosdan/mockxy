@@ -5,6 +5,27 @@ punto 7, l'unico finding di quel documento rimasto aperto). Questo documento svi
 spiega perché il fix suggerito dalla review non è applicabile così com'è, e cataloga le soluzioni
 possibili per il giorno in cui servissero.
 
+## Stato attuale (27 settembre 2026)
+
+Il perimetro d'uso è cambiato: con la decisione D01 del [piano agent/API](../progetto/PIANO-PILOTAGGIO-DA-AGENT.md)
+GUI e agent possono modificare lo stesso workspace in contemporanea. La **soluzione 1** descritta
+sotto è implementata con S1: nel router admin tutte le rotte di mutazione passano da una coda per
+`mocksDir` canonico (`runInMutationQueue` in `src/admin/admin-api.js`), esterna e distinta da
+quella non rientrante di `.collections.json`, quindi senza deadlock. Il turno dura quanto
+l'operazione, reload e rollback compresi, anche se il client si disconnette.
+
+Garanzie e limiti, per non leggerle più ampie di quanto sono:
+
+- **garantito:** due mutazioni API sullo stesso workspace, nello stesso processo, non si intrecciano
+  più; letture, traffico e push delle console SSE/WS non attendono la coda;
+- **non garantito:** scritture fatte da editor, dal watcher o da un altro processo sullo stesso
+  workspace; nessuna coda li governa;
+- **bozze stantie:** la coda non impedisce che un salvataggio basato su una lettura vecchia
+  sovrascriva una modifica più recente. Le revisioni attese che lo rilevano arrivano con S4;
+- **azioni immediate** (toggle, selezione, riordini): vince l'ultima, per scelta dichiarata.
+
+Il resto del documento conserva l'analisi del 9 luglio.
+
 ## La posizione di prodotto (decisa il 9 lug 2026)
 
 **L'uso previsto di Mockxy è mono-utente**: una persona, un'app desktop o una UI nel browser, che fa

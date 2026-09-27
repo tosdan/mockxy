@@ -37,6 +37,27 @@ esistenti restano compatibili: nessuna migrazione richiesta.
   mock sotto `/_admin/api` va spostato su un altro percorso: il namespace non è più disponibile
   per i mock.
 
+#### Esito delle mutazioni verificato sul runtime
+
+- **Prima:** sette rotte che ricaricano il runtime (abilitazione in massa di endpoint e
+  collezioni, eliminazione di endpoint e del contenuto di una collezione, import OpenAPI,
+  creazione dallo storico, rinomina dei file dati con riscrittura) ignoravano l'esito del reload:
+  potevano rispondere `2xx` anche quando il runtime non serviva la modifica. Un reload fallito o
+  un errore di scrittura rispondevano `400`, e un errore di scrittura a metà operazione poteva
+  lasciare file non ripristinati.
+- **Ora:** ogni mutazione verifica che il runtime rifletta l'effetto richiesto sugli endpoint
+  coinvolti e, se non ci riesce, ripristina i file. Gli errori portano `details.code` e
+  `details.rollback`: `400 MUTATION_REJECTED` (input non valido o modifica non applicabile),
+  `500 RUNTIME_APPLY_FAILED` (reload fallito nel suo insieme, prima `400`), `500 MUTATION_FAILED`
+  (errore di scrittura, prima `400`), `500 ROLLBACK_FAILED` (fallito anche il ripristino). Import
+  OpenAPI e creazione dallo storico aggiungono `items` e `runtime` alla risposta, conservando i
+  conteggi; un reload finale fallito risponde `500 BATCH_RUNTIME_FAILED` senza annullare gli
+  elementi scritti. Le mutazioni dello stesso workspace vengono eseguite una alla volta; letture,
+  traffico e push delle console non le attendono.
+- **Per i client:** leggere `details.code` invece del solo status, e per i batch
+  `items[].runtimeOutcome` anche con `201`. Chi distingueva un reload fallito dal `400` deve
+  gestire il `500 RUNTIME_APPLY_FAILED`.
+
 ---
 
 ## v1.3.2 (pubblicata)

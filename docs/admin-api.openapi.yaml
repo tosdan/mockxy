@@ -49,11 +49,20 @@ info:
       answers `404` with `details.code: "ADMIN_ROUTE_NOT_FOUND"`. It never falls through to mock
       serving or to the backend proxy, and a mock declared under `/_admin/api` is never served,
       WebSocket upgrades included.
-    - **Reload semantics**: catalog mutations reload the runtime *before responding*, so the
-      change is live for the very next request — no restart. A mutation that leaves the runtime
-      unable to load is rolled back on disk and reported as an error. Data-file writes reload
-      nothing (`data()` re-reads on every call), with one exception: a rename that rewrites
-      `data()` references in handler sources does reload.
+    - **Reload semantics**: catalog mutations reload the runtime *before responding* and check
+      the outcome, so the change is live for the very next request — no restart. A `2xx` means
+      the files are written **and** the installed runtime reflects the requested effect on the
+      endpoints involved: served when enabled, gone when disabled or deleted. A load error on
+      those endpoints, a failed runtime reload or a write error undoes the change and answers
+      with `details.code` and `details.rollback` (see the `BadRequest` and `MutationFailed`
+      responses); errors of unrelated endpoints do not fail a valid mutation. There is no
+      isolation from traffic while a mutation runs: the guarantee is a consistent state at the
+      end. Data-file writes reload nothing (`data()` re-reads on every call), with one
+      exception: a rename that rewrites `data()` references in handler sources does reload, and
+      the rewritten handlers are checked the same way.
+    - **One mutation at a time**: mutations of the same workspace are serialized. Reads, served
+      traffic and the SSE/WS console pushes are not queued behind them, and a client that
+      disconnects does not cut a running mutation short.
     - **Mutation results**: most endpoint and variant mutations answer with the **full
       `MockDetail`** of the affected endpoint, so a client never needs a follow-up GET. Composing
       that detail happens *after* the change is committed, so when it fails for an unrelated
@@ -216,6 +225,7 @@ paths:
                 error: Conflict
                 message: An endpoint already exists for this folder and method.
                 details: { existingMockId: bW9ja3MvYXBpL3VzZXJzL0dFVC5lbmRwb2ludC5qc29u }
+        "500": { $ref: "#/components/responses/MutationFailed" }
 
   /mocks/resolve:
     get:
@@ -455,6 +465,7 @@ paths:
                   childOrder: { $ref: "#/components/schemas/ChildOrder" }
         "400": { $ref: "#/components/responses/BadRequest" }
         "404": { $ref: "#/components/responses/CollectionNotFound" }
+        "500": { $ref: "#/components/responses/MutationFailed" }
 
   /mocks/collections/{id}:
     parameters:
@@ -495,6 +506,7 @@ paths:
                   deleted: { type: integer }
         "400": { $ref: "#/components/responses/BadRequest" }
         "404": { $ref: "#/components/responses/CollectionNotFound" }
+        "500": { $ref: "#/components/responses/MutationFailed" }
 
   # ──────────────────────────────── Endpoints ────────────────────────────────
   /mocks/enabled:
@@ -507,9 +519,11 @@ paths:
         `PATCH /mocks/collections/{id}/enabled`, but the caller picks the endpoints instead of
         taking a whole subtree — this is what backs multi-selection in the catalog.
 
-        All-or-nothing: the whole batch shares a single rollback and a single runtime reload, so a
-        rejected reload leaves every file as it was. An unknown id fails the request before
-        anything is written. Endpoints already in the requested state are left untouched.
+        All-or-nothing: the whole list shares one rollback. After the reload every listed
+        endpoint is checked — enabled ones must load without errors and be served, disabled ones
+        must no longer be served — and on failure every file is restored (`400
+        MUTATION_REJECTED`). An unknown id fails the request before anything is written.
+        Endpoints already in the requested state are not rewritten, but they are checked too.
       requestBody:
         required: true
         content:
@@ -543,6 +557,7 @@ paths:
                   childOrder: { $ref: "#/components/schemas/ChildOrder" }
         "400": { $ref: "#/components/responses/BadRequest" }
         "404": { $ref: "#/components/responses/MockNotFound" }
+        "500": { $ref: "#/components/responses/MutationFailed" }
 
   /mocks/{id}:
     parameters:
@@ -608,6 +623,7 @@ paths:
               schema: { $ref: "#/components/schemas/MockDetailAfterMutation" }
         "400": { $ref: "#/components/responses/BadRequest" }
         "404": { $ref: "#/components/responses/MockNotFound" }
+        "500": { $ref: "#/components/responses/MutationFailed" }
     delete:
       tags: [Endpoints]
       operationId: deleteMock
@@ -617,6 +633,7 @@ paths:
         "204": { description: Deleted. }
         "400": { $ref: "#/components/responses/BadRequest" }
         "404": { $ref: "#/components/responses/MockNotFound" }
+        "500": { $ref: "#/components/responses/MutationFailed" }
 
   /mocks/{id}/endpoint:
     parameters:
@@ -650,6 +667,7 @@ paths:
               schema: { $ref: "#/components/schemas/MockDetailAfterMutation" }
         "400": { $ref: "#/components/responses/BadRequest" }
         "404": { $ref: "#/components/responses/MockNotFound" }
+        "500": { $ref: "#/components/responses/MutationFailed" }
 
   /mocks/{id}/copy:
     parameters:
@@ -705,6 +723,7 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
+        "500": { $ref: "#/components/responses/MutationFailed" }
 
   /mocks/{id}/collection:
     parameters:
@@ -965,6 +984,7 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
+        "500": { $ref: "#/components/responses/MutationFailed" }
 
   /mocks/{id}/responses/{responseFileName}:
     parameters:
@@ -1016,6 +1036,7 @@ paths:
               schema: { $ref: "#/components/schemas/MockDetailAfterMutation" }
         "400": { $ref: "#/components/responses/BadRequest" }
         "404": { $ref: "#/components/responses/MockNotFound" }
+        "500": { $ref: "#/components/responses/MutationFailed" }
     delete:
       tags: [Response variants]
       operationId: deleteResponse
@@ -1039,6 +1060,7 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
+        "500": { $ref: "#/components/responses/MutationFailed" }
 
   /mocks/{id}/responses/{responseFileName}/file:
     parameters:
@@ -1087,6 +1109,7 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
         "404": { $ref: "#/components/responses/MockNotFound" }
+        "500": { $ref: "#/components/responses/MutationFailed" }
 
   # ─────────────────────────────── OpenAPI import ─────────────────────────────
   /mocks/import/openapi:
@@ -1098,7 +1121,9 @@ paths:
         Takes an OpenAPI document as the **raw request body** (JSON or YAML, up to 12 MB) and
         creates one mock endpoint per operation, with a body sampled from the first successful
         response schema. Operation tags become collections, reusing existing ones by label;
-        endpoints that already exist are skipped rather than overwritten.
+        endpoints that already exist are skipped rather than overwritten. The import degrades per
+        operation, with one runtime reload at the end: `items` and `runtime` tell which created
+        endpoints are actually served.
 
         With `dryRun=true` nothing is written and the response is the **plan** — every operation
         with the action that would be taken — so a wizard can show it before committing. The
@@ -1150,6 +1175,7 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
+        "500": { $ref: "#/components/responses/BatchRuntimeFailed" }
 
   # ───────────────────────────────── Data files ───────────────────────────────
   /files:
@@ -1265,6 +1291,7 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
+        "500": { $ref: "#/components/responses/MutationFailed" }
     delete:
       tags: [Data files]
       operationId: deleteDataFile
@@ -1548,7 +1575,7 @@ paths:
         Degrades per entry instead of failing the batch: an endpoint that already exists is
         counted as skipped, and an entry whose body was binary or truncated produces a
         **skeleton** — empty body, description marked as to be completed. One runtime reload at
-        the end.
+        the end: `items` and `runtime` tell which created endpoints are actually served.
       requestBody:
         required: true
         content:
@@ -1582,7 +1609,7 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [created, createdEmpty, skippedExisting, failed]
+                required: [created, createdEmpty, skippedExisting, failed, items, runtime]
                 properties:
                   created:
                     type: integer
@@ -1595,7 +1622,21 @@ paths:
                     description: Endpoints that already existed.
                   failed:
                     type: integer
+                  items:
+                    type: array
+                    description: One outcome per archived entry, in the order they were read.
+                    items:
+                      allOf:
+                        - $ref: "#/components/schemas/BatchItemOutcome"
+                        - type: object
+                          required: [key, method, path]
+                          properties:
+                            key: { type: [string, "null"], description: The entry's `dumpKey`. }
+                            method: { type: string }
+                            path: { type: string }
+                  runtime: { $ref: "#/components/schemas/BatchRuntime" }
         "400": { $ref: "#/components/responses/BadRequest" }
+        "500": { $ref: "#/components/responses/BatchRuntimeFailed" }
 
   /monitoring/dumps/{file}:
     parameters:
@@ -1705,7 +1746,28 @@ components:
 
   responses:
     BadRequest:
-      description: Invalid input.
+      description: |
+        Invalid input. On a mutation the body is also rejected when the reload shows that the
+        change cannot be applied (`details.code: MUTATION_REJECTED`); `details.rollback` says
+        whether anything had to be restored (`not_needed` or `restored`).
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    MutationFailed:
+      description: |
+        The mutation could not be applied and was undone. `details.code` is
+        `RUNTIME_APPLY_FAILED` (the runtime reload failed globally), `MUTATION_FAILED` (an
+        unexpected write error) or `ROLLBACK_FAILED` (restoring the previous files or runtime
+        failed too: `details.rollback` is `failed`, and `details.cause` / `details.recoveryError`
+        describe both errors — the workspace state must not be assumed consistent).
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    BatchRuntimeFailed:
+      description: |
+        `details.code: BATCH_RUNTIME_FAILED`. The items were written, but the final runtime
+        reload failed globally: nothing is undone, `details.result` holds the complete batch
+        result with `runtime.status: failed` and every created item `not_applied`.
       content:
         application/json:
           schema: { $ref: "#/components/schemas/Error" }
@@ -1859,7 +1921,23 @@ components:
           properties:
             code:
               type: string
-              description: Stable error code, present on newer errors (e.g. `ADMIN_ROUTE_NOT_FOUND` for an unknown admin route).
+              description: |
+                Stable error code, present on newer errors: `ADMIN_ROUTE_NOT_FOUND`,
+                `MUTATION_REJECTED`, `RUNTIME_APPLY_FAILED`, `MUTATION_FAILED`, `ROLLBACK_FAILED`,
+                `BATCH_RUNTIME_FAILED`.
+            rollback:
+              type: string
+              enum: [not_needed, restored, failed]
+              description: On a failed mutation, what happened to the files and runtime it had touched.
+            cause:
+              type: string
+              description: "`ROLLBACK_FAILED` only: the error that failed the mutation."
+            recoveryError:
+              type: string
+              description: "`ROLLBACK_FAILED` only: the error that failed the restore."
+            result:
+              type: object
+              description: "`BATCH_RUNTIME_FAILED` only: the complete batch result, as in the 201 response."
       example:
         error: Bad Request
         message: config.status must be an integer HTTP status code.
@@ -2575,9 +2653,51 @@ components:
           type: string
           description: Prefix inferred from the document's `servers`, offered to the user by the wizard.
 
+    BatchRuntime:
+      type: object
+      description: Outcome of the single runtime reload that closes a batch.
+      required: [status, errors]
+      properties:
+        status:
+          type: string
+          enum: [applied, degraded]
+          description: "`degraded` when some endpoint of the workspace — not necessarily one of this batch — failed to load."
+        errors:
+          type: array
+          items:
+            type: object
+            required: [filePath, message]
+            properties:
+              filePath: { type: string, description: Endpoint file, relative to the mocks folder. }
+              message: { type: string }
+    BatchItemOutcome:
+      type: object
+      required: [id, responseFile, writeOutcome, runtimeOutcome, error]
+      properties:
+        id:
+          type: [string, "null"]
+          description: Endpoint id, when one was created or already existed.
+        responseFile:
+          type: [string, "null"]
+          description: Response variant written for this item.
+        writeOutcome:
+          type: string
+          enum: [created, skipped, failed]
+          description: What happened on disk. A failed item restores its own files; the batch goes on.
+        runtimeOutcome:
+          type: string
+          enum: [applied, not_applied, not_applicable]
+          description: |
+            `applied`: served after the final reload. `not_applied`: written but not served
+            (see `error`). `not_applicable`: nothing to serve (skipped or failed).
+        error:
+          type: [string, "null"]
     OpenapiImportResult:
       type: object
-      required: [created, skipped, failed, total, collections, prefix]
+      required: [created, skipped, failed, total, collections, prefix, items, runtime]
+      description: |
+        The counts keep their historical meaning of writes on disk; whether each endpoint is
+        actually served is told by `items[].runtimeOutcome` and `runtime.status`.
       properties:
         created: { type: integer }
         skipped:
@@ -2591,6 +2711,18 @@ components:
           type: integer
           description: Collections resolved or created from tags.
         prefix: { type: string }
+        items:
+          type: array
+          description: One outcome per operation of the plan, skipped ones included.
+          items:
+            allOf:
+              - $ref: "#/components/schemas/BatchItemOutcome"
+              - type: object
+                required: [method, path]
+                properties:
+                  method: { type: string }
+                  path: { type: string }
+        runtime: { $ref: "#/components/schemas/BatchRuntime" }
 
     # ── Data files ───────────────────────────────────────────────────────────
     DataFileSummary:

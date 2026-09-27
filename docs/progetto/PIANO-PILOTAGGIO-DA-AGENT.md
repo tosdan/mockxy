@@ -40,7 +40,7 @@ Ogni passo è un insieme di modifiche verificabile e può essere suddiviso in co
 | Passo | Risultato | Dipendenze | Stato | Evidenze |
 |---|---|---|---|---|
 | S0 | Correggere default, namespace admin e guardia del contratto | Nessuna | Completato | [#20](https://github.com/tosdan/mockxy/pull/20) integrata; [mockxy-skills#3](https://github.com/tosdan/mockxy-skills/pull/3) integrata |
-| S1 | Serializzare mutazioni e rendere affidabili esiti/reload | S0 | Da fare | — |
+| S1 | Serializzare mutazioni e rendere affidabili esiti/reload | S0 | In corso | — |
 | S2 | Esporre identità, configurazione effettiva e diagnostica | S1 per gli esiti coerenti | Da fare | — |
 | S3 | Leggere/preparare varianti inattive e preservare stream | S1 | Da fare | — |
 | S4 | Proteggere bozze e sincronizzare GUI senza perderle | S1–S3; bozza stabile prima del polling del dettaglio | Da fare | — |
@@ -116,6 +116,13 @@ Correggere subito `saveDescription` perché invii solo `description`, eliminando
 **Punti del codice:** [admin-fs.js](../../src/admin/admin-fs.js), [endpoint-operations.js](../../src/admin/endpoint-operations.js), [collection-operations.js](../../src/admin/collection-operations.js), [openapi-admin-import.js](../../src/admin/openapi-admin-import.js), [dump-to-mock.js](../../src/admin/dump-to-mock.js), [server.js](../../src/server.js), [store GUI](../../mockxy-ui/src/app/pages/mocks-next/mocks-next.store.ts).
 
 **Accettazione:** riprodurre il caso dell'handler non compilabile e del toggle; verificare interleaving di due mutazioni, recupero da errore e disconnessione del client; GET informativi, letture di bozza e push su endpoint estranei restano possibili durante un batch, senza attenderne il completamento. Provare rimozione/rinomina concorrente a una lettura, recupero al secondo tentativo e risposta READ_INCONSISTENT senza token quando il recupero non riesce. I test non devono confondere un errore estraneo con un errore sulla risorsa modificata. Verificare separatamente delete, rinomina e batch parziali.
+
+> **Avanzamento S1 — aggiornato il 2026-09-27**
+>
+> - **Consegnato / restante:** S1 è diviso in tre PR per tenere le review piccole. La prima (motore, in preparazione) contiene la coda delle mutazioni per workspace su tutte le rotte di modifica tranne i push, il nuovo `commitWithRollback` con le scritture nella fase protetta, la classificazione degli errori della tabella C1 (`MUTATION_REJECTED`, `RUNTIME_APPLY_FAILED`, `MUTATION_FAILED`, `ROLLBACK_FAILED`, con `details.rollback`), la verifica dell'effetto sul registro installato per le quindici rotte che ricaricano il runtime, le sette lacune chiuse (toggle endpoint/collezione, delete endpoint/contenuto, import OpenAPI, creazione dallo storico, rinomina dati con riscrittura come gruppo unico), gli esiti per elemento dei due batch con `BATCH_RUNTIME_FAILED`, e l'aggiornamento di OpenAPI, guide ADMIN-API IT/EN, note di rilascio e `CONCORRENZA-ADMIN.md`. Restano: la seconda PR del motore (push e stato delle console SSE/WS risolti dal runtime installato; procedura `READ_INCONSISTENT` sulle letture del dettaglio), la PR della GUI (`saveDescription` e toggle con il solo campo modificato) e l'allineamento della reference dello skill. La validazione diretta di una variante inattiva (C1) arriva con `select: false` in S3, dove è ripresa dai criteri di accettazione.
+> - **Verifiche:** sul branch della prima PR, `npm test` 73 suite / 825 test. Nuovi test: contratto delle mutazioni col reload reale (12, di cui 7 falliscono sul codice precedente), coda delle mutazioni (4, due falliscono senza serializzazione: attesa della seconda mutazione e disconnessione del client), unità di `commitWithRollback` e `validateReloadedEndpoints`. Test UI, build e CI da eseguire all'apertura della PR.
+> - **Impedimenti:** nessuno.
+> - **Modifiche al contratto:** nessuna.
 
 ## 5. S2 — Identità, contratto distribuito e diagnostica
 
