@@ -177,7 +177,7 @@ describe("mutazioni admin: esito applicato e rollback", () => {
       details: {
         code: "ROLLBACK_FAILED",
         rollback: "failed",
-        recoveryError: `${path.join("kept", "GET.endpoint.json")} was served before the mutation and is not served after the restore.`,
+        recoveryError: "kept/GET.endpoint.json was served before the mutation and is not served after the restore.",
       },
     });
     expect(readEndpoint("kept").enabled).toBe(true);
