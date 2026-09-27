@@ -282,6 +282,17 @@ describe("ws serving", () => {
     expect(fallbackCalls).toEqual(["/altra/rotta"]);
   });
 
+  // Il namespace admin è riservato anche per gli upgrade: un mock ws dichiarato lì non viene
+  // servito e la richiesta prosegue al passthrough, che la rifiuta con il 404 admin.
+  test("un upgrade nel namespace admin non serve il mock ws e va al passthrough", async () => {
+    await writeWsEndpoint({ folder: "shadow", routePath: "/_admin/api/shadow" });
+    const { fallbackCalls } = await startApp();
+
+    const client = connect("/_admin/api/shadow");
+    await new Promise((resolve) => client.on("error", resolve));
+    expect(fallbackCalls).toEqual(["/_admin/api/shadow"]);
+  });
+
   test("a server spento anche l'upgrade sull'endpoint ws va al passthrough", async () => {
     await writeWsEndpoint({});
     const { serverState, fallbackCalls } = await startApp();

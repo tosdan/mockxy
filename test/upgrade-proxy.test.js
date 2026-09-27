@@ -1,4 +1,6 @@
 const http = require("http");
+const fs = require("fs");
+const path = require("path");
 const { startServer } = require("../src/server");
 const { createNoopLogger, createTempDir, removeDir } = require("./helpers");
 
@@ -125,6 +127,51 @@ describe("upgrade proxy (passthrough WebSocket)", () => {
     const { upgraded, res } = await requestUpgrade(port);
     expect(upgraded).toBe(false);
     expect(res.statusCode).toBe(501);
+  });
+
+  test("un mock ws dichiarato sotto /_admin/api non fa l'handshake: 404 admin", async () => {
+    const endpointDir = path.join(mocksDir, "shadow");
+    await fs.promises.mkdir(path.join(endpointDir, "GET.responses"), { recursive: true });
+    await fs.promises.writeFile(
+      path.join(endpointDir, "GET.endpoint.json"),
+      JSON.stringify({
+        method: "GET",
+        path: "/_admin/api/shadow",
+        description: "",
+        enabled: true,
+        responseFiles: ["001.response.json"],
+        selectedResponseFile: "001.response.json",
+      })
+    );
+    await fs.promises.writeFile(
+      path.join(endpointDir, "GET.responses", "001.response.json"),
+      JSON.stringify({ type: "ws", title: "Ombra", script: [{ afterMs: 0, data: "dal mock" }] })
+    );
+    const port = await startProxy({ adminApiEnabled: true });
+
+    const { upgraded, res } = await requestUpgrade(port, "/_admin/api/shadow");
+    expect(upgraded).toBe(false);
+    expect(res.statusCode).toBe(404);
+    const body = await new Promise((resolve) => {
+      let raw = "";
+      res.on("data", (chunk) => { raw += chunk; });
+      res.on("end", () => resolve(JSON.parse(raw)));
+    });
+    expect(body.details).toEqual({ code: "ADMIN_ROUTE_NOT_FOUND" });
+  });
+
+  test("il namespace admin è riservato anche con le maiuscole: nessun inoltro al backend", async () => {
+    const seen = {};
+    backend = await startEchoBackend(seen);
+    const port = await startProxy({
+      backendUrl: `http://127.0.0.1:${backend.address().port}`,
+      proxyFallbackEnabled: true,
+    });
+
+    const { upgraded, res } = await requestUpgrade(port, "/_ADMIN/API/live");
+    expect(upgraded).toBe(false);
+    expect(res.statusCode).toBe(404);
+    expect(seen.upgradeRequest).toBeUndefined();
   });
 
   test("in modalità solo-mock l'upgrade non viene inoltrato (404)", async () => {

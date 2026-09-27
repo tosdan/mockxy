@@ -98,6 +98,64 @@ describe("admin API", () => {
     });
   }
 
+  describe("namespace riservato /_admin/api", () => {
+    // Prima una rotta admin inesistente proseguiva nel serving dei mock e poi nel proxy: un
+    // client che sbagliava percorso raggiungeva il backend reale senza accorgersene.
+    test("una rotta sconosciuta risponde 404 admin e non raggiunge il backend, nemmeno col fallback", async () => {
+      let sentinelHits = 0;
+      const sentinel = await startBackendServer((_req, res) => {
+        sentinelHits += 1;
+        res.statusCode = 200;
+        res.setHeader("content-type", "application/json");
+        res.end(JSON.stringify({ reachedBackend: true }));
+      });
+      try {
+        const app = await buildApp({ backendUrl: sentinel.url, proxyFallbackEnabled: true });
+
+        const unknownGet = await request(app).get("/_admin/api/info");
+        expect(unknownGet.status).toBe(404);
+        expect(unknownGet.body).toMatchObject({
+          error: "Not Found",
+          details: { code: "ADMIN_ROUTE_NOT_FOUND" },
+        });
+        expect(unknownGet.body.message).toContain("GET /_admin/api/info");
+
+        const unknownPost = await request(app).post("/_admin/api/typo").send({ secret: "x" });
+        expect(unknownPost.status).toBe(404);
+        expect(unknownPost.body.details).toEqual({ code: "ADMIN_ROUTE_NOT_FOUND" });
+
+        // Metodo non previsto su una rotta esistente: anche questo resta nel namespace admin.
+        const wrongMethod = await request(app).delete("/_admin/api/server");
+        expect(wrongMethod.status).toBe(404);
+        expect(wrongMethod.body.details).toEqual({ code: "ADMIN_ROUTE_NOT_FOUND" });
+
+        const namespaceRoot = await request(app).get("/_admin/api");
+        expect(namespaceRoot.status).toBe(404);
+        expect(namespaceRoot.body.details).toEqual({ code: "ADMIN_ROUTE_NOT_FOUND" });
+
+        expect(sentinelHits).toBe(0);
+      } finally {
+        await stopBackendServer(sentinel.server);
+      }
+    });
+
+    test("un mock definito sotto /_admin/api non viene servito", async () => {
+      await writeMock({ mocksDir, folder: "shadow", method: "GET", routePath: "/_admin/api/shadow", body: { mock: true } });
+      const app = await buildApp();
+
+      const response = await request(app).get("/_admin/api/shadow");
+      expect(response.status).toBe(404);
+      expect(response.body.details).toEqual({ code: "ADMIN_ROUTE_NOT_FOUND" });
+    });
+
+    test("le rotte esistenti non cambiano", async () => {
+      const app = await buildApp();
+      const response = await request(app).get("/_admin/api/server");
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual({ serverEnabled: true, proxyAll: false });
+    });
+  });
+
   describe("monitor dump", () => {
     test("stato di default: disabilitato", async () => {
       const app = await buildApp();

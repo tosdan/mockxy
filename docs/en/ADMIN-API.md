@@ -9,6 +9,10 @@ state between tests, pipelines that import an updated spec.
 
 - Enabled with `ADMIN_API_ENABLED` (default: on in development, off in production). When off,
   every route answers `404` with an explicit message.
+- The `/_admin/api` namespace is **reserved**: a method or path that is not listed below
+  answers `404` with `details.code: "ADMIN_ROUTE_NOT_FOUND"`. It never falls through to mock
+  serving or to the backend proxy, and a mock declared under `/_admin/api` is never served,
+  WebSocket upgrades included.
 - **No authentication**: it creates handlers, i.e. it writes files and executes code. The
   protections and the exposure rules are in the page on [network exposure](RETE.md) (anti
   DNS-rebinding guard on the `Host` header, warning on non-loopback binds).
@@ -27,7 +31,8 @@ state between tests, pipelines that import an updated spec.
   it from the lists and treat it as **opaque**.
 - **Errors** are JSON `{ error, message, details? }` with the appropriate status
   (`400` invalid input, `403` unexpected `Host` header, `404` not found, `409` conflict,
-  `415` unsupported media type, `500` unexpected failure).
+  `415` unsupported media type, `500` unexpected failure). Newer errors add a stable code in
+  `details.code`, so a client does not have to parse the text.
 - Catalog mutations **wait for the reload pass containing their write**: the next request sees
   the change; a load error on the mutated endpoint triggers rollback and a non-`2xx` response.
   Data files reload nothing ([`data()`
@@ -51,6 +56,7 @@ state between tests, pipelines that import an updated spec.
 | `GET /mocks/:id/ws/connections` | WS console state: open connections (with script position) and the bidirectional transcript (sent and received) |
 | `PUT /mocks/:id/endpoint` | updates **only** `description` and `enabled` (any other field is a `400`): method and path are fixed at creation — the path determines the files' folder — and are changed with `POST /mocks/:id/copy` |
 | `POST /mocks/:id/copy` | duplicates onto a new method+path — body `{ method, path, copyResponses }`; with `?dryRun=true`, returns the plan without writing or reloading |
+| `PATCH /mocks/enabled` | enables or disables a list of endpoints — body `{ ids, enabled }`, with a non-empty `ids` (duplicates are collapsed); an unknown id fails the request before anything is written; answers with the refreshed catalog `{ items, collections, childOrder }`. It is the route behind the catalog's multi-selection |
 | `PUT /mocks/:id/collection` | assigns the endpoint to a collection |
 | `DELETE /mocks/:id` | deletes endpoint and variants |
 

@@ -307,11 +307,13 @@ function loadConfig(overrides = {}) {
       overrides.rewriteProxyRedirects ?? process.env.REWRITE_PROXY_REDIRECTS,
       DEFAULT_REWRITE_PROXY_REDIRECTS
     ),
+    // Fallback null, non undefined: undefined farebbe scattare il default `false` di
+    // parseBoolean e un flag assente spegnerebbe l'admin anche in development.
     adminApiEnabled: shouldEnableAdminApi({
       adminApiEnabled:
         overrides.adminApiEnabled == null
-          ? parseBoolean(process.env.ADMIN_API_ENABLED, undefined)
-          : parseBoolean(overrides.adminApiEnabled, undefined),
+          ? parseBoolean(process.env.ADMIN_API_ENABLED, null)
+          : parseBoolean(overrides.adminApiEnabled, null),
       nodeEnv,
     }),
     delayAllRequests: parseBoolean(

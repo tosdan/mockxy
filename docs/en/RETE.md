@@ -13,7 +13,11 @@ therefore be an explicit, informed choice.
   which only accepts the binary loopback/network choice and shows the risk warning.
 - **Docker**: the images set `HOST=0.0.0.0` on their own, because the *container's* loopback
   is not reachable through the port mapping; the actual exposure is decided on the host's
-  port mapping.
+  port mapping. The **development** image (the root `Dockerfile`) does not set
+  `ADMIN_API_ENABLED`: started without compose and without `NODE_ENV=production`, it therefore
+  has the admin on by default. For local use publish the port on loopback only
+  (`-p 127.0.0.1:3000:3000`), or pass `-e ADMIN_API_ENABLED=false`. On a network bind the
+  `Host` header guard described below only applies when `ADMIN_ALLOWED_HOSTS` is set.
 
 When the admin API is active on a non-loopback bind, at startup the log shows a **warning
 designed to be impossible to miss**. It's not a block — on a trusted network it can be a
