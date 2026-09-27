@@ -2,6 +2,8 @@ const fs = require("fs");
 const path = require("path");
 const request = require("supertest");
 const { createServerRuntime } = require("../src/server");
+const { createAdminError } = require("../src/admin/admin-errors");
+const { commitWithRollback, readBackup } = require("../src/admin/admin-fs");
 const { encodeMockId } = require("../src/admin/mock-ids");
 const { createNoopLogger, createTempDir, removeDir, writeMock } = require("./helpers");
 
@@ -144,6 +146,42 @@ describe("mutazioni admin: esito applicato e rollback", () => {
 
     expect(response.status).toBe(204);
     expect((await request(app).get("/gone")).status).toBe(404);
+  });
+
+  test("il ripristino non si dichiara riuscito se una definizione servita prima non torna servita", async () => {
+    const HANDLER_OK = "module.exports = { async resolveResponse() { return { status: 200, jsonBody: { ok: true } }; } };\n";
+    await writeHandlerEndpoint({ folder: "kept", routePath: "/kept", source: HANDLER_OK });
+    const runtime = await startRuntime();
+    // Il sorgente si rompe su disco: il runtime continua a servire la versione già caricata.
+    await fs.promises.writeFile(path.join(mocksDir, "kept", "GET.responses", "001.handler.js"), BROKEN_SOURCE);
+    expect((await request(app).get("/kept")).status).toBe(200);
+    const endpointPath = path.join(mocksDir, "kept", "GET.endpoint.json");
+    const backups = [await readBackup(endpointPath)];
+
+    // Il reload intermedio toglie la definizione disabilitata; il ripristino riabilita il file,
+    // ma ricaricare il sorgente rotto non ricostruisce la versione servita prima.
+    const failure = await commitWithRollback({
+      backups,
+      reloadRuntime: runtime.reloadRuntime,
+      rejectionLabel: "Toggle rejected",
+      commit: () => fs.promises.writeFile(endpointPath, JSON.stringify({ ...readEndpoint("kept"), enabled: false })),
+      validateReloadResult: () => {
+        throw createAdminError(400, "another endpoint was rejected");
+      },
+      involved: [endpointPath],
+      baseDir: mocksDir,
+    }).catch((error) => error);
+
+    expect(failure).toMatchObject({
+      status: 500,
+      details: {
+        code: "ROLLBACK_FAILED",
+        rollback: "failed",
+        recoveryError: `${path.join("kept", "GET.endpoint.json")} was served before the mutation and is not served after the restore.`,
+      },
+    });
+    expect(readEndpoint("kept").enabled).toBe(true);
+    expect((await request(app).get("/kept")).status).toBe(404);
   });
 
   test("un input rifiutato prima di scrivere dichiara che non serve ripristino", async () => {

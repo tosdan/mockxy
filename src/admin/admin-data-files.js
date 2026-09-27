@@ -189,6 +189,8 @@ async function renameAdminDataFile(filesDir, mocksDir, name, nextName, options =
           installed: endpointPaths.filter(isEndpointEnabled),
           baseDir: mocksDir,
         }),
+      involved: endpointPaths,
+      baseDir: mocksDir,
     });
   }
 

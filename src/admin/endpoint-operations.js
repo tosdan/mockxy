@@ -121,6 +121,8 @@ async function createAdminEndpointFromMock(mocksDir, payload, reloadRuntime) {
       await writeFileAtomic(endpointPath, `${JSON.stringify(endpoint, null, 2)}\n`, "utf8");
     },
     validateReloadResult: validateEndpointReload(endpointPath, mocksDir),
+    involved: [endpointPath],
+    baseDir: mocksDir,
   });
 
   return getAdminMockDetailAfterCommit(mocksDir, encodeMockId(relativePath));
@@ -174,6 +176,8 @@ async function createAdminEndpointFromScript(mocksDir, payload, reloadRuntime, t
       await assertEndpointSourceIsValid(sourcePath, type);
     },
     validateReloadResult: validateEndpointReload(endpointPath, mocksDir),
+    involved: [endpointPath],
+    baseDir: mocksDir,
   });
 
   return getAdminMockDetailAfterCommit(mocksDir, encodeMockId(relativePath));
@@ -626,6 +630,8 @@ async function createAdminResponse(mocksDir, id, payload, reloadRuntime, scenari
       }
     },
     validateReloadResult: validateEndpointReload(endpointPath, mocksDir),
+    involved: [endpointPath],
+    baseDir: mocksDir,
   });
 
   // La variante creata diventa la selezionata: lo scenario precedente non vale piu'.
@@ -666,6 +672,8 @@ async function setEndpointsEnabledAtomically(mocksDir, endpointPaths, enabled, r
       validateReloadedEndpoints(reloadResult, enabled
         ? { checked: endpointPaths, installed: endpointPaths, baseDir: mocksDir }
         : { absent: endpointPaths, baseDir: mocksDir }),
+    involved: endpointPaths,
+    baseDir: mocksDir,
   });
 
   return listAdminMocks(mocksDir);
@@ -766,6 +774,8 @@ async function updateAdminResponse(mocksDir, id, responseFileName, payload, relo
       }
     },
     validateReloadResult: validateEndpointReload(endpointPath, mocksDir),
+    involved: [endpointPath],
+    baseDir: mocksDir,
   });
 
   // Switch via dal file (es. file→body): rimuove l'asset orfano se non più referenziato.
@@ -849,6 +859,8 @@ async function setAdminResponseFile(mocksDir, id, responseFileName, fileBuffer, 
       await readEndpointResponse(responseFilePath, endpoint);
     },
     validateReloadResult: validateEndpointReload(endpointPath, mocksDir),
+    involved: [endpointPath],
+    baseDir: mocksDir,
   });
 
   if (oldAsset) {
@@ -936,6 +948,8 @@ async function deleteAdminResponse(mocksDir, id, responseFileName, reloadRuntime
       }
     },
     validateReloadResult: validateEndpointReload(endpointPath, mocksDir),
+    involved: [endpointPath],
+    baseDir: mocksDir,
   });
 
   // Cancellare la variante selezionata ne promuove un'altra: e' un cambio di selezione.
@@ -1002,6 +1016,8 @@ async function updateAdminEndpoint(mocksDir, id, payload, reloadRuntime) {
       await readEndpointConfig(endpointPath);
     },
     validateReloadResult: validateEndpointReload(endpointPath, mocksDir),
+    involved: [endpointPath],
+    baseDir: mocksDir,
   });
 
   return getAdminMockDetailAfterCommit(mocksDir, id);
@@ -1066,6 +1082,8 @@ async function updateAdminMock(mocksDir, id, payload, reloadRuntime, scenarioSta
       rejectionLabel: "Endpoint response selection rejected",
       commit: () => writeFileAtomic(endpointPath, `${JSON.stringify(nextEndpoint, null, 2)}\n`, "utf8"),
       validateReloadResult: validateEndpointReload(endpointPath, mocksDir),
+      involved: [endpointPath],
+      baseDir: mocksDir,
     });
 
     // Entrare in una sequence, uscirne o passare a un'altra azzera lo scenario; riselezionare la
@@ -1155,6 +1173,8 @@ async function updateAdminMock(mocksDir, id, payload, reloadRuntime, scenarioSta
       }
     },
     validateReloadResult: validateEndpointReload(endpointPath, mocksDir),
+    involved: [endpointPath],
+    baseDir: mocksDir,
   });
 
   return getAdminMockDetailAfterCommit(mocksDir, id);
@@ -1360,6 +1380,8 @@ async function deleteAdminMocksUnlocked(
         absent: targets.map(({ endpointPath }) => endpointPath),
         baseDir: mocksDir,
       }),
+    involved: targets.map(({ endpointPath }) => endpointPath),
+    baseDir: mocksDir,
   });
 
   return { deleted: targets.length };
@@ -1539,6 +1561,8 @@ async function copyAdminEndpoint(mocksDir, id, payload, reloadRuntime) {
       }
     },
     validateReloadResult: validateEndpointReload(targetEndpointPath, mocksDir),
+    involved: [targetEndpointPath],
+    baseDir: mocksDir,
   });
 
   return getAdminMockDetailAfterCommit(mocksDir, encodeMockId(relativePath));

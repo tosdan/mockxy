@@ -47,7 +47,8 @@ resettano lo stato tra i test, pipeline che importano una specifica aggiornata.
   - `500 RUNTIME_APPLY_FAILED`: il reload del runtime è fallito nel suo insieme; file ripristinati;
   - `500 MUTATION_FAILED`: errore imprevisto durante la scrittura; file ripristinati;
   - `500 ROLLBACK_FAILED`: è fallito anche il ripristino (`rollback: "failed"`, con `cause` e
-    `recoveryError`): lo stato del workspace non va considerato coerente.
+    `recoveryError`), anche solo perché un endpoint coinvolto, servito prima della mutazione, non
+    lo è più dopo il ripristino: lo stato del workspace non va considerato coerente.
 - **Una mutazione alla volta** per workspace: le mutazioni vengono messe in coda, mentre letture,
   traffico e push delle console SSE/WS non le aspettano. Un client che si disconnette non
   interrompe una mutazione già partita.
@@ -102,7 +103,7 @@ resettano lo stato tra i test, pipeline che importano una specifica aggiornata.
 
 | Metodo e percorso | Cosa fa |
 |---|---|
-| `POST /mocks/import/openapi` | importa la specifica (body grezzo JSON/YAML, fino a 12 MB) — [regole di generazione](OPENAPI.md). Procede per elemento: `items` riporta per ogni operazione `writeOutcome` e `runtimeOutcome`, `runtime.status` dice se il runtime è `applied` o `degraded`; se fallisce il reload finale risponde `500 BATCH_RUNTIME_FAILED` con il risultato completo in `details.result` |
+| `POST /mocks/import/openapi` | importa la specifica (body grezzo JSON/YAML, fino a 12 MB) — [regole di generazione](OPENAPI.md). Procede per elemento: `items` riporta per ogni operazione `writeOutcome` e `runtimeOutcome`, `runtime.status` dice se il runtime è `applied` o `degraded`; se fallisce il reload finale risponde `500 BATCH_RUNTIME_FAILED` con il risultato completo in `details.result`. Se il ripristino di un elemento fallito non riesce, si ferma lì e risponde `500 ROLLBACK_FAILED`, con gli elementi elaborati fino a quel punto in `details.result`. Una collection non assegnata non annulla l'endpoint: finisce nell'`error` dell'elemento |
 | `POST /mocks/import/openapi?dryRun=true` | solo il piano con i conteggi, senza scrivere nulla |
 | `POST /mocks/import/openapi?prefix=/be` | antepone `/be` a tutti i percorsi importati (vale anche con `dryRun`); il piano riporta `prefix` applicato e `suggestedPrefix` ricavato dai `servers` |
 
@@ -146,7 +147,7 @@ client e polling, eseguire il reset, poi avviare lo scenario.
 | `POST /monitoring/dump/flush` | flush manuale; body `{}`; risponde con il numero di voci scritte |
 | `GET /monitoring/dumps` | elenco dei file di dump |
 | `GET /monitoring/dumps/read` | lettura paginata a cursore (`?fileIndex&lineIndex&limit`) |
-| `POST /monitoring/dumps/create-mocks` | crea mock in blocco da un file o da una selezione di voci; come l'import, riporta `items` (con la `key` della voce) e `runtime` |
+| `POST /monitoring/dumps/create-mocks` | crea mock in blocco da un file o da una selezione di voci; come l'import, riporta `items` (con la `key` della voce) e `runtime`, e risponde agli stessi errori di batch |
 | `DELETE /monitoring/dumps/:file` | elimina un file di dump |
 
 ## Stato del server

@@ -1,6 +1,6 @@
 const { readDumpFileEntries, readDumpEntriesByKeys } = require("../monitoring/monitor-dump-reader");
 const { createAdminError } = require("./admin-errors");
-const { applyBatchRuntimeOutcome, runReload } = require("./admin-fs");
+const { finalizeBatch } = require("./admin-fs");
 const { resolveAdminFilePath } = require("./mock-ids");
 const { createAdminMock } = require("./endpoint-operations");
 
@@ -94,8 +94,16 @@ async function createMocksFromDump(mocksDir, dumpDir, selection, reloadRuntime) 
   const noReload = async () => {};
   const counts = { created: 0, createdEmpty: 0, skippedExisting: 0, failed: 0 };
   const items = [];
+  // Un elemento il cui ripristino fallisce (ROLLBACK_FAILED) ferma il batch: lo stato del
+  // workspace non è più garantito e continuare peggiorerebbe l'incertezza.
+  let interruption = null;
+  let processed = 0;
 
   for (const entry of entries) {
+    if (interruption != null) {
+      break;
+    }
+    processed += 1;
     const { payload, skeleton } = buildMockPayloadFromDumpEntry(entry);
     const identity = { key: entry.dumpKey ?? null, method: payload.config.method, path: payload.config.path };
     try {
@@ -128,16 +136,21 @@ async function createMocksFromDump(mocksDir, dumpDir, selection, reloadRuntime) 
         runtimeOutcome: "not_applicable",
         error: existing ? null : error.message,
       });
+      if (error?.details?.code === "ROLLBACK_FAILED") {
+        interruption = error;
+      }
     }
   }
 
   // I conteggi conservano il significato storico di creazioni su disco; il servizio effettivo
   // lo dicono items[].runtimeOutcome e runtime.status.
-  const reloadResult = await runReload(reloadRuntime);
-  return applyBatchRuntimeOutcome({
-    reloadResult,
+  return finalizeBatch({
+    reloadRuntime,
     mocksDir,
     rejectionLabel: "Mock creation from dump",
+    interruption,
+    processed,
+    total: entries.length,
     result: { ...counts, items },
   });
 }

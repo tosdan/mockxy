@@ -56,8 +56,11 @@ async function readJsonFile(filePath) {
   }
 }
 
+// Attende la conclusione di OGNI ripristino anche quando uno fallisce: con Promise.all il primo
+// errore farebbe terminare l'operazione (e liberare la coda delle mutazioni) mentre gli altri
+// ripristini sono ancora in volo, pronti a sovrascrivere scritture successive.
 async function restoreBackup(backupEntries) {
-  await Promise.all(
+  const outcomes = await Promise.allSettled(
     backupEntries.map(async (entry) => {
       if (entry.exists) {
         await fs.promises.mkdir(path.dirname(entry.filePath), { recursive: true });
@@ -68,6 +71,16 @@ async function restoreBackup(backupEntries) {
       await fs.promises.rm(entry.filePath, { force: true });
     })
   );
+  const failures = outcomes.filter((outcome) => outcome.status === "rejected").map((outcome) => outcome.reason);
+  if (failures.length > 0) {
+    const error = new Error(
+      failures.length === 1
+        ? failures[0].message
+        : `${failures.length} files could not be restored: ${failures.map((failure) => failure.message).join("; ")}`
+    );
+    error.restoreFailures = failures;
+    throw error;
+  }
 }
 
 async function readBackup(filePath) {
@@ -235,14 +248,73 @@ function applyBatchRuntimeOutcome({ reloadResult, result, mocksDir, rejectionLab
   };
 }
 
+/**
+ * Chiude un batch interrotto da un elemento che non si è potuto ripristinare (ROLLBACK_FAILED):
+ * lo stato non è coerente, quindi niente risposta positiva. Il reload finale è già stato fatto
+ * dal chiamante per allineare il runtime al disco; `result` è il risultato parziale disponibile,
+ * con gli elementi elaborati fino all'interruzione.
+ */
+function createBatchRollbackFailure({ interruption, result, rejectionLabel, processed, total }) {
+  return createAdminError(
+    500,
+    `${rejectionLabel}: stopped after ${processed} of ${total} items because one could not be restored: ${interruption.message}`,
+    {
+      code: "ROLLBACK_FAILED",
+      rollback: ROLLBACK.FAILED,
+      cause: interruption.details?.cause ?? interruption.message,
+      recoveryError: interruption.details?.recoveryError ?? null,
+      result,
+    }
+  );
+}
+
+// Esegue il reload finale di un batch e ne applica gli esiti; se il batch era stato interrotto
+// da un ripristino fallito, quell'errore prevale anche su un reload finale fallito.
+async function finalizeBatch({ reloadRuntime, result, mocksDir, rejectionLabel, interruption, processed, total }) {
+  const reloadResult = await runReload(reloadRuntime);
+  let finalResult;
+  try {
+    finalResult = applyBatchRuntimeOutcome({ reloadResult, result, mocksDir, rejectionLabel });
+  } catch (error) {
+    if (interruption == null || error.details?.code !== "BATCH_RUNTIME_FAILED") {
+      throw error;
+    }
+    finalResult = error.details.result;
+  }
+  if (interruption != null) {
+    throw createBatchRollbackFailure({ interruption, result: finalResult, rejectionLabel, processed, total });
+  }
+  return finalResult;
+}
+
 // Ripristina i backup e ricarica: il recupero riesce solo se entrambi i passi riescono. Errori
 // preesistenti su altri endpoint non lo invalidano: si torna allo stato di prima, com'era.
-async function recoverFromFailedMutation(backups, reloadRuntime) {
+async function recoverFromFailedMutation({ backups, reloadRuntime, involved, servedBefore, baseDir }) {
   try {
     await restoreBackup(backups);
     const reloadResult = await runReload(reloadRuntime);
     if (reloadResult?.applied === false) {
       return { ok: false, error: createRuntimeApplyError(reloadResult) };
+    }
+    // I file tornano com'erano, ma il comportamento servito può non tornare: una versione che il
+    // runtime manteneva nonostante un errore di caricamento, tolta da un reload intermedio, non
+    // si ricostruisce ricaricando lo stesso sorgente rotto. Gli errori preesistenti non contano
+    // di per sé: conta che ogni risorsa coinvolta sia servita come prima della mutazione.
+    const servedAfter = reloadResult?.installedConfigFilePaths;
+    if (servedBefore != null && servedAfter != null) {
+      for (const filePath of involved) {
+        const resolvedPath = path.resolve(filePath);
+        const wasServed = servedBefore.has(resolvedPath);
+        if (wasServed !== servedAfter.has(resolvedPath)) {
+          const name = relativeLoadErrorPath(filePath, baseDir);
+          return {
+            ok: false,
+            error: new Error(wasServed
+              ? `${name} was served before the mutation and is not served after the restore.`
+              : `${name} was not served before the mutation and is served after the restore.`),
+          };
+        }
+      }
     }
     return { ok: true };
   } catch (error) {
@@ -296,7 +368,20 @@ function classifyMutationFailure({ error, phase, recovery, rejectionLabel }) {
 // reload del runtime e la verifica del suo esito; su qualunque errore ripristina i backup,
 // ricarica e verifica anche il ripristino. Il reload non rigetta: un esito `applied: false` è
 // un fallimento globale. Senza `validateReloadResult` si verifica solo quello.
-async function commitWithRollback({ backups, reloadRuntime, rejectionLabel, commit, validateReloadResult }) {
+async function commitWithRollback({
+  backups,
+  reloadRuntime,
+  rejectionLabel,
+  commit,
+  validateReloadResult,
+  involved = [],
+  baseDir,
+}) {
+  // Quali delle definizioni coinvolte erano servite prima di scrivere: il recupero deve
+  // riportare lo stesso stato. Disponibile solo col reload del runtime reale.
+  const servedBefore = typeof reloadRuntime?.installedConfigFilePaths === "function"
+    ? reloadRuntime.installedConfigFilePaths()
+    : null;
   // La fase in cui avviene l'errore ne decide la classificazione: scrittura (I/O), reload del
   // runtime (fallimento globale) o verifica del suo esito (rifiuto sulle risorse coinvolte).
   let phase = "commit";
@@ -315,7 +400,7 @@ async function commitWithRollback({ backups, reloadRuntime, rejectionLabel, comm
     }
     return reloadResult;
   } catch (error) {
-    const recovery = await recoverFromFailedMutation(backups, reloadRuntime);
+    const recovery = await recoverFromFailedMutation({ backups, reloadRuntime, involved, servedBefore, baseDir });
     throw classifyMutationFailure({ error, phase, recovery, rejectionLabel });
   }
 }
@@ -337,6 +422,7 @@ async function removeEmptyDirectory(dirPath, stopDir) {
 module.exports = {
   ROLLBACK,
   applyBatchRuntimeOutcome,
+  finalizeBatch,
   resolvePayloadPath,
   listFiles,
   readJsonFile,

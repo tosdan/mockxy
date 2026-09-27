@@ -1175,7 +1175,7 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
-        "500": { $ref: "#/components/responses/BatchRuntimeFailed" }
+        "500": { $ref: "#/components/responses/BatchFailed" }
 
   # ───────────────────────────────── Data files ───────────────────────────────
   /files:
@@ -1636,7 +1636,7 @@ paths:
                             path: { type: string }
                   runtime: { $ref: "#/components/schemas/BatchRuntime" }
         "400": { $ref: "#/components/responses/BadRequest" }
-        "500": { $ref: "#/components/responses/BatchRuntimeFailed" }
+        "500": { $ref: "#/components/responses/BatchFailed" }
 
   /monitoring/dumps/{file}:
     parameters:
@@ -1758,16 +1758,26 @@ components:
         The mutation could not be applied and was undone. `details.code` is
         `RUNTIME_APPLY_FAILED` (the runtime reload failed globally), `MUTATION_FAILED` (an
         unexpected write error) or `ROLLBACK_FAILED` (restoring the previous files or runtime
-        failed too: `details.rollback` is `failed`, and `details.cause` / `details.recoveryError`
-        describe both errors — the workspace state must not be assumed consistent).
+        failed too, including when an endpoint involved was served before the mutation and is
+        not after the restore: `details.rollback` is `failed`, and `details.cause` /
+        `details.recoveryError` describe both errors — the workspace state must not be assumed
+        consistent).
       content:
         application/json:
           schema: { $ref: "#/components/schemas/Error" }
-    BatchRuntimeFailed:
+    BatchFailed:
       description: |
-        `details.code: BATCH_RUNTIME_FAILED`. The items were written, but the final runtime
-        reload failed globally: nothing is undone, `details.result` holds the complete batch
-        result with `runtime.status: failed` and every created item `not_applied`.
+        The batch did not complete cleanly; the final runtime reload always runs, and
+        `details.result` holds the batch result in the shape of the 201 response.
+
+        - `BATCH_RUNTIME_FAILED`: the items were written, but the final reload failed
+          globally. Nothing is undone: `runtime.status` is `failed` and every created item is
+          `not_applied`.
+        - `ROLLBACK_FAILED`: an item's write failed and restoring its files failed too
+          (`details.rollback: failed`, with `cause` and `recoveryError`). The batch stops at that
+          item: `details.result.items` lists the items processed up to it, and the following
+          ones are not attempted. The workspace state must not be assumed consistent. This code
+          prevails over a failed final reload.
       content:
         application/json:
           schema: { $ref: "#/components/schemas/Error" }
@@ -1937,7 +1947,7 @@ components:
               description: "`ROLLBACK_FAILED` only: the error that failed the restore."
             result:
               type: object
-              description: "`BATCH_RUNTIME_FAILED` only: the complete batch result, as in the 201 response."
+              description: "Batch errors only (`BATCH_RUNTIME_FAILED`, or `ROLLBACK_FAILED` from a batch): the batch result, as in the 201 response."
       example:
         error: Bad Request
         message: config.status must be an integer HTTP status code.
@@ -2683,7 +2693,9 @@ components:
         writeOutcome:
           type: string
           enum: [created, skipped, failed]
-          description: What happened on disk. A failed item restores its own files; the batch goes on.
+          description: |
+            What happened on disk. A failed item restores its own files and the batch goes on,
+            unless the restore fails too: then the batch stops with `500 ROLLBACK_FAILED`.
         runtimeOutcome:
           type: string
           enum: [applied, not_applied, not_applicable]
@@ -2692,6 +2704,9 @@ components:
             (see `error`). `not_applicable`: nothing to serve (skipped or failed).
         error:
           type: [string, "null"]
+          description: |
+            Why the item failed or is not served. On a created item of the OpenAPI import it can
+            also report a collection that could not be assigned: the endpoint stays created.
     OpenapiImportResult:
       type: object
       required: [created, skipped, failed, total, collections, prefix, items, runtime]

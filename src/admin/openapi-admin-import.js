@@ -1,5 +1,5 @@
 const { planFromDocument } = require("../mocks/openapi-import");
-const { applyBatchRuntimeOutcome, runReload } = require("./admin-fs");
+const { finalizeBatch } = require("./admin-fs");
 const { resolveAdminFilePath } = require("./mock-ids");
 const { createAdminCollection, assignAdminCollection } = require("./collection-operations");
 const { DEFAULT_COLLECTION_LABEL, compareCollectionLabels } = require("./collections-state");
@@ -59,6 +59,11 @@ async function importAdminOpenapi(mocksDir, document, reloadRuntime, options = {
   const noReload = async () => {};
   const failed = [];
   let created = 0;
+  // Un elemento il cui ripristino fallisce (ROLLBACK_FAILED) ferma il batch: lo stato del
+  // workspace non è più garantito e continuare peggiorerebbe l'incertezza.
+  let interruption = null;
+  let processed = 0;
+  const assignments = [];
   const items = plan.items
     .filter((item) => item.action !== "create")
     .map((item) => ({
@@ -71,6 +76,10 @@ async function importAdminOpenapi(mocksDir, document, reloadRuntime, options = {
       error: null,
     }));
   for (const item of toCreate) {
+    if (interruption != null) {
+      break;
+    }
+    processed += 1;
     try {
       const detail = await createAdminMock(
         mocksDir,
@@ -89,7 +98,7 @@ async function importAdminOpenapi(mocksDir, document, reloadRuntime, options = {
         noReload,
       );
       created += 1;
-      items.push({
+      const outcome = {
         method: item.method,
         path: item.path,
         id: detail.id,
@@ -99,7 +108,12 @@ async function importAdminOpenapi(mocksDir, document, reloadRuntime, options = {
         error: null,
         endpointPath: resolveAdminFilePath(mocksDir, detail.id),
         expectServing: true,
-      });
+      };
+      items.push(outcome);
+      const collectionId = item.collection ? collectionIdByTag[item.collection] : undefined;
+      if (collectionId != null) {
+        assignments.push({ outcome, collectionId });
+      }
     } catch (error) {
       failed.push(`${item.method} ${item.path}`);
       items.push({
@@ -111,27 +125,31 @@ async function importAdminOpenapi(mocksDir, document, reloadRuntime, options = {
         runtimeOutcome: "not_applicable",
         error: error.message,
       });
+      if (error?.details?.code === "ROLLBACK_FAILED") {
+        interruption = error;
+      }
     }
   }
 
-  // Assegna le collection ai nuovi mock (ri-listo per ricavare gli id per method+path).
-  const itemsAfter = await listAdminMocks(mocksDir);
-  const idByKey = new Map(itemsAfter.map((item) => [`${item.method} ${item.path}`, item.id]));
-  for (const item of toCreate) {
-    const collectionId = item.collection ? collectionIdByTag[item.collection] : undefined;
-    const id = idByKey.get(`${item.method} ${item.path}`);
-    if (id && collectionId) {
-      await assignAdminCollection(mocksDir, id, { collectionId });
+  // Assegna le collection ai mock creati. Un errore qui non annulla l'endpoint, già scritto:
+  // resta nell'esito dell'elemento, e il batch arriva comunque al reload finale.
+  for (const { outcome, collectionId } of assignments) {
+    try {
+      await assignAdminCollection(mocksDir, outcome.id, { collectionId });
+    } catch (error) {
+      outcome.error = `Created, but the collection could not be assigned: ${error.message}`;
     }
   }
 
   // I conteggi conservano il significato storico di creazioni su disco; il servizio effettivo
   // lo dicono items[].runtimeOutcome e runtime.status.
-  const reloadResult = await runReload(reloadRuntime);
-  return applyBatchRuntimeOutcome({
-    reloadResult,
+  return finalizeBatch({
+    reloadRuntime,
     mocksDir,
     rejectionLabel: "OpenAPI import",
+    interruption,
+    processed,
+    total: toCreate.length,
     result: {
       created,
       skipped: plan.skip,

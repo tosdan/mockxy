@@ -136,12 +136,17 @@ function createReloadHandler({ mocksDir, registry, proxyMiddlewareRegistry, logg
     drainPromise = null;
   };
 
-  return () => new Promise((resolve) => {
+  const reload = () => new Promise((resolve) => {
     queuedWaiters.push(resolve);
     if (drainPromise == null) {
       drainPromise = drainReloadQueue();
     }
   });
+  // Fotografia delle definizioni servite in questo momento: le mutazioni admin la prendono prima
+  // di scrivere, per verificare che un eventuale ripristino riporti lo stesso comportamento.
+  reload.installedConfigFilePaths = () =>
+    collectInstalledConfigFilePaths([...registry.routeGroups, ...proxyMiddlewareRegistry.routeGroups]);
+  return reload;
 }
 
 // Canonicalizza il percorso da osservare (alias corti 8.3 di Windows, symlink) prima di

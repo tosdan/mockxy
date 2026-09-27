@@ -1,6 +1,6 @@
 const fs = require("fs");
 const path = require("path");
-const { readBackup, commitWithRollback, validateReloadedEndpoints } = require("../src/admin/admin-fs");
+const { readBackup, restoreBackup, commitWithRollback, validateReloadedEndpoints } = require("../src/admin/admin-fs");
 const { writeFileAtomic } = require("../src/utils/fs-atomic");
 const { createTempDir, removeDir } = require("./helpers");
 
@@ -181,11 +181,114 @@ describe("commitWithRollback", () => {
     expect(await fs.promises.readFile(filePath, "utf8")).toBe("originale");
   });
 
+  // Reload col registro delle definizioni installate, come quello del runtime reale: `served`
+  // è lo stato prima della mutazione, `outcomes` gli esiti dei reload successivi.
+  function createTrackedReload(served, outcomes) {
+    const reloadRuntime = jest.fn();
+    for (const outcome of outcomes) {
+      reloadRuntime.mockResolvedValueOnce(outcome);
+    }
+    reloadRuntime.installedConfigFilePaths = () => new Set(served);
+    return reloadRuntime;
+  }
+
+  test("un ripristino che non torna a servire una risorsa servita prima non è un rollback riuscito", async () => {
+    await writeFileAtomic(filePath, "originale", "utf8");
+    const backups = [await readBackup(filePath)];
+    // Il runtime serviva la versione precedente nonostante il sorgente rotto: il reload
+    // intermedio la toglie e ricaricare lo stesso sorgente non la ricostruisce.
+    const reloadRuntime = createTrackedReload([filePath], [
+      { applied: true, loadErrors: [], fatalError: null, installedConfigFilePaths: new Set() },
+      { applied: true, loadErrors: [{ filePath, message: "sintassi" }], fatalError: null, installedConfigFilePaths: new Set() },
+    ]);
+
+    await expect(commitWithRollback({
+      backups,
+      reloadRuntime,
+      rejectionLabel: "Operazione rejected",
+      commit: () => writeFileAtomic(filePath, "nuovo", "utf8"),
+      validateReloadResult: () => {
+        const error = new Error("rifiutata");
+        error.status = 400;
+        throw error;
+      },
+      involved: [filePath],
+      baseDir: dir,
+    })).rejects.toMatchObject({
+      status: 500,
+      details: {
+        code: "ROLLBACK_FAILED",
+        rollback: "failed",
+        recoveryError: "GET.endpoint.json was served before the mutation and is not served after the restore.",
+      },
+    });
+    expect(await fs.promises.readFile(filePath, "utf8")).toBe("originale");
+  });
+
+  test("un errore preesistente su una risorsa che non era servita non invalida il ripristino", async () => {
+    await writeFileAtomic(filePath, "originale", "utf8");
+    const backups = [await readBackup(filePath)];
+    const brokenBefore = { applied: true, loadErrors: [{ filePath, message: "sintassi" }], fatalError: null, installedConfigFilePaths: new Set() };
+    const reloadRuntime = createTrackedReload([], [brokenBefore, brokenBefore]);
+
+    await expect(commitWithRollback({
+      backups,
+      reloadRuntime,
+      rejectionLabel: "Operazione rejected",
+      commit: () => writeFileAtomic(filePath, "nuovo", "utf8"),
+      validateReloadResult: () => {
+        const error = new Error("rifiutata");
+        error.status = 400;
+        throw error;
+      },
+      involved: [filePath],
+      baseDir: dir,
+    })).rejects.toMatchObject({ status: 400, details: { code: "MUTATION_REJECTED", rollback: "restored" } });
+  });
+
   test("restituisce l'esito del reload a chi deve verificarne l'effetto", async () => {
     const outcome = { applied: true, loadErrors: [], fatalError: null };
     const reloadRuntime = jest.fn().mockResolvedValue(outcome);
 
     await expect(commitWithRollback({ backups: [], reloadRuntime, rejectionLabel: "x" })).resolves.toBe(outcome);
+  });
+});
+
+describe("restoreBackup", () => {
+  let dir;
+
+  beforeEach(async () => {
+    dir = await createTempDir("admin-fs-restore-");
+  });
+
+  afterEach(async () => {
+    jest.restoreAllMocks();
+    await removeDir(dir);
+  });
+
+  test("se un ripristino fallisce attende comunque la conclusione degli altri", async () => {
+    // Una cartella che non si può creare (il genitore è un file) fa fallire subito un ripristino;
+    // l'altro è rallentato. Rigettare prima che finisca libererebbe la coda delle mutazioni
+    // mentre una scrittura del ripristino è ancora in corso.
+    const blocker = path.join(dir, "blocker");
+    await fs.promises.writeFile(blocker, "file, non cartella");
+    const unreachable = path.join(blocker, "sub", "GET.endpoint.json");
+    const slowPath = path.join(dir, "slow", "GET.endpoint.json");
+    const realMkdir = fs.promises.mkdir.bind(fs.promises);
+    jest.spyOn(fs.promises, "mkdir").mockImplementation(async (target, options) => {
+      if (target === path.dirname(slowPath)) {
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
+      return realMkdir(target, options);
+    });
+
+    const failure = await restoreBackup([
+      { filePath: unreachable, exists: true, content: "perso" },
+      { filePath: slowPath, exists: true, content: "ripristinato" },
+    ]).catch((error) => error);
+
+    expect(fs.existsSync(slowPath) && fs.readFileSync(slowPath, "utf8")).toBe("ripristinato");
+    expect(failure).toMatchObject({ restoreFailures: [expect.objectContaining({ code: "ENOTDIR" })] });
   });
 });
 
