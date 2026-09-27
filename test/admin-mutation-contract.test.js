@@ -1,4 +1,5 @@
 const fs = require("fs");
+const Module = require("module");
 const path = require("path");
 const request = require("supertest");
 const { createServerRuntime } = require("../src/server");
@@ -246,6 +247,45 @@ describe("mutazioni admin: esito applicato e rollback", () => {
       expect(fs.existsSync(path.join(filesDir, "goods.json"))).toBe(false);
       expect(fs.readFileSync(path.join(mocksDir, "broken", "GET.responses", "001.handler.js"), "utf8"))
         .toBe(brokenReadingItems);
+    });
+
+    test("se il ripristino non ricarica un handler e resta la versione riscritta, il rollback è fallito", async () => {
+      await fs.promises.writeFile(path.join(filesDir, "items.json"), JSON.stringify([{ id: 1 }]));
+      await writeHandlerEndpoint({ folder: "a", routePath: "/a", source: HANDLER_READING_ITEMS });
+      await writeHandlerEndpoint({ folder: "b", routePath: "/b", source: HANDLER_READING_ITEMS });
+      await startRuntime();
+      expect((await request(app).get("/a")).status).toBe(200);
+
+      // Due errori di caricamento simulati: il reload della modifica non carica B riscritto
+      // (rifiuto e ripristino); il reload di recupero non carica A ripristinato, quindi il
+      // runtime tiene la versione di A appena installata, che legge il file dati rinominato.
+      const handlerA = path.join(mocksDir, "a", "GET.responses", "001.handler.js");
+      const handlerB = path.join(mocksDir, "b", "GET.responses", "001.handler.js");
+      const realCompile = Module.prototype._compile;
+      const compile = jest.spyOn(Module.prototype, "_compile").mockImplementation(function (source, filename) {
+        if ((filename === handlerB && source.includes("goods")) || (filename === handlerA && source.includes("items"))) {
+          throw new Error("simulated read error");
+        }
+        return realCompile.call(this, source, filename);
+      });
+      let response;
+      try {
+        response = await request(app).patch("/_admin/api/files/items").send({ name: "goods", rewriteReferences: true });
+      } finally {
+        compile.mockRestore();
+      }
+
+      expect(response.status).toBe(500);
+      expect(response.body.details).toMatchObject({
+        code: "ROLLBACK_FAILED",
+        rollback: "failed",
+        recoveryError:
+          "a/GET.endpoint.json failed to load after the restore, and the runtime kept a version other than the one served before the mutation.",
+      });
+      // File e sorgenti sono ripristinati, ma A serve ancora la versione della modifica rifiutata.
+      expect(fs.existsSync(path.join(filesDir, "items.json"))).toBe(true);
+      expect(fs.readFileSync(handlerA, "utf8")).toBe(HANDLER_READING_ITEMS);
+      expect((await request(app).get("/a")).status).toBe(500);
     });
   });
 

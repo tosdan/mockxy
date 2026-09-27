@@ -47,13 +47,20 @@ function graftPreviousRoutes(nextRouteGroups, previousRouteGroups, erroredFilePa
   return grafted ? sortRouteGroups(Array.from(groupsByPath.values())) : nextRouteGroups;
 }
 
-function collectInstalledConfigFilePaths(routeGroups) {
-  const installed = new Set();
+// Definizioni installate, per file di configurazione. Il graft conserva gli oggetti entry per
+// riferimento: la loro identità dice quale versione di una definizione è servita.
+function collectInstalledDefinitions(routeGroups) {
+  const installed = new Map();
   for (const group of routeGroups) {
     for (const entry of group.methods.values()) {
-      if (entry.configFilePath != null) {
-        installed.add(path.resolve(entry.configFilePath));
+      if (entry.configFilePath == null) {
+        continue;
       }
+      const filePath = path.resolve(entry.configFilePath);
+      if (!installed.has(filePath)) {
+        installed.set(filePath, new Set());
+      }
+      installed.get(filePath).add(entry);
     }
   }
   return installed;
@@ -107,11 +114,13 @@ function createReloadHandler({ mocksDir, registry, proxyMiddlewareRegistry, logg
       });
       // Le definizioni davvero installate (versioni reinnestate comprese): le mutazioni admin le
       // confrontano con l'effetto richiesto, perché l'assenza di errori non basta a provarlo.
+      const installedDefinitions = collectInstalledDefinitions([...routeGroups, ...middlewareRouteGroups]);
       return {
         applied: true,
         loadErrors,
         fatalError: null,
-        installedConfigFilePaths: collectInstalledConfigFilePaths([...routeGroups, ...middlewareRouteGroups]),
+        installedConfigFilePaths: new Set(installedDefinitions.keys()),
+        installedDefinitions,
       };
     } catch (error) {
       logger.error("Runtime reload failed. Keeping previous configuration.", {
@@ -143,9 +152,9 @@ function createReloadHandler({ mocksDir, registry, proxyMiddlewareRegistry, logg
     }
   });
   // Fotografia delle definizioni servite in questo momento: le mutazioni admin la prendono prima
-  // di scrivere, per verificare che un eventuale ripristino riporti lo stesso comportamento.
-  reload.installedConfigFilePaths = () =>
-    collectInstalledConfigFilePaths([...registry.routeGroups, ...proxyMiddlewareRegistry.routeGroups]);
+  // di scrivere, per verificare che un eventuale ripristino riporti le stesse versioni.
+  reload.installedDefinitions = () =>
+    collectInstalledDefinitions([...registry.routeGroups, ...proxyMiddlewareRegistry.routeGroups]);
   return reload;
 }
 

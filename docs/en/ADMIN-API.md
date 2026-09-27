@@ -46,8 +46,9 @@ state between tests, pipelines that import an updated spec.
   - `500 RUNTIME_APPLY_FAILED`: the runtime reload failed as a whole; files restored;
   - `500 MUTATION_FAILED`: unexpected error while writing; files restored;
   - `500 ROLLBACK_FAILED`: the restore failed too (`rollback: "failed"`, with `cause` and
-    `recoveryError`), even just because an endpoint involved, served before the mutation, is no
-    longer served after the restore: the workspace state must not be assumed consistent.
+    `recoveryError`), even just because after the restore an endpoint involved is not served as
+    it was before: it is no longer served, or the rejected version is still served because the
+    restore could not reload it. The workspace state must not be assumed consistent.
 - **One mutation at a time** per workspace: mutations are queued, while reads, traffic and the
   SSE/WS console pushes do not wait for them. A client that disconnects does not cut a running
   mutation short.

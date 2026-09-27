@@ -181,40 +181,50 @@ describe("commitWithRollback", () => {
     expect(await fs.promises.readFile(filePath, "utf8")).toBe("originale");
   });
 
-  // Reload col registro delle definizioni installate, come quello del runtime reale: `served`
-  // è lo stato prima della mutazione, `outcomes` gli esiti dei reload successivi.
-  function createTrackedReload(served, outcomes) {
+  // Reload col registro delle definizioni installate, come quello del runtime reale: `before`
+  // sono le definizioni servite prima della mutazione, `outcomes` gli esiti dei reload
+  // successivi. Una definizione è identificata dall'oggetto installato, che il graft conserva.
+  function createTrackedReload(before, outcomes) {
     const reloadRuntime = jest.fn();
     for (const outcome of outcomes) {
       reloadRuntime.mockResolvedValueOnce(outcome);
     }
-    reloadRuntime.installedConfigFilePaths = () => new Set(served);
+    reloadRuntime.installedDefinitions = () => new Map(before);
     return reloadRuntime;
   }
+  const reloaded = ({ loadErrors = [], definitions = [] } = {}) => ({
+    applied: true,
+    loadErrors,
+    fatalError: null,
+    installedConfigFilePaths: new Set(definitions.map(([definitionPath]) => definitionPath)),
+    installedDefinitions: new Map(definitions),
+  });
+  const rejectAfterReload = () => {
+    const error = new Error("rifiutata");
+    error.status = 400;
+    throw error;
+  };
+  const rejectedMutation = (reloadRuntime) => commitWithRollback({
+    backups: [{ filePath, exists: true, content: "originale" }],
+    reloadRuntime,
+    rejectionLabel: "Operazione rejected",
+    commit: () => writeFileAtomic(filePath, "nuovo", "utf8"),
+    validateReloadResult: rejectAfterReload,
+    involved: [filePath],
+    baseDir: dir,
+  });
 
   test("un ripristino che non torna a servire una risorsa servita prima non è un rollback riuscito", async () => {
     await writeFileAtomic(filePath, "originale", "utf8");
-    const backups = [await readBackup(filePath)];
     // Il runtime serviva la versione precedente nonostante il sorgente rotto: il reload
     // intermedio la toglie e ricaricare lo stesso sorgente non la ricostruisce.
-    const reloadRuntime = createTrackedReload([filePath], [
-      { applied: true, loadErrors: [], fatalError: null, installedConfigFilePaths: new Set() },
-      { applied: true, loadErrors: [{ filePath, message: "sintassi" }], fatalError: null, installedConfigFilePaths: new Set() },
+    const previous = { version: "prima" };
+    const reloadRuntime = createTrackedReload([[filePath, new Set([previous])]], [
+      reloaded(),
+      reloaded({ loadErrors: [{ filePath, message: "sintassi" }] }),
     ]);
 
-    await expect(commitWithRollback({
-      backups,
-      reloadRuntime,
-      rejectionLabel: "Operazione rejected",
-      commit: () => writeFileAtomic(filePath, "nuovo", "utf8"),
-      validateReloadResult: () => {
-        const error = new Error("rifiutata");
-        error.status = 400;
-        throw error;
-      },
-      involved: [filePath],
-      baseDir: dir,
-    })).rejects.toMatchObject({
+    await expect(rejectedMutation(reloadRuntime)).rejects.toMatchObject({
       status: 500,
       details: {
         code: "ROLLBACK_FAILED",
@@ -225,25 +235,54 @@ describe("commitWithRollback", () => {
     expect(await fs.promises.readFile(filePath, "utf8")).toBe("originale");
   });
 
+  test("se il ripristino non si ricarica e resta la versione della modifica, non è un rollback riuscito", async () => {
+    await writeFileAtomic(filePath, "originale", "utf8");
+    const previous = { version: "prima" };
+    const rejected = { version: "modifica rifiutata" };
+    const reloadRuntime = createTrackedReload([[filePath, new Set([previous])]], [
+      reloaded({ definitions: [[filePath, new Set([rejected])]] }),
+      reloaded({ loadErrors: [{ filePath, message: "lettura" }], definitions: [[filePath, new Set([rejected])]] }),
+    ]);
+
+    await expect(rejectedMutation(reloadRuntime)).rejects.toMatchObject({
+      status: 500,
+      details: {
+        code: "ROLLBACK_FAILED",
+        rollback: "failed",
+        recoveryError:
+          "GET.endpoint.json failed to load after the restore, and the runtime kept a version other than the one served before the mutation.",
+      },
+    });
+  });
+
+  test("se il ripristino non si ricarica ma resta la versione di prima, il rollback è riuscito", async () => {
+    await writeFileAtomic(filePath, "originale", "utf8");
+    const previous = { version: "prima" };
+    const keptPrevious = reloaded({ loadErrors: [{ filePath, message: "sintassi" }], definitions: [[filePath, new Set([previous])]] });
+    const reloadRuntime = createTrackedReload([[filePath, new Set([previous])]], [keptPrevious, keptPrevious]);
+
+    await expect(rejectedMutation(reloadRuntime))
+      .rejects.toMatchObject({ status: 400, details: { code: "MUTATION_REJECTED", rollback: "restored" } });
+  });
+
+  test("una risorsa ricaricata senza errori dai file ripristinati conferma il ripristino", async () => {
+    await writeFileAtomic(filePath, "originale", "utf8");
+    const reloadRuntime = createTrackedReload([[filePath, new Set([{ version: "prima" }])]], [
+      reloaded({ definitions: [[filePath, new Set([{ version: "modifica rifiutata" }])]] }),
+      reloaded({ definitions: [[filePath, new Set([{ version: "ricaricata" }])]] }),
+    ]);
+
+    await expect(rejectedMutation(reloadRuntime))
+      .rejects.toMatchObject({ status: 400, details: { code: "MUTATION_REJECTED", rollback: "restored" } });
+  });
+
   test("un errore preesistente su una risorsa che non era servita non invalida il ripristino", async () => {
     await writeFileAtomic(filePath, "originale", "utf8");
-    const backups = [await readBackup(filePath)];
-    const brokenBefore = { applied: true, loadErrors: [{ filePath, message: "sintassi" }], fatalError: null, installedConfigFilePaths: new Set() };
+    const brokenBefore = reloaded({ loadErrors: [{ filePath, message: "sintassi" }] });
     const reloadRuntime = createTrackedReload([], [brokenBefore, brokenBefore]);
 
-    await expect(commitWithRollback({
-      backups,
-      reloadRuntime,
-      rejectionLabel: "Operazione rejected",
-      commit: () => writeFileAtomic(filePath, "nuovo", "utf8"),
-      validateReloadResult: () => {
-        const error = new Error("rifiutata");
-        error.status = 400;
-        throw error;
-      },
-      involved: [filePath],
-      baseDir: dir,
-    })).rejects.toMatchObject({ status: 400, details: { code: "MUTATION_REJECTED", rollback: "restored" } });
+    await expect(rejectedMutation(reloadRuntime))
+      .rejects.toMatchObject({ status: 400, details: { code: "MUTATION_REJECTED", rollback: "restored" } });
   });
 
   test("restituisce l'esito del reload a chi deve verificarne l'effetto", async () => {

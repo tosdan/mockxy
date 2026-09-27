@@ -1758,8 +1758,9 @@ components:
         The mutation could not be applied and was undone. `details.code` is
         `RUNTIME_APPLY_FAILED` (the runtime reload failed globally), `MUTATION_FAILED` (an
         unexpected write error) or `ROLLBACK_FAILED` (restoring the previous files or runtime
-        failed too, including when an endpoint involved was served before the mutation and is
-        not after the restore: `details.rollback` is `failed`, and `details.cause` /
+        failed too, including when an endpoint involved is not served as it was before the
+        mutation — no longer served, or still served in the rejected version because the
+        restore could not reload it: `details.rollback` is `failed`, and `details.cause` /
         `details.recoveryError` describe both errors — the workspace state must not be assumed
         consistent).
       content:

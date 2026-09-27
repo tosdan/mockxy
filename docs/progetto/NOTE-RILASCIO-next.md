@@ -50,7 +50,7 @@ esistenti restano compatibili: nessuna migrazione richiesta.
   `details.rollback`: `400 MUTATION_REJECTED` (input non valido o modifica non applicabile),
   `500 RUNTIME_APPLY_FAILED` (reload fallito nel suo insieme, prima `400`), `500 MUTATION_FAILED`
   (errore di scrittura, prima `400`), `500 ROLLBACK_FAILED` (fallito anche il ripristino, o un
-  endpoint coinvolto servito prima non lo è più dopo il ripristino). Import
+  endpoint coinvolto non è servito com'era prima della mutazione). Import
   OpenAPI e creazione dallo storico aggiungono `items` e `runtime` alla risposta, conservando i
   conteggi; un reload finale fallito risponde `500 BATCH_RUNTIME_FAILED` senza annullare gli
   elementi scritti. Se non riesce il ripristino di un elemento fallito, il batch si ferma lì e

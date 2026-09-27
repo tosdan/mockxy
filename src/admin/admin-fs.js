@@ -287,36 +287,54 @@ async function finalizeBatch({ reloadRuntime, result, mocksDir, rejectionLabel, 
   return finalResult;
 }
 
-// Ripristina i backup e ricarica: il recupero riesce solo se entrambi i passi riescono. Errori
-// preesistenti su altri endpoint non lo invalidano: si torna allo stato di prima, com'era.
-async function recoverFromFailedMutation({ backups, reloadRuntime, involved, servedBefore, baseDir }) {
+// Confronta le definizioni coinvolte servite dopo il ripristino con quelle di prima della
+// mutazione. I file tornano com'erano, ma il comportamento servito può non tornare:
+// - una risorsa servita prima può sparire: la versione che il runtime manteneva nonostante un
+//   errore di caricamento, tolta da un reload intermedio, non si ricostruisce ricaricando lo
+//   stesso sorgente rotto;
+// - se il reload di recupero non carica una risorsa, il runtime tiene la versione installata
+//   subito prima, che può essere quella della modifica rifiutata: deve essere la stessa di prima.
+// Gli errori preesistenti non contano di per sé, e una risorsa ricaricata senza errori viene dai
+// file ripristinati. Restituisce l'errore da riportare, o null se il ripristino è confermato.
+function findUnrestoredDefinition({ reloadResult, involved, definitionsBefore, baseDir }) {
+  const definitionsAfter = reloadResult?.installedDefinitions;
+  if (definitionsBefore == null || definitionsAfter == null) {
+    return null;
+  }
+  const erroredPaths = new Set((reloadResult.loadErrors || []).map((loadError) => path.resolve(loadError.filePath)));
+  for (const filePath of involved) {
+    const resolvedPath = path.resolve(filePath);
+    const before = definitionsBefore.get(resolvedPath);
+    const after = definitionsAfter.get(resolvedPath);
+    const name = relativeLoadErrorPath(filePath, baseDir);
+    if ((before != null) !== (after != null)) {
+      return new Error(before != null
+        ? `${name} was served before the mutation and is not served after the restore.`
+        : `${name} was not served before the mutation and is served after the restore.`);
+    }
+    const keptSameVersion = after == null
+      || (after.size === before.size && [...after].every((definition) => before.has(definition)));
+    if (erroredPaths.has(resolvedPath) && !keptSameVersion) {
+      return new Error(
+        `${name} failed to load after the restore, and the runtime kept a version other than the one served before the mutation.`
+      );
+    }
+  }
+  return null;
+}
+
+// Ripristina i backup e ricarica: il recupero riesce solo se entrambi i passi riescono e le
+// risorse coinvolte tornano servite come prima. Errori preesistenti su altri endpoint non lo
+// invalidano: si torna allo stato di prima, com'era.
+async function recoverFromFailedMutation({ backups, reloadRuntime, involved, definitionsBefore, baseDir }) {
   try {
     await restoreBackup(backups);
     const reloadResult = await runReload(reloadRuntime);
     if (reloadResult?.applied === false) {
       return { ok: false, error: createRuntimeApplyError(reloadResult) };
     }
-    // I file tornano com'erano, ma il comportamento servito può non tornare: una versione che il
-    // runtime manteneva nonostante un errore di caricamento, tolta da un reload intermedio, non
-    // si ricostruisce ricaricando lo stesso sorgente rotto. Gli errori preesistenti non contano
-    // di per sé: conta che ogni risorsa coinvolta sia servita come prima della mutazione.
-    const servedAfter = reloadResult?.installedConfigFilePaths;
-    if (servedBefore != null && servedAfter != null) {
-      for (const filePath of involved) {
-        const resolvedPath = path.resolve(filePath);
-        const wasServed = servedBefore.has(resolvedPath);
-        if (wasServed !== servedAfter.has(resolvedPath)) {
-          const name = relativeLoadErrorPath(filePath, baseDir);
-          return {
-            ok: false,
-            error: new Error(wasServed
-              ? `${name} was served before the mutation and is not served after the restore.`
-              : `${name} was not served before the mutation and is served after the restore.`),
-          };
-        }
-      }
-    }
-    return { ok: true };
+    const unrestored = findUnrestoredDefinition({ reloadResult, involved, definitionsBefore, baseDir });
+    return unrestored == null ? { ok: true } : { ok: false, error: unrestored };
   } catch (error) {
     return { ok: false, error };
   }
@@ -377,10 +395,10 @@ async function commitWithRollback({
   involved = [],
   baseDir,
 }) {
-  // Quali delle definizioni coinvolte erano servite prima di scrivere: il recupero deve
-  // riportare lo stesso stato. Disponibile solo col reload del runtime reale.
-  const servedBefore = typeof reloadRuntime?.installedConfigFilePaths === "function"
-    ? reloadRuntime.installedConfigFilePaths()
+  // Le definizioni servite prima di scrivere: il recupero deve riportare le stesse versioni.
+  // Disponibile solo col reload del runtime reale.
+  const definitionsBefore = typeof reloadRuntime?.installedDefinitions === "function"
+    ? reloadRuntime.installedDefinitions()
     : null;
   // La fase in cui avviene l'errore ne decide la classificazione: scrittura (I/O), reload del
   // runtime (fallimento globale) o verifica del suo esito (rifiuto sulle risorse coinvolte).
@@ -400,7 +418,7 @@ async function commitWithRollback({
     }
     return reloadResult;
   } catch (error) {
-    const recovery = await recoverFromFailedMutation({ backups, reloadRuntime, involved, servedBefore, baseDir });
+    const recovery = await recoverFromFailedMutation({ backups, reloadRuntime, involved, definitionsBefore, baseDir });
     throw classifyMutationFailure({ error, phase, recovery, rejectionLabel });
   }
 }

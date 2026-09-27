@@ -47,8 +47,9 @@ resettano lo stato tra i test, pipeline che importano una specifica aggiornata.
   - `500 RUNTIME_APPLY_FAILED`: il reload del runtime è fallito nel suo insieme; file ripristinati;
   - `500 MUTATION_FAILED`: errore imprevisto durante la scrittura; file ripristinati;
   - `500 ROLLBACK_FAILED`: è fallito anche il ripristino (`rollback: "failed"`, con `cause` e
-    `recoveryError`), anche solo perché un endpoint coinvolto, servito prima della mutazione, non
-    lo è più dopo il ripristino: lo stato del workspace non va considerato coerente.
+    `recoveryError`), anche solo perché dopo il ripristino un endpoint coinvolto non è servito
+    com'era prima: non è più servito, oppure resta la versione della modifica rifiutata perché il
+    ripristino non è riuscito a ricaricarlo. Lo stato del workspace non va considerato coerente.
 - **Una mutazione alla volta** per workspace: le mutazioni vengono messe in coda, mentre letture,
   traffico e push delle console SSE/WS non le aspettano. Un client che si disconnette non
   interrompe una mutazione già partita.
