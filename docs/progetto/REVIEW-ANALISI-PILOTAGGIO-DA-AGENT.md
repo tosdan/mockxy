@@ -766,3 +766,12 @@ Su richiesta di Dani, Codex ha riallineato main al remoto e confrontato tutti i 
 Analisi e piano ora distinguono la base storica da quella verificata dopo il rebase. Il piano aggiunge le due regressioni UI da preservare e il raccordo con le note/procedura di rilascio aggiornate. Le note della release 1.3.2 e il codice applicativo non sono stati modificati da questa valutazione.
 
 Verifiche: diff completo dei sei commit, equivalenza delle patch dopo rebase, `npm run check:versions` superato (tutti i package a 1.3.2) e controlli documentali. Nessuna nuova esecuzione delle suite applicative: questa è una verifica d’impatto sui contratti, non una certificazione dei test dei commit remoti. L’implementazione di S0 non è stata avviata.
+
+
+### Arbitraggio sulla politica di versione — 27 settembre 2026
+
+Dani ha chiarito che la soglia per una major è l’incompatibilità dei workspace con una nuova app, mentre accetta modifiche incompatibili dell’admin API in una minor. Dopo la precisazione di Codex, la compatibilità comprende anche il significato delle definizioni, non solo la leggibilità dei JSON. La regola è ora fissata nel §1 di [PROCEDURA-RILASCIO.md](PROCEDURA-RILASCIO.md) come politica di versionamento di Mockxy e richiamata dal piano; non viene promessa retrocompatibilità API tra minor.
+
+S0–S8 non richiedono una major nel perimetro concordato. Rimangono note dedicate per le incompatibilità API, avviso sull’esposizione dell’admin di S0 e aggiornamento coordinato di GUI, OpenAPI, guide e skill. Agent e script sono client separati: il flusso live consulta versione e contratto del runtime e segnala i motori precedenti privi delle nuove rotte prima di tentare mutazioni basate su capacità non verificate. Il piano esplicita i controlli di compatibilità con fixture della base 1.3.2; nessun numero di release assegnato, bump o implementazione eseguiti in questo aggiornamento.
+
+Nel messaggio riportato da Dani, Opus riferisce inoltre backend verde (70 suite, 781 test) e UI verde (31 file, 359 test), dopo riesecuzione dei fallimenti iniziali sotto forte carico. Playwright e build frontend non eseguiti. Questi risultati sono attribuiti a Opus, non a una nuova esecuzione di Codex, e non sostituiscono i controlli richiesti per le future modifiche applicative.

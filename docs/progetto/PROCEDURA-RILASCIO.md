@@ -7,11 +7,34 @@ artefatti.
 
 ## 1. Scegliere la versione
 
-Usare il versionamento semantico:
+Applicare la **politica di versionamento di Mockxy**, centrata sulla compatibilità dei workspace:
 
 - `patch` per correzioni compatibili, per esempio `1.3.1` → `1.3.2`;
-- `minor` per nuove funzionalità compatibili, per esempio `1.3.1` → `1.4.0`;
-- `major` per cambiamenti incompatibili, per esempio `1.3.1` → `2.0.0`.
+- `minor` per nuove funzionalità e cambiamenti dell’admin API, anche non retrocompatibili,
+  purché i workspace esistenti restino compatibili, per esempio `1.3.2` → `1.4.0`;
+- `major` per incompatibilità dei workspace esistenti, per esempio `1.3.2` → `2.0.0`.
+
+La compatibilità del workspace comprende il formato persistito e il significato delle definizioni:
+leggere ancora gli stessi JSON non basta se occorre riscriverli o migrarli per conservare gli scenari
+che descrivono. Le correzioni di bug e le modifiche documentate al ciclo di vita del runtime non
+implicano automaticamente un nuovo formato o una major.
+
+Una minor **non garantisce la retrocompatibilità dell’admin API**. Per ogni modifica incompatibile
+aggiungere nelle note una sezione “Cambiamenti dell’admin API” con comportamento precedente,
+nuovo comportamento e aggiornamento richiesto ai client. Aggiornare GUI e contratto insieme al
+motore, coordinando anche guide e skill distribuiti separatamente. Gli agent, gli script e i test
+sono client dell’API e non vanno considerati automaticamente allineati alla versione dell’app.
+
+Quando disponibili nel runtime, `/info` e `/openapi.yaml` sotto `/_admin/api` sono i riferimenti
+per versione e contratto; la loro introduzione è prevista da S2 del
+[piano agent/API](PIANO-PILOTAGGIO-DA-AGENT.md). Un client non deve presumere che una rotta descritta
+nel proprio skill sia già disponibile in un motore precedente.
+
+I cambiamenti che incidono sull’esposizione dell’admin, come il default di abilitazione di S0,
+richiedono una nota esplicita e le istruzioni per mantenere il comportamento precedente,
+indipendentemente dal numero di versione. Il piano S0–S8 non prevede incompatibilità dei workspace:
+le sue modifiche API possono essere rilasciate come minor; questa regola non assegna già il numero
+né impone di pubblicare ogni passo separatamente.
 
 La versione deve essere stabile e composta soltanto da tre numeri. La pipeline non accetta
 prerelease come `1.4.0-beta.1`.
