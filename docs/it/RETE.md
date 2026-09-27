@@ -13,7 +13,12 @@ essere una scelta esplicita e consapevole.
   workspace, che accetta solo la scelta binaria loopback/rete e mostra l'avvertenza sul rischio.
 - **Docker**: le immagini impostano `HOST=0.0.0.0` da sole, perché il loopback *del container*
   non è raggiungibile dal port mapping; l'esposizione reale si decide sul mapping delle porte
-  dell'host.
+  dell'host. L'immagine di **sviluppo** (il `Dockerfile` della radice) non imposta
+  `ADMIN_API_ENABLED`: avviata senza compose e senza `NODE_ENV=production`, ha quindi l'admin
+  attiva per default. Per l'uso locale pubblicare la porta solo su loopback
+  (`-p 127.0.0.1:3000:3000`), oppure passare `-e ADMIN_API_ENABLED=false`. Su un bind di rete la
+  guardia sull'header `Host` descritta sotto interviene solo se `ADMIN_ALLOWED_HOSTS` è
+  impostato.
 
 Quando l'admin API è attiva su un bind non-loopback, all'avvio compare nel log un **avviso
 pensato per essere impossibile da mancare**. Non è un blocco — su una rete fidata può essere

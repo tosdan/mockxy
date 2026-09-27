@@ -39,7 +39,7 @@ Ogni passo è un insieme di modifiche verificabile e può essere suddiviso in co
 
 | Passo | Risultato | Dipendenze | Stato | Evidenze |
 |---|---|---|---|---|
-| S0 | Correggere default, namespace admin e guardia del contratto | Nessuna | Da fare | — |
+| S0 | Correggere default, namespace admin e guardia del contratto | Nessuna | In corso | — |
 | S1 | Serializzare mutazioni e rendere affidabili esiti/reload | S0 | Da fare | — |
 | S2 | Esporre identità, configurazione effettiva e diagnostica | S1 per gli esiti coerenti | Da fare | — |
 | S3 | Leggere/preparare varianti inattive e preservare stream | S1 | Da fare | — |
@@ -88,6 +88,13 @@ Il controllo sulle chiamate della UI resta una convenzione verificabile: include
 - Senza flag o `.env` interferenti: admin attiva in development e disattiva in production; valori espliciti prevalenti. Coprire anche bind `0.0.0.0`, avviso iniziale e comportamento della guardia Host con/senza allowlist; controllare Docker di sviluppo senza compose e standalone con flag esplicito.
 - GET e POST sconosciute sotto `/_admin/api` restituiscono l'errore admin e non raggiungono un backend sentinella, anche con fallback attivo.
 - Aggiungere o togliere un'operazione da un solo lato router/spec fa fallire il confronto.
+
+> **Avanzamento S0 — aggiornato il 2026-09-27**
+>
+> - **Consegnato / restante:** implementati, in attesa di PR, il fallback corretto di `ADMIN_API_ENABLED`, il 404 `ADMIN_ROUTE_NOT_FOUND` in coda al router admin (anche per metodi non previsti e per mock dichiarati sotto `/_admin/api`), la guardia router–OpenAPI con controprova del confronto e la convenzione sui trasporti della UI. Aggiornati OpenAPI (namespace riservato, `details.code`), guide ADMIN-API e RETE IT/EN (namespace, `PATCH /mocks/enabled`, immagine Docker di sviluppo senza compose) e la sezione “Prossima versione” delle note di rilascio. La reference dello skill `mockxy-workspace` copre ora tutte le rotte del router, spiega il default fino alla 1.3.2 e rimanda all'OpenAPI. Restano da aprire e integrare le PR di `mockxy` e `mockxy-skills`. Le descrizioni OpenAPI che promettono il rollback su reload rifiutato (`PATCH /mocks/enabled`, convenzione “Reload semantics”) vanno corrette in S1 insieme al comportamento.
+> - **Verifiche:** sul branch di S0, `npm test` 71 suite / 795 test, test UI 31 file / 359 test e build frontend riusciti; nuovi test falliti prima delle correzioni (default in development, 404 del namespace) e controprova della guardia UI con una `fetch` aggiunta di proposito. Confronto automatico router/documentazione: 49 rotte su 49 in guide IT/EN e reference dello skill. Immagini Docker costruite dal branch e pubblicate solo su loopback: sviluppo senza flag con admin attiva, avviso di esposizione e 404 admin; sviluppo con `ADMIN_API_ENABLED=false` e standalone con admin spenta. Test del validatore degli skill verdi. Non eseguiti: Playwright (S0 non modifica la UI) e risultato CI, da collegare alle PR.
+> - **Impedimenti:** nessuno.
+> - **Modifiche al contratto:** nessuna.
 
 ## 4. S1 — Mutazioni serializzate ed esito applicato
 
