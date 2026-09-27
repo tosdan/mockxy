@@ -37,19 +37,41 @@ Il rollback interno di una mutazione fallita rimane nel contratto delle operazio
 
 Ogni passo è un insieme di modifiche verificabile e può essere suddiviso in commit piccoli. I passi non sono tutti necessari per pubblicare una singola correzione, ma **S0–S6 insieme completano il primo caso d'uso approvato**.
 
-| Passo | Risultato | Dipendenze | Stato |
-|---|---|---|---|
-| S0 | Correggere default, namespace admin e guardia del contratto | Nessuna | Da fare |
-| S1 | Serializzare mutazioni e rendere affidabili esiti/reload | S0 | Da fare |
-| S2 | Esporre identità, configurazione effettiva e diagnostica | S1 per gli esiti coerenti | Da fare |
-| S3 | Leggere/preparare varianti inattive e preservare stream | S1 | Da fare |
-| S4 | Proteggere bozze e sincronizzare GUI senza perderle | S1–S3; bozza stabile prima del polling del dettaglio | Da fare |
-| S5 | Rendere il Monitor interrogabile e la perdita di traffico rilevabile | S2 per l'identità runtime | Da fare |
-| S6 | Consegnare setup ripetibile, esempio Playwright e flusso nello skill | S0–S5 | Da fare |
-| S7 | Centralizzare creazione di mock dal traffico | Primo caso completato | Successivo |
-| S8 | Consentire modifiche effimere della configurazione runtime | S7 secondo D03 | Successivo |
+| Passo | Risultato | Dipendenze | Stato | Evidenze |
+|---|---|---|---|---|
+| S0 | Correggere default, namespace admin e guardia del contratto | Nessuna | Da fare | — |
+| S1 | Serializzare mutazioni e rendere affidabili esiti/reload | S0 | Da fare | — |
+| S2 | Esporre identità, configurazione effettiva e diagnostica | S1 per gli esiti coerenti | Da fare | — |
+| S3 | Leggere/preparare varianti inattive e preservare stream | S1 | Da fare | — |
+| S4 | Proteggere bozze e sincronizzare GUI senza perderle | S1–S3; bozza stabile prima del polling del dettaglio | Da fare | — |
+| S5 | Rendere il Monitor interrogabile e la perdita di traffico rilevabile | S2 per l'identità runtime | Da fare | — |
+| S6 | Consegnare setup ripetibile, esempio Playwright e flusso nello skill | S0–S5 | Da fare | — |
+| S7 | Centralizzare creazione di mock dal traffico | Primo caso completato | Da fare | — |
+| S8 | Consentire modifiche effimere della configurazione runtime | S7 secondo D03 | Da fare | — |
 
 Documentazione, OpenAPI e test dei contratti cambiano nello stesso passo dell'implementazione. Il numero 49 descrive la base attuale, non è un numero da congelare nei test. Le note di rilascio e la matrice documentale del §12 fanno parte della consegna di ogni passo, non di un riallineamento successivo.
+
+### Tracciamento dell’avanzamento
+
+Questo piano è l’unico riferimento per lo stato dell’implementazione. Analisi e review conservano diagnosi e decisioni; non duplicano il registro di avanzamento. La tabella riassume lo stato, mentre la nota in fondo alla sezione di ciascun passo (§3–§11) ne descrive il lavoro restante. Aggiornare entrambe a ogni consegna significativa, non a ogni modifica di file.
+
+- **Da fare:** implementazione non iniziata; le dipendenze indicano quando affrontarla. S7/S8 restano successivi al primo caso d’uso.
+- **In corso:** lavoro iniziato, con criteri di accettazione ancora da soddisfare.
+- **Bloccato:** indicare nella nota l’impedimento concreto e che cosa permette di rimuoverlo; una dipendenza pianificata non ancora iniziata non è da sola un blocco.
+- **Completato:** tutti i criteri del passo soddisfatti, comprese verifiche, documentazione e modifiche richieste negli altri repository. Il solo completamento del codice del motore non basta.
+
+**Evidenze.** Citare preferibilmente PR tramite link e numero. Indicare il repository quando diverso da mockxy, per esempio `mockxy-skills#N` o `mockxy-acceptance-tests#N`, e distinguere PR aperte da integrate. In assenza di PR, usare il commit definitivo su main; evitare hash provvisori di branch destinati a rebase/squash. Registrare anche le PR degli skill quando richieste dal passo: un riferimento al solo repository del motore non dimostra una consegna completa. Finché non esistono evidenze usare “—”, senza inventare riferimenti. I dettagli dei test stanno nella nota del passo, con collegamento al risultato CI quando disponibile.
+
+**Nota locale.** Al primo avvio di ciascun passo aggiungere in fondo alla sua sezione, dopo prescrizioni e criteri di accettazione, una nota con questo formato; aggiornarla sul posto anziché creare un diario cronologico:
+
+> **Avanzamento Sx — aggiornato il AAAA-MM-GG**
+>
+> - **Consegnato / restante:** risultati raggiunti e criteri ancora aperti.
+> - **Verifiche:** controlli eseguiti, esito e controlli non ancora eseguiti; riferire i risultati alla PR/revisione verificata e non riportare test della base come prova della nuova implementazione.
+> - **Impedimenti:** problema concreto e condizione di sblocco, oppure nessuno.
+> - **Modifiche al contratto:** riferimento al punto aggiornato del §13 e motivazione, oppure nessuna.
+
+**Scostamenti.** Se emerge la necessità di cambiare un comportamento, aggiornare il §13 e le prescrizioni/accettazioni interessate prima di implementare il contratto diverso. La nota di avanzamento rimanda a quella modifica e non può sostituirla. Se cambia una decisione di prodotto, serve l’arbitraggio di Dani prima di procedere sulla parte dipendente; le scelte tecniche nel perimetro approvato non richiedono un nuovo arbitraggio. Queste regole non modificano D01–D04 né avviano S0.
 
 ## 3. S0 — Fondamenta dell'admin API
 
