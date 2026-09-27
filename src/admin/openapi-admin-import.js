@@ -1,5 +1,6 @@
 const { planFromDocument } = require("../mocks/openapi-import");
-const { runReload } = require("./admin-fs");
+const { applyBatchRuntimeOutcome, runReload } = require("./admin-fs");
+const { resolveAdminFilePath } = require("./mock-ids");
 const { createAdminCollection, assignAdminCollection } = require("./collection-operations");
 const { DEFAULT_COLLECTION_LABEL, compareCollectionLabels } = require("./collections-state");
 const { listAdminMocks, listAdminCollections } = require("./mock-catalog");
@@ -53,13 +54,25 @@ async function importAdminOpenapi(mocksDir, document, reloadRuntime, options = {
     }
   }
 
-  // Crea i mock; reload una sola volta a fine batch (non per ogni endpoint).
+  // Crea i mock; reload una sola volta a fine batch (non per ogni endpoint). Ogni elemento del
+  // piano diventa un esito: un fallimento in scrittura ripristina i soli file di quell'elemento.
   const noReload = async () => {};
   const failed = [];
   let created = 0;
+  const items = plan.items
+    .filter((item) => item.action !== "create")
+    .map((item) => ({
+      method: item.method,
+      path: item.path,
+      id: null,
+      responseFile: null,
+      writeOutcome: "skipped",
+      runtimeOutcome: "not_applicable",
+      error: null,
+    }));
   for (const item of toCreate) {
     try {
-      await createAdminMock(
+      const detail = await createAdminMock(
         mocksDir,
         {
           config: {
@@ -76,8 +89,28 @@ async function importAdminOpenapi(mocksDir, document, reloadRuntime, options = {
         noReload,
       );
       created += 1;
-    } catch (_error) {
+      items.push({
+        method: item.method,
+        path: item.path,
+        id: detail.id,
+        responseFile: "001.response.json",
+        writeOutcome: "created",
+        runtimeOutcome: "not_applied",
+        error: null,
+        endpointPath: resolveAdminFilePath(mocksDir, detail.id),
+        expectServing: true,
+      });
+    } catch (error) {
       failed.push(`${item.method} ${item.path}`);
+      items.push({
+        method: item.method,
+        path: item.path,
+        id: null,
+        responseFile: null,
+        writeOutcome: "failed",
+        runtimeOutcome: "not_applicable",
+        error: error.message,
+      });
     }
   }
 
@@ -92,16 +125,23 @@ async function importAdminOpenapi(mocksDir, document, reloadRuntime, options = {
     }
   }
 
-  await runReload(reloadRuntime);
-
-  return {
-    created,
-    skipped: plan.skip,
-    failed: failed.length,
-    total: plan.total,
-    collections: Object.keys(collectionIdByTag).length,
-    prefix: plan.prefix,
-  };
+  // I conteggi conservano il significato storico di creazioni su disco; il servizio effettivo
+  // lo dicono items[].runtimeOutcome e runtime.status.
+  const reloadResult = await runReload(reloadRuntime);
+  return applyBatchRuntimeOutcome({
+    reloadResult,
+    mocksDir,
+    rejectionLabel: "OpenAPI import",
+    result: {
+      created,
+      skipped: plan.skip,
+      failed: failed.length,
+      total: plan.total,
+      collections: Object.keys(collectionIdByTag).length,
+      prefix: plan.prefix,
+      items,
+    },
+  });
 }
 
 module.exports = {

@@ -1,6 +1,6 @@
 const fs = require("fs");
 const path = require("path");
-const { readBackup, commitWithRollback } = require("../src/admin/admin-fs");
+const { readBackup, commitWithRollback, validateReloadedEndpoints } = require("../src/admin/admin-fs");
 const { writeFileAtomic } = require("../src/utils/fs-atomic");
 const { createTempDir, removeDir } = require("./helpers");
 
@@ -32,7 +32,7 @@ describe("commitWithRollback", () => {
     expect(reloadRuntime).toHaveBeenCalledTimes(1);
   });
 
-  test("se il commit fallisce ripristina i backup, rifà il reload e traduce in 400", async () => {
+  test("se il commit fallisce per un errore non tipizzato ripristina i backup e risponde 500 MUTATION_FAILED", async () => {
     await writeFileAtomic(filePath, "originale", "utf8");
     const backups = [await readBackup(filePath)];
     await writeFileAtomic(filePath, "scrittura da annullare", "utf8");
@@ -52,8 +52,9 @@ describe("commitWithRollback", () => {
       caught = error;
     }
 
-    expect(caught.status).toBe(400);
+    expect(caught.status).toBe(500);
     expect(caught.message).toBe("Operazione rejected: boom");
+    expect(caught.details).toEqual({ code: "MUTATION_FAILED", rollback: "restored" });
     expect(await fs.promises.readFile(filePath, "utf8")).toBe("originale");
     // Il reload post-rollback riallinea il runtime ai file appena ripristinati
     // (quello ordinario non è mai partito: il commit è fallito prima).
@@ -81,10 +82,11 @@ describe("commitWithRollback", () => {
 
     expect(caught.status).toBe(404);
     expect(caught.message).toBe("Collection not found.");
+    expect(caught.details).toEqual({ rollback: "restored" });
     expect(await fs.promises.readFile(filePath, "utf8")).toBe("originale");
   });
 
-  test("se il reload fallisce il rollback rimuove i file che prima non esistevano", async () => {
+  test("se il reload rigetta, il rollback rimuove i file nuovi e risponde 500 RUNTIME_APPLY_FAILED", async () => {
     const backups = [await readBackup(filePath)];
     await writeFileAtomic(filePath, "creato dalla mutazione", "utf8");
     const reloadRuntime = jest
@@ -99,8 +101,9 @@ describe("commitWithRollback", () => {
       caught = error;
     }
 
-    expect(caught.status).toBe(400);
-    expect(caught.message).toBe("Operazione rejected: reload rotto");
+    expect(caught.status).toBe(500);
+    expect(caught.message).toBe("Operazione rejected: runtime reload failed: reload rotto");
+    expect(caught.details).toEqual({ code: "RUNTIME_APPLY_FAILED", rollback: "restored" });
     expect(fs.existsSync(filePath)).toBe(false);
     expect(reloadRuntime).toHaveBeenCalledTimes(2);
   });
@@ -120,10 +123,113 @@ describe("commitWithRollback", () => {
       reloadRuntime,
       rejectionLabel: "Operazione rejected",
       validateReloadResult,
-    })).rejects.toMatchObject({ status: 400, message: "Operazione rejected: endpoint rotto" });
+    })).rejects.toMatchObject({
+      status: 400,
+      message: "Operazione rejected: endpoint rotto",
+      details: { code: "MUTATION_REJECTED", rollback: "restored" },
+    });
 
     expect(validateReloadResult).toHaveBeenCalledWith(firstOutcome);
     expect(reloadRuntime).toHaveBeenCalledTimes(2);
     expect(await fs.promises.readFile(filePath, "utf8")).toBe("originale");
+  });
+
+  // Il reload non rigetta mai: sul fallimento globale risolve con applied false. Prima questo
+  // esito passava inosservato alle mutazioni che non lo validavano esplicitamente.
+  test("un reload risolto con applied false è un fallimento globale anche senza validazione", async () => {
+    await writeFileAtomic(filePath, "originale", "utf8");
+    const backups = [await readBackup(filePath)];
+    const reloadRuntime = jest
+      .fn()
+      .mockResolvedValueOnce({ applied: false, loadErrors: [], fatalError: new Error("scansione fallita") })
+      .mockResolvedValueOnce({ applied: true, loadErrors: [], fatalError: null });
+
+    await expect(commitWithRollback({
+      backups,
+      reloadRuntime,
+      rejectionLabel: "Operazione rejected",
+      commit: () => writeFileAtomic(filePath, "nuovo", "utf8"),
+    })).rejects.toMatchObject({
+      status: 500,
+      message: "Operazione rejected: runtime reload failed: scansione fallita",
+      details: { code: "RUNTIME_APPLY_FAILED", rollback: "restored" },
+    });
+    expect(await fs.promises.readFile(filePath, "utf8")).toBe("originale");
+  });
+
+  test("se anche il reload del ripristino fallisce non dichiara un rollback riuscito", async () => {
+    await writeFileAtomic(filePath, "originale", "utf8");
+    const backups = [await readBackup(filePath)];
+    const failed = { applied: false, loadErrors: [], fatalError: new Error("scansione fallita") };
+    const reloadRuntime = jest.fn().mockResolvedValue(failed);
+
+    await expect(commitWithRollback({
+      backups,
+      reloadRuntime,
+      rejectionLabel: "Operazione rejected",
+      commit: () => writeFileAtomic(filePath, "nuovo", "utf8"),
+    })).rejects.toMatchObject({
+      status: 500,
+      details: {
+        code: "ROLLBACK_FAILED",
+        rollback: "failed",
+        cause: "scansione fallita",
+        recoveryError: "scansione fallita",
+      },
+    });
+    // I file sono comunque ripristinati: è il runtime a non poterlo confermare.
+    expect(await fs.promises.readFile(filePath, "utf8")).toBe("originale");
+  });
+
+  test("restituisce l'esito del reload a chi deve verificarne l'effetto", async () => {
+    const outcome = { applied: true, loadErrors: [], fatalError: null };
+    const reloadRuntime = jest.fn().mockResolvedValue(outcome);
+
+    await expect(commitWithRollback({ backups: [], reloadRuntime, rejectionLabel: "x" })).resolves.toBe(outcome);
+  });
+});
+
+describe("validateReloadedEndpoints", () => {
+  const base = path.resolve("/workspace/mocks");
+  const endpointA = path.join(base, "a", "GET.endpoint.json");
+  const endpointB = path.join(base, "b", "GET.endpoint.json");
+  const reloaded = (overrides = {}) => ({
+    applied: true,
+    loadErrors: [],
+    fatalError: null,
+    installedConfigFilePaths: new Set([endpointA]),
+    ...overrides,
+  });
+
+  test("accetta l'effetto richiesto e ignora gli errori di endpoint estranei", () => {
+    expect(() => validateReloadedEndpoints(
+      reloaded({ loadErrors: [{ filePath: endpointB, message: "rotto" }] }),
+      { checked: [endpointA], installed: [endpointA], baseDir: base }
+    )).not.toThrow();
+  });
+
+  test("un errore di caricamento su una risorsa coinvolta è un rifiuto", () => {
+    expect(() => validateReloadedEndpoints(
+      reloaded({ loadErrors: [{ filePath: endpointA, message: "handler non compilabile" }] }),
+      { checked: [endpointA] }
+    )).toThrow("handler non compilabile");
+  });
+
+  test("una definizione che doveva essere servita e non lo è è un rifiuto", () => {
+    expect(() => validateReloadedEndpoints(reloaded(), { installed: [endpointB], baseDir: base }))
+      .toThrow("b/GET.endpoint.json is not served after the reload.");
+  });
+
+  test("una definizione che doveva sparire ed è ancora servita è un rifiuto", () => {
+    expect(() => validateReloadedEndpoints(reloaded(), { absent: [endpointA], baseDir: base }))
+      .toThrow("a/GET.endpoint.json is still served after the reload.");
+  });
+
+  test("senza l'elenco delle definizioni installate verifica solo gli errori", () => {
+    expect(() => validateReloadedEndpoints(
+      { applied: true, loadErrors: [] },
+      { installed: [endpointB], absent: [endpointA] }
+    )).not.toThrow();
+    expect(() => validateReloadedEndpoints(undefined, { checked: [endpointA] })).not.toThrow();
   });
 });

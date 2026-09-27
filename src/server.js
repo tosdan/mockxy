@@ -1,4 +1,5 @@
 const fs = require("fs");
+const path = require("path");
 const chokidar = require("chokidar");
 const { createApp } = require("./app");
 const { loadConfig, WORKSPACE_SETTING_DEFAULTS } = require("./config");
@@ -44,6 +45,18 @@ function graftPreviousRoutes(nextRouteGroups, previousRouteGroups, erroredFilePa
   }
 
   return grafted ? sortRouteGroups(Array.from(groupsByPath.values())) : nextRouteGroups;
+}
+
+function collectInstalledConfigFilePaths(routeGroups) {
+  const installed = new Set();
+  for (const group of routeGroups) {
+    for (const entry of group.methods.values()) {
+      if (entry.configFilePath != null) {
+        installed.add(path.resolve(entry.configFilePath));
+      }
+    }
+  }
+  return installed;
 }
 
 function createReloadHandler({ mocksDir, registry, proxyMiddlewareRegistry, logger, handlerStates, sseConnections, wsConnections }) {
@@ -92,7 +105,14 @@ function createReloadHandler({ mocksDir, registry, proxyMiddlewareRegistry, logg
         proxyMiddlewareCount: middlewareRouteGroups.length,
         endpointLoadErrors: loadErrors.length,
       });
-      return { applied: true, loadErrors, fatalError: null };
+      // Le definizioni davvero installate (versioni reinnestate comprese): le mutazioni admin le
+      // confrontano con l'effetto richiesto, perché l'assenza di errori non basta a provarlo.
+      return {
+        applied: true,
+        loadErrors,
+        fatalError: null,
+        installedConfigFilePaths: collectInstalledConfigFilePaths([...routeGroups, ...middlewareRouteGroups]),
+      };
     } catch (error) {
       logger.error("Runtime reload failed. Keeping previous configuration.", {
         error: error.message,

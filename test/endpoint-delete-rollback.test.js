@@ -54,8 +54,9 @@ describe("deleteAdminMock: rollback della cartella delle response", () => {
     const failingReload = jest.fn().mockRejectedValueOnce(new Error("boom")).mockResolvedValue(undefined);
 
     await expect(deleteAdminMock(mocksDir, encodeMockId(relativePath), failingReload)).rejects.toMatchObject({
-      status: 400,
-      message: "Endpoint delete rejected: boom",
+      status: 500,
+      message: "Endpoint delete rejected: runtime reload failed: boom",
+      details: { code: "RUNTIME_APPLY_FAILED", rollback: "restored" },
     });
 
     expect(fs.existsSync(endpointPath)).toBe(true);

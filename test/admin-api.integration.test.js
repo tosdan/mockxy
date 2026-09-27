@@ -240,7 +240,15 @@ describe("admin API", () => {
         .post("/_admin/api/monitoring/dumps/create-mocks")
         .send({ file: "dump-batch.ndjson" });
       expect(res.status).toBe(201);
-      expect(res.body).toEqual({ created: 1, createdEmpty: 1, skippedExisting: 1, failed: 0 });
+      expect(res.body).toMatchObject({ created: 1, createdEmpty: 1, skippedExisting: 1, failed: 0 });
+      // Esiti per elemento: i conteggi dicono cosa è stato scritto, items e runtime cosa è servito.
+      expect(res.body.items.map(({ key, writeOutcome, runtimeOutcome }) => ({ key, writeOutcome, runtimeOutcome }))).toEqual([
+        { key: "dump-batch.ndjson#0", writeOutcome: "created", runtimeOutcome: "applied" },
+        { key: "dump-batch.ndjson#1", writeOutcome: "created", runtimeOutcome: "applied" },
+        { key: "dump-batch.ndjson#2", writeOutcome: "skipped", runtimeOutcome: "not_applicable" },
+      ]);
+      expect(res.body.items[2].id).toBe(res.body.items[0].id);
+      expect(res.body.runtime).toEqual({ status: "applied", errors: [] });
 
       const mocks = await request(app).get("/_admin/api/mocks");
       const paths = mocks.body.items.map((i) => i.path);

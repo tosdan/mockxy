@@ -1,6 +1,7 @@
 const { readDumpFileEntries, readDumpEntriesByKeys } = require("../monitoring/monitor-dump-reader");
 const { createAdminError } = require("./admin-errors");
-const { runReload } = require("./admin-fs");
+const { applyBatchRuntimeOutcome, runReload } = require("./admin-fs");
+const { resolveAdminFilePath } = require("./mock-ids");
 const { createAdminMock } = require("./endpoint-operations");
 
 // Creazione massiva di mock a partire dalle entry di un dump del monitor.
@@ -92,25 +93,53 @@ async function createMocksFromDump(mocksDir, dumpDir, selection, reloadRuntime) 
 
   const noReload = async () => {};
   const counts = { created: 0, createdEmpty: 0, skippedExisting: 0, failed: 0 };
+  const items = [];
 
   for (const entry of entries) {
     const { payload, skeleton } = buildMockPayloadFromDumpEntry(entry);
+    const identity = { key: entry.dumpKey ?? null, method: payload.config.method, path: payload.config.path };
     try {
       // La descrizione "[da completare]" dello skeleton è ora impostata in fase di create
       // (payload.description → buildEndpointFilePayload), senza più un update separato.
-      await createAdminMock(mocksDir, payload, noReload);
+      const detail = await createAdminMock(mocksDir, payload, noReload);
       counts[skeleton ? "createdEmpty" : "created"] += 1;
+      items.push({
+        ...identity,
+        id: detail.id,
+        responseFile: "001.response.json",
+        writeOutcome: "created",
+        runtimeOutcome: "not_applied",
+        error: null,
+        endpointPath: resolveAdminFilePath(mocksDir, detail.id),
+        expectServing: true,
+      });
     } catch (error) {
-      if (error && error.status === 409) {
+      const existing = error && error.status === 409;
+      if (existing) {
         counts.skippedExisting += 1;
       } else {
         counts.failed += 1;
       }
+      items.push({
+        ...identity,
+        id: existing ? error.details?.existingMockId ?? null : null,
+        responseFile: null,
+        writeOutcome: existing ? "skipped" : "failed",
+        runtimeOutcome: "not_applicable",
+        error: existing ? null : error.message,
+      });
     }
   }
 
-  await runReload(reloadRuntime);
-  return counts;
+  // I conteggi conservano il significato storico di creazioni su disco; il servizio effettivo
+  // lo dicono items[].runtimeOutcome e runtime.status.
+  const reloadResult = await runReload(reloadRuntime);
+  return applyBatchRuntimeOutcome({
+    reloadResult,
+    mocksDir,
+    rejectionLabel: "Mock creation from dump",
+    result: { ...counts, items },
+  });
 }
 
 module.exports = {
