@@ -97,7 +97,9 @@ esistenti restano compatibili: nessuna migrazione richiesta.
   pannello resta com'era, bozze comprese.
 - **Import OpenAPI e creazione dallo storico:** il riepilogo segnala gli endpoint creati ma non
   serviti dal runtime e quelli con avvisi (per esempio una collection non assegnata), e in quel
-  caso diventa un avviso invece di una conferma.
+  caso diventa un avviso invece di una conferma. Se il batch fallisce dopo aver già scritto degli
+  endpoint (`BATCH_RUNTIME_FAILED`, `ROLLBACK_FAILED`), l'errore dice anche cosa è rimasto su
+  disco; l'import OpenAPI rilegge il catalogo e ricalcola l'anteprima, che non vale più.
 
 ---
 

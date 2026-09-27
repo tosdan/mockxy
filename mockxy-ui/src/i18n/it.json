@@ -44,7 +44,8 @@
     "resultExisting": "{{count}} già esistenti",
     "resultFailed": "{{count}} falliti",
     "resultNotServed": "{{count}} non serviti dal runtime",
-    "resultWarnings": "{{count}} con avvisi"
+    "resultWarnings": "{{count}} con avvisi",
+    "partialResult": "Scritto finora: {{summary}}."
   },
   "dati": {
     "title": "Dati",
@@ -614,6 +615,7 @@
     "resultFailed": "{{count}} falliti",
     "resultNotServed": "{{count}} non serviti dal runtime",
     "resultWarnings": "{{count}} con avvisi",
+    "partialResult": "Scritto finora: {{summary}}.",
     "errUnsupported": "Formato non supportato: scegli un file .json, .yaml o .yml.",
     "errReadFile": "Impossibile leggere il file.",
     "errImportFailed": "Import non riuscito."

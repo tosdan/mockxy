@@ -44,7 +44,8 @@
     "resultExisting": "{{count}} already existing",
     "resultFailed": "{{count}} failed",
     "resultNotServed": "{{count}} not served by the runtime",
-    "resultWarnings": "{{count}} with warnings"
+    "resultWarnings": "{{count}} with warnings",
+    "partialResult": "Written so far: {{summary}}."
   },
   "dati": {
     "title": "Data",
@@ -614,6 +615,7 @@
     "resultFailed": "{{count}} failed",
     "resultNotServed": "{{count}} not served by the runtime",
     "resultWarnings": "{{count}} with warnings",
+    "partialResult": "Written so far: {{summary}}.",
     "errUnsupported": "Unsupported format: choose a .json, .yaml or .yml file.",
     "errReadFile": "Unable to read the file.",
     "errImportFailed": "Import failed."

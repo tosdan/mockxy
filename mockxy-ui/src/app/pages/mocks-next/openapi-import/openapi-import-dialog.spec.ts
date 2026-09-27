@@ -2,7 +2,7 @@ import '@angular/compiler';
 import { TestBed } from '@angular/core/testing';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { DialogRef } from '@angular/cdk/dialog';
-import { of } from 'rxjs';
+import { of, throwError } from 'rxjs';
 import { OpenapiImportDialog } from './openapi-import-dialog';
 import { translocoTesting } from '../../../testing/transloco-testing';
 import { MockAdminApiService } from '../../../mock-admin-api.service';
@@ -126,6 +126,56 @@ describe('OpenapiImportDialog', () => {
     expect(toast.show).toHaveBeenCalledWith(
       expect.objectContaining({ tone: 'warning', description: '3 creati, 0 saltati, 1 non serviti dal runtime, 1 con avvisi' }),
     );
+  });
+
+  it('import fallito dopo aver scritto: mostra il risultato parziale, rilegge catalogo e anteprima', () => {
+    const message = 'OpenAPI import: runtime reload failed: scansione fallita';
+    const notApplied = { method: 'GET', id: 'x', responseFile: '001.response.json', writeOutcome: 'created' as const, runtimeOutcome: 'not_applied' as const, error: null };
+    api.importOpenapi.mockReturnValueOnce(
+      throwError(() => ({
+        status: 500,
+        error: {
+          message,
+          details: {
+            code: 'BATCH_RUNTIME_FAILED',
+            result: {
+              created: 2, skipped: 0, failed: 0, total: 2, collections: 0, prefix: '',
+              items: [{ ...notApplied, path: '/a' }, { ...notApplied, path: '/b' }],
+              runtime: { status: 'failed', errors: [] },
+            },
+          },
+        },
+      })),
+    );
+    const { c } = create();
+    c.docText = '{"openapi":"3.0.0","paths":{}}';
+    c.preview.set(PREVIEW);
+    api.previewOpenapi.mockClear();
+
+    c.runImport();
+
+    const expected = `${message} Scritto finora: 2 creati, 0 saltati, 2 non serviti dal runtime.`;
+    expect(toast.show).toHaveBeenCalledWith(expect.objectContaining({ tone: 'error', description: expected }));
+    expect(store.loadCatalog).toHaveBeenCalledTimes(1);
+    // L'anteprima superata è ricalcolata; l'errore resta visibile anche dopo il ricalcolo.
+    expect(api.previewOpenapi).toHaveBeenCalledTimes(1);
+    expect(c.preview()).toEqual(PREVIEW);
+    expect(c.error()).toBe(expected);
+    expect(dialogRef.close).not.toHaveBeenCalled();
+  });
+
+  it('import rifiutato prima di scrivere: solo il messaggio, catalogo e anteprima invariati', () => {
+    api.importOpenapi.mockReturnValueOnce(throwError(() => ({ status: 400, error: { message: 'Documento OpenAPI non interpretabile' } })));
+    const { c } = create();
+    c.docText = '{"openapi":"3.0.0","paths":{}}';
+    c.preview.set(PREVIEW);
+    api.previewOpenapi.mockClear();
+
+    c.runImport();
+
+    expect(toast.show).toHaveBeenCalledWith(expect.objectContaining({ tone: 'error', description: 'Documento OpenAPI non interpretabile' }));
+    expect(store.loadCatalog).not.toHaveBeenCalled();
+    expect(api.previewOpenapi).not.toHaveBeenCalled();
   });
 
   it('non importa senza documento', () => {

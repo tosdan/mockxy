@@ -23,6 +23,7 @@ import { UiTooltip } from '../../ui/ui-tooltip/ui-tooltip';
 import { ToastService } from '../../ui/ui-toast/ui-toast';
 import { MockAdminApiService } from '../../mock-admin-api.service';
 import { summarizeBatchAttention, type DumpCreateMocksResult, type DumpEntry, type DumpReadCursor, type DumpSelection, type MonitorDumpFile } from '../../mock-admin-api.types';
+import { readBatchPartialResult } from '../../shared/read-error-message';
 
 const PAGE_SIZE = 300;
 
@@ -337,7 +338,15 @@ export class StoricoDumpPage implements OnInit {
           this.toast.show({ title: this.transloco.translate('storico.toastMocksCreated'), description: this.summarizeResult(result), tone });
           this.clearSelection();
         },
-        error: (error: unknown) => this.toast.show({ title: this.transloco.translate('common.error'), description: this.readError(error), tone: 'error' }),
+        error: (error: unknown) => {
+          // Un batch fallito può aver già creato dei mock: il fallimento resta evidente, ma il
+          // riepilogo dice cosa c'è su disco.
+          const partial = readBatchPartialResult<DumpCreateMocksResult>(error);
+          const description = partial
+            ? `${this.readError(error)} ${this.transloco.translate('storico.partialResult', { summary: this.summarizeResult(partial) })}`
+            : this.readError(error);
+          this.toast.show({ title: this.transloco.translate('common.error'), description, tone: 'error' });
+        },
       });
   }
 

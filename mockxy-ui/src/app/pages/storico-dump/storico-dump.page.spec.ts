@@ -184,6 +184,36 @@ describe('StoricoDumpPage', () => {
       );
     });
 
+    it('un batch fallito dopo aver creato dei mock mostra l’errore insieme al risultato parziale', () => {
+      const message = 'Mock creation from dump: stopped after 2 of 3 items because one could not be restored: disco pieno';
+      api.createMocksFromDump.mockReturnValueOnce(
+        throwError(() => ({
+          status: 500,
+          error: {
+            message,
+            details: {
+              code: 'ROLLBACK_FAILED',
+              rollback: 'failed',
+              result: {
+                created: 1, createdEmpty: 0, skippedExisting: 0, failed: 1,
+                items: [
+                  { key: 'f#0', method: 'GET', path: '/a', id: 'a', responseFile: '001.response.json', writeOutcome: 'created', runtimeOutcome: 'applied', error: null },
+                  { key: 'f#1', method: 'GET', path: '/b', id: null, responseFile: null, writeOutcome: 'failed', runtimeOutcome: 'not_applicable', error: 'disco pieno' },
+                ],
+                runtime: { status: 'applied', errors: [] },
+              },
+            },
+          },
+        })),
+      );
+      const { c } = create();
+      c.selectAllLoaded();
+      c.createFromSelected();
+      expect(toast.show).toHaveBeenCalledWith(
+        expect.objectContaining({ tone: 'error', description: `${message} Scritto finora: 1 create, 1 falliti.` }),
+      );
+    });
+
     it('"tutto il file" manda il criterio per nome file', () => {
       const { c } = create();
       c.createFromFile(FILE1);

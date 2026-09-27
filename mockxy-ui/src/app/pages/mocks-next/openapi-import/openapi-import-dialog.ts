@@ -10,6 +10,7 @@ import { MockAdminApiService } from '../../../mock-admin-api.service';
 import { MocksStore } from '../mocks-next.store';
 import { routePathError } from '../../../mock-path-convention';
 import { summarizeBatchAttention, type OpenapiImportPreview, type OpenapiImportResult } from '../../../mock-admin-api.types';
+import { readBatchPartialResult } from '../../../shared/read-error-message';
 
 type ImportFilter = 'all' | 'create' | 'skip';
 
@@ -268,15 +269,18 @@ export class OpenapiImportDialog implements OnDestroy {
     this.requestPreview();
   }
 
-  /** Ricalcola l'anteprima con il prefisso corrente; le risposte superate vengono scartate. */
-  private requestPreview(): void {
+  /**
+   * Ricalcola l'anteprima con il prefisso corrente; le risposte superate vengono scartate.
+   * `keepError` conserva l'errore mostrato (es. un import fallito a metà) anche se il ricalcolo riesce.
+   */
+  private requestPreview({ keepError = false }: { keepError?: boolean } = {}): void {
     const seq = ++this.previewSeq;
     this.refreshing.set(true);
     this.api.previewOpenapi(this.docText, this.prefix().trim()).subscribe({
       next: (plan) => {
         if (seq !== this.previewSeq) return;
         this.preview.set(plan);
-        this.error.set(undefined);
+        if (!keepError) this.error.set(undefined);
         this.loading.set(false);
         this.refreshing.set(false);
       },
@@ -325,8 +329,19 @@ export class OpenapiImportDialog implements OnDestroy {
       },
       error: (e: unknown) => {
         this.importing.set(false);
-        this.error.set(this.readError(e));
-        this.toast.show({ title: this.transloco.translate('openapiImport.errorTitle'), description: this.readError(e), tone: 'error' });
+        // Un batch fallito può aver già scritto degli endpoint: il fallimento resta evidente, ma il
+        // riepilogo dice cosa c'è su disco, il catalogo va riletto e l'anteprima non vale più.
+        const partial = readBatchPartialResult<OpenapiImportResult>(e);
+        const message = partial
+          ? `${this.readError(e)} ${this.transloco.translate('openapiImport.partialResult', { summary: this.summarizeImport(partial) })}`
+          : this.readError(e);
+        this.error.set(message);
+        this.toast.show({ title: this.transloco.translate('openapiImport.errorTitle'), description: message, tone: 'error' });
+        if (partial) {
+          this.store.loadCatalog();
+          this.preview.set(undefined);
+          this.requestPreview({ keepError: true });
+        }
       },
     });
   }
