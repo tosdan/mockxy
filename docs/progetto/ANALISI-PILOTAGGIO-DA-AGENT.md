@@ -4,7 +4,10 @@ Stato: **diagnosi aggiornata dopo review e arbitraggio; implementazione non iniz
 
 Analisi iniziale: 25 settembre 2026. Aggiornamento: 27 settembre 2026.
 
-Base del codice esaminato: `ace8860c9d5b2d019147e0a090bad9ab1c0d5713`.
+Base della diagnosi iniziale: `ace8860c9d5b2d019147e0a090bad9ab1c0d5713`.
+Verifica incrementale dopo pull/rebase: `33fbfcc7de3e03611067b9eb04939708ef2d6dc6` (1.3.2), 27 settembre 2026.
+I sei commit intermedi riguardano rilasci, documentazione e presentazione UI; motore e admin API
+sono invariati. La diagnosi resta valida; il piano recepisce le cautele UI e di rilascio emerse.
 La [review](REVIEW-ANALISI-PILOTAGGIO-DA-AGENT.md) conserva i riscontri e la storia del confronto
 Codex–Opus; le decisioni di Dani D01–D04 prevalgono sulle proposte precedenti.
 Il [piano di implementazione](PIANO-PILOTAGGIO-DA-AGENT.md) traduce questa diagnosi in passi e
@@ -481,7 +484,10 @@ cambiate insieme al codice. La distinzione fra validazione API e loader va mante
 [NOTE-RILASCIO-next.md](NOTE-RILASCIO-next.md) va aggiornato nei passi implementativi pertinenti:
 nuovo default admin, namespace admin riservato, stream preservati ed eventuali cambi di forma o
 ordine nel Monitor. Qui si descrivono cambiamenti previsti; le note rivolte agli utenti non devono
-annunciarli come già realizzati. Il piano contiene una matrice dei file e dei passi coinvolti.
+annunciarli come già realizzati. Sulla base aggiornata il file contiene le note di v1.3.2: i futuri
+incrementi del piano vanno in una sezione distinta per la prossima versione, seguendo
+[PROCEDURA-RILASCIO.md](PROCEDURA-RILASCIO.md), compresa l’integrazione manuale delle note curate
+nella bozza GitHub. Il piano contiene una matrice dei file e dei passi coinvolti.
 
 ### Un server MCP?
 

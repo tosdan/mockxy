@@ -746,3 +746,23 @@ Dani riporta la verifica di Opus sul diff dei documenti: accordo pieno sul testo
 Codex ha verificato le due funzioni di lettura e aggiunto in C1 la stessa risoluzione, gli stessi esiti 404/400 e la conservazione dei campi delle risposte. Il criterio di accettazione copre insieme push e lettura della console quando il caricamento della nuova selezione fallisce e la vecchia rotta SSE/WS resta installata. Questo completamento recepisce la richiesta di Opus; non gli attribuisce un’ulteriore lettura del diff successivo.
 
 Il confronto sul piano è concluso. Decisioni D01–D04 invariate; documenti pronti per l’implementazione a partire da S0, che non è stata avviata in questo passaggio.
+
+
+### Verifica d’impatto dopo pull con rebase — 27 settembre 2026
+
+Su richiesta di Dani, Codex ha riallineato main al remoto e confrontato tutti i sei commit fra la base iniziale `ace8860` e `33fbfcc7de3e03611067b9eb04939708ef2d6dc6`. Il rebase è riuscito senza conflitti. `git range-diff` conferma che i tre commit documentali conservano le patch originali: `729efb6` → `87c9338`, `6a057ee` → `1fda09d`, `6fc71ab` → `870c168`.
+
+| Commit remoto | Contenuto verificato | Impatto sul piano |
+|---|---|---|
+| `dd3bf25` | Versioni root/UI/Electron e lockfile portati a 1.3.0 | Aggiornamento della base; nessun cambio al contratto applicativo |
+| `103f530` | Wrap dei filtri Catalogo e test Playwright del pulsante raggiungibile | Preservare il fix e il test durante le modifiche GUI di S4; nessun cambio a C6 |
+| `a72b6d6` | Versioni portate a 1.3.1 | Nessuna nuova capacità API |
+| `8dbec7b` | Evidenziazione JavaScript nel dettaglio handler/middleware, renderer UiCode e test | Preservare rendering/evidenziazione durante refresh e confronto delle bozze; nessuna modifica al loro salvataggio |
+| `759c55a` | Runbook di rilascio e collegamento da PUBBLICAZIONE.md | Aggiungere il riferimento operativo; note curate da integrare manualmente nella bozza GitHub |
+| `33fbfcc` | Versioni portate a 1.3.2 e note di rilascio aggiornate alla patch | Non aggiungere le nuove funzionalità sotto v1.3.2; separare le note della prossima versione e valutare la compatibilità quando si prepara il rilascio |
+
+**Esito:** nessun cambiamento a D01–D04, R01–R11, contratti C0–C8 o dipendenze S0–S8. Nell’intervallo verificato non sono cambiati `src/`, OpenAPI, configurazione Playwright, logica Electron o store delle bozze; i lockfile cambiano solo la versione del pacchetto, senza aggiornare dipendenze. Non c’è un requisito del piano già risolto da quei commit. Restano applicabili le diagnosi su default admin, reload, revisioni e diagnostica.
+
+Analisi e piano ora distinguono la base storica da quella verificata dopo il rebase. Il piano aggiunge le due regressioni UI da preservare e il raccordo con le note/procedura di rilascio aggiornate. Le note della release 1.3.2 e il codice applicativo non sono stati modificati da questa valutazione.
+
+Verifiche: diff completo dei sei commit, equivalenza delle patch dopo rebase, `npm run check:versions` superato (tutti i package a 1.3.2) e controlli documentali. Nessuna nuova esecuzione delle suite applicative: questa è una verifica d’impatto sui contratti, non una certificazione dei test dei commit remoti. L’implementazione di S0 non è stata avviata.
