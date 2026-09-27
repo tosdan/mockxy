@@ -1230,11 +1230,15 @@ async function getAdminSequenceState(mocksDir, id, sequenceStates) {
 
 // Risolve il bersaglio di push e stato delle console SSE/WS dalla definizione INSTALLATA, non
 // dalla selezione su disco: è quella che serve le connessioni aperte, anche quando una nuova
-// selezione non si è caricata e il runtime mantiene la vecchia rotta. Sincrona: fra questa
-// verifica e il push non ci sono attese.
-function resolveInstalledStreamEndpoint(registry, mocksDir, id, protocol) {
+// selezione non si è caricata e il runtime mantiene la vecchia rotta. `installed` porta i due
+// registri del runtime: i middleware vivono in quello del proxy, e un middleware installato è
+// un endpoint servito con un altro tipo (400), non un endpoint assente (404). Sincrona: fra
+// questa verifica e il push non ci sono attese.
+function resolveInstalledStreamEndpoint(installed, mocksDir, id, protocol) {
   const endpointPath = resolveAdminFilePath(mocksDir, id);
-  const endpoint = registry?.findEndpointByConfigFile(endpointPath) ?? null;
+  const endpoint = installed?.registry?.findEndpointByConfigFile(endpointPath)
+    ?? installed?.proxyMiddlewareRegistry?.findEndpointByConfigFile(endpointPath)
+    ?? null;
   if (endpoint == null) {
     throw createAdminError(
       404,
@@ -1249,8 +1253,8 @@ function resolveInstalledStreamEndpoint(registry, mocksDir, id, protocol) {
 
 // Push manuale della console: invia un messaggio ({ data, event?, id? }) a tutte le
 // connessioni aperte dell'endpoint. Azione runtime immediata, nessun file toccato.
-function pushAdminSseMessage(registry, mocksDir, id, payload, sseConnections) {
-  const { key } = resolveInstalledStreamEndpoint(registry, mocksDir, id, "sse");
+function pushAdminSseMessage(installed, mocksDir, id, payload, sseConnections) {
+  const { key } = resolveInstalledStreamEndpoint(installed, mocksDir, id, "sse");
   const errors = [];
   const message = validateSseMessage(payload == null ? {} : payload, "message", errors);
   if (errors.length > 0 || message == null) {
@@ -1264,8 +1268,8 @@ function pushAdminSseMessage(registry, mocksDir, id, payload, sseConnections) {
 }
 
 // Stato della console: connessioni aperte e storico dei messaggi usciti (copione e manuali).
-function listAdminSseState(registry, mocksDir, id, sseConnections) {
-  const { key } = resolveInstalledStreamEndpoint(registry, mocksDir, id, "sse");
+function listAdminSseState(installed, mocksDir, id, sseConnections) {
+  const { key } = resolveInstalledStreamEndpoint(installed, mocksDir, id, "sse");
   return {
     connections: sseConnections != null ? sseConnections.listConnections(key) : [],
     history: sseConnections != null ? sseConnections.listHistory(key) : [],
@@ -1274,8 +1278,8 @@ function listAdminSseState(registry, mocksDir, id, sseConnections) {
 
 // Push manuale della console WS: invia { data } in broadcast a tutte le connessioni aperte.
 // Azione runtime immediata, nessun file toccato.
-function pushAdminWsMessage(registry, mocksDir, id, payload, wsConnections) {
-  const { key } = resolveInstalledStreamEndpoint(registry, mocksDir, id, "ws");
+function pushAdminWsMessage(installed, mocksDir, id, payload, wsConnections) {
+  const { key } = resolveInstalledStreamEndpoint(installed, mocksDir, id, "ws");
   const errors = [];
   const message = validateWsMessage(payload == null ? {} : payload, "message", errors);
   if (errors.length > 0 || message == null) {
@@ -1289,8 +1293,8 @@ function pushAdminWsMessage(registry, mocksDir, id, payload, wsConnections) {
 }
 
 // Stato della console WS: connessioni aperte e transcript bidirezionale (usciti e ricevuti).
-function listAdminWsState(registry, mocksDir, id, wsConnections) {
-  const { key } = resolveInstalledStreamEndpoint(registry, mocksDir, id, "ws");
+function listAdminWsState(installed, mocksDir, id, wsConnections) {
+  const { key } = resolveInstalledStreamEndpoint(installed, mocksDir, id, "ws");
   return {
     connections: wsConnections != null ? wsConnections.listConnections(key) : [],
     transcript: wsConnections != null ? wsConnections.listTranscript(key) : [],

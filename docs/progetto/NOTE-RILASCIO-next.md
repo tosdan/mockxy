@@ -70,7 +70,7 @@ esistenti restano compatibili: nessuna migrazione richiesta.
   servito, o viceversa, dava l'esito sbagliato.
 - **Ora:** il bersaglio è la definizione servita dal runtime installato. Un endpoint che il
   runtime non serve risponde `404` (`The runtime does not serve this endpoint.`), uno servito con
-  un altro tipo `400`, con il messaggio `The response served by this endpoint is not ...`.
+  un altro tipo, middleware compresi, `400`, con il messaggio `The response served by this endpoint is not ...`.
 - **Per i client:** dopo aver cambiato la selezione su disco senza reload, le console seguono
   ancora la variante servita.
 

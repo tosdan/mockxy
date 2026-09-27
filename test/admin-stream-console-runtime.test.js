@@ -123,6 +123,38 @@ describe("console SSE/WS: bersaglio dal runtime installato", () => {
     expect(missing.body.message).toBe("Endpoint definition not found.");
   });
 
+  test("un middleware installato è servito con un altro tipo: 400 sulle console, non 404", async () => {
+    const responseDir = path.join(mocksDir, "proxy", "GET.responses");
+    await fs.promises.mkdir(responseDir, { recursive: true });
+    await fs.promises.writeFile(
+      path.join(responseDir, "001.response.json"),
+      JSON.stringify({ type: "middleware", title: "", sourceFile: "001.middleware.js" })
+    );
+    await fs.promises.writeFile(
+      path.join(responseDir, "001.middleware.js"),
+      "module.exports = { async transformResponse({ response }) { return response; } };\n"
+    );
+    await writeDefinition("proxy", "/proxied", "001.response.json");
+    await startRuntime();
+    const id = encodeMockId("proxy/GET.endpoint.json");
+
+    const calls = [
+      request(runtime.app).post(`/_admin/api/mocks/${id}/sse/push`).send({ data: "ciao" }),
+      request(runtime.app).get(`/_admin/api/mocks/${id}/sse/connections`),
+      request(runtime.app).post(`/_admin/api/mocks/${id}/ws/push`).send({ data: "ciao" }),
+      request(runtime.app).get(`/_admin/api/mocks/${id}/ws/connections`),
+    ];
+    const responses = await Promise.all(calls);
+
+    expect(responses.map((response) => response.status)).toEqual([400, 400, 400, 400]);
+    expect(responses.map((response) => response.body.message)).toEqual([
+      "The response served by this endpoint is not an sse variant.",
+      "The response served by this endpoint is not an sse variant.",
+      "The response served by this endpoint is not a ws variant.",
+      "The response served by this endpoint is not a ws variant.",
+    ]);
+  });
+
   test("il tipo conta sulla definizione servita: una console ws su uno stream sse è 400", async () => {
     const id = await writeStreamEndpoint("stream", "/stream", { type: "sse", title: "", script: [] });
     await startRuntime();

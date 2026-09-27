@@ -1,5 +1,4 @@
-const path = require("path");
-const { createPathParamsMatcher } = require("./route-groups");
+const { createPathParamsMatcher, findEntryByConfigFile } = require("./route-groups");
 
 class MockRegistry {
   constructor(routeGroups = [], sequenceStates = null) {
@@ -12,18 +11,9 @@ class MockRegistry {
     this.setRouteGroups(routeGroups);
   }
 
-  // Definizione installata del file endpoint indicato, anche quando è una versione mantenuta
-  // nonostante un errore di caricamento; null se il runtime non la serve.
+  // Definizione installata del file endpoint indicato (vedi findEntryByConfigFile).
   findEndpointByConfigFile(configFilePath) {
-    const target = path.resolve(configFilePath);
-    for (const group of this.routeGroups) {
-      for (const endpoint of group.methods.values()) {
-        if (endpoint.configFilePath != null && path.resolve(endpoint.configFilePath) === target) {
-          return endpoint;
-        }
-      }
-    }
-    return null;
+    return findEntryByConfigFile(this.routeGroups, configFilePath);
   }
 
   setRouteGroups(routeGroups) {

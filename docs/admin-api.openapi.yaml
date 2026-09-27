@@ -1801,7 +1801,8 @@ components:
     StreamEndpointNotServed:
       description: |
         The endpoint does not exist, or the installed runtime does not serve it (disabled, or
-        never loaded successfully).
+        never loaded successfully). An installed middleware endpoint is served with another
+        type and answers `400`, not `404`.
       content:
         application/json:
           schema: { $ref: "#/components/schemas/Error" }
