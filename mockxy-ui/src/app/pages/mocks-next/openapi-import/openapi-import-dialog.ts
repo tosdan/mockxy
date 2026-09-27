@@ -9,7 +9,8 @@ import { ToastService } from '../../../ui/ui-toast/ui-toast';
 import { MockAdminApiService } from '../../../mock-admin-api.service';
 import { MocksStore } from '../mocks-next.store';
 import { routePathError } from '../../../mock-path-convention';
-import type { OpenapiImportPreview } from '../../../mock-admin-api.types';
+import { summarizeBatchAttention, type OpenapiImportPreview, type OpenapiImportResult } from '../../../mock-admin-api.types';
+import { readBatchPartialResult } from '../../../shared/read-error-message';
 
 type ImportFilter = 'all' | 'create' | 'skip';
 
@@ -268,15 +269,18 @@ export class OpenapiImportDialog implements OnDestroy {
     this.requestPreview();
   }
 
-  /** Ricalcola l'anteprima con il prefisso corrente; le risposte superate vengono scartate. */
-  private requestPreview(): void {
+  /**
+   * Ricalcola l'anteprima con il prefisso corrente; le risposte superate vengono scartate.
+   * `keepError` conserva l'errore mostrato (es. un import fallito a metà) anche se il ricalcolo riesce.
+   */
+  private requestPreview({ keepError = false }: { keepError?: boolean } = {}): void {
     const seq = ++this.previewSeq;
     this.refreshing.set(true);
     this.api.previewOpenapi(this.docText, this.prefix().trim()).subscribe({
       next: (plan) => {
         if (seq !== this.previewSeq) return;
         this.preview.set(plan);
-        this.error.set(undefined);
+        if (!keepError) this.error.set(undefined);
         this.loading.set(false);
         this.refreshing.set(false);
       },
@@ -313,18 +317,31 @@ export class OpenapiImportDialog implements OnDestroy {
     this.api.importOpenapi(this.docText, this.prefix().trim()).subscribe({
       next: (result) => {
         this.importing.set(false);
+        // Anche con 201 un endpoint creato può non essere servito: lo dicono gli esiti per elemento.
+        const attention = summarizeBatchAttention(result.items);
         this.toast.show({
           title: this.transloco.translate('openapiImport.toastTitle'),
-          description: this.summarizeImport(result.created, result.skipped, result.failed),
-          tone: result.created > 0 ? 'success' : 'info',
+          description: this.summarizeImport(result),
+          tone: attention.notServed + attention.withWarnings > 0 ? 'warning' : result.created > 0 ? 'success' : 'info',
         });
         this.store.loadCatalog();
         this.dialogRef.close();
       },
       error: (e: unknown) => {
         this.importing.set(false);
-        this.error.set(this.readError(e));
-        this.toast.show({ title: this.transloco.translate('openapiImport.errorTitle'), description: this.readError(e), tone: 'error' });
+        // Un batch fallito può aver già scritto degli endpoint: il fallimento resta evidente, ma il
+        // riepilogo dice cosa c'è su disco, il catalogo va riletto e l'anteprima non vale più.
+        const partial = readBatchPartialResult<OpenapiImportResult>(e);
+        const message = partial
+          ? `${this.readError(e)} ${this.transloco.translate('openapiImport.partialResult', { summary: this.summarizeImport(partial) })}`
+          : this.readError(e);
+        this.error.set(message);
+        this.toast.show({ title: this.transloco.translate('openapiImport.errorTitle'), description: message, tone: 'error' });
+        if (partial) {
+          this.store.loadCatalog();
+          this.preview.set(undefined);
+          this.requestPreview({ keepError: true });
+        }
       },
     });
   }
@@ -347,13 +364,19 @@ export class OpenapiImportDialog implements OnDestroy {
     return `color-mix(in srgb, ${color} ${pct}%, transparent)`;
   }
 
-  /** Riepilogo dell'esito import (conteggi tradotti) per il toast; il suffisso "falliti" solo se presente. */
-  private summarizeImport(created: number, skipped: number, failed: number): string {
+  /**
+   * Riepilogo dell'esito import (conteggi tradotti) per il toast; "falliti", "non serviti" e
+   * "con avvisi" solo se presenti.
+   */
+  private summarizeImport(result: OpenapiImportResult): string {
+    const { notServed, withWarnings } = summarizeBatchAttention(result.items);
     const parts = [
-      this.transloco.translate('openapiImport.resultCreated', { count: created }),
-      this.transloco.translate('openapiImport.resultSkipped', { count: skipped }),
+      this.transloco.translate('openapiImport.resultCreated', { count: result.created }),
+      this.transloco.translate('openapiImport.resultSkipped', { count: result.skipped }),
     ];
-    if (failed > 0) parts.push(this.transloco.translate('openapiImport.resultFailed', { count: failed }));
+    if (result.failed > 0) parts.push(this.transloco.translate('openapiImport.resultFailed', { count: result.failed }));
+    if (notServed > 0) parts.push(this.transloco.translate('openapiImport.resultNotServed', { count: notServed }));
+    if (withWarnings > 0) parts.push(this.transloco.translate('openapiImport.resultWarnings', { count: withWarnings }));
     return parts.join(', ');
   }
 

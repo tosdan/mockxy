@@ -335,8 +335,13 @@ export interface SelectResponseRequest {
   selectedResponseFile: string;
 }
 
+/**
+ * Aggiornamento parziale dei metadati: si invia solo il campo che l'azione modifica. Reinviare un
+ * valore letto prima (la descrizione col toggle, `enabled` col salvataggio della descrizione)
+ * cancellerebbe una modifica fatta nel frattempo da un altro client.
+ */
 export interface EndpointUpdateRequest {
-  description: string;
+  description?: string | null;
   enabled?: boolean;
 }
 
@@ -584,11 +589,34 @@ export interface DumpReadPage {
 /** Criterio di selezione per la creazione massiva: tutto un file o un insieme di chiavi. */
 export type DumpSelection = { file: string } | { keys: string[] };
 
+/**
+ * Esito di un elemento di un batch (import OpenAPI, creazione dallo storico). `writeOutcome` dice
+ * cosa è successo su disco, `runtimeOutcome` se il runtime lo serve: un elemento creato può non
+ * essere servito (`not_applied`, con il motivo in `error`) anche con una risposta 201.
+ */
+export interface BatchItemOutcome {
+  method: string;
+  path: string;
+  id: string | null;
+  responseFile: string | null;
+  writeOutcome: 'created' | 'skipped' | 'failed';
+  runtimeOutcome: 'applied' | 'not_applied' | 'not_applicable';
+  error: string | null;
+}
+
+/** Stato del runtime dopo il reload finale di un batch; `degraded` = errori di caricamento. */
+export interface BatchRuntime {
+  status: 'applied' | 'degraded' | 'failed';
+  errors: { filePath: string; message: string }[];
+}
+
 export interface DumpCreateMocksResult {
   created: number;
   createdEmpty: number;
   skippedExisting: number;
   failed: number;
+  items: (BatchItemOutcome & { key: string | null })[];
+  runtime: BatchRuntime;
 }
 
 /** Stato runtime di Mockxy: server on/off + "proxy all" (backend src/server-state.js). */
@@ -629,6 +657,24 @@ export interface OpenapiImportResult {
   total: number;
   collections: number;
   prefix: string;
+  items: BatchItemOutcome[];
+  runtime: BatchRuntime;
+}
+
+/**
+ * Elementi di un batch che richiedono attenzione pur essendo stati creati: `notServed` sono
+ * scritti ma non serviti dal runtime, `withWarnings` serviti ma con un avviso (es. collection
+ * non assegnata).
+ */
+export function summarizeBatchAttention(items: readonly BatchItemOutcome[] | undefined): {
+  notServed: number;
+  withWarnings: number;
+} {
+  const created = (items ?? []).filter((item) => item.writeOutcome === 'created');
+  return {
+    notServed: created.filter((item) => item.runtimeOutcome === 'not_applied').length,
+    withWarnings: created.filter((item) => item.runtimeOutcome !== 'not_applied' && item.error != null).length,
+  };
 }
 
 export interface RequestMonitorSnapshotEvent {

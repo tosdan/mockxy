@@ -9,6 +9,7 @@
     "copied": "Copiato",
     "copyCode": "Copia il codice",
     "unexpectedError": "Errore imprevisto.",
+    "detailReadUnavailable": "Dettaglio non leggibile in questo momento: l'endpoint sta cambiando o un file che usa manca. Riprova tra poco. {{message}}",
     "selectPlaceholder": "Seleziona…",
     "noOptions": "Nessuna opzione",
     "clearFilter": "Svuota il filtro",
@@ -41,7 +42,10 @@
     "resultCreated": "{{count}} create",
     "resultSkeleton": "{{count}} skeleton",
     "resultExisting": "{{count}} già esistenti",
-    "resultFailed": "{{count}} falliti"
+    "resultFailed": "{{count}} falliti",
+    "resultNotServed": "{{count}} non serviti dal runtime",
+    "resultWarnings": "{{count}} con avvisi",
+    "partialResult": "Scritto finora: {{summary}}."
   },
   "dati": {
     "title": "Dati",
@@ -609,6 +613,9 @@
     "resultCreated": "{{count}} creati",
     "resultSkipped": "{{count}} saltati",
     "resultFailed": "{{count}} falliti",
+    "resultNotServed": "{{count}} non serviti dal runtime",
+    "resultWarnings": "{{count}} con avvisi",
+    "partialResult": "Scritto finora: {{summary}}.",
     "errUnsupported": "Formato non supportato: scegli un file .json, .yaml o .yml.",
     "errReadFile": "Impossibile leggere il file.",
     "errImportFailed": "Import non riuscito."
