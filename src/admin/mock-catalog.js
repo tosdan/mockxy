@@ -186,17 +186,10 @@ async function buildAdminMockResponse(mocksDir, endpointPath, id, responseFileNa
   let fileInfo = null;
   let assetDigest = null;
   if (response.type === "mock" && response.file != null) {
-    const assetPath = resolvePayloadPath(responseDir, response.file);
-    try {
-      const stats = await fs.promises.stat(assetPath);
-      fileInfo = { name: response.file, size: stats.size };
-    } catch (error) {
-      if (error.code === "ENOENT") {
-        throw markMissingFile(createAdminError(404, "Response asset file not found on disk."));
-      }
-      throw error;
-    }
-    assetDigest = await digestFile(assetPath, "Response asset file not found on disk.");
+    // Dimensione e impronta dalla stessa lettura (§13 C4).
+    const asset = await digestFile(resolvePayloadPath(responseDir, response.file), "Response asset file not found on disk.");
+    fileInfo = { name: response.file, size: asset.size };
+    assetDigest = asset.sha256;
   }
 
   return {
@@ -267,21 +260,14 @@ async function buildAdminMockDetail(mocksDir, filePath) {
     if (response.file != null) {
       const payloadPath = resolvePayloadPath(responseDir, response.file);
       detail.payloadFilePath = payloadPath;
-      let stat;
-      try {
-        stat = await fs.promises.stat(payloadPath);
-      } catch (error) {
-        // Asset sparito da disco (cancellato a mano): 404 esplicito invece di un 500 grezzo.
-        if (error.code === "ENOENT") {
-          throw markMissingFile(createAdminError(404, "Response asset file not found on disk."));
-        }
-        throw error;
-      }
+      // Dimensione e impronta dalla stessa lettura. Un asset sparito da disco (cancellato a mano)
+      // è un file mancante, non un 500 grezzo.
+      const asset = await digestFile(payloadPath, "Response asset file not found on disk.");
       detail.fileInfo = {
         name: response.file,
-        size: stat.size,
+        size: asset.size,
       };
-      assetDigest = await digestFile(payloadPath, "Response asset file not found on disk.");
+      assetDigest = asset.sha256;
     } else {
       detail.payloadFilePath = responseFilePath;
       detail.body = response.body;
@@ -384,7 +370,7 @@ async function currentResponseRevision(mocksDir, endpointPath, responseFileName)
     }
   }
   if (response.type === "mock" && response.file != null) {
-    assetDigest = await digestFile(resolvePayloadPath(responseDir, response.file), "Response asset file not found on disk.");
+    assetDigest = (await digestFile(resolvePayloadPath(responseDir, response.file), "Response asset file not found on disk.")).sha256;
   }
   return responseRevisionOf({ mocksDir, endpointId: endpointIdOf(mocksDir, endpointPath), responseFile: name, response, sourceBytes, assetDigest });
 }

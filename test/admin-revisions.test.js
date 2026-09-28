@@ -29,12 +29,12 @@ describe("revisioni e precondizioni", () => {
     await removeDir(workspaceDir);
   });
 
-  async function startRuntime() {
+  async function startRuntime(filesDirName = "files") {
     runtime = await createServerRuntime({
       configOverrides: {
         host: "127.0.0.1",
         mocksDir,
-        filesDir: path.join(workspaceDir, "files"),
+        filesDir: path.join(workspaceDir, filesDirName),
         monitorDumpDir: path.join(workspaceDir, "dump"),
         devWatch: false,
         adminApiEnabled: true,
@@ -229,6 +229,81 @@ describe("revisioni e precondizioni", () => {
       const selection = await request(app).put(`/_admin/api/mocks/${ID}`).send({ selectedResponseFile: "001.response.json", expectedRevision: responseRevision });
       expect(selection.status).toBe(400);
     });
+  });
+
+  test("una precondizione presente ma nulla o vuota è un 400, non una protezione spenta", async () => {
+    const before = await readDetail();
+
+    const nullRevision = await putDescription({ description: "x", enabled: false, expectedRevision: null });
+    expect(nullRevision.status).toBe(400);
+    expect((await readDetail()).endpoint).toMatchObject({ description: before.endpoint.description, enabled: true });
+
+    const emptyHeader = await request(app)
+      .put(`/_admin/api/mocks/${ID}/responses/001.response.json/file?filename=blob.bin`)
+      .set("content-type", "application/octet-stream")
+      .set("X-Mockxy-Expected-Revision", "")
+      .send(Buffer.from("dati"));
+    expect(emptyHeader.status).toBe(400);
+  });
+
+  describe("asset di un mock servito da file", () => {
+    async function withAsset(bytes) {
+      await request(app)
+        .put(`/_admin/api/mocks/${ID}/responses/001.response.json/file?contentType=image/png&filename=logo.png`)
+        .set("content-type", "application/octet-stream")
+        .send(Buffer.from(bytes));
+      return path.join(responsesDir(), (await readDetail()).fileInfo.name);
+    }
+
+    test("dimensione e token descrivono la stessa versione anche se il file cambia durante la lettura", async () => {
+      const assetPath = await withAsset([1, 2, 3]);
+      const realStat = fs.promises.stat.bind(fs.promises);
+      let replaced = false;
+      jest.spyOn(fs.promises, "stat").mockImplementation(async (target, ...rest) => {
+        const stats = await realStat(target, ...rest);
+        if (target === assetPath && !replaced) {
+          replaced = true;
+          await fs.promises.writeFile(assetPath, Buffer.from([1, 2, 3, 4, 5, 6]));
+        }
+        return stats;
+      });
+      const detail = await readDetail();
+      jest.restoreAllMocks();
+
+      const currentSize = (await fs.promises.stat(assetPath)).size;
+      const save = await putVariant("001.response.json", { title: "Logo", expectedRevision: detail.responseRevision });
+      // Il token autorizza il salvataggio solo se descrive i byte che la risposta ha riportato.
+      expect(detail.fileInfo.size === currentSize).toBe(save.status === 200);
+    });
+
+    test("leggerlo per il token aggiorna anche la revisione del catalogo", async () => {
+      const assetPath = await withAsset([1, 2, 3]);
+      const tick = new Date(Math.floor(Date.now() / 1000) * 1000);
+      await fs.promises.utimes(assetPath, tick, tick);
+      await runtime.reloadRuntime("watcher");
+      const catalogBefore = (await request(app).get("/_admin/api/info")).body.revisions.catalog;
+
+      await fs.promises.writeFile(assetPath, Buffer.from([9, 9, 9]));
+      await fs.promises.utimes(assetPath, tick, tick);
+      await runtime.reloadRuntime("watcher");
+      expect((await request(app).get("/_admin/api/info")).body.revisions.catalog).toBe(catalogBefore);
+
+      await readDetail();
+      expect((await request(app).get("/_admin/api/info")).body.revisions.catalog).toBe(catalogBefore + 1);
+    });
+  });
+
+  test("due runtime con gli stessi mock e cartelle dati diverse hanno token propri, che non si influenzano", async () => {
+    const firstApp = app;
+    const firstDetail = await readDetail();
+
+    await startRuntime("altri-file");
+    const secondDetail = await readDetail();
+    expect(secondDetail.responseRevision).not.toBe(firstDetail.responseRevision);
+
+    app = firstApp;
+    expect((await readDetail()).responseRevision).toBe(firstDetail.responseRevision);
+    expect((await putVariant("001.response.json", { body: { v: 2 }, expectedRevision: firstDetail.responseRevision })).status).toBe(200);
   });
 
   test("precondizione malformata 400, risorsa eliminata 404, precondizione assente come prima", async () => {

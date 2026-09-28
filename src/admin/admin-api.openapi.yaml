@@ -2574,7 +2574,9 @@ components:
         definition (key order and indentation do not matter) and the bytes of its direct source
         and asset, names included — not the selection, `enabled`, the description or the variants
         a sequence uses as steps. It describes the current content, not a history: going back to
-        the same content gives back the same token, and a restart keeps it.
+        the same content gives back the same token, and a restart keeps it. As a precondition,
+        only its absence keeps the legacy behaviour: a present but invalid value (`null` or an
+        empty header included) is a `400`.
     ResponseVariantCreated:
       description: The endpoint after the mutation, plus the file name of the variant just created.
       allOf:

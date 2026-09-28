@@ -1,8 +1,8 @@
+const { AsyncLocalStorage } = require("async_hooks");
 const crypto = require("crypto");
 const fs = require("fs");
 const { createAdminError, markMissingFile } = require("./admin-errors");
 const { describeWorkspace } = require("../runtime-info");
-const { canonicalPath } = require("../utils/canonical-path");
 
 // Token di revisione delle risorse modificabili da bozza (piano agent/API, §13 C4): opachi,
 // `rev-v1:` più lo SHA-256 della serializzazione deterministica di formato, workspace, endpoint,
@@ -12,16 +12,19 @@ const { canonicalPath } = require("../utils/canonical-path");
 const REVISION_FORMAT = "rev-v1";
 const REVISION_PATTERN = /^rev-v1:[0-9a-f]{64}$/;
 
-// Identità del workspace per mocksDir canonico, registrata dal router (che conosce anche filesDir):
-// le letture del catalogo ricevono solo mocksDir.
-const workspaceIds = new Map();
+// Identità del workspace del runtime che sta servendo l'operazione: il router la imposta per le
+// proprie letture e mutazioni, perché le funzioni del catalogo ricevono soltanto mocksDir mentre
+// l'identità comprende anche filesDir. È un contesto dell'operazione, non un registro globale:
+// due runtime con gli stessi mock e cartelle dati diverse non si influenzano. Fuori da un
+// contesto (usi diretti delle funzioni) vale l'identità con la sola cartella dei mock.
+const workspaceContext = new AsyncLocalStorage();
 
-function registerWorkspaceId(mocksDir, workspaceId) {
-  workspaceIds.set(canonicalPath(mocksDir), workspaceId);
+function runWithWorkspaceId(workspaceId, task) {
+  return workspaceContext.run(workspaceId, task);
 }
 
 function workspaceIdFor(mocksDir) {
-  return workspaceIds.get(canonicalPath(mocksDir)) ?? describeWorkspace({ mocksDir }).id;
+  return workspaceContext.getStore() ?? describeWorkspace({ mocksDir }).id;
 }
 
 // Chiavi degli oggetti ordinate ricorsivamente; ordine degli array e valori conservati.
@@ -74,21 +77,28 @@ function digestBytes(bytes) {
   return crypto.createHash("sha256").update(bytes).digest("hex");
 }
 
-// Impronta dei byte di un file letto in streaming (asset anche grandi); un file assente è un file
-// mancante per la procedura di lettura incompleta.
+// Impronta e dimensione dei byte di un file letti in streaming (asset anche grandi) dalla stessa
+// lettura: metadati e token descrivono la stessa versione. Un file assente è un file mancante per
+// la procedura di lettura incompleta.
 function digestFile(filePath, missingMessage) {
   return new Promise((resolve, reject) => {
     const hash = crypto.createHash("sha256");
+    let size = 0;
     fs.createReadStream(filePath)
-      .on("data", (chunk) => hash.update(chunk))
+      .on("data", (chunk) => {
+        size += chunk.length;
+        hash.update(chunk);
+      })
       .on("error", (error) => reject(error.code === "ENOENT" ? markMissingFile(createAdminError(404, missingMessage)) : error))
-      .on("end", () => resolve(hash.digest("hex")));
+      .on("end", () => resolve({ sha256: hash.digest("hex"), size }));
   });
 }
 
-// `expectedRevision` (o l'header dell'upload): assente conserva il comportamento legacy.
+// `expectedRevision` (o l'header dell'upload): soltanto l'assenza conserva il comportamento
+// legacy. Un valore presente e non valido, `null` o stringa vuota compresi, è un 400: non deve
+// spegnere in silenzio la protezione.
 function readExpectedRevision(value, label = "expectedRevision") {
-  if (value == null) {
+  if (value === undefined) {
     return null;
   }
   if (typeof value !== "string" || !REVISION_PATTERN.test(value)) {
@@ -116,7 +126,7 @@ module.exports = {
   digestBytes,
   digestFile,
   readExpectedRevision,
-  registerWorkspaceId,
   responseRevision,
+  runWithWorkspaceId,
   workspaceIdFor,
 };
