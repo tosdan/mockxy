@@ -117,7 +117,7 @@ export class DraftGuard<T> implements DraftConflictView {
 
   /** "Confronta": carica la versione corrente accanto alla bozza, senza sostituirla. */
   compare(): void {
-    this.fetch((version) => this.remote.set(version));
+    this.loadCurrent((version) => this.remote.set(version));
   }
 
   /** "Ricarica": con la bozza modificata chiede prima conferma. */
@@ -136,7 +136,7 @@ export class DraftGuard<T> implements DraftConflictView {
   /** Sostituisce la bozza con la versione corrente, che diventa la nuova base. */
   confirmReload(): void {
     this.confirmingReload.set(false);
-    this.fetch((version) => {
+    this.loadCurrent((version) => {
       if (!this.options.apply(version.data)) {
         this.remote.set(version);
         this.reloadUnsupported.set(true);
@@ -149,7 +149,7 @@ export class DraftGuard<T> implements DraftConflictView {
     });
   }
 
-  private fetch(onLoaded: (version: RemoteVersion<T>) => void): void {
+  private loadCurrent(onLoaded: (version: RemoteVersion<T>) => void): void {
     const target = this.target();
     if (!target) {
       return;
