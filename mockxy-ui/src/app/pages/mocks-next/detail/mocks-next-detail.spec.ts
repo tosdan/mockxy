@@ -1,5 +1,6 @@
 import '@angular/compiler';
 import { signal } from '@angular/core';
+import { of } from 'rxjs';
 import { TestBed } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
@@ -7,7 +8,8 @@ import { MocksNextDetail } from './mocks-next-detail';
 import { translocoTesting } from '../../../testing/transloco-testing';
 import { MockAdminApiService } from '../../../mock-admin-api.service';
 import { MocksStore } from '../mocks-next.store';
-import type { MockDetail } from '../../../mock-admin-api.types';
+import type { DraftSave } from '../mocks-next.store';
+import type { MockDetail, ResponseVariantRead, RevisionConflict } from '../../../mock-admin-api.types';
 
 function detail(overrides: Partial<MockDetail> = {}): MockDetail {
   return {
@@ -47,7 +49,10 @@ describe('MocksNextDetail', () => {
     assignCollection: ReturnType<typeof vi.fn>;
     addResponse: ReturnType<typeof vi.fn>;
     uploadResponseFile: ReturnType<typeof vi.fn>;
+    saveDescription: ReturnType<typeof vi.fn>;
+    detailReadErrorMessage: ReturnType<typeof vi.fn>;
   };
+  let api: { getMock: ReturnType<typeof vi.fn>; getResponse: ReturnType<typeof vi.fn> };
 
   function create() {
     store = {
@@ -62,13 +67,16 @@ describe('MocksNextDetail', () => {
       assignCollection: vi.fn(),
       addResponse: vi.fn(),
       uploadResponseFile: vi.fn(),
+      saveDescription: vi.fn(),
+      detailReadErrorMessage: vi.fn(() => 'lettura fallita'),
     };
+    api = { getMock: vi.fn(), getResponse: vi.fn() };
     TestBed.configureTestingModule({
       imports: [MocksNextDetail, translocoTesting()],
       providers: [
         provideNoopAnimations(),
         { provide: MocksStore, useValue: store },
-        { provide: MockAdminApiService, useValue: {} },
+        { provide: MockAdminApiService, useValue: api },
       ],
     });
     const fixture = TestBed.createComponent(MocksNextDetail);
@@ -248,6 +256,218 @@ describe('MocksNextDetail', () => {
       c.activateNewResponse.set(false);
       c.createResponseOfType('mock');
       expect(c.activateNewResponse()).toBe(true);
+    });
+  });
+
+  // Piano agent/API, §13 C4: ogni bozza tiene endpoint, variante e revisione dell'apertura. Al
+  // conflitto il testo resta, e l'utente sceglie fra confronto, ricarica e la propria versione.
+  describe('bozze protette da revisione', () => {
+    const REV_A = `rev-v1:${'a'.repeat(64)}`;
+    const REV_B = `rev-v1:${'b'.repeat(64)}`;
+    const CONFLICT: RevisionConflict = {
+      code: 'REVISION_CONFLICT',
+      resource: { kind: 'response', endpointId: 'e1', responseFile: '001.response.json' },
+      expectedRevision: REV_A,
+      currentRevision: REV_B,
+    };
+    const CURRENT: ResponseVariantRead = {
+      id: 'e1',
+      responseFile: '001.response.json',
+      selected: false,
+      active: false,
+      response: { type: 'mock', title: 'Ok', status: 201, headers: { 'x-agent': '1' }, body: { fromAgent: true }, delayMs: 0 },
+      source: null,
+      fileInfo: null,
+      revision: REV_B,
+    };
+    type Detail = {
+      startEditResponse(): void;
+      saveEditResponse(): void;
+      uploadResponseFile(file: File): void;
+      startEditDescription(): void;
+      saveDescription(): void;
+      draftDescription: { (): string; set(v: string): void };
+      draft: { body: { (): string; set(v: string): void }; status(): number | null };
+      editingResponse(): boolean;
+    };
+
+    function editableDetail(overrides: Partial<MockDetail> = {}): MockDetail {
+      return detail({
+        responseRevision: REV_A,
+        descriptionRevision: REV_A,
+        responses: [
+          { fileName: '001.response.json', type: 'mock', title: 'Ok', selected: true },
+          { fileName: '002.response.json', type: 'mock', title: 'Ko' },
+        ],
+        ...overrides,
+      });
+    }
+
+    function button(fixture: ReturnType<typeof create>, label: string): HTMLButtonElement {
+      fixture.detectChanges();
+      const found = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('button')).find(
+        (el) => el.textContent?.trim() === label,
+      );
+      if (!found) throw new Error(`pulsante ${label} assente`);
+      return found as HTMLButtonElement;
+    }
+
+    function lastDraft(mock: ReturnType<typeof vi.fn>): DraftSave {
+      return mock.mock.calls.at(-1)![2] as DraftSave;
+    }
+
+    function openConflict() {
+      const fixture = create();
+      store.selected.set(editableDetail());
+      fixture.detectChanges();
+      const c = fixture.componentInstance as unknown as Detail;
+      c.startEditResponse();
+      c.draft.body.set('{"mine":true}');
+      store.saveResponse.mockImplementationOnce((_payload: unknown, _ok: unknown, draft: DraftSave) => draft.onConflict!(CONFLICT));
+      c.saveEditResponse();
+      fixture.detectChanges();
+      return { fixture, c };
+    }
+
+    it('la bozza della variante resta sulla variante aperta mentre l’agent ne attiva un’altra', () => {
+      const fixture = create();
+      store.selected.set(editableDetail());
+      fixture.detectChanges();
+      const c = fixture.componentInstance as unknown as Detail;
+      c.startEditResponse();
+      c.draft.body.set('{"mine":true}');
+
+      store.selected.set(editableDetail({ selectedResponseFile: '002.response.json', responseRevision: REV_B }));
+      fixture.detectChanges();
+      c.saveEditResponse();
+
+      expect(store.saveResponse).toHaveBeenCalledWith(
+        expect.objectContaining({ body: { mine: true } }),
+        expect.any(Function),
+        expect.objectContaining({ target: { endpointId: 'e1', responseFile: '001.response.json', baseRevision: REV_A } }),
+      );
+    });
+
+    it('al conflitto conserva il testo, mostra il pannello e gli passa il focus', () => {
+      const { fixture, c } = openConflict();
+      const panel = (fixture.nativeElement as HTMLElement).querySelector('mocks-next-draft-conflict section');
+
+      expect(c.editingResponse()).toBe(true);
+      expect(c.draft.body()).toBe('{"mine":true}');
+      expect(panel?.textContent).toContain('La versione è cambiata mentre la modificavi');
+      expect(document.activeElement).toBe(panel);
+    });
+
+    it('«Confronta» mostra la versione corrente accanto; «Salva la mia versione» usa la sua revisione', () => {
+      const { fixture, c } = openConflict();
+      api.getResponse.mockReturnValue(of(CURRENT));
+
+      button(fixture, 'Confronta').click();
+      fixture.detectChanges();
+
+      expect(api.getResponse).toHaveBeenCalledWith('e1', '001.response.json');
+      expect((fixture.nativeElement as HTMLElement).querySelector('mocks-next-draft-conflict ui-code')?.textContent).toContain('fromAgent');
+      expect(c.draft.body()).toBe('{"mine":true}');
+
+      button(fixture, 'Salva la mia versione').click();
+
+      expect(store.saveResponse).toHaveBeenCalledTimes(2);
+      expect(store.saveResponse.mock.calls[1][0]).toEqual(expect.objectContaining({ body: { mine: true } }));
+      expect(lastDraft(store.saveResponse).target).toEqual({ endpointId: 'e1', responseFile: '001.response.json', baseRevision: REV_B });
+    });
+
+    it('«Ricarica» chiede conferma su una bozza modificata, poi la sostituisce e ne sposta la base', () => {
+      const { fixture, c } = openConflict();
+      api.getResponse.mockReturnValue(of(CURRENT));
+
+      button(fixture, 'Ricarica').click();
+      fixture.detectChanges();
+      expect(api.getResponse).not.toHaveBeenCalled();
+      expect(document.activeElement?.textContent?.trim()).toBe('Sostituisci');
+
+      button(fixture, 'Sostituisci').click();
+      fixture.detectChanges();
+
+      expect(JSON.parse(c.draft.body())).toEqual({ fromAgent: true });
+      expect(c.draft.status()).toBe(201);
+      c.saveEditResponse();
+      expect(lastDraft(store.saveResponse).target.baseRevision).toBe(REV_B);
+    });
+
+    it('annullando la ricarica la bozza resta e il focus torna su «Ricarica»', () => {
+      const { fixture, c } = openConflict();
+
+      button(fixture, 'Ricarica').click();
+      button(fixture, 'Tieni la bozza').click();
+      fixture.detectChanges();
+
+      expect(c.draft.body()).toBe('{"mine":true}');
+      expect(document.activeElement?.textContent?.trim()).toBe('Ricarica');
+    });
+
+    it('con la variante sparita il testo resta copiabile e il salvataggio è disabilitato', () => {
+      const fixture = create();
+      store.selected.set(editableDetail());
+      fixture.detectChanges();
+      const c = fixture.componentInstance as unknown as Detail;
+      c.startEditResponse();
+      c.draft.body.set('{"mine":true}');
+      store.saveResponse.mockImplementationOnce((_payload: unknown, _ok: unknown, draft: DraftSave) => draft.onMissing!());
+      c.saveEditResponse();
+
+      expect(button(fixture, 'Salva').disabled).toBe(true);
+      expect((fixture.nativeElement as HTMLElement).textContent).toContain('Questa risorsa non esiste più');
+      expect(c.draft.body()).toBe('{"mine":true}');
+      c.saveEditResponse();
+      expect(store.saveResponse).toHaveBeenCalledTimes(1);
+    });
+
+    it('l’upload in modifica va sulla variante della bozza con la sua revisione', () => {
+      const fixture = create();
+      store.selected.set(editableDetail({ payloadType: 'file', fileInfo: { name: 'logo.png' } } as never));
+      fixture.detectChanges();
+      const c = fixture.componentInstance as unknown as Detail;
+      c.startEditResponse();
+      const file = new File(['x'], 'nuovo.png');
+
+      c.uploadResponseFile(file);
+
+      expect(store.uploadResponseFile).toHaveBeenCalledWith(
+        file,
+        expect.any(Function),
+        undefined,
+        expect.objectContaining({ target: { endpointId: 'e1', responseFile: '001.response.json', baseRevision: REV_A } }),
+      );
+    });
+
+    it('la descrizione salva con la sua revisione e al conflitto confronta la versione corrente', () => {
+      const fixture = create();
+      store.selected.set(editableDetail());
+      fixture.detectChanges();
+      const c = fixture.componentInstance as unknown as Detail;
+      c.startEditDescription();
+      c.draftDescription.set('mia');
+      store.saveDescription.mockImplementationOnce((_text: unknown, _ok: unknown, draft: DraftSave) =>
+        draft.onConflict!({ ...CONFLICT, resource: { kind: 'description', endpointId: 'e1' } }));
+
+      c.saveDescription();
+      expect(store.saveDescription).toHaveBeenCalledWith('mia', expect.any(Function), expect.objectContaining({
+        target: { endpointId: 'e1', responseFile: null, baseRevision: REV_A },
+      }));
+
+      api.getMock.mockReturnValue(of(editableDetail({
+        descriptionRevision: REV_B,
+        endpoint: { ...editableDetail().endpoint!, description: 'dell’agent' },
+      })));
+      button(fixture, 'Confronta').click();
+      fixture.detectChanges();
+      expect((fixture.nativeElement as HTMLElement).querySelector('mocks-next-draft-conflict ui-code')?.textContent).toContain('dell’agent');
+      expect(c.draftDescription()).toBe('mia');
+
+      button(fixture, 'Salva la mia versione').click();
+      expect(store.saveDescription).toHaveBeenLastCalledWith('mia', expect.any(Function), expect.objectContaining({
+        target: { endpointId: 'e1', responseFile: null, baseRevision: REV_B },
+      }));
     });
   });
 

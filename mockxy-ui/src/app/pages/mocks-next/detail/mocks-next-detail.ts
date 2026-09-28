@@ -1,7 +1,8 @@
-import { ChangeDetectionStrategy, Component, computed, effect, inject, signal, ViewContainerRef } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, ElementRef, computed, effect, inject, signal, viewChild, ViewContainerRef } from '@angular/core';
 import { CdkMenuTrigger } from '@angular/cdk/menu';
 import { CdkCopyToClipboard } from '@angular/cdk/clipboard';
 import { NgIcon, provideIcons } from '@ng-icons/core';
+import { map } from 'rxjs';
 import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
 import { lucideCable, lucideCheck, lucideCog, lucideCopy, lucideEllipsisVertical, lucideFile, lucideFolder, lucideFileCode, lucideLayers, lucideListOrdered, lucideMessageSquare, lucidePencil, lucidePlus, lucideRadio, lucideTrash2, lucideTriangleAlert, lucideX } from '@ng-icons/lucide';
 import { UiBadge, type BadgeTone } from '../../../ui/ui-badge/ui-badge';
@@ -27,9 +28,12 @@ import { MocksNextSequenceSummary } from '../sequence/mocks-next-sequence-summar
 import { MocksNextSseConsole } from '../sse/mocks-next-sse-console';
 import { MocksNextWsConsole } from '../ws/mocks-next-ws-console';
 import { MocksNextResponseForm } from './response-form';
-import { ResponseDraft, type DraftPayloadType, type DraftScriptType } from './response-draft';
+import { ResponseDraft, seedFromVariant, type DraftPayloadType, type DraftScriptType } from './response-draft';
+import { DraftGuard } from '../draft-conflict/draft-guard';
+import { MocksNextDraftConflict } from '../draft-conflict/draft-conflict-panel';
+import { variantVersion } from '../draft-conflict/variant-version';
 import { mockIdToWorkspacePath, shortenWorkspacePath } from '../../../mock-id';
-import type { EndpointCreateType } from '../../../mock-admin-api.types';
+import type { EndpointCreateType, ResponseVariantRead } from '../../../mock-admin-api.types';
 
 const METHOD_TONES: ReadonlySet<string> = new Set(['get', 'post', 'put', 'delete', 'patch']);
 
@@ -42,7 +46,7 @@ const METHOD_TONES: ReadonlySet<string> = new Set(['get', 'post', 'put', 'delete
  */
 @Component({
   selector: 'mocks-next-detail',
-  imports: [CdkMenuTrigger, CdkCopyToClipboard, NgIcon, StatusCombobox, TranslocoPipe, UiBadge, UiButton, UiCheckbox, UiChip, UiCode, UiCollapsible, UiInput, UiMenu, UiMenuItem, UiSelect, UiSkeleton, UiSwitch, UiTable, UiTooltip, MocksNextResponseForm, MocksNextSequenceSummary, MocksNextSseConsole, MocksNextWsConsole],
+  imports: [CdkMenuTrigger, CdkCopyToClipboard, NgIcon, StatusCombobox, TranslocoPipe, UiBadge, UiButton, UiCheckbox, UiChip, UiCode, UiCollapsible, UiInput, UiMenu, UiMenuItem, UiSelect, UiSkeleton, UiSwitch, UiTable, UiTooltip, MocksNextDraftConflict, MocksNextResponseForm, MocksNextSequenceSummary, MocksNextSseConsole, MocksNextWsConsole],
   providers: [provideIcons({ lucideCable, lucideCheck, lucideCog, lucideCopy, lucideEllipsisVertical, lucideFile, lucideFolder, lucideFileCode, lucideLayers, lucideListOrdered, lucideMessageSquare, lucidePencil, lucidePlus, lucideRadio, lucideTrash2, lucideTriangleAlert, lucideX })],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { class: 'relative flex min-w-0 flex-1 flex-col overflow-hidden bg-muted' },
@@ -88,18 +92,21 @@ const METHOD_TONES: ReadonlySet<string> = new Set(['get', 'post', 'put', 'delete
           @if (editingDescription()) {
           <div class="mt-2 flex items-center gap-2">
             <input
+              #descriptionInput
               ui-input
               type="text"
               class="w-full max-w-xl text-[13.5px]"
               [placeholder]="'detail.descriptionPlaceholder' | transloco"
+              [attr.aria-label]="'detail.descriptionPlaceholder' | transloco"
               [value]="draftDescription()"
               (input)="draftDescription.set($any($event.target).value)"
               (keydown.enter)="saveDescription()"
               (keydown.escape)="cancelEditDescription()"
             />
-            <button ui-button size="icon" [disabled]="busy()" (click)="saveDescription()" [uiTooltip]="'detail.saveDescription' | transloco"><ng-icon name="lucideCheck" size="0.9rem" /></button>
-            <button ui-button variant="outline" size="icon" (click)="cancelEditDescription()" [uiTooltip]="'detail.cancel' | transloco"><ng-icon name="lucideX" size="0.9rem" /></button>
+            <button ui-button size="icon" [disabled]="busy() || !descriptionGuard.canSave()" (click)="saveDescription()" [uiTooltip]="'detail.saveDescription' | transloco" [attr.aria-label]="'detail.saveDescription' | transloco"><ng-icon name="lucideCheck" size="0.9rem" /></button>
+            <button ui-button variant="outline" size="icon" (click)="cancelEditDescription()" [uiTooltip]="'detail.cancel' | transloco" [attr.aria-label]="'detail.cancel' | transloco"><ng-icon name="lucideX" size="0.9rem" /></button>
           </div>
+          <mocks-next-draft-conflict class="mt-2 max-w-xl" [guard]="descriptionGuard" [busy]="busy()" (saveMine)="saveDescription($event)" />
           } @else {
           <div class="mt-2 flex items-center gap-2">
             <p class="text-[13.5px]" [class]="d.endpoint?.description ? 'text-muted-foreground' : 'text-muted-foreground/50 italic'">{{ d.endpoint?.description || ('detail.noDescription' | transloco) }}</p>
@@ -355,6 +362,9 @@ const METHOD_TONES: ReadonlySet<string> = new Set(['get', 'post', 'put', 'delete
            In modifica resta un'unica area scrollabile (il form è lungo per natura). -->
       <div class="min-h-0 flex-1" [class]="responseFormOpen() ? 'overflow-y-auto mx-scroll' : 'flex flex-col overflow-hidden'">
         @if (responseFormOpen()) {
+        @if (editingResponse()) {
+        <mocks-next-draft-conflict class="mx-6 mt-4" [guard]="responseGuard" [busy]="busy()" (saveMine)="saveMineResponse($event)" />
+        }
         <mocks-next-response-form [draft]="draft" [creating]="creatingResponse()" (filePicked)="uploadResponseFile($event)" />
         } @else if (d.type === 'sse') {
         <!-- Variante SSE: al posto della preview del body c'è la console (regia manuale). -->
@@ -463,8 +473,54 @@ export class MocksNextDetail {
   protected readonly draft = new ResponseDraft();
   // bozza descrizione
   protected readonly draftDescription = signal('');
+  private seededDescription = '';
+  private readonly descriptionInput = viewChild('descriptionInput', { read: ElementRef<HTMLInputElement> });
+
+  /**
+   * Bersaglio e conflitto delle bozze (piano agent/API, §13 C4): fissati all'apertura, i
+   * salvataggi vanno lì con la revisione letta anche se nel frattempo la selezione cambia.
+   */
+  protected readonly descriptionGuard = new DraftGuard<string>({
+    load: (target) =>
+      this.api.getMock(target.endpointId).pipe(
+        map((detail) => {
+          const description = detail.endpoint?.description ?? '';
+          const label = this.transloco.translate('draftConflict.descriptionLabel');
+          return { revision: detail.descriptionRevision ?? '', data: description, blocks: [{ label, code: description, language: 'text' as const }] };
+        }),
+      ),
+    apply: (description) => {
+      this.draftDescription.set(description);
+      this.seededDescription = description;
+      this.descriptionInput()?.nativeElement.focus();
+      return true;
+    },
+    isDirty: () => this.draftDescription() !== this.seededDescription,
+    errorMessage: (error) => this.store.detailReadErrorMessage(error),
+  });
+  protected readonly responseGuard = new DraftGuard<ResponseVariantRead>({
+    load: (target) => this.api.getResponse(target.endpointId, target.responseFile ?? '').pipe(map(variantVersion)),
+    apply: (read) => {
+      const seed = seedFromVariant(read);
+      if (!seed) return false;
+      this.draft.seedForEdit(seed);
+      this.responseSeed = this.responseSnapshot();
+      this.pendingUpload = null;
+      return true;
+    },
+    isDirty: () => this.responseSnapshot() !== this.responseSeed,
+    errorMessage: (error) => this.store.detailReadErrorMessage(error),
+  });
+  /** Payload della bozza variante appena seminata: la ricarica chiede conferma se è cambiato. */
+  private responseSeed = '';
+  /** File scelto in modifica il cui upload è in corso o in conflitto ("Salva la mia versione" lo ricarica). */
+  private pendingUpload: File | null = null;
 
   constructor() {
+    inject(DestroyRef).onDestroy(() => {
+      this.descriptionGuard.close();
+      this.responseGuard.close();
+    });
     // Quando cambia l'endpoint selezionato, azzera lo stato di modifica (niente bozze stantie).
     let lastId: string | null | undefined = null;
     effect(() => {
@@ -630,6 +686,8 @@ export class MocksNextDetail {
     if (!this.draft.isScript() && !isValidStatus(this.draft.status())) return false;
     // In creazione modalità File serve un file scelto (l'upload avviene dopo la create).
     if (this.creatingResponse() && this.draft.payloadType() === 'file' && !this.draft.file()) return false;
+    // Variante della bozza sparita: il testo resta da copiare, il salvataggio no.
+    if (this.editingResponse() && !this.responseGuard.canSave()) return false;
     return true;
   });
 
@@ -677,15 +735,22 @@ export class MocksNextDetail {
     const d = this.detail();
     if (!d || !d.editable) return;
     this.resetEditState();
-    this.draftDescription.set(d.endpoint?.description ?? '');
+    const description = d.endpoint?.description ?? '';
+    this.draftDescription.set(description);
+    this.seededDescription = description;
+    this.descriptionGuard.open({ endpointId: d.id, responseFile: null, baseRevision: d.descriptionRevision });
     this.editingDescription.set(true);
   }
   protected cancelEditDescription(): void {
     this.editingDescription.set(false);
+    this.descriptionGuard.close();
   }
-  protected saveDescription(): void {
+  /** Salva la descrizione sul bersaglio della bozza; `revision` è quella di "Salva la mia versione". */
+  protected saveDescription(revision?: string): void {
     if (this.busy()) return;
-    this.store.saveDescription(this.draftDescription().trim(), () => this.editingDescription.set(false));
+    const save = this.descriptionGuard.saveWith(revision);
+    if (!save) return;
+    this.store.saveDescription(this.draftDescription().trim(), () => this.cancelEditDescription(), save);
   }
 
   // --- modifica response (C1) ---
@@ -704,7 +769,10 @@ export class MocksNextDetail {
       body: payloadType === 'file' ? '' : this.body().text,
       scriptType,
       templated: d.config?.templated === true,
+      fileName: payloadType === 'file' ? d.fileInfo?.name || d.bodyFile || d.file || '' : '',
     });
+    this.responseSeed = this.responseSnapshot();
+    this.responseGuard.open({ endpointId: d.id, responseFile: d.selectedResponseFile ?? null, baseRevision: d.responseRevision });
     this.editingResponse.set(true);
   }
   protected cancelEditResponse(): void {
@@ -717,9 +785,31 @@ export class MocksNextDetail {
       this.createDraftResponse();
       return;
     }
+    this.pendingUpload = null;
+    this.saveResponseDraft();
+  }
+
+  /** Salva la bozza variante sul suo bersaglio; `revision` è quella di "Salva la mia versione". */
+  private saveResponseDraft(revision?: string): void {
     const payload = this.draft.buildUpdatePayload();
-    if (!payload) return;
-    this.store.saveResponse(payload, () => this.closeResponseForm());
+    const save = this.responseGuard.saveWith(revision);
+    if (!payload || !save) return;
+    this.store.saveResponse(payload, () => this.closeResponseForm(), save);
+  }
+
+  /** "Salva la mia versione": ripete l'azione in conflitto (upload o salvataggio) contro la revisione mostrata. */
+  protected saveMineResponse(revision: string): void {
+    if (this.pendingUpload) {
+      this.sendUpload(revision);
+      return;
+    }
+    if (!this.canSaveResponse()) return;
+    this.saveResponseDraft(revision);
+  }
+
+  /** Snapshot del payload della bozza variante (null se il body non è valido). */
+  private responseSnapshot(): string {
+    return JSON.stringify(this.draft.buildUpdatePayload());
   }
 
   /**
@@ -754,11 +844,24 @@ export class MocksNextDetail {
     this.editingResponse.set(false);
     this.creatingResponse.set(false);
     this.draft.clearTransient();
+    this.responseGuard.close();
+    this.pendingUpload = null;
   }
 
-  /** Carica il file scelto/rilasciato in MODIFICA (rende la response file-backed) e chiude il form. */
+  /**
+   * Carica il file scelto/rilasciato in MODIFICA (rende la response file-backed) e chiude il form.
+   * Va sulla variante della bozza, con la sua revisione nell'header della precondizione.
+   */
   protected uploadResponseFile(file: File): void {
-    this.store.uploadResponseFile(file, () => this.closeResponseForm());
+    this.pendingUpload = file;
+    this.sendUpload();
+  }
+
+  private sendUpload(revision?: string): void {
+    const file = this.pendingUpload;
+    const save = this.responseGuard.saveWith(revision);
+    if (!file || !save) return;
+    this.store.uploadResponseFile(file, () => this.closeResponseForm(), undefined, save);
   }
 
   // --- crea response (C2): apre il form su una BOZZA del tipo scelto (anche diverso dall'attuale).
@@ -860,6 +963,9 @@ export class MocksNextDetail {
     this.confirmingDeleteResponse.set(false);
     this.confirmingDeleteEndpoint.set(false);
     this.draft.clearTransient();
+    this.descriptionGuard.close();
+    this.responseGuard.close();
+    this.pendingUpload = null;
   }
 
   private currentResponseTitle(): string {

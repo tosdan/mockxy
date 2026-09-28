@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, DestroyRef, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { map } from 'rxjs';
 import { DIALOG_DATA, DialogRef } from '@angular/cdk/dialog';
 import { NgIcon, provideIcons } from '@ng-icons/core';
 import {
@@ -22,9 +23,13 @@ import { UiTooltip } from '../../../ui/ui-tooltip/ui-tooltip';
 import { ToastService } from '../../../ui/ui-toast/ui-toast';
 import { MockAdminApiService } from '../../../mock-admin-api.service';
 import { MocksStore } from '../mocks-next.store';
+import { DraftGuard } from '../draft-conflict/draft-guard';
+import { MocksNextDraftConflict } from '../draft-conflict/draft-conflict-panel';
+import { variantVersion } from '../draft-conflict/variant-version';
 import type {
   MockDetail,
   ResponseSequenceCreateRequest,
+  ResponseVariantRead,
   SequenceState,
   SequenceStep,
   SequenceVariantConfig,
@@ -50,7 +55,7 @@ const STATE_POLL_MS = 1500;
 /** Editor di una response sequence, usato sia per crearla sia per modificare quella selezionata. */
 @Component({
   selector: 'mocks-next-sequence-dialog',
-  imports: [NgIcon, TranslocoPipe, UiButton, UiCheckbox, UiInput, UiSelect, UiToggleGroup, UiToggleItem, UiTooltip],
+  imports: [NgIcon, TranslocoPipe, UiButton, UiCheckbox, UiInput, UiSelect, UiToggleGroup, UiToggleItem, UiTooltip, MocksNextDraftConflict],
   providers: [
     provideIcons({
       lucideArrowDown,
@@ -161,6 +166,9 @@ const STATE_POLL_MS = 1500;
         @if (store.error()) {
         <p class="text-[12.5px] text-destructive-soft">{{ store.error() }}</p>
         }
+        @if (isEdit) {
+        <mocks-next-draft-conflict [guard]="guard" [busy]="store.savingId() != null" (saveMine)="save($event)" />
+        }
 
         @if (isEdit) {
         <div class="flex items-center justify-between gap-3 rounded-lg border border-input bg-black/20 px-3.5 py-2.5">
@@ -200,12 +208,23 @@ export class MocksNextSequenceDialog {
   protected readonly isEdit = this.data.mode === 'edit';
   /** In creazione: attivare subito la nuova sequence (default) o solo prepararla. */
   protected readonly activateNow = signal(true);
-  protected readonly originalSequence: SequenceVariantConfig | null = this.isEdit
+  // Base della bozza: la versione letta all'apertura, o quella ricaricata dopo un conflitto.
+  private readonly originalSequence = signal<SequenceVariantConfig | null>(this.isEdit
     ? this.data.detail.sequence ?? null
-    : null;
-  private readonly originalTitle = this.isEdit
+    : null);
+  private readonly originalTitle = signal(this.isEdit
     ? this.data.detail.responses?.find((response) => response.fileName === this.data.detail.selectedResponseFile)?.title ?? ''
-    : '';
+    : '');
+  /**
+   * Bersaglio e conflitto della bozza in modifica (piano agent/API, §13 C4): la variante aperta
+   * con la sua revisione, anche se intanto la selezione passa a un'altra.
+   */
+  protected readonly guard = new DraftGuard<ResponseVariantRead>({
+    load: (target) => this.api.getResponse(target.endpointId, target.responseFile ?? '').pipe(map(variantVersion)),
+    apply: (read) => this.applyVariant(read),
+    isDirty: () => this.changed(),
+    errorMessage: (error) => this.store.detailReadErrorMessage(error),
+  });
 
   protected readonly variantOptions: readonly UiSelectOption<string>[] = (this.data.detail.responses ?? [])
     .filter((response) => !response.missing && !response.invalid && (response.type === 'mock' || response.type === 'handler'))
@@ -215,21 +234,18 @@ export class MocksNextSequenceDialog {
     }));
 
   protected readonly hasEnoughVariants = this.variantOptions.length >= 2;
-  protected readonly title = signal(this.originalTitle);
-  protected readonly onEnd = signal<'stay' | 'loop'>(this.originalSequence?.onEnd ?? 'stay');
-  protected readonly resetAfterMs = signal(
-    this.originalSequence != null
-      ? this.originalSequence.resetAfterMs != null
-        ? String(this.originalSequence.resetAfterMs)
-        : ''
-      : String(DEFAULT_RESET_AFTER_MS),
-  );
+  protected readonly title = signal(this.originalTitle());
+  protected readonly onEnd = signal<'stay' | 'loop'>(this.originalSequence()?.onEnd ?? 'stay');
+  protected readonly resetAfterMs = signal(this.initialResetAfterMs());
   protected readonly steps = signal<readonly DraftStep[]>(this.buildInitialSteps());
   protected readonly sequenceState = signal<SequenceState | null>(this.data.detail.sequenceState ?? null);
   protected readonly resetting = signal(false);
 
   constructor() {
+    this.destroyRef.onDestroy(() => this.guard.close());
     if (this.isEdit) {
+      const detail = this.data.detail;
+      this.guard.open({ endpointId: detail.id, responseFile: detail.selectedResponseFile ?? null, baseRevision: detail.responseRevision });
       this.refreshState();
       const pollTimer = setInterval(() => this.refreshState(), STATE_POLL_MS);
       this.destroyRef.onDestroy(() => clearInterval(pollTimer));
@@ -250,9 +266,34 @@ export class MocksNextSequenceDialog {
     return state == null ? '-' : `${state.stepIndex + 1}/${this.steps().length}`;
   }
 
+  private initialResetAfterMs(): string {
+    const original = this.originalSequence();
+    if (original == null) return String(DEFAULT_RESET_AFTER_MS);
+    return original.resetAfterMs != null ? String(original.resetAfterMs) : '';
+  }
+
+  /** Ricarica deliberata: la versione corrente diventa bozza e base. False se non è più una sequence. */
+  private applyVariant(read: ResponseVariantRead): boolean {
+    const response = read.response;
+    if (response.type !== 'sequence') return false;
+    // Stessi campi, nello stesso ordine, del `sequence` del dettaglio: il confronto `changed` è testuale.
+    this.originalSequence.set({
+      steps: response['steps'] as SequenceStep[],
+      onEnd: response['onEnd'] as 'stay' | 'loop',
+      resetAfterMs: response['resetAfterMs'] as number | null,
+    });
+    this.originalTitle.set(typeof response.title === 'string' ? response.title : '');
+    this.title.set(this.originalTitle());
+    this.onEnd.set(this.originalSequence()?.onEnd ?? 'stay');
+    this.resetAfterMs.set(this.initialResetAfterMs());
+    this.steps.set(this.buildInitialSteps());
+    return true;
+  }
+
   private buildInitialSteps(): DraftStep[] {
-    if (this.originalSequence != null) {
-      return this.originalSequence.steps.map((step) => ({
+    const original = this.originalSequence();
+    if (original != null) {
+      return original.steps.map((step) => ({
         response: step.response,
         mode: step.forMs != null ? 'forMs' : 'times',
         value: step.times != null ? String(step.times) : step.forMs != null ? String(step.forMs) : '',
@@ -360,19 +401,21 @@ export class MocksNextSequenceDialog {
 
   private readonly changed = computed(() => {
     const built = this.buildSequence();
-    if (this.originalSequence == null) return true;
+    const original = this.originalSequence();
+    if (original == null) return true;
     return JSON.stringify(built) !== JSON.stringify({
       type: 'sequence',
-      title: this.originalTitle,
-      ...this.originalSequence,
+      title: this.originalTitle(),
+      ...original,
     });
   });
 
   protected readonly canSave = computed(() =>
-    this.store.savingId() == null && this.validationError() == null && this.changed(),
+    this.store.savingId() == null && this.validationError() == null && this.changed() && (!this.isEdit || this.guard.canSave()),
   );
 
-  protected save(): void {
+  /** Salva; in modifica sul bersaglio della bozza, e `revision` è quella di "Salva la mia versione". */
+  protected save(revision?: string): void {
     if (!this.canSave()) return;
     const sequence = this.buildSequence();
     const prepared = !this.isEdit && !this.activateNow();
@@ -382,7 +425,9 @@ export class MocksNextSequenceDialog {
       this.dialogRef.close('saved');
     };
     if (this.isEdit) {
-      this.store.updateSequence(sequence, onSuccess);
+      const draft = this.guard.saveWith(revision);
+      if (!draft) return;
+      this.store.updateSequence(sequence, onSuccess, draft);
     } else {
       this.store.createSequence(prepared ? { ...sequence, select: false } : sequence, onSuccess);
     }

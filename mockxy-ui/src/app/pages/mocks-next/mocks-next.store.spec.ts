@@ -386,6 +386,95 @@ describe('MocksStore', () => {
     });
   });
 
+  // Piano agent/API, §13 C4: una bozza salva sul bersaglio fissato all'apertura, con la revisione
+  // letta; conflitto e risorsa sparita tornano alla bozza, che conserva il testo.
+  describe('salvataggi da bozza', () => {
+    const REV_A = `rev-v1:${'a'.repeat(64)}`;
+    const REV_B = `rev-v1:${'b'.repeat(64)}`;
+    const target = { endpointId: 'e1', responseFile: '001.response.json', baseRevision: REV_A };
+    const payload = { type: 'mock' as const, title: '', status: 200, headers: {}, delayMs: 0, body: { a: 1 } };
+    const conflict = {
+      code: 'REVISION_CONFLICT' as const,
+      resource: { kind: 'response' as const, endpointId: 'e1', responseFile: '001.response.json' },
+      expectedRevision: REV_A,
+      currentRevision: REV_B,
+    };
+    const conflictError = {
+      status: 409,
+      error: { message: 'The resource changed since it was read: reload it before saving.', details: conflict },
+    };
+
+    it('salva sulla variante della bozza con la sua revisione anche se intanto è attiva un’altra', () => {
+      const store = create();
+      // L'agent ha attivato 002 dopo l'apertura della bozza di 001.
+      store.selected.set(detail('e1', { selectedResponseFile: '002.response.json' }));
+
+      store.saveResponse(payload, undefined, { target });
+
+      expect(api.updateResponse).toHaveBeenCalledWith('e1', '001.response.json', { ...payload, expectedRevision: REV_A });
+    });
+
+    it('sequence e upload da bozza vanno sul bersaglio; l’upload porta la revisione per l’header', () => {
+      const store = create();
+      store.selected.set(detail('e1', { selectedResponseFile: '002.response.json' }));
+      const sequence = { type: 'sequence' as const, title: '', steps: [{ response: '003.response.json' }], onEnd: 'stay' as const, resetAfterMs: null };
+
+      store.updateSequence(sequence, undefined, { target });
+      expect(api.updateSequence).toHaveBeenCalledWith('e1', '001.response.json', { ...sequence, expectedRevision: REV_A });
+
+      const file = new File(['x'], 'logo.png');
+      store.uploadResponseFile(file, undefined, undefined, { target });
+      expect(api.uploadResponseFile).toHaveBeenCalledWith('e1', '001.response.json', file, REV_A);
+    });
+
+    it('la descrizione da bozza manda soltanto la descrizione e la sua revisione', () => {
+      const store = create();
+      store.selected.set(detail('e1'));
+
+      store.saveDescription('nuova', undefined, { target: { endpointId: 'e1', responseFile: null, baseRevision: REV_A } });
+
+      expect(api.updateEndpoint).toHaveBeenCalledWith('e1', { description: 'nuova', expectedRevision: REV_A });
+    });
+
+    it('un 409 REVISION_CONFLICT va alla bozza: niente onSuccess né errore della pagina', () => {
+      const store = create();
+      store.selected.set(detail('e1'));
+      api.updateResponse.mockReturnValueOnce(throwError(() => conflictError));
+      const onSuccess = vi.fn();
+      const onConflict = vi.fn();
+
+      store.saveResponse(payload, onSuccess, { target, onConflict });
+
+      expect(onConflict).toHaveBeenCalledWith(conflict);
+      expect(onSuccess).not.toHaveBeenCalled();
+      expect(store.error()).toBeUndefined();
+      expect(store.savingId()).toBeUndefined();
+    });
+
+    it('un 404 dice alla bozza che il bersaglio non esiste più', () => {
+      const store = create();
+      store.selected.set(detail('e1'));
+      api.updateEndpoint.mockReturnValueOnce(throwError(() => ({ status: 404, error: { message: 'Endpoint definition not found.' } })));
+      const onMissing = vi.fn();
+
+      store.saveDescription('nuova', undefined, { target: { endpointId: 'e1', responseFile: null, baseRevision: REV_A }, onMissing });
+
+      expect(onMissing).toHaveBeenCalledTimes(1);
+      expect(store.error()).toBeUndefined();
+    });
+
+    it('senza gestori il conflitto resta un errore della pagina, e non si ritenta senza precondizione', () => {
+      const store = create();
+      store.selected.set(detail('e1'));
+      api.updateResponse.mockReturnValueOnce(throwError(() => conflictError));
+
+      store.saveResponse(payload, undefined, { target });
+
+      expect(store.error()).toBe('The resource changed since it was read: reload it before saving.');
+      expect(api.updateResponse).toHaveBeenCalledTimes(1);
+    });
+  });
+
   describe('mutazioni del dettaglio (runDetailMutation)', () => {
     it('crea e aggiorna sequence usando le operazioni response dedicate', () => {
       const store = create();
@@ -485,7 +574,7 @@ describe('MocksStore', () => {
 
       const file = new File(['x'], 'logo.png');
       store.uploadResponseFile(file, undefined, '002.response.json');
-      expect(api.uploadResponseFile).toHaveBeenCalledWith('e1', '002.response.json', file);
+      expect(api.uploadResponseFile).toHaveBeenCalledWith('e1', '002.response.json', file, undefined);
     });
 
     it('senza selezione le mutazioni sono no-op', () => {

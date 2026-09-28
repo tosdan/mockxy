@@ -9,7 +9,7 @@ import {
   type ResponsePreset,
 } from '../response-presets';
 import { scriptTemplate } from '../script-templates';
-import type { CreateResponseRequest, EndpointCreateType, ResponseUpdateRequest } from '../../../mock-admin-api.types';
+import type { CreateResponseRequest, EndpointCreateType, ResponseUpdateRequest, ResponseVariantRead } from '../../../mock-admin-api.types';
 
 export type DraftPayloadType = 'json' | 'text' | 'file';
 export type DraftScriptType = 'handler' | 'middleware' | null;
@@ -28,6 +28,40 @@ export interface DraftSeed {
   body: string;
   scriptType: DraftScriptType;
   templated?: boolean;
+  /** Nome dell'asset della variante file-backed seminata (mostrato nel form di modifica). */
+  fileName?: string;
+}
+
+/**
+ * Seme di modifica da una variante letta per filename (ricarica di una bozza in conflitto), con le
+ * stesse regole del dettaglio. Null se il form generico non la rappresenta: sse, ws, sequence o
+ * script senza sorgente.
+ */
+export function seedFromVariant(read: ResponseVariantRead): DraftSeed | null {
+  const response = read.response;
+  const title = typeof response.title === 'string' ? response.title : '';
+  if (response.type === 'handler' || response.type === 'middleware') {
+    if (read.source == null) return null;
+    return { title, status: 200, delay: 0, headers: [], payloadType: 'json', body: read.source, scriptType: response.type };
+  }
+  if (response.type !== 'mock') return null;
+  const file = response['file'];
+  const body = response['body'];
+  const payloadType: DraftPayloadType = file != null ? 'file' : typeof body === 'string' ? 'text' : 'json';
+  const headers = (response['headers'] ?? {}) as Record<string, string | number | boolean | string[]>;
+  const status = response['status'];
+  const delayMs = response['delayMs'];
+  return {
+    title,
+    status: typeof status === 'number' ? status : 200,
+    delay: typeof delayMs === 'number' ? delayMs : 0,
+    headers: Object.entries(headers).map(([key, value]) => ({ key, value: Array.isArray(value) ? value.join(', ') : String(value) })),
+    payloadType,
+    body: payloadType === 'file' ? '' : typeof body === 'string' ? body : body == null ? '' : JSON.stringify(body, null, 2),
+    scriptType: null,
+    templated: response['templated'] === true,
+    fileName: typeof file === 'string' ? file : '',
+  };
 }
 
 /**
@@ -51,6 +85,8 @@ export class ResponseDraft {
   readonly file = signal<File | null>(null);
   /** Preset response in attesa di conferma quando il body corrente non è vuoto/di default. */
   readonly pendingPreset = signal<ResponsePreset | null>(null);
+  /** Asset della variante in modifica: quello del bersaglio della bozza, non della selezionata. */
+  readonly currentFileName = signal('');
 
   readonly isScript = computed(() => this.scriptType() !== null);
 
@@ -81,6 +117,7 @@ export class ResponseDraft {
     this.body.set(seed.body);
     this.scriptType.set(seed.scriptType);
     this.templated.set(seed.templated === true);
+    this.currentFileName.set(seed.fileName ?? '');
     this.clearTransient();
   }
 
@@ -104,6 +141,7 @@ export class ResponseDraft {
       this.body.set('{\n  \n}');
     }
     this.templated.set(false);
+    this.currentFileName.set('');
     this.clearTransient();
   }
 

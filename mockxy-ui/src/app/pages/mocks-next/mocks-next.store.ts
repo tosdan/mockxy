@@ -2,7 +2,7 @@ import { computed, inject, Injectable, signal } from '@angular/core';
 import { Observable, concatMap, finalize, from, map, switchMap, toArray } from 'rxjs';
 import { TranslocoService } from '@jsverse/transloco';
 import { MockAdminApiService } from '../../mock-admin-api.service';
-import { isReadInconsistentError } from '../../shared/read-error-message';
+import { isNotFoundError, isReadInconsistentError, readRevisionConflict } from '../../shared/read-error-message';
 import { ViewStateService } from '../../shared/view-state.service';
 import {
   CollectionSummary,
@@ -21,7 +21,20 @@ import {
   ResponseSequenceUpdateRequest,
   ResponseUpdateRequest,
   UNSORTED_COLLECTION_ID,
+  type DraftTarget,
+  type RevisionConflict,
 } from '../../mock-admin-api.types';
+
+/**
+ * Salvataggio da bozza (piano agent/API, §13 C4): il bersaglio fissato all'apertura, con la
+ * revisione letta, e i gestori di un conflitto o di una risorsa sparita. Senza gestori quei casi
+ * diventano un errore come gli altri.
+ */
+export interface DraftSave {
+  target: DraftTarget;
+  onConflict?: (conflict: RevisionConflict) => void;
+  onMissing?: () => void;
+}
 
 /** Riga endpoint del catalogo (view-model). */
 export interface CatalogEndpointVM {
@@ -287,24 +300,54 @@ export class MocksStore {
     this.runDetailMutation(sel.id, this.api.createSequence(sel.id, sequence), onSuccess);
   }
 
-  /** Aggiorna la variante sequence selezionata, usando la rotta response per filename. */
-  updateSequence(sequence: ResponseSequenceUpdateRequest, onSuccess?: () => void): void {
-    const sel = this.selected();
-    const fileName = sel?.selectedResponseFile;
-    if (!sel || !fileName) {
+  /**
+   * Aggiorna una variante sequence per filename. Da bozza (`draft`) salva sul bersaglio fissato
+   * all'apertura con la sua revisione; altrimenti sulla variante selezionata, senza precondizione.
+   */
+  updateSequence(sequence: ResponseSequenceUpdateRequest, onSuccess?: () => void, draft?: DraftSave): void {
+    const target = this.responseTarget(draft);
+    if (!target) {
       return;
     }
-    this.runDetailMutation(sel.id, this.api.updateSequence(sel.id, fileName, sequence), onSuccess);
+    this.runDetailMutation(
+      target.endpointId,
+      this.api.updateSequence(target.endpointId, target.responseFile, { ...sequence, ...target.precondition }),
+      onSuccess,
+      draft,
+    );
   }
 
-  /** Salva la response selezionata (body/headers/status/delay per mock, source per script). */
-  saveResponse(payload: ResponseUpdateRequest, onSuccess?: () => void): void {
-    const sel = this.selected();
-    const fileName = sel?.selectedResponseFile;
-    if (!sel || !fileName) {
+  /**
+   * Salva una response (body/headers/status/delay per mock, source per script). Da bozza (`draft`)
+   * salva sul bersaglio fissato all'apertura con la sua revisione: una modifica ad A non finisce
+   * in B se nel frattempo la selezione è cambiata. Le azioni immediate (status, delay, templating
+   * in linea) salvano la selezionata senza precondizione.
+   */
+  saveResponse(payload: ResponseUpdateRequest, onSuccess?: () => void, draft?: DraftSave): void {
+    const target = this.responseTarget(draft);
+    if (!target) {
       return;
     }
-    this.runDetailMutation(sel.id, this.api.updateResponse(sel.id, fileName, payload), onSuccess);
+    this.runDetailMutation(
+      target.endpointId,
+      this.api.updateResponse(target.endpointId, target.responseFile, { ...payload, ...target.precondition }),
+      onSuccess,
+      draft,
+    );
+  }
+
+  /** Bersaglio di un salvataggio di variante: quello della bozza, o la variante selezionata. */
+  private responseTarget(draft?: DraftSave): { endpointId: string; responseFile: string; precondition: { expectedRevision?: string } } | null {
+    if (draft?.target.responseFile) {
+      return {
+        endpointId: draft.target.endpointId,
+        responseFile: draft.target.responseFile,
+        precondition: draft.target.baseRevision ? { expectedRevision: draft.target.baseRevision } : {},
+      };
+    }
+    const sel = this.selected();
+    const fileName = sel?.selectedResponseFile;
+    return sel && fileName ? { endpointId: sel.id, responseFile: fileName, precondition: {} } : null;
   }
 
   /**
@@ -329,15 +372,24 @@ export class MocksStore {
     this.runDetailMutation(sel.id, this.api.deleteResponse(sel.id, fileName), onSuccess);
   }
 
-  /** Carica un file per la response selezionata (la rende file-backed). */
-  uploadResponseFile(file: File, onSuccess?: () => void, targetResponseFile?: string): void {
+  /**
+   * Carica un file per una response (la rende file-backed). Di default la variante selezionata;
+   * dopo una creazione senza attivazione, quella creata; da bozza, il bersaglio della bozza con la
+   * sua revisione nell'header della precondizione.
+   */
+  uploadResponseFile(file: File, onSuccess?: () => void, targetResponseFile?: string, draft?: DraftSave): void {
     const sel = this.selected();
-    // Di default la variante selezionata; dopo una creazione senza attivazione, quella creata.
-    const fileName = targetResponseFile ?? sel?.selectedResponseFile;
-    if (!sel || !fileName) {
+    const endpointId = draft?.target.endpointId ?? sel?.id;
+    const fileName = draft?.target.responseFile ?? targetResponseFile ?? sel?.selectedResponseFile;
+    if (!endpointId || !fileName) {
       return;
     }
-    this.runDetailMutation(sel.id, this.api.uploadResponseFile(sel.id, fileName, file), onSuccess);
+    this.runDetailMutation(
+      endpointId,
+      this.api.uploadResponseFile(endpointId, fileName, file, draft?.target.baseRevision),
+      onSuccess,
+      draft,
+    );
   }
 
   /**
@@ -345,12 +397,18 @@ export class MocksStore {
    * letto col dettaglio può essere vecchio, e reinviarlo riabiliterebbe (o disabiliterebbe)
    * l'endpoint annullando un toggle fatto nel frattempo.
    */
-  saveDescription(description: string, onSuccess?: () => void): void {
-    const sel = this.selected();
-    if (!sel) {
+  saveDescription(description: string, onSuccess?: () => void, draft?: DraftSave): void {
+    const endpointId = draft?.target.endpointId ?? this.selected()?.id;
+    if (!endpointId) {
       return;
     }
-    this.runDetailMutation(sel.id, this.api.updateEndpoint(sel.id, { description }), onSuccess);
+    const expectedRevision = draft?.target.baseRevision;
+    this.runDetailMutation(
+      endpointId,
+      this.api.updateEndpoint(endpointId, expectedRevision ? { description, expectedRevision } : { description }),
+      onSuccess,
+      draft,
+    );
   }
 
   /** Elimina l'endpoint selezionato e apre il primo rimasto. */
@@ -719,8 +777,11 @@ export class MocksStore {
     this.setSelected(detail);
   }
 
-  /** Rilegge il dettaglio dell'endpoint selezionato: è l'azione dello stato "non leggibile". */
-  reloadSelectedDetail(): void {
+  /**
+   * Rilegge il dettaglio dell'endpoint selezionato: è l'azione dello stato "non leggibile" e della
+   * ricarica di una bozza in conflitto. `onLoaded` riceve il dettaglio riletto.
+   */
+  reloadSelectedDetail(onLoaded?: (detail: MockDetail) => void): void {
     const id = this.selected()?.id;
     if (id == null) {
       return;
@@ -731,7 +792,10 @@ export class MocksStore {
       .getMock(id)
       .pipe(finalize(() => this.detailLoading.set(false)))
       .subscribe({
-        next: (detail) => this.setSelected(detail),
+        next: (detail) => {
+          this.setSelected(detail);
+          onLoaded?.(detail);
+        },
         error: (e) => this.error.set(this.detailReadErrorMessage(e)),
       });
   }
@@ -779,6 +843,7 @@ export class MocksStore {
     savingId: string,
     op: Observable<T>,
     onSuccess?: (result: T) => void,
+    draft?: DraftSave,
   ): void {
     this.savingId.set(savingId);
     this.error.set(undefined);
@@ -791,7 +856,19 @@ export class MocksStore {
         this.applyCatalogResponse(res);
         onSuccess?.(detail);
       },
-      error: (e) => this.error.set(readErrorMessage(e) ?? this.transloco.translate('common.unexpectedError')),
+      error: (e) => {
+        // Un salvataggio da bozza gestisce da sé conflitto e risorsa sparita: il testo resta.
+        const conflict = readRevisionConflict(e);
+        if (conflict && draft?.onConflict) {
+          draft.onConflict(conflict);
+          return;
+        }
+        if (isNotFoundError(e) && draft?.onMissing) {
+          draft.onMissing();
+          return;
+        }
+        this.error.set(readErrorMessage(e) ?? this.transloco.translate('common.unexpectedError'));
+      },
     });
   }
 }

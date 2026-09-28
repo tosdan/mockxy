@@ -227,6 +227,10 @@ export interface MockSummary {
 
 export interface MockDetail extends MockSummary {
   editable: boolean;
+  /** Revisione della descrizione: precondizione di una bozza della descrizione (§13 C4). */
+  descriptionRevision?: string;
+  /** Revisione della variante selezionata, calcolata dagli stessi dati del dettaglio. */
+  responseRevision?: string;
   definitionFilePath?: string;
   payloadFilePath?: string;
   responseFilePath?: string;
@@ -343,7 +347,44 @@ export interface SelectResponseRequest {
 export interface EndpointUpdateRequest {
   description?: string | null;
   enabled?: boolean;
+  /** Precondizione sulla sola descrizione: da inviare con `description` e senza `enabled`. */
+  expectedRevision?: string;
 }
+
+/** Una variante per filename, attiva o no, con la sua revisione (GET /mocks/:id/responses/:file). */
+export interface ResponseVariantRead {
+  id: string;
+  responseFile: string;
+  selected: boolean;
+  active: boolean;
+  response: Record<string, unknown> & { type: MockType; title?: string };
+  source: string | null;
+  fileInfo: { name: string; size: number } | null;
+  revision: string;
+}
+
+/** Bersaglio di una bozza, fissato all'apertura: un salvataggio non cambia mai risorsa. */
+export interface DraftTarget {
+  endpointId: string;
+  /** Variante della bozza; null per la descrizione. */
+  responseFile: string | null;
+  /** Revisione letta all'apertura; assente con un motore che non espone revisioni. */
+  baseRevision?: string;
+}
+
+/** Dettagli di un `409 REVISION_CONFLICT`: la risorsa è cambiata dopo la lettura della bozza. */
+export interface RevisionConflict {
+  code: 'REVISION_CONFLICT';
+  resource: { kind: 'description' | 'response'; endpointId: string; responseFile?: string };
+  expectedRevision: string;
+  currentRevision: string;
+}
+
+/** Esito di un aggiornamento di variante: il dettaglio più la variante aggiornata e la sua revisione. */
+export type ResponseUpdatedResult = MockDetailAfterMutation & {
+  updatedResponseFile?: string;
+  updatedResponseRevision?: string | null;
+};
 
 /** Copia un endpoint verso un nuovo metodo+path; `copyResponses` copia tutte le response (non solo la selezionata). */
 export interface EndpointCopyRequest {
@@ -417,12 +458,13 @@ export interface ResponseSequenceCreateRequest extends Omit<ResponseSequenceUpda
   select?: boolean;
 }
 
-export type ResponseUpdateRequest =
+export type ResponseUpdateRequest = (
   | ResponseMockUpdateRequest
   | ResponseScriptUpdateRequest
   | ResponseSseUpdateRequest
   | ResponseWsUpdateRequest
-  | ResponseSequenceUpdateRequest;
+  | ResponseSequenceUpdateRequest
+) & { expectedRevision?: string };
 
 /**
  * Creazione di una variante. `select: false` la prepara senza attivarla: selezione, cursore della

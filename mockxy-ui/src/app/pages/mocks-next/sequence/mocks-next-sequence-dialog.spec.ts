@@ -9,7 +9,8 @@ import { translocoTesting } from '../../../testing/transloco-testing';
 import { MockAdminApiService } from '../../../mock-admin-api.service';
 import { MocksStore } from '../mocks-next.store';
 import { ToastService } from '../../../ui/ui-toast/ui-toast';
-import type { MockDetail, SequenceVariantConfig } from '../../../mock-admin-api.types';
+import type { DraftSave } from '../mocks-next.store';
+import type { MockDetail, ResponseVariantRead, SequenceVariantConfig } from '../../../mock-admin-api.types';
 
 const EXISTING_SEQUENCE: SequenceVariantConfig = {
   steps: [
@@ -19,6 +20,11 @@ const EXISTING_SEQUENCE: SequenceVariantConfig = {
   onEnd: 'loop',
   resetAfterMs: 30000,
 };
+const REV_SEQ = `rev-v1:${'a'.repeat(64)}`;
+/** Bersaglio della bozza in modifica: la variante aperta con la revisione letta. */
+const SEQ_DRAFT = expect.objectContaining({
+  target: { endpointId: 'id-1', responseFile: '004.response.json', baseRevision: REV_SEQ },
+});
 
 function detailWith(overrides: Partial<MockDetail> = {}): MockDetail {
   return {
@@ -63,6 +69,7 @@ function editDetail(overrides: Partial<MockDetail> = {}): MockDetail {
     selectedResponseFile: '004.response.json',
     sequence: EXISTING_SEQUENCE,
     sequenceState: { stepIndex: 1, servedInStep: 3, stepStartedAt: 1, lastRequestAt: 2 },
+    responseRevision: REV_SEQ,
     endpoint: {
       ...detailWith().endpoint!,
       selectedResponseFile: '004.response.json',
@@ -77,10 +84,12 @@ describe('MocksNextSequenceDialog', () => {
     error: ReturnType<typeof signal<string | undefined>>;
     createSequence: ReturnType<typeof vi.fn>;
     updateSequence: ReturnType<typeof vi.fn>;
+    detailReadErrorMessage: ReturnType<typeof vi.fn>;
   };
   let api: {
     getSequenceState: ReturnType<typeof vi.fn>;
     resetSequence: ReturnType<typeof vi.fn>;
+    getResponse: ReturnType<typeof vi.fn>;
   };
   let toast: { show: ReturnType<typeof vi.fn>; dismiss: ReturnType<typeof vi.fn> };
   let dialogRef: { close: ReturnType<typeof vi.fn> };
@@ -91,6 +100,7 @@ describe('MocksNextSequenceDialog', () => {
       error: signal<string | undefined>(undefined),
       createSequence: vi.fn(),
       updateSequence: vi.fn(),
+      detailReadErrorMessage: vi.fn(() => 'lettura fallita'),
     };
     const initialState = detail.sequenceState ?? {
       stepIndex: 0,
@@ -104,6 +114,7 @@ describe('MocksNextSequenceDialog', () => {
         sequenceFile: detail.selectedResponseFile ?? '',
         sequenceState: { stepIndex: 0, servedInStep: 0, stepStartedAt: null, lastRequestAt: null },
       })),
+      getResponse: vi.fn(),
     };
     toast = { show: vi.fn(), dismiss: vi.fn() };
     dialogRef = { close: vi.fn() };
@@ -241,6 +252,7 @@ describe('MocksNextSequenceDialog', () => {
         resetAfterMs: 30000,
       },
       expect.any(Function),
+      SEQ_DRAFT,
     );
   });
 
@@ -274,7 +286,104 @@ describe('MocksNextSequenceDialog', () => {
         onEnd: 'stay',
       }),
       expect.any(Function),
+      SEQ_DRAFT,
     );
+  });
+
+  // Piano agent/API, §13 C4: la bozza della sequence resta sulla variante aperta, e un conflitto
+  // si risolve con un confronto o una ricarica deliberati, mai con un merge automatico.
+  describe('conflitto della bozza in modifica', () => {
+    const REV_B = `rev-v1:${'b'.repeat(64)}`;
+    const CURRENT: ResponseVariantRead = {
+      id: 'id-1',
+      responseFile: '004.response.json',
+      selected: true,
+      active: true,
+      response: {
+        type: 'sequence',
+        title: 'Dell’agent',
+        steps: [
+          { response: '002.response.json', times: 4 },
+          { response: '001.response.json', forMs: 900 },
+        ],
+        onEnd: 'loop',
+        resetAfterMs: null,
+      },
+      source: null,
+      fileInfo: null,
+      revision: REV_B,
+    };
+
+    function conflicted() {
+      const created = create(editDetail(), 'edit');
+      store.updateSequence.mockImplementationOnce((_sequence: unknown, _ok: unknown, draft: DraftSave) => draft.onConflict!({
+        code: 'REVISION_CONFLICT',
+        resource: { kind: 'response', endpointId: 'id-1', responseFile: '004.response.json' },
+        expectedRevision: REV_SEQ,
+        currentRevision: REV_B,
+      }));
+      created.c.title.set('Mia');
+      created.c.save();
+      created.fixture.detectChanges();
+      return created;
+    }
+
+    it('conserva la bozza e salva la propria versione contro la revisione mostrata', () => {
+      const { fixture, c } = conflicted();
+      expect(dialogRef.close).not.toHaveBeenCalled();
+      expect(c.title()).toBe('Mia');
+      api.getResponse.mockReturnValue(of(CURRENT));
+
+      c.guard.compare();
+      fixture.detectChanges();
+      expect(api.getResponse).toHaveBeenCalledWith('id-1', '004.response.json');
+      expect((fixture.nativeElement as HTMLElement).querySelector('mocks-next-draft-conflict ui-code')?.textContent).toContain('Dell’agent');
+      expect(c.title()).toBe('Mia');
+
+      store.updateSequence.mockImplementation((_sequence: unknown, onSuccess: () => void) => onSuccess());
+      c.save(REV_B);
+      expect(store.updateSequence).toHaveBeenLastCalledWith(
+        expect.objectContaining({ title: 'Mia' }),
+        expect.any(Function),
+        expect.objectContaining({ target: { endpointId: 'id-1', responseFile: '004.response.json', baseRevision: REV_B } }),
+      );
+      expect(dialogRef.close).toHaveBeenCalledWith('saved');
+    });
+
+    it('«Ricarica» sostituisce bozza e base con la versione corrente', () => {
+      const { c } = conflicted();
+      api.getResponse.mockReturnValue(of(CURRENT));
+
+      c.guard.confirmReload();
+
+      expect(c.title()).toBe('Dell’agent');
+      expect(c.onEnd()).toBe('loop');
+      expect(c.resetAfterMs()).toBe('');
+      expect(c.steps()).toEqual([
+        { response: '002.response.json', mode: 'times', value: '4' },
+        { response: '001.response.json', mode: 'forMs', value: '900' },
+      ]);
+      // Ricaricata, la bozza coincide con la sua nuova base: nulla da salvare finché non cambia.
+      expect(c.canSave()).toBe(false);
+
+      c.title.set('Dell’agent, ritoccata');
+      c.save();
+      expect(store.updateSequence).toHaveBeenLastCalledWith(
+        expect.anything(),
+        expect.any(Function),
+        expect.objectContaining({ target: expect.objectContaining({ baseRevision: REV_B }) }),
+      );
+    });
+
+    it('con la variante sparita il salvataggio resta disabilitato', () => {
+      const { c } = create(editDetail(), 'edit');
+      store.updateSequence.mockImplementationOnce((_sequence: unknown, _ok: unknown, draft: DraftSave) => draft.onMissing!());
+      c.title.set('Mia');
+      c.save();
+
+      expect(c.canSave()).toBe(false);
+      expect(c.title()).toBe('Mia');
+    });
   });
 
   it('un errore del poll di stato non propaga e riporta lo stato a sconosciuto', () => {

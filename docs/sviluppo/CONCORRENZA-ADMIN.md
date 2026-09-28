@@ -5,7 +5,7 @@ punto 7, l'unico finding di quel documento rimasto aperto). Questo documento svi
 spiega perché il fix suggerito dalla review non è applicabile così com'è, e cataloga le soluzioni
 possibili per il giorno in cui servissero.
 
-## Stato attuale (27 settembre 2026)
+## Stato attuale (28 settembre 2026)
 
 Il perimetro d'uso è cambiato: con la decisione D01 del [piano agent/API](../progetto/PIANO-PILOTAGGIO-DA-AGENT.md)
 GUI e agent possono modificare lo stesso workspace in contemporanea. La **soluzione 1** descritta
@@ -20,8 +20,13 @@ Garanzie e limiti, per non leggerle più ampie di quanto sono:
   più; letture, traffico e push delle console SSE/WS non attendono la coda;
 - **non garantito:** scritture fatte da editor, dal watcher o da un altro processo sullo stesso
   workspace; nessuna coda li governa;
-- **bozze stantie:** la coda non impedisce che un salvataggio basato su una lettura vecchia
-  sovrascriva una modifica più recente. Le revisioni attese che lo rilevano arrivano con S4;
+- **bozze stantie:** descrizione e varianti accettano `expectedRevision` (per l'upload l'header
+  `X-Mockxy-Expected-Revision`), verificata dentro la coda rileggendo il contenuto: un salvataggio
+  basato su una lettura vecchia risponde `409 REVISION_CONFLICT` senza scrivere
+  (`src/admin/revision-tokens.js`). La GUI salva sempre da bozza con la precondizione, sul
+  bersaglio fissato all'apertura, e al conflitto conserva la bozza; lo skill la usa nel flusso di
+  modifica. Un client che la omette conserva il comportamento precedente, e una scrittura esterna
+  fatta dopo il controllo resta fuori dalla coda;
 - **azioni immediate** (toggle, selezione, riordini): vince l'ultima, per scelta dichiarata;
 - **letture:** il dettaglio di un endpoint non è una fotografia atomica. Un file mancante durante
   la lettura provoca un solo secondo tentativo completo, poi `409 READ_INCONSISTENT`

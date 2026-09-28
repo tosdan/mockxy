@@ -179,6 +179,14 @@ esistenti restano compatibili: nessuna migrazione richiesta.
   creata senza cambiare la risposta servita né lo scenario in corso. Nel Monitor, aggiungendo una
   risposta catturata a un endpoint esistente, si può scegliere «Aggiungi senza attivare». Le
   varianti SSE e WS, che nascono senza form, restano attivate alla creazione.
+- **Bozze protette dalle modifiche concorrenti:** la descrizione, il form di una variante e il
+  dialog di una sequenza salvano sulla risorsa aperta, con la revisione letta all'apertura. Se
+  intanto un agente o un altro client attiva un'altra variante, la bozza resta sulla sua. Se la
+  risorsa è cambiata, il salvataggio non la sovrascrive: la bozza resta com'è e un pannello
+  permette di confrontarla con la versione attuale, di ricaricarla al posto della bozza (con
+  conferma se modificata) o di salvare la propria versione dopo averla vista. Se la risorsa non
+  esiste più, il testo resta da copiare e il salvataggio è disabilitato. Le azioni immediate
+  (status, delay e template in linea, attivazione, selezione) non cambiano.
 
 ---
 
