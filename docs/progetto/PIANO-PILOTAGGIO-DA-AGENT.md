@@ -41,7 +41,7 @@ Ogni passo è un insieme di modifiche verificabile e può essere suddiviso in co
 |---|---|---|---|---|
 | S0 | Correggere default, namespace admin e guardia del contratto | Nessuna | Completato | [#20](https://github.com/tosdan/mockxy/pull/20) integrata; [mockxy-skills#3](https://github.com/tosdan/mockxy-skills/pull/3) integrata |
 | S1 | Serializzare mutazioni e rendere affidabili esiti/reload | S0 | Completato | [#21](https://github.com/tosdan/mockxy/pull/21), [#22](https://github.com/tosdan/mockxy/pull/22) e [#23](https://github.com/tosdan/mockxy/pull/23) integrate; [mockxy-skills#4](https://github.com/tosdan/mockxy-skills/pull/4) integrata |
-| S2 | Esporre identità, configurazione effettiva e diagnostica | S1 per gli esiti coerenti | Da fare | — |
+| S2 | Esporre identità, configurazione effettiva e diagnostica | S1 per gli esiti coerenti | In corso | Prima PR in preparazione |
 | S3 | Leggere/preparare varianti inattive e preservare stream | S1 | Da fare | — |
 | S4 | Proteggere bozze e sincronizzare GUI senza perderle | S1–S3; bozza stabile prima del polling del dettaglio | Da fare | — |
 | S5 | Rendere il Monitor interrogabile e la perdita di traffico rilevabile | S2 per l'identità runtime | Da fare | — |
@@ -151,6 +151,13 @@ Il primo GET distingue valori di avvio, effettivi e override runtime (§13, C2/C
 **Distribuzione dello spec:** spostare la fonte canonica da `docs/admin-api.openapi.yaml` a `src/admin/admin-api.openapi.yaml` durante S2. È un percorso pianificato, non ancora esistente. [.dockerignore](../../.dockerignore) esclude `docs/`, mentre Docker include `src/` ed Electron copia `../src`: la collocazione proposta copre entrambi i pacchetti. Risolvere il file rispetto al modulo server, senza dipendere dalla cwd o dal checkout. Mantenere una sola fonte modificabile; aggiornare insieme lo script [validate-admin-openapi.js](../../scripts/validate-admin-openapi.js), i test di parità, i link delle guide IT/EN, le reference degli skill e gli esempi correnti dell'analisi. I documenti storici possono conservare il vecchio percorso qualificato come storico; non mantenere una seconda copia in `docs/`: aggiornare i collegamenti alla fonte in `src/`.
 
 **Accettazione:** handler invalido all'avvio e dopo reload visibile via API; caso con rotta mantenuta e caso senza rotta; errore risolto; nuovo `runtimeId` dopo restart; identità corretta anche con più runtime; spec leggibile sia nel layout Electron sia nell'immagine Docker di sviluppo senza checkout o `docs/`, uguale alla fonte validata. Nella standalone il file può essere presente, ma la rotta deve restare disabilitata con l'admin. La GUI userà questa diagnostica in S4.
+
+> **Avanzamento S2 — aggiornato il 2026-09-28**
+>
+> - **Consegnato / restante:** S2 è diviso in tre PR, così ogni rotta nasce con il contratto completo. La prima sposta la fonte canonica in `src/admin/admin-api.openapi.yaml` (validatore, test di parità, link delle guide e dell'analisi aggiornati; i documenti storici conservano il vecchio percorso) e aggiunge `GET /openapi.yaml`, servito dal file risolto rispetto al modulo, e `GET /config` con le nove chiavi di C8, `startup` uguale a `effective`, `overrides` vuoto e `persisted: false`; introduce l'identità del runtime (`runtimeId`, `startedAt`). Restano: `GET /runtime/status` con la revisione `diagnostics` (seconda PR) e `GET /info` con identità del workspace, listener, watcher e revisioni, compresa la cache del catalogo (terza PR), più l'allineamento dello skill.
+> - **Verifiche:** nuovi test del contratto del runtime (9): configurazione con e senza backend, `runtimeId` nuovo a ogni avvio, spec servita identica alla fonte e indipendente dalla directory corrente, rotte spente con l'admin, spec inclusa sia nell'immagine Docker di sviluppo sia nel pacchetto Electron. Senza il cablaggio delle rotte ne falliscono 5; passano i 4 su distribuzione e admin spenta.
+> - **Impedimenti:** nessuno.
+> - **Modifiche al contratto:** nessuna.
 
 ## 6. S3 — Varianti inattive e stream preservati
 

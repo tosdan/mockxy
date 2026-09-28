@@ -165,6 +165,13 @@ client e polling, eseguire il reset, poi avviare lo scenario.
 | `GET /server` | `{ serverEnabled, proxyAll }` — [le tre modalità](CONTROLLI.md) |
 | `PATCH /server` | aggiornamento parziale dei due booleani |
 
+## Runtime
+
+| Metodo e percorso | Cosa fa |
+|---|---|
+| `GET /config` | configurazione effettiva in sola lettura: `{ runtimeId, startup, effective, overrides, persisted }`, con le sole nove chiavi modificabili a runtime nelle prossime versioni (`backendUrl` è `null` senza backend). Nessun'altra variabile d'ambiente. Per ora `effective` coincide con `startup` e `overrides` è `{}`; `runtimeId` cambia a ogni avvio |
+| `GET /openapi.yaml` | il [contratto](#la-descrizione-leggibile-dalle-macchine) della versione in esecuzione, come `application/yaml` |
+
 ## Esempi
 
 ```bash
@@ -206,9 +213,12 @@ prudenziale: l'anteprima informa, non abilita né blocca il commit. La copia non
 ## La descrizione leggibile dalle macchine
 
 Per la struttura esatta di ogni body di richiesta e risposta esiste una descrizione OpenAPI 3.1
-di questa API: [`docs/admin-api.openapi.yaml`](../admin-api.openapi.yaml). Documenta rotta per
-rotta gli schemi, gli status e le varianti di payload, e si può caricare in un generatore di
-client, in uno strumento per le richieste, o darla a un agente che deve pilotare Mockxy da solo.
+di questa API: [`src/admin/admin-api.openapi.yaml`](../../src/admin/admin-api.openapi.yaml). Documenta
+rotta per rotta gli schemi, gli status e le varianti di payload, e si può caricare in un
+generatore di client, in uno strumento per le richieste, o darla a un agente che deve pilotare
+Mockxy da solo. Un runtime in esecuzione la serve così com'è da `GET /_admin/api/openapi.yaml`,
+anche dall'app desktop e dall'immagine Docker di sviluppo: è il contratto della versione che
+risponde, con le stesse regole di abilitazione delle altre rotte admin.
 
 La seconda fonte affidabile resta l'interfaccia stessa: ogni sua azione è una chiamata a queste
 rotte, osservabile dagli strumenti di sviluppo del browser.

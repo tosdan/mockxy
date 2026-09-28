@@ -469,9 +469,9 @@ Le priorità esprimono l'ordine dei casi d'uso; i passi eseguibili sono nel pian
 
 ### Distribuzione, guide e note di rilascio
 
-Attualmente il contratto è in `docs/admin-api.openapi.yaml`: `.dockerignore` esclude `docs/`
-e il pacchetto Electron copia il motore da `src/`. S2 sposterà la fonte canonica in
-`src/admin/admin-api.openapi.yaml`, aggiornando validatore, test e link correnti. La rotta dello
+Fino a S2 il contratto era in `docs/admin-api.openapi.yaml` (percorso storico): `.dockerignore`
+esclude `docs/` e il pacchetto Electron copia il motore da `src/`. S2 ha spostato la fonte
+canonica in `src/admin/admin-api.openapi.yaml`, aggiornando validatore, test e link correnti. La rotta dello
 spec resta sotto la stessa abilitazione admin; la standalone non deve esporla quando l'admin è
 spenta. Serve una sola fonte modificabile e una prova sia del layout Electron sia di Docker.
 
@@ -507,7 +507,8 @@ Finché le correzioni non arrivano:
    oggi bisogna conoscere l'istanza configurata; il futuro `/info` renderà la verifica esplicita.
    Se risponde `404 Admin API disabled`, riavviare con
    `ADMIN_API_ENABLED=true` (5.1).
-3. **Contratto**: `docs/admin-api.openapi.yaml` nel repository.
+3. **Contratto**: `src/admin/admin-api.openapi.yaml` nel repository, oppure `GET /_admin/api/openapi.yaml`
+   dal runtime in esecuzione (da S2).
 4. **Accortezze**:
    - controllare metodo e percorso: una rotta sbagliata non dà 404 ma può arrivare al backend
      (5.2);
@@ -550,7 +551,7 @@ test("ogni rotta del router admin è documentata nell'OpenAPI e viceversa", () =
     .flatMap((layer) => Object.keys(layer.route.methods)
       .map((method) => normalize(`${method.toUpperCase()} ${layer.route.path}`)));
 
-  const specPath = path.join(__dirname, "..", "docs", "admin-api.openapi.yaml");
+  const specPath = path.join(__dirname, "..", "src", "admin", "admin-api.openapi.yaml");
   const spec = yaml.safeLoad(fs.readFileSync(specPath, "utf8"));
   const operations = Object.entries(spec.paths).flatMap(([route, item]) =>
     METHODS.filter((method) => item[method])

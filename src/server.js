@@ -19,6 +19,7 @@ const { RequestMonitorStore } = require("./monitoring/request-monitor");
 const { ServerStateStore } = require("./server-state");
 const { MonitorDumpWriter } = require("./monitoring/monitor-dump");
 const { createUpgradeHandler } = require("./proxy/upgrade-proxy");
+const { createRuntimeIdentity } = require("./runtime-identity");
 
 // Reintegra nelle nuove route la versione precedente degli endpoint il cui file oggi non
 // carica: a caldo un errore su un singolo file non deve far sparire una route che funzionava
@@ -217,6 +218,7 @@ function startMockWatcher({ config, registry, proxyMiddlewareRegistry, logger, r
 const LOOPBACK_HOSTS = new Set(["127.0.0.1", "localhost", "::1"]);
 
 async function createServerRuntime({ configOverrides = {}, logger: extLogger } = {}) {
+  const runtimeIdentity = createRuntimeIdentity();
   const config = loadConfig(configOverrides);
   const logger = extLogger || createLogger(config.logLevel);
   // L'admin API scrive file ed esegue JavaScript in-process: aperta su un'interfaccia di rete
@@ -288,6 +290,7 @@ async function createServerRuntime({ configOverrides = {}, logger: extLogger } =
     registry,
     config,
     logger,
+    runtimeIdentity,
     proxyMiddlewareRegistry,
     reloadRuntime,
     requestMonitor,
@@ -323,6 +326,7 @@ async function createServerRuntime({ configOverrides = {}, logger: extLogger } =
     wsConnections,
     reloadRuntime,
     watcher,
+    runtimeIdentity,
   };
 }
 

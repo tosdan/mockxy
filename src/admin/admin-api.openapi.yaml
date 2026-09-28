@@ -2,7 +2,9 @@
 #
 # Hand-written from the route table in src/admin/admin-api.js and the operations it delegates to.
 # When a route changes, this file changes with it: it is the machine-readable twin of
-# docs/{it,en}/ADMIN-API.md, which stays the prose reference.
+# docs/{it,en}/ADMIN-API.md, which stays the prose reference. It lives next to the router because
+# the running engine serves it (GET /_admin/api/openapi.yaml) from every package that ships src/:
+# a checkout, the desktop app and the development Docker image.
 openapi: 3.1.0
 
 info:
@@ -133,6 +135,8 @@ tags:
     description: Runtime switches that decide whether mocks are used at all.
   - name: Shared runtime state
     description: Metadata and reset actions for named JSON resources shared by local handlers. Values are never exposed.
+  - name: Runtime
+    description: The running engine itself — its effective configuration and the contract of the version that answers.
 
 paths:
   # ───────────────────────────────── Catalog ─────────────────────────────────
@@ -1706,6 +1710,42 @@ paths:
         "200": { $ref: "#/components/responses/ServerState" }
         "400": { $ref: "#/components/responses/BadRequest" }
 
+  # ────────────────────────────────── Runtime ─────────────────────────────────
+  /config:
+    get:
+      tags: [Runtime]
+      operationId: getRuntimeConfig
+      summary: Effective configuration, read-only
+      description: |
+        The nine settings that a future version will let you change at runtime, as they were at
+        startup and as they are now. No other environment variable is exposed: the `/server`
+        switches and the monitor dump options stay on their own routes. Nothing here is
+        persisted (`persisted` is always `false`). In this version nothing can override them at
+        runtime, so `effective` equals `startup` and `overrides` is empty.
+      responses:
+        "200":
+          description: Effective configuration
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RuntimeConfigState" }
+
+  /openapi.yaml:
+    get:
+      tags: [Runtime]
+      operationId: getAdminOpenapi
+      summary: This contract, as shipped with the running engine
+      description: |
+        The OpenAPI description of the version that answers, served as is from the source that
+        ships with the engine (`src/admin/admin-api.openapi.yaml`) — in a checkout, the desktop
+        app and the development Docker image alike. Same enablement and access rules as every
+        other admin route.
+      responses:
+        "200":
+          description: The OpenAPI document
+          content:
+            application/yaml:
+              schema: { type: string }
+
 components:
   requestBodies:
     EmptyJsonObject:
@@ -1983,6 +2023,72 @@ components:
       example:
         error: Bad Request
         message: config.status must be an integer HTTP status code.
+
+    RuntimeConfig:
+      type: object
+      additionalProperties: false
+      required:
+        - backendUrl
+        - proxyFallbackEnabled
+        - corsEnabled
+        - delayAllRequests
+        - caseInsensitiveFilters
+        - adaptProxyCookies
+        - rewriteProxyRedirects
+        - globalDelayMs
+        - requestTimeoutMs
+      properties:
+        backendUrl:
+          type: [string, "null"]
+          description: Absolute HTTP/HTTPS URL of the real backend; `null` when none is configured.
+        proxyFallbackEnabled: { type: boolean }
+        corsEnabled: { type: boolean }
+        delayAllRequests: { type: boolean }
+        caseInsensitiveFilters: { type: boolean }
+        adaptProxyCookies: { type: boolean }
+        rewriteProxyRedirects: { type: boolean }
+        globalDelayMs: { type: integer, minimum: 0 }
+        requestTimeoutMs: { type: integer, minimum: 1 }
+    RuntimeConfigState:
+      type: object
+      required: [runtimeId, startup, effective, overrides, persisted]
+      properties:
+        runtimeId:
+          type: string
+          format: uuid
+          description: Identity of this start of the engine; a restart gets a new one.
+        startup: { $ref: "#/components/schemas/RuntimeConfig" }
+        effective: { $ref: "#/components/schemas/RuntimeConfig" }
+        overrides:
+          type: object
+          description: Keys changed at runtime. Always empty in this version.
+        persisted:
+          const: false
+          description: Runtime configuration is never written to disk.
+      example:
+        runtimeId: 7d9f1c4e-2b0a-4c7e-9f3a-5e8d2c1b4a60
+        startup:
+          backendUrl: http://localhost:8080
+          proxyFallbackEnabled: true
+          corsEnabled: true
+          delayAllRequests: false
+          caseInsensitiveFilters: true
+          adaptProxyCookies: true
+          rewriteProxyRedirects: true
+          globalDelayMs: 0
+          requestTimeoutMs: 15000
+        effective:
+          backendUrl: http://localhost:8080
+          proxyFallbackEnabled: true
+          corsEnabled: true
+          delayAllRequests: false
+          caseInsensitiveFilters: true
+          adaptProxyCookies: true
+          rewriteProxyRedirects: true
+          globalDelayMs: 0
+          requestTimeoutMs: 15000
+        overrides: {}
+        persisted: false
 
     HttpMethod:
       type: string
