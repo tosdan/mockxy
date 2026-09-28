@@ -151,6 +151,46 @@ describe("CatalogRevisionTracker", () => {
     }
   });
 
+  test("ogni file di un'osservazione ha il proprio ordine di lettura", async () => {
+    const first = at("items/GET.responses/001.response.json");
+    const second = at("items/GET.responses/002.response.json");
+    const tick = new Date(Math.floor(Date.now() / 1000) * 1000);
+    await fs.promises.utimes(second, tick, tick);
+    expect(await tracker.refresh()).toBe(1);
+    // L'osservazione di A e B resta sospesa sulla lettura di A.
+    const realReadFile = fs.promises.readFile.bind(fs.promises);
+    let resumeObservation;
+    let observationPaused;
+    const paused = new Promise((resolve) => {
+      observationPaused = resolve;
+    });
+    const spy = jest.spyOn(fs.promises, "readFile").mockImplementation(async (filePath, ...rest) => {
+      if (filePath === first && resumeObservation == null) {
+        await new Promise((resolve) => {
+          resumeObservation = resolve;
+          observationPaused();
+        });
+      }
+      return realReadFile(filePath, ...rest);
+    });
+    try {
+      const observation = tracker.observeFiles([first, second]);
+      await paused;
+      // Una scansione rilegge B, ancora nella versione vecchia, con un ordine successivo.
+      expect(await tracker.refresh({ invalidate: [second] })).toBe(1);
+      // B cambia a firma invariata; poi l'osservazione riprende e legge il B nuovo.
+      await fs.promises.writeFile(second, JSON.stringify({ type: "mock", status: 500, file: "assets/logo.png" }));
+      await fs.promises.utimes(second, tick, tick);
+      resumeObservation();
+
+      expect(await observation).toBe(2);
+      spy.mockRestore();
+      expect(await tracker.refresh()).toBe(2);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
   test("un'osservazione registra anche un file comparso fuori dalla cache", async () => {
     await write("items/GET.responses/003.response.json", JSON.stringify({ type: "mock", status: 204 }));
     await writeEndpoint(["001.response.json", "002.response.json", "003.response.json"]);

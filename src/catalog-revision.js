@@ -46,7 +46,6 @@ class CatalogRevisionTracker {
   // Se cambia la struttura (un file nuovo, riferimenti diversi) accoda una scansione, senza
   // attenderla.
   async observeFiles(filePaths) {
-    const seq = this.tick();
     const observations = [];
     for (const filePath of new Set(filePaths.map((candidate) => path.resolve(candidate)))) {
       let stats;
@@ -59,6 +58,8 @@ class CatalogRevisionTracker {
         continue;
       }
       const kind = this.files.get(filePath)?.kind ?? inferKind(filePath);
+      // Il numero si prende subito prima di leggere ciascun file: è l'ordine di quella lettura.
+      const seq = this.tick();
       const read = await readDigest(filePath, kind);
       if (!read.digest.startsWith("error:")) {
         observations.push({ filePath, kind, mtimeMs: stats.mtimeMs, size: stats.size, ...read, seq });
@@ -69,7 +70,7 @@ class CatalogRevisionTracker {
     let structureChanged = false;
     for (const observation of observations) {
       const current = this.files.get(observation.filePath);
-      if (current != null && current.seq > seq) {
+      if (current != null && current.seq > observation.seq) {
         continue;
       }
       if (current == null || !sameReferences(current.references, observation.references)) {
