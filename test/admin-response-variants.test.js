@@ -85,6 +85,19 @@ describe("varianti inattive", () => {
       expect((await readVariant("003.response.json")).body).toMatchObject({ selected: true, active: true });
     });
 
+    test("con la selezione illeggibile l'errore resta esplicito, invece di un active falso", async () => {
+      await selectSequence();
+      expect(await served()).toEqual({ step: 1 });
+      await fs.promises.writeFile(path.join(responsesDir(), "003.response.json"), "{ json invalido");
+
+      const response = await readVariant("001.response.json");
+
+      expect(response.status).toBe(400);
+      expect(response.body.message).toContain("Invalid JSON");
+      // Il runtime serve ancora la sequence caricata in precedenza.
+      expect(await served()).toEqual({ step: 2 });
+    });
+
     test("riporta il sorgente di un handler e i metadati di un asset, mai il contenuto binario", async () => {
       await create({ type: "handler", title: "Handler", select: false });
       await fs.promises.writeFile(path.join(responsesDir(), "003.file.png"), Buffer.from([1, 2, 3, 4]));
@@ -201,6 +214,25 @@ describe("varianti inattive", () => {
 
       expect(response.status).toBe(200);
       expect(response.body).toMatchObject({ updatedResponseFile: "002.response.json", selectedResponseFile: "001.response.json" });
+      expect(await served()).toEqual({ step: 1 });
+    });
+
+    test("aggiornare una variante inattiva che referenzia un asset assente è rifiutato e ripristinato", async () => {
+      await create({ type: "mock", title: "Da file", status: 200, body: {}, select: false });
+      const variantPath = path.join(responsesDir(), "002.response.json");
+      const broken = JSON.stringify({ type: "mock", title: "Da file", status: 200, headers: {}, delayMs: 0, file: "missing.bin" });
+      await fs.promises.writeFile(variantPath, broken);
+
+      const response = await request(app)
+        .put(`/_admin/api/mocks/${ID}/responses/002.response.json`)
+        .send({ title: "Rinominata" });
+
+      expect(response.status).toBe(400);
+      expect(response.body).toMatchObject({
+        message: "Response asset file not found: missing.bin.",
+        details: { code: "MUTATION_REJECTED", rollback: "restored" },
+      });
+      expect(await fs.promises.readFile(variantPath, "utf8")).toBe(broken);
       expect(await served()).toEqual({ step: 1 });
     });
 

@@ -948,8 +948,8 @@ paths:
         With `select: false` the variant is **prepared without being activated**: the selection,
         the sequence cursor and the handler memory stay as they were, so the current response and
         scenario do not change. It goes through the same validation as any write: schema, direct
-        source or asset, compilation, and step references and compatibility for a sequence (the
-        handler is not executed). A variant prepared this way is never part of the active
+        source or asset (a file-backed mock's asset must exist), compilation, and step references
+        and compatibility for a sequence (the handler is not executed). A variant prepared this way is never part of the active
         scenario; to change a step of the sequence in use without touching it, prepare a separate
         variant, and a separate sequence if needed.
 
@@ -1034,7 +1034,9 @@ paths:
 
         A variant no longer listed by the endpoint answers `404`, even if its file is still on
         disk. A file missing during the read follows the same bounded procedure as the endpoint
-        detail (`409 READ_INCONSISTENT`); other definition errors keep their explicit `400`.
+        detail (`409 READ_INCONSISTENT`); other definition errors keep their explicit `400` —
+        including those of the selected variant, which `active` depends on: the route never
+        guesses `active` when the selection cannot be read.
       responses:
         "200":
           description: The variant

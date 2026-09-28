@@ -537,6 +537,18 @@ async function validateSequenceGraph(endpointPath, endpoint, response) {
   }
 }
 
+// L'asset diretto di un mock servito da file deve esistere (§13 C3). Il reload non lo verifica per
+// una variante inattiva, che non carica: senza questo controllo una scrittura potrebbe lasciare
+// una variante preparata che fallirebbe solo all'attivazione.
+function assertResponseAssetExists(responseDir, response) {
+  if (response?.type !== "mock" || response.file == null) {
+    return;
+  }
+  if (!fs.existsSync(resolvePayloadPath(responseDir, response.file))) {
+    throw createAdminError(400, `Response asset file not found: ${response.file}.`);
+  }
+}
+
 // Verifica del reload per una mutazione su un singolo endpoint: nessun errore di caricamento su
 // quel file e, a seconda dello stato scritto, endpoint installato (abilitato) o assente
 // (disabilitato). Il fallimento globale del reload lo gestisce già commitWithRollback.
@@ -630,6 +642,7 @@ async function createAdminResponse(mocksDir, id, payload, reloadRuntime, scenari
 
       const validatedResponse = await readEndpointResponse(responseFilePath, nextEndpoint);
       await validateSequenceGraph(endpointPath, nextEndpoint, validatedResponse);
+      assertResponseAssetExists(responseDir, validatedResponse);
       if (nextResponse.type === "handler" || nextResponse.type === "middleware") {
         const sourcePath = resolvePayloadPath(responseDir, nextResponse.sourceFile);
         assertEndpointSourceIsValid(sourcePath, nextResponse.type);
@@ -792,6 +805,7 @@ async function updateAdminResponse(mocksDir, id, responseFileName, payload, relo
 
       const validatedResponse = await readEndpointResponse(responseFilePath, endpoint);
       await validateSequenceGraph(endpointPath, endpoint, validatedResponse);
+      assertResponseAssetExists(responseDir, validatedResponse);
       if (sourcePath != null) {
         assertEndpointSourceIsValid(sourcePath, nextResponse.type);
       }

@@ -205,17 +205,11 @@ async function buildAdminMockResponse(endpointPath, id, responseFileName) {
 }
 
 // Una variante non selezionata è attiva se la selezionata è una sequence che la usa come step.
-// Una selezionata illeggibile non ha step: il file mancante segue invece la procedura C4.
+// Una selezionata illeggibile non permette di dirlo: il suo errore resta esplicito (400), e un
+// file mancante segue la procedura C4. Rispondere `active: false` sarebbe un'indicazione falsa,
+// perché il runtime può ancora servire la sequence caricata in precedenza.
 async function isStepOfSelectedSequence(endpointPath, responseFileName) {
-  let selected;
-  try {
-    selected = (await readEndpointSelectedResponse(endpointPath)).response;
-  } catch (error) {
-    if (isMissingFileError(error)) {
-      throw error;
-    }
-    return false;
-  }
+  const selected = (await readEndpointSelectedResponse(endpointPath)).response;
   return selected.type === "sequence"
     && (selected.steps || []).some((step) => step?.response === responseFileName);
 }
