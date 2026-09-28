@@ -3,6 +3,7 @@ const path = require("path");
 const express = require("express");
 const {
   getAdminMockDetail,
+  getAdminMockResponse,
   listAdminChildOrder,
   listAdminCollections,
   listAdminMocks,
@@ -53,6 +54,8 @@ const { describeRuntimeConfig, pickRuntimeConfig } = require("./runtime-config")
 const { ENGINE_VERSION, ObservedRevision, describeWorkspace } = require("../runtime-info");
 const { canonicalPath } = require("../utils/canonical-path");
 const { trackWrites } = require("../utils/write-tracking");
+const { getEndpointResponsesDir } = require("./endpoint-files");
+const { resolveAdminFilePath } = require("./mock-ids");
 const {
   listDumpFiles,
   readDumpPage,
@@ -130,6 +133,19 @@ function detailReadPaths(detail) {
     ...(responsesDir == null ? [] : (detail.responses || []).map((response) => path.join(responsesDir, response.fileName))),
     detail.sourceFilePath,
   ].filter((filePath) => typeof filePath === "string" && filePath !== "");
+}
+
+// File del catalogo di cui GET /mocks/:id/responses/:file ha letto il contenuto: definizione,
+// variante e sorgente diretto.
+function variantReadPaths(mocksDir, variant) {
+  const endpointPath = resolveAdminFilePath(mocksDir, variant.id);
+  const responsesDir = getEndpointResponsesDir(endpointPath);
+  const sourceFile = variant.source != null ? variant.response?.sourceFile : null;
+  return [
+    endpointPath,
+    path.join(responsesDir, variant.responseFile),
+    ...(typeof sourceFile === "string" ? [path.join(responsesDir, sourceFile)] : []),
+  ];
 }
 
 function markParsedJsonBodyLength(req, _res, buffer) {
@@ -645,6 +661,13 @@ function createAdminApiRouter({ config, runtimeIdentity, runtimeStatus, catalogR
     );
     sendJson(res, 201, detail);
   }));
+
+  // Una variante per filename, attiva o no, senza cambiare selezione né scenario (§13 C3).
+  router.get("/mocks/:id/responses/:responseFileName", async (req, res) => {
+    const variant = await getAdminMockResponse(config.mocksDir, req.params.id, req.params.responseFileName);
+    await catalogRevision?.observeFiles(variantReadPaths(config.mocksDir, variant)).catch(() => {});
+    sendJson(res, 200, variant);
+  });
 
   router.put("/mocks/:id/responses/:responseFileName", mutation(async (req, res) => {
     const detail = await updateAdminResponse(

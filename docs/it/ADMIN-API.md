@@ -90,8 +90,9 @@ resettano lo stato tra i test, pipeline che importano una specifica aggiornata.
 
 | Metodo e percorso | Cosa fa |
 |---|---|
-| `POST /mocks/:id/responses` | aggiunge e seleziona una variante `mock`, `handler`, `middleware`, `sse`, `ws` o `sequence`; il clone generico vale anche per sequence |
-| `PUT /mocks/:id/responses/:file` | aggiorna una variante; per sequence modifica titolo/step/fine/reset e valida tutto il grafo |
+| `GET /mocks/:id/responses/:file` | una variante per filename, selezionata o no: `{ id, responseFile, selected, active, response, source, fileInfo }`, con il sorgente di handler e middleware e i metadati (`name`, `size`) dell'asset di un mock servito da file, mai il contenuto binario. `active` dice se è la selezionata o uno step della sequence selezionata: va controllato prima di considerare innocua una modifica; se la variante selezionata è illeggibile la risposta è `400`, non un `active` inventato. Leggerla non cambia selezione né scenario; una variante non più elencata è `404`, un file mancante segue la procedura `READ_INCONSISTENT` del dettaglio |
+| `POST /mocks/:id/responses` | aggiunge e seleziona una variante `mock`, `handler`, `middleware`, `sse`, `ws` o `sequence`; il clone generico vale anche per sequence. Con `select: false` la prepara senza attivarla: selezione, cursore della sequence e memoria handler non cambiano, la validazione è la stessa. La risposta riporta `createdResponseFile` |
+| `PUT /mocks/:id/responses/:file` | aggiorna una variante; per sequence modifica titolo/step/fine/reset e valida tutto il grafo. La risposta riporta `updatedResponseFile`, indipendente dalla variante selezionata del dettaglio |
 | `PUT /mocks/:id/responses/:file/file` | carica i byte grezzi che rendono la variante [file-backed](RESPONSE.md) — body `application/octet-stream` (fino a 12 MB), MIME e nome in query (`?contentType=…&filename=…`) |
 | `DELETE /mocks/:id/responses/:file` | elimina una variante; risponde `409` con `details.referencedBy` se è usata da una sequence |
 
