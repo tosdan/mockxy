@@ -982,6 +982,9 @@ function createApp({
   wsConnections,
   runtimeIdentity = createRuntimeIdentity(),
   runtimeStatus,
+  catalogRevision,
+  watcherStatus,
+  listener,
 }) {
   if (sharedStates == null || typeof sharedStates.createRequestFacade !== "function") {
     throw new TypeError("createApp requires an explicitly injected sharedStates store");
@@ -993,7 +996,7 @@ function createApp({
   const dataFileReader = createDataFileReader(config?.filesDir);
 
   if (config?.adminApiEnabled !== false) {
-    app.use("/_admin/api", createAdminHostGuard(config), createAdminApiRouter({ config, runtimeIdentity, runtimeStatus, registry, proxyMiddlewareRegistry, reloadRuntime, requestMonitor, serverState, monitorDump, sequenceStates, handlerStates, sharedStates, sseConnections, wsConnections }));
+    app.use("/_admin/api", createAdminHostGuard(config), createAdminApiRouter({ config, runtimeIdentity, runtimeStatus, catalogRevision, watcherStatus, listener, registry, proxyMiddlewareRegistry, reloadRuntime, requestMonitor, serverState, monitorDump, sequenceStates, handlerStates, sharedStates, sseConnections, wsConnections }));
   } else {
     app.use("/_admin/api", sendAdminApiDisabled);
   }

@@ -50,6 +50,8 @@ const {
 } = require("./admin-data-files");
 const { setNoCacheHeaders } = require("../utils/cache");
 const { describeRuntimeConfig, pickRuntimeConfig } = require("./runtime-config");
+const { ENGINE_VERSION, ObservedRevision, describeWorkspace } = require("../runtime-info");
+const { canonicalPath } = require("../utils/canonical-path");
 const {
   listDumpFiles,
   readDumpPage,
@@ -74,11 +76,7 @@ function canonicalWorkspaceKey(mocksDir) {
   if (typeof mocksDir !== "string" || mocksDir === "") {
     return "";
   }
-  try {
-    return fs.realpathSync.native(mocksDir);
-  } catch {
-    return path.resolve(mocksDir);
-  }
+  return canonicalPath(mocksDir);
 }
 
 function runInMutationQueue(key, task) {
@@ -149,7 +147,7 @@ function sendJson(res, status, payload) {
   res.status(status).json(payload);
 }
 
-function createAdminApiRouter({ config, runtimeIdentity, runtimeStatus, registry, proxyMiddlewareRegistry, reloadRuntime, requestMonitor, serverState, monitorDump, sequenceStates, handlerStates, sharedStates, sseConnections, wsConnections }) {
+function createAdminApiRouter({ config, runtimeIdentity, runtimeStatus, catalogRevision, watcherStatus, listener, registry, proxyMiddlewareRegistry, reloadRuntime, requestMonitor, serverState, monitorDump, sequenceStates, handlerStates, sharedStates, sseConnections, wsConnections }) {
   const router = express.Router();
   // Store dello scenario runtime, passati alle mutazioni che possono invalidarlo: il reload da
   // solo non basta, perche' aggrega piu' scritture in un giro unico (vedi invalidateScenario).
@@ -161,10 +159,30 @@ function createAdminApiRouter({ config, runtimeIdentity, runtimeStatus, registry
   const workspaceKey = canonicalWorkspaceKey(config?.mocksDir);
   // Esegue il gestore di una rotta di mutazione nel turno del workspace, dopo parsing e limiti
   // del body (già applicati dai middleware della rotta).
+  // Chiude il turno riallineando la revisione del catalogo: la scansione rilegge per forza i
+  // file scritti durante la mutazione, anche se dimensione e mtime non sono cambiati (§13 C2).
   const mutation = (handler) => (req, res) =>
-    runInMutationQueue(workspaceKey, () => handler(req, res)).catch((error) => {
+    runInMutationQueue(workspaceKey, async () => {
+      const startedAt = Date.now();
+      try {
+        return await handler(req, res);
+      } finally {
+        await catalogRevision?.refresh({ writtenSince: startedAt }).catch(() => {});
+      }
+    }).catch((error) => {
       throw markRejectedBeforeWriting(error);
     });
+  // Identità del workspace (calcolata alla prima lettura: i percorsi sono fissi per il runtime)
+  // e revisioni degli stati configurabili, per GET /info.
+  let workspace = null;
+  const serverRevision = new ObservedRevision(() => JSON.stringify(serverState?.getState() ?? null));
+  const dumpRevision = new ObservedRevision(() => JSON.stringify(monitorDump == null ? null : {
+    enabled: monitorDump.enabled,
+    intervalMs: monitorDump.intervalMs,
+    threshold: monitorDump.threshold,
+    maxFileBytes: monitorDump.maxFileBytes,
+    maxTotalBytes: monitorDump.maxTotalBytes,
+  }));
 
   router.use(express.json({ limit: "2mb", verify: markParsedJsonBodyLength }));
 
@@ -178,6 +196,31 @@ function createAdminApiRouter({ config, runtimeIdentity, runtimeStatus, registry
   // Configurazione effettiva in sola lettura: le nove chiavi di C8, senza altre variabili d'ambiente.
   router.get("/config", (_req, res) => {
     sendJson(res, 200, describeRuntimeConfig({ runtimeId: runtimeIdentity?.runtimeId ?? null, startup: startupConfig, config }));
+  });
+
+  // Identità del runtime e del workspace, indirizzo, watcher e revisioni leggere delle risorse
+  // osservabili (§13 C2). Non avvia scansioni: le revisioni si aggiornano con le operazioni, e
+  // qui si attendono soltanto quelle già in corso.
+  router.get("/info", async (_req, res) => {
+    const catalog = catalogRevision ? await catalogRevision.settled() : 1;
+    sendJson(res, 200, {
+      version: ENGINE_VERSION,
+      runtimeId: runtimeIdentity?.runtimeId ?? null,
+      startedAt: runtimeIdentity?.startedAt ?? null,
+      workspace: (workspace ??= describeWorkspace(config ?? {})),
+      listener: listener?.address ?? null,
+      watcher: watcherStatus == null
+        ? { state: "disabled", polling: false, lastError: null }
+        : { state: watcherStatus.state, polling: watcherStatus.polling, lastError: watcherStatus.lastError },
+      revisions: {
+        catalog,
+        server: serverRevision.observe(),
+        dump: dumpRevision.observe(),
+        diagnostics: runtimeStatus?.revision ?? 1,
+        // Nessuna configurazione modificabile a runtime prima di S8.
+        config: 1,
+      },
+    });
   });
 
   // Esito dell'ultimo tentativo di caricamento ed errori per file del registro installato: 200
@@ -254,6 +297,7 @@ function createAdminApiRouter({ config, runtimeIdentity, runtimeStatus, registry
     } else if (body.enabled === false) {
       await monitorDump.stop();
     }
+    dumpRevision.observe();
     sendJson(res, 200, monitorDump.getStatus());
   }));
 
@@ -308,7 +352,9 @@ function createAdminApiRouter({ config, runtimeIdentity, runtimeStatus, registry
     if ('proxyAll' in body && typeof body.proxyAll !== 'boolean') {
       throw createAdminError(400, 'proxyAll must be a boolean.');
     }
-    sendJson(res, 200, serverState ? serverState.setState(body) : DEFAULT_SERVER_STATE);
+    const state = serverState ? serverState.setState(body) : DEFAULT_SERVER_STATE;
+    serverRevision.observe();
+    sendJson(res, 200, state);
   }));
 
   // Runtime shared state is intentionally metadata-only: values remain private to handlers.
@@ -348,6 +394,8 @@ function createAdminApiRouter({ config, runtimeIdentity, runtimeStatus, registry
     const collections = await listAdminCollections(config.mocksDir, items);
     const childOrder = await listAdminChildOrder(config.mocksDir, items);
     sendJson(res, 200, { items, collections, childOrder, loadErrors });
+    // Una lettura del catalogo è un'occasione per riallineare la revisione senza watcher.
+    catalogRevision?.refresh().catch(() => {});
   });
 
   // Risolve una richiesta concreta (es. una entry del monitor) nell'endpoint del catalogo

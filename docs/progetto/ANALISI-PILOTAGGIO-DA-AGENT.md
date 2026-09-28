@@ -502,9 +502,9 @@ Finché le correzioni non arrivano:
 1. **Trovare l'istanza**: nel server headless la porta è `PORT` (default 3000); nel desktop è
    quella in `<workspace>/.mockxy/settings.json`, che l'app aggiorna anche quando ripiega su una
    porta libera.
-2. **Verificare**: `curl -s http://127.0.0.1:<porta>/_admin/api/server` deve rispondere
-   `{"serverEnabled":…,"proxyAll":…}`. Questa risposta non certifica l'identità del workspace:
-   oggi bisogna conoscere l'istanza configurata; il futuro `/info` renderà la verifica esplicita.
+2. **Verificare**: `curl -s http://127.0.0.1:<porta>/_admin/api/info` riporta `workspace`
+   (percorsi canonici e `id`) e `runtimeId` (da S2): confermano di parlare con l'istanza del
+   workspace giusto, e un `runtimeId` diverso rivela un riavvio.
    Se risponde `404 Admin API disabled`, riavviare con
    `ADMIN_API_ENABLED=true` (5.1).
 3. **Contratto**: `src/admin/admin-api.openapi.yaml` nel repository, oppure `GET /_admin/api/openapi.yaml`

@@ -33,6 +33,7 @@ describe("desktop-server (avvio del motore per l'app desktop)", () => {
     };
 
     const result = await startDesktopServer({
+      workspaceRoot: "/ws",
       mocksDir: "/ws/mocks",
       uiDistDir: "/ui/dist",
       monitorDumpDir: "/ws/.local/dump",
@@ -42,6 +43,7 @@ describe("desktop-server (avvio del motore per l'app desktop)", () => {
     expect(captured.configOverrides).toEqual(
       expect.objectContaining({
         host: "127.0.0.1",
+        workspaceRoot: "/ws",
         mocksDir: "/ws/mocks",
         uiDistDir: "/ui/dist",
         monitorDumpDir: "/ws/.local/dump",

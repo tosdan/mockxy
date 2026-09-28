@@ -68,6 +68,7 @@ function isPortFree(port, host = "127.0.0.1") {
 // dell'app desktop: in pacchetto lo stdout del motore non lo vede nessuno).
 // startServerFn è iniettabile per i test.
 async function startDesktopServer({
+  workspaceRoot,
   mocksDir,
   filesDir,
   uiDistDir,
@@ -106,6 +107,7 @@ async function startDesktopServer({
       port: resolvedPort,
       // Solo i due valori noti sono ammessi a monte (main.js); qui il fallback resta loopback.
       host: host === "0.0.0.0" ? "0.0.0.0" : "127.0.0.1",
+      workspaceRoot,
       mocksDir,
       filesDir,
       uiDistDir,

@@ -21,6 +21,7 @@ const { MonitorDumpWriter } = require("./monitoring/monitor-dump");
 const { createUpgradeHandler } = require("./proxy/upgrade-proxy");
 const { createRuntimeIdentity } = require("./runtime-identity");
 const { RELOAD_REASONS, RuntimeStatusStore } = require("./runtime-status");
+const { CatalogRevisionTracker } = require("./catalog-revision");
 
 // Reintegra nelle nuove route la versione precedente degli endpoint il cui file oggi non
 // carica: a caldo un errore su un singolo file non deve far sparire una route che funzionava
@@ -68,7 +69,7 @@ function collectInstalledDefinitions(routeGroups) {
   return installed;
 }
 
-function createReloadHandler({ mocksDir, registry, proxyMiddlewareRegistry, logger, handlerStates, sseConnections, wsConnections, runtimeStatus }) {
+function createReloadHandler({ mocksDir, registry, proxyMiddlewareRegistry, logger, handlerStates, sseConnections, wsConnections, runtimeStatus, catalogRevision }) {
   let drainPromise = null;
   let queuedWaiters = [];
 
@@ -84,6 +85,12 @@ function createReloadHandler({ mocksDir, registry, proxyMiddlewareRegistry, logg
       outcome,
       registries: [registry, proxyMiddlewareRegistry],
     });
+    // Ogni reload segue una modifica del workspace: la revisione del catalogo va riallineata.
+    try {
+      await catalogRevision?.refresh();
+    } catch (error) {
+      logger.warn("Catalog revision scan failed.", { error: error.message });
+    }
     return outcome;
   };
 
@@ -196,7 +203,8 @@ function resolveCanonicalWatchPath(watchPath) {
   }
 }
 
-function startMockWatcher({ config, registry, proxyMiddlewareRegistry, logger, reloadRuntime }) {
+// `watcherStatus`, se passato, riporta lo stato del watcher per GET /info (§13 C2).
+function startMockWatcher({ config, registry, proxyMiddlewareRegistry, logger, reloadRuntime, watcherStatus }) {
   if (!config.watchEnabled) {
     return null;
   }
@@ -225,8 +233,17 @@ function startMockWatcher({ config, registry, proxyMiddlewareRegistry, logger, r
   watcher.on("unlink", reloadFromWatcher);
   watcher.on("unlinkDir", reloadFromWatcher);
   watcher.on("addDir", reloadFromWatcher);
+  watcher.on("ready", () => {
+    if (watcherStatus != null && watcherStatus.state === "starting") {
+      watcherStatus.state = "ready";
+    }
+  });
   watcher.on("error", (error) => {
     logger.error("Mock watcher error.", { error: error.message });
+    if (watcherStatus != null) {
+      watcherStatus.state = "error";
+      watcherStatus.lastError = error.message;
+    }
   });
 
   logger.info("Mock watch enabled.", {
@@ -257,6 +274,14 @@ async function createServerRuntime({ configOverrides = {}, logger: extLogger } =
     );
   }
   const runtimeStatus = new RuntimeStatusStore({ runtimeId: runtimeIdentity.runtimeId, mocksDir: config.mocksDir });
+  const catalogRevision = new CatalogRevisionTracker({ mocksDir: config.mocksDir });
+  // Stato del watcher e indirizzo realmente in ascolto, riportati da GET /info.
+  const watcherStatus = {
+    state: config.watchEnabled ? "starting" : "disabled",
+    polling: config.watchEnabled ? config.watchUsePolling === true : false,
+    lastError: null,
+  };
+  const listener = { address: null };
   const startupStartedAt = new Date().toISOString();
   const { mockRouteGroups, handlerRouteGroups, proxyMiddlewareRouteGroups, sequenceRouteGroups, sseRouteGroups, wsRouteGroups, loadErrors } =
     await loadEndpointRouteGroups(config.mocksDir);
@@ -298,6 +323,10 @@ async function createServerRuntime({ configOverrides = {}, logger: extLogger } =
     outcome: { applied: true, loadErrors, fatalError: null },
     registries: [registry, proxyMiddlewareRegistry],
   });
+  // La prima scansione fissa la revisione 1 del catalogo prima di servire qualunque richiesta:
+  // calcolata più tardi, assorbirebbe nella base una modifica esterna successiva all'avvio,
+  // lasciando alla revisione 1 un client che aveva già letto il catalogo precedente.
+  await catalogRevision.refresh();
   const requestMonitor = new RequestMonitorStore(undefined, logger);
   const serverState = new ServerStateStore();
   const monitorDump = new MonitorDumpWriter({
@@ -317,6 +346,7 @@ async function createServerRuntime({ configOverrides = {}, logger: extLogger } =
     sseConnections,
     wsConnections,
     runtimeStatus,
+    catalogRevision,
   });
   const app = createApp({
     registry,
@@ -324,6 +354,9 @@ async function createServerRuntime({ configOverrides = {}, logger: extLogger } =
     logger,
     runtimeIdentity,
     runtimeStatus,
+    catalogRevision,
+    watcherStatus,
+    listener,
     proxyMiddlewareRegistry,
     reloadRuntime,
     requestMonitor,
@@ -341,6 +374,7 @@ async function createServerRuntime({ configOverrides = {}, logger: extLogger } =
     proxyMiddlewareRegistry,
     logger,
     reloadRuntime,
+    watcherStatus,
   });
 
   return {
@@ -361,6 +395,9 @@ async function createServerRuntime({ configOverrides = {}, logger: extLogger } =
     watcher,
     runtimeIdentity,
     runtimeStatus,
+    catalogRevision,
+    watcherStatus,
+    listener,
   };
 }
 
@@ -420,6 +457,9 @@ async function startServer(options = {}) {
     server.once("error", handleError);
     server.once("listening", handleListening);
   });
+  // L'indirizzo realmente in ascolto, anche quando la porta richiesta era 0.
+  const address = server.address();
+  runtime.listener.address = address && typeof address === "object" ? { host: address.address, port: address.port } : null;
 
   const performShutdown = async () => {
     // Il runtime spento non deve restare agganciato al processo: senza questa rimozione ogni
