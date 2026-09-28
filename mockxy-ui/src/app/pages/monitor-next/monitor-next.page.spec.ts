@@ -275,6 +275,23 @@ describe('MonitorNextPage', () => {
     expect(navSpy).toHaveBeenCalledWith(['/mocks'], { queryParams: { m: 'GET', p: '/api/users/42' } });
   });
 
+  it('«Aggiungi senza attivare» conserva la response catturata senza cambiare quella servita', () => {
+    apiStub.createMock.mockClear();
+    apiStub.createResponse.mockClear();
+    apiStub.createMock.mockReturnValue(
+      throwError(() => ({ status: 409, error: { details: { existingMockId: 'endpoint-esistente' } } })) as never,
+    );
+    apiStub.createResponse.mockReturnValue(of({ id: 'endpoint-esistente', method: 'GET', path: '/api/users/42' }) as never);
+
+    const { c } = create();
+    c.createMockFromEntry(entry({ id: 'k', method: 'GET', status: 200, source: 'backend', originalUrl: '/api/users/42', responseHeaders: { 'content-type': 'application/json' }, responseBody: '{"v":2}' }));
+    c.confirmAddResponseToExisting(false);
+
+    const [, payloadArg] = apiStub.createResponse.mock.calls[0];
+    expect(payloadArg).toMatchObject({ type: 'mock', body: { v: 2 }, select: false });
+    expect(c.toast.toasts().at(-1)).toMatchObject({ title: 'Variante aggiunta senza attivarla' });
+  });
+
   it('l\'annullo chiude il dialog senza aggiungere varianti', () => {
     apiStub.createMock.mockClear();
     apiStub.createResponse.mockClear();

@@ -278,7 +278,7 @@ export class MocksStore {
     this.runDetailMutation(sel.id, this.api.selectResponse(sel.id, { selectedResponseFile: fileName }));
   }
 
-  /** Crea e seleziona una nuova variante sequence. */
+  /** Crea una nuova variante sequence: la seleziona, salvo `select: false` (preparazione). */
   createSequence(sequence: ResponseSequenceCreateRequest, onSuccess?: () => void): void {
     const sel = this.selected();
     if (!sel) {
@@ -307,13 +307,16 @@ export class MocksStore {
     this.runDetailMutation(sel.id, this.api.updateResponse(sel.id, fileName, payload), onSuccess);
   }
 
-  /** Crea una nuova response per l'endpoint selezionato e la rende selezionata. */
-  addResponse(payload: CreateResponseRequest, onSuccess?: () => void): void {
+  /**
+   * Crea una nuova response per l'endpoint selezionato: la rende selezionata, salvo
+   * `select: false` (preparazione senza attivazione). `onSuccess` riceve il filename creato.
+   */
+  addResponse(payload: CreateResponseRequest, onSuccess?: (createdResponseFile?: string) => void): void {
     const sel = this.selected();
     if (!sel) {
       return;
     }
-    this.runDetailMutation(sel.id, this.api.createResponse(sel.id, payload), onSuccess);
+    this.runDetailMutation(sel.id, this.api.createResponse(sel.id, payload), (result) => onSuccess?.(result.createdResponseFile));
   }
 
   /** Elimina la response selezionata dell'endpoint aperto. */
@@ -327,9 +330,10 @@ export class MocksStore {
   }
 
   /** Carica un file per la response selezionata (la rende file-backed). */
-  uploadResponseFile(file: File, onSuccess?: () => void): void {
+  uploadResponseFile(file: File, onSuccess?: () => void, targetResponseFile?: string): void {
     const sel = this.selected();
-    const fileName = sel?.selectedResponseFile;
+    // Di default la variante selezionata; dopo una creazione senza attivazione, quella creata.
+    const fileName = targetResponseFile ?? sel?.selectedResponseFile;
     if (!sel || !fileName) {
       return;
     }
@@ -771,10 +775,10 @@ export class MocksStore {
    * i controlli durante la scrittura; `onSuccess` scatta solo a salvataggio riuscito
    * (es. per uscire dalla modalita' modifica preservando le bozze in caso di errore).
    */
-  private runDetailMutation(
+  private runDetailMutation<T extends MockDetailAfterMutation>(
     savingId: string,
-    op: Observable<MockDetailAfterMutation>,
-    onSuccess?: () => void,
+    op: Observable<T>,
+    onSuccess?: (result: T) => void,
   ): void {
     this.savingId.set(savingId);
     this.error.set(undefined);
@@ -785,7 +789,7 @@ export class MocksStore {
       next: ({ detail, res }) => {
         this.applyMutationDetail(detail);
         this.applyCatalogResponse(res);
-        onSuccess?.();
+        onSuccess?.(detail);
       },
       error: (e) => this.error.set(readErrorMessage(e) ?? this.transloco.translate('common.unexpectedError')),
     });

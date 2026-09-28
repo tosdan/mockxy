@@ -413,6 +413,8 @@ export interface ResponseSequenceUpdateRequest {
 
 export interface ResponseSequenceCreateRequest extends Omit<ResponseSequenceUpdateRequest, 'steps'> {
   steps: SequenceStep[];
+  /** `false` prepara la sequence senza attivarla: risposta servita e scenario non cambiano. */
+  select?: boolean;
 }
 
 export type ResponseUpdateRequest =
@@ -422,10 +424,18 @@ export type ResponseUpdateRequest =
   | ResponseWsUpdateRequest
   | ResponseSequenceUpdateRequest;
 
-export type CreateResponseRequest =
+/**
+ * Creazione di una variante. `select: false` la prepara senza attivarla: selezione, cursore della
+ * sequence e memoria handler restano quelli di prima (omesso = la variante creata viene selezionata).
+ */
+export type CreateResponseRequest = (
   | Exclude<ResponseUpdateRequest, ResponseSequenceUpdateRequest>
   | ResponseSequenceCreateRequest
-  | { title?: string };
+  | { title?: string }
+) & { select?: boolean };
+
+/** Esito di una creazione di variante: il dettaglio più il filename della variante creata. */
+export type ResponseCreatedResult = MockDetailAfterMutation & { createdResponseFile?: string };
 
 /** Accende o spegne un elenco arbitrario di endpoint in una sola chiamata, tutto-o-niente. */
 export interface EndpointsEnabledUpdateRequest {

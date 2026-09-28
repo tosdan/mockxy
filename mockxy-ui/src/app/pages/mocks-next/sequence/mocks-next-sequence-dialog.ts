@@ -14,6 +14,7 @@ import {
 } from '@ng-icons/lucide';
 import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
 import { UiButton } from '../../../ui/ui-button/ui-button';
+import { UiCheckbox } from '../../../ui/ui-checkbox/ui-checkbox';
 import { UiInput } from '../../../ui/ui-input/ui-input';
 import { UiSelect, type UiSelectOption } from '../../../ui/ui-select/ui-select';
 import { UiToggleGroup, UiToggleItem } from '../../../ui/ui-toggle-group/ui-toggle-group';
@@ -49,7 +50,7 @@ const STATE_POLL_MS = 1500;
 /** Editor di una response sequence, usato sia per crearla sia per modificare quella selezionata. */
 @Component({
   selector: 'mocks-next-sequence-dialog',
-  imports: [NgIcon, TranslocoPipe, UiButton, UiInput, UiSelect, UiToggleGroup, UiToggleItem, UiTooltip],
+  imports: [NgIcon, TranslocoPipe, UiButton, UiCheckbox, UiInput, UiSelect, UiToggleGroup, UiToggleItem, UiTooltip],
   providers: [
     provideIcons({
       lucideArrowDown,
@@ -174,6 +175,13 @@ const STATE_POLL_MS = 1500;
       </div>
 
       <div class="flex items-center justify-end gap-2 border-t border-border px-5 py-3">
+        @if (!isEdit) {
+        <!-- Senza spunta la sequence viene preparata: lo scenario in corso non cambia. -->
+        <label class="mr-auto flex items-center gap-2 text-[12px] text-muted-foreground">
+          <ui-checkbox [(checked)]="activateNow" [ariaLabel]="'sequenceDialog.activateNow' | transloco" />
+          {{ 'sequenceDialog.activateNow' | transloco }}
+        </label>
+        }
         <button ui-button variant="outline" (click)="close()">{{ 'sequenceDialog.cancel' | transloco }}</button>
         <button ui-button [disabled]="!canSave()" (click)="save()"><ng-icon name="lucideCheck" size="0.9rem" /> {{ 'sequenceDialog.save' | transloco }}</button>
       </div>
@@ -190,6 +198,8 @@ export class MocksNextSequenceDialog {
   private readonly transloco = inject(TranslocoService);
 
   protected readonly isEdit = this.data.mode === 'edit';
+  /** In creazione: attivare subito la nuova sequence (default) o solo prepararla. */
+  protected readonly activateNow = signal(true);
   protected readonly originalSequence: SequenceVariantConfig | null = this.isEdit
     ? this.data.detail.sequence ?? null
     : null;
@@ -365,14 +375,15 @@ export class MocksNextSequenceDialog {
   protected save(): void {
     if (!this.canSave()) return;
     const sequence = this.buildSequence();
+    const prepared = !this.isEdit && !this.activateNow();
     const onSuccess = () => {
-      this.toast.show({ tone: 'success', title: this.transloco.translate('sequenceDialog.savedTitle') });
+      this.toast.show({ tone: 'success', title: this.transloco.translate(prepared ? 'sequenceDialog.preparedTitle' : 'sequenceDialog.savedTitle') });
       this.dialogRef.close('saved');
     };
     if (this.isEdit) {
       this.store.updateSequence(sequence, onSuccess);
     } else {
-      this.store.createSequence(sequence, onSuccess);
+      this.store.createSequence(prepared ? { ...sequence, select: false } : sequence, onSuccess);
     }
   }
 

@@ -475,6 +475,19 @@ describe('MocksStore', () => {
       expect(api.updateEndpoint).toHaveBeenCalledWith('e1', { description: 'nuova' });
     });
 
+    it('addResponse passa il filename creato, e l’upload può mirare a una variante non selezionata', () => {
+      const store = create();
+      store.selected.set(detail('e1'));
+      api.createResponse.mockReturnValueOnce(of({ ...detail('e1'), createdResponseFile: '002.response.json' }));
+      const onCreated = vi.fn();
+      store.addResponse({ type: 'mock', status: 200, select: false } as never, onCreated);
+      expect(onCreated).toHaveBeenCalledWith('002.response.json');
+
+      const file = new File(['x'], 'logo.png');
+      store.uploadResponseFile(file, undefined, '002.response.json');
+      expect(api.uploadResponseFile).toHaveBeenCalledWith('e1', '002.response.json', file);
+    });
+
     it('senza selezione le mutazioni sono no-op', () => {
       const store = create();
       store.saveResponse({ type: 'mock', title: '', status: 200, headers: {}, delayMs: 0, body: {} });

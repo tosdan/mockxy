@@ -151,6 +151,11 @@ esistenti restano compatibili: nessuna migrazione richiesta.
   caso diventa un avviso invece di una conferma. Se il batch fallisce dopo aver già scritto degli
   endpoint (`BATCH_RUNTIME_FAILED`, `ROLLBACK_FAILED`), l'errore dice anche cosa è rimasto su
   disco; l'import OpenAPI rilegge il catalogo e ricalcola l'anteprima, che non vale più.
+- **Varianti preparate senza attivarle:** il form di una nuova risposta e il dialog di una nuova
+  sequenza hanno l'opzione «Attiva subito», attiva di default; togliendola la variante viene
+  creata senza cambiare la risposta servita né lo scenario in corso. Nel Monitor, aggiungendo una
+  risposta catturata a un endpoint esistente, si può scegliere «Aggiungi senza attivare». Le
+  varianti SSE e WS, che nascono senza form, restano attivate alla creazione.
 
 ---
 

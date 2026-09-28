@@ -363,6 +363,7 @@ interface SourceMeta {
         </div>
         <div class="flex justify-end gap-2 border-t border-border px-5 py-3.5">
           <button ui-button variant="outline" size="sm" (click)="cancelAddResponseToExisting()">{{ 'monitor.mockExistsCancel' | transloco }}</button>
+          <button ui-button variant="outline" size="sm" (click)="confirmAddResponseToExisting(false)">{{ 'monitor.mockExistsConfirmInactive' | transloco }}</button>
           <button ui-button size="sm" (click)="confirmAddResponseToExisting()"><ng-icon name="lucidePlus" size="0.85rem" /> {{ 'monitor.mockExistsConfirm' | transloco }}</button>
         </div>
       </div>
@@ -668,8 +669,11 @@ export class MonitorNextPage {
     return status === 409 && typeof details?.existingMockId === 'string' ? details.existingMockId : null;
   }
 
-  /** Conferma del dialog: aggiunge la response catturata come nuova variante (selezionata) dell'endpoint esistente. */
-  protected confirmAddResponseToExisting(): void {
+  /**
+   * Conferma del dialog: aggiunge la response catturata come nuova variante dell'endpoint esistente.
+   * `activate: false` la conserva senza attivarla: la risposta servita resta quella di prima.
+   */
+  protected confirmAddResponseToExisting(activate = true): void {
     const prompt = this.mockExistsPrompt();
     this.closeMockExistsDialog();
     if (prompt == null) return;
@@ -692,6 +696,7 @@ export class MonitorNextPage {
         headers: request.config.headers,
         delayMs: 0,
         body: request.body,
+        ...(activate ? {} : { select: false }),
       })
       .pipe(finalize(() => this.creatingMock.set(false)))
       .subscribe({
@@ -699,8 +704,11 @@ export class MonitorNextPage {
         // anche quando la variante è stata aggiunta ma il dettaglio non è componibile.
         next: () =>
           this.toast.show({
-            title: this.transloco.translate('monitor.toastResponseAdded'),
-            description: this.transloco.translate('monitor.toastResponseAddedDesc', { method: entry.method, path: request.config.path }),
+            title: this.transloco.translate(activate ? 'monitor.toastResponseAdded' : 'monitor.toastResponsePrepared'),
+            description: this.transloco.translate(activate ? 'monitor.toastResponseAddedDesc' : 'monitor.toastResponsePreparedDesc', {
+              method: entry.method,
+              path: request.config.path,
+            }),
             tone: 'success',
             action: {
               label: this.transloco.translate('monitor.toastOpenMock'),

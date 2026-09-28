@@ -45,6 +45,8 @@ describe('MocksNextDetail', () => {
     collections: ReturnType<typeof signal<{ id: string; label: string }[]>>;
     saveResponse: ReturnType<typeof vi.fn>;
     assignCollection: ReturnType<typeof vi.fn>;
+    addResponse: ReturnType<typeof vi.fn>;
+    uploadResponseFile: ReturnType<typeof vi.fn>;
   };
 
   function create() {
@@ -58,6 +60,8 @@ describe('MocksNextDetail', () => {
       collections: signal<{ id: string; label: string }[]>([]),
       saveResponse: vi.fn(),
       assignCollection: vi.fn(),
+      addResponse: vi.fn(),
+      uploadResponseFile: vi.fn(),
     };
     TestBed.configureTestingModule({
       imports: [MocksNextDetail, translocoTesting()],
@@ -188,6 +192,49 @@ describe('MocksNextDetail', () => {
 
       expect(delayInput(fixture)).toBeNull();
       expect((fixture.nativeElement as HTMLElement).textContent).toContain('delay');
+    });
+  });
+
+  // Creare una variante senza attivarla (piano agent/API, §13 C3): la risposta servita non cambia.
+  describe('nuova response: Attiva subito', () => {
+    it('di default attiva la variante creata, come prima', () => {
+      const fixture = create();
+      const c = fixture.componentInstance as any;
+      c.createResponseOfType('mock');
+      c.saveEditResponse();
+      expect(store.addResponse).toHaveBeenCalledTimes(1);
+      expect(store.addResponse.mock.calls[0][0]).not.toHaveProperty('select');
+    });
+
+    it('senza spunta prepara la variante con select false', () => {
+      const fixture = create();
+      const c = fixture.componentInstance as any;
+      c.createResponseOfType('mock');
+      c.activateNewResponse.set(false);
+      c.saveEditResponse();
+      expect(store.addResponse).toHaveBeenCalledWith(expect.objectContaining({ type: 'mock', select: false }), expect.any(Function));
+    });
+
+    it('in modalità file carica il file sulla variante creata, non su quella selezionata', () => {
+      const fixture = create();
+      const c = fixture.componentInstance as any;
+      c.createResponseOfType('mock');
+      c.activateNewResponse.set(false);
+      c.draft.payloadType.set('file');
+      const file = new File(['x'], 'logo.png', { type: 'image/png' });
+      c.draft.file.set(file);
+      store.addResponse.mockImplementation((_payload: unknown, onSuccess: (created?: string) => void) => onSuccess('002.response.json'));
+      c.saveEditResponse();
+      expect(store.uploadResponseFile).toHaveBeenCalledWith(file, expect.any(Function), '002.response.json');
+    });
+
+    it('riaprendo il form l’opzione torna attiva', () => {
+      const fixture = create();
+      const c = fixture.componentInstance as any;
+      c.createResponseOfType('mock');
+      c.activateNewResponse.set(false);
+      c.createResponseOfType('mock');
+      expect(c.activateNewResponse()).toBe(true);
     });
   });
 
