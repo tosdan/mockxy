@@ -2026,6 +2026,10 @@ components:
 
     RuntimeConfig:
       type: object
+      description: |
+        Values as the engine accepted them at startup. The validation of runtime overrides, due in
+        a future version, will be stricter (for example an integer `requestTimeoutMs` from 1): it
+        does not describe what startup accepts today.
       additionalProperties: false
       required:
         - backendUrl
@@ -2048,7 +2052,9 @@ components:
         adaptProxyCookies: { type: boolean }
         rewriteProxyRedirects: { type: boolean }
         globalDelayMs: { type: integer, minimum: 0 }
-        requestTimeoutMs: { type: integer, minimum: 1 }
+        requestTimeoutMs:
+          type: number
+          description: Any finite number accepted at startup (`REQUEST_TIMEOUT_MS`), including `0` and fractions.
     RuntimeConfigState:
       type: object
       required: [runtimeId, startup, effective, overrides, persisted]

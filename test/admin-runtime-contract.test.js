@@ -1,6 +1,7 @@
 const fs = require("fs");
 const path = require("path");
 const request = require("supertest");
+const Ajv2020 = require("ajv/dist/2020");
 const yaml = require("js-yaml");
 const { createServerRuntime } = require("../src/server");
 const { createNoopLogger, createTempDir, removeDir } = require("./helpers");
@@ -68,6 +69,31 @@ describe("admin API: configurazione effettiva e contratto del runtime", () => {
         overrides: {},
         persisted: false,
       });
+    });
+
+    // La risposta deve rispettare lo schema che il runtime stesso pubblica: un client che valida
+    // contro la spec scaricata non può rifiutare una configurazione che l'avvio ha accettato.
+    test.each([
+      ["i valori di default", {}],
+      ["un backend configurato", { backendUrl: "https://api.example.test", proxyFallbackEnabled: true }],
+      ["un timeout 0", { requestTimeoutMs: 0 }],
+      ["un timeout frazionario", { requestTimeoutMs: 1.5 }],
+      ["un timeout negativo", { requestTimeoutMs: -5 }],
+      ["un ritardo globale", { globalDelayMs: 250, delayAllRequests: true }],
+    ])("con %s la risposta rispetta lo schema pubblicato", async (_label, configOverrides) => {
+      const runtime = await startRuntime(configOverrides);
+      const spec = yaml.safeLoad((await request(runtime.app).get("/_admin/api/openapi.yaml")).text);
+      const ajv = new Ajv2020({ strict: false, validateFormats: false });
+      ajv.addSchema({ $id: "admin-openapi", components: spec.components });
+      const validate = ajv.compile({ $ref: "admin-openapi#/components/schemas/RuntimeConfigState" });
+
+      const response = await request(runtime.app).get("/_admin/api/config");
+
+      expect(response.status).toBe(200);
+      expect(validate(response.body) ? [] : validate.errors).toEqual([]);
+      for (const [key, value] of Object.entries(configOverrides)) {
+        expect(response.body.effective[key]).toBe(value);
+      }
     });
 
     test("un backend non configurato è null", async () => {
