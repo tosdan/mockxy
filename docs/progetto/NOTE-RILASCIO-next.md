@@ -137,6 +137,17 @@ esistenti restano compatibili: nessuna migrazione richiesta.
   per filename conviene leggerne `active`: modificare uno step della sequence in uso cambia lo
   scenario in corso.
 
+### Stream SSE/WS preservati alle ricariche
+
+- **Prima:** ogni ricarica a caldo chiudeva tutte le connessioni SSE e WebSocket aperte, anche per
+  una descrizione cambiata, una variante inattiva o un altro endpoint.
+- **Ora:** si chiudono soltanto le connessioni degli endpoint il cui stream installato cambia
+  (copione, regole, chiusura, tipo) o che vengono disabilitati o eliminati. Una nuova selezione con
+  la stessa definizione e la vecchia rotta mantenuta su un errore di caricamento le conservano.
+  Lo shutdown le chiude tutte.
+- **Per i client:** una riconnessione non segue più ogni modifica del workspace; se serve
+  ripartire dall'inizio del copione, basta riaprire la connessione.
+
 ### Interfaccia
 
 - **Descrizione e abilitazione:** salvare la descrizione invia solo la descrizione, e il toggle
