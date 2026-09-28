@@ -22,6 +22,7 @@ const { createUpgradeHandler } = require("./proxy/upgrade-proxy");
 const { createRuntimeIdentity } = require("./runtime-identity");
 const { RELOAD_REASONS, RuntimeStatusStore } = require("./runtime-status");
 const { CatalogRevisionTracker } = require("./catalog-revision");
+const { collectStreamSignatures, reconcileStreamConnections } = require("./mocks/stream-signature");
 
 // Reintegra nelle nuove route la versione precedente degli endpoint il cui file oggi non
 // carica: a caldo un errore su un singolo file non deve far sparire una route che funzionava
@@ -121,16 +122,19 @@ function createReloadHandler({ mocksDir, registry, proxyMiddlewareRegistry, logg
           });
         }
       }
+      const previousStreams = collectStreamSignatures(registry.routeGroups);
       const changedSequenceKeys = registry.setRouteGroups(routeGroups);
       proxyMiddlewareRegistry.setRouteGroups(middlewareRouteGroups);
       for (const key of changedSequenceKeys) {
         handlerStates?.reset(key);
       }
-      // Le connessioni SSE/WS aperte vanno chiuse: stanno servendo copioni della configurazione
-      // precedente. Il client riconnette da solo e il copione (eventualmente nuovo) riparte
-      // — "riconnessione = reset" è la semantica documentata.
-      sseConnections?.closeAll();
-      wsConnections?.closeAll();
+      // Si chiudono soltanto le connessioni SSE/WS il cui stream installato è cambiato o sparito
+      // (§13 C3): il client riconnette da solo e il nuovo copione riparte. Le altre continuano.
+      reconcileStreamConnections({
+        previous: previousStreams,
+        next: collectStreamSignatures(routeGroups),
+        stores: [sseConnections, wsConnections],
+      });
       logger.info("Runtime routes reloaded.", {
         routeCount: routeGroups.length,
         proxyMiddlewareCount: middlewareRouteGroups.length,

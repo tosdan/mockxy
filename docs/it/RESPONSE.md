@@ -166,8 +166,11 @@ connessione, indipendentemente per ciascuna** — riconnettersi significa ripart
 - **`presets`** — facoltativi: i messaggi pronti (macro) della console dell'endpoint.
 
 Nei silenzi il motore invia un commento di **heartbeat** ogni 15 secondi (invisibile ai client).
-Le connessioni vengono chiuse alla ricarica a caldo e allo shutdown: il client SSE riconnette da
-solo e il copione riparte. La **console** nella scheda dell'endpoint mostra connessioni aperte e
+Una ricarica a caldo chiude le connessioni soltanto se cambia lo stream dell'endpoint (copione,
+`retryMs`, `onEnd`, tipo) o se l'endpoint viene disabilitato o eliminato: il client SSE
+riconnette da solo e il copione riparte. Titolo, descrizione, preset, varianti inattive, altri
+endpoint e una nuova selezione con la stessa definizione non le toccano; lo shutdown le chiude
+tutte. La **console** nella scheda dell'endpoint mostra connessioni aperte e
 storico, e permette la regia manuale (broadcast a tutte le connessioni) — via API:
 `POST /mocks/:id/sse/push` e `GET /mocks/:id/sse/connections`. La voce del [monitor](MONITOR.md)
 nasce alla chiusura della connessione. Una variante `sse` non può essere lo step di una
@@ -215,8 +218,10 @@ al backend; gli upgrade che non matchano un endpoint `ws` seguono il passthrough
 - **`presets`** — facoltativi: i messaggi pronti (macro) della console.
 
 Nei silenzi il motore invia un **ping** di protocollo ogni 30 secondi (permissivo: un pong
-mancato non chiude). Le connessioni vengono chiuse alla ricarica a caldo e allo shutdown: il
-client riconnette e il copione riparte. La **console** nella scheda dell'endpoint mostra le
+mancato non chiude). Una ricarica a caldo chiude le connessioni soltanto se cambia lo stream
+dell'endpoint (copione, regole, `onEnd`, `closeCode`, `closeReason`, tipo) o se l'endpoint viene
+disabilitato o eliminato: il client riconnette e il copione riparte. Il resto non le tocca; lo
+shutdown le chiude tutte. La **console** nella scheda dell'endpoint mostra le
 connessioni e il **transcript bidirezionale** (▶ usciti dal copione/regole/regia, ◀ ricevuti
 dai client), con re-invio a un clic — via API: `POST /mocks/:id/ws/push` e
 `GET /mocks/:id/ws/connections`. Una variante `ws` non può essere lo step di una

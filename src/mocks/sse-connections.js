@@ -126,16 +126,33 @@ class SseConnectionStore {
 
   /** Chiude tutte le connessioni (ricarica a caldo, shutdown): il client SSE riconnette da solo. */
   closeAll() {
-    for (const entry of this.endpoints.values()) {
-      for (const connection of [...entry.connections.values()]) {
-        try {
-          connection.close();
-        } catch {
-          /* già chiusa */
-        }
-      }
-      entry.connections.clear();
+    for (const key of this.endpoints.keys()) {
+      this.closeKey(key);
     }
+  }
+
+  /**
+   * Chiude le connessioni di un solo endpoint (reload che ne cambia lo stream, piano agent/API
+   * §13 C3), con la stessa chiusura normale di closeAll; lo storico della console resta.
+   */
+  closeKey(key) {
+    const entry = this.endpoints.get(key);
+    if (entry == null) {
+      return;
+    }
+    for (const connection of [...entry.connections.values()]) {
+      try {
+        connection.close();
+      } catch {
+        /* già chiusa */
+      }
+    }
+    entry.connections.clear();
+  }
+
+  /** Le chiavi method/path che hanno almeno una connessione aperta. */
+  openKeys() {
+    return [...this.endpoints.entries()].filter(([, entry]) => entry.connections.size > 0).map(([key]) => key);
   }
 }
 
