@@ -26,6 +26,7 @@ const { runWithTimeout } = require("./utils/run-with-timeout");
 const { ServerStateStore } = require("./server-state");
 const { setNoCacheHeaders } = require("./utils/cache");
 const { isSharedStateError } = require("./mocks/shared-state");
+const { createRuntimeIdentity } = require("./runtime-identity");
 
 const MAX_HANDLER_REQUEST_BODY_BYTES = 2 * 1024 * 1024;
 
@@ -979,6 +980,7 @@ function createApp({
   sharedStates,
   sseConnections = new SseConnectionStore(),
   wsConnections,
+  runtimeIdentity = createRuntimeIdentity(),
 }) {
   if (sharedStates == null || typeof sharedStates.createRequestFacade !== "function") {
     throw new TypeError("createApp requires an explicitly injected sharedStates store");
@@ -990,7 +992,7 @@ function createApp({
   const dataFileReader = createDataFileReader(config?.filesDir);
 
   if (config?.adminApiEnabled !== false) {
-    app.use("/_admin/api", createAdminHostGuard(config), createAdminApiRouter({ config, registry, proxyMiddlewareRegistry, reloadRuntime, requestMonitor, serverState, monitorDump, sequenceStates, handlerStates, sharedStates, sseConnections, wsConnections }));
+    app.use("/_admin/api", createAdminHostGuard(config), createAdminApiRouter({ config, runtimeIdentity, registry, proxyMiddlewareRegistry, reloadRuntime, requestMonitor, serverState, monitorDump, sequenceStates, handlerStates, sharedStates, sseConnections, wsConnections }));
   } else {
     app.use("/_admin/api", sendAdminApiDisabled);
   }

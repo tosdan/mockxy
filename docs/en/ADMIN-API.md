@@ -162,6 +162,13 @@ then start the scenario.
 | `GET /server` | `{ serverEnabled, proxyAll }` — [the three modes](CONTROLLI.md) |
 | `PATCH /server` | partial update of the two booleans |
 
+## Runtime
+
+| Method and path | What it does |
+|---|---|
+| `GET /config` | effective configuration, read-only: `{ runtimeId, startup, effective, overrides, persisted }`, with only the nine keys that upcoming versions will let you change at runtime (`backendUrl` is `null` without a backend). No other environment variable. For now `effective` equals `startup` and `overrides` is `{}`; `runtimeId` changes at every start |
+| `GET /openapi.yaml` | the [contract](#the-machine-readable-description) of the running version, as `application/yaml` |
+
 ## Examples
 
 ```bash
@@ -203,9 +210,12 @@ rewrite the name or `seedKey`, because sharing the resource may be intentional.
 ## The machine-readable description
 
 For the exact structure of every request and response body there is an OpenAPI 3.1 description
-of this API: [`docs/admin-api.openapi.yaml`](../admin-api.openapi.yaml). It documents the
-schemas, the status codes and the payload variants route by route, and it can be loaded into a
-client generator, a request tool, or an agent that needs to drive Mockxy on its own.
+of this API: [`src/admin/admin-api.openapi.yaml`](../../src/admin/admin-api.openapi.yaml). It
+documents the schemas, the status codes and the payload variants route by route, and it can be
+loaded into a client generator, a request tool, or an agent that needs to drive Mockxy on its
+own. A running engine serves it as is from `GET /_admin/api/openapi.yaml`, from the desktop app
+and the development Docker image too: it is the contract of the version that answers, under the
+same enablement rules as the other admin routes.
 
 The second reliable source stays the UI itself: every one of its actions is a call to these
 routes, observable from the browser's developer tools.

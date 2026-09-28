@@ -49,6 +49,7 @@ const {
   deleteAdminDataFile,
 } = require("./admin-data-files");
 const { setNoCacheHeaders } = require("../utils/cache");
+const { describeRuntimeConfig, pickRuntimeConfig } = require("./runtime-config");
 const {
   listDumpFiles,
   readDumpPage,
@@ -57,6 +58,10 @@ const {
 } = require("../monitoring/monitor-dump-reader");
 
 const PARSED_JSON_BODY_BYTES = Symbol("parsedJsonBodyBytes");
+
+// Fonte canonica del contratto, risolta rispetto a questo modulo e non alla cwd: è lo stesso file
+// in un checkout, nel pacchetto Electron (che copia src/) e nell'immagine Docker di sviluppo.
+const ADMIN_OPENAPI_PATH = path.join(__dirname, "admin-api.openapi.yaml");
 
 // Coda delle mutazioni admin per workspace (piano agent/API, §13 C1): una mutazione alla volta
 // per mocksDir canonico, anche fra runtime distinti dello stesso processo. È distinta dalla coda
@@ -144,13 +149,15 @@ function sendJson(res, status, payload) {
   res.status(status).json(payload);
 }
 
-function createAdminApiRouter({ config, registry, proxyMiddlewareRegistry, reloadRuntime, requestMonitor, serverState, monitorDump, sequenceStates, handlerStates, sharedStates, sseConnections, wsConnections }) {
+function createAdminApiRouter({ config, runtimeIdentity, registry, proxyMiddlewareRegistry, reloadRuntime, requestMonitor, serverState, monitorDump, sequenceStates, handlerStates, sharedStates, sseConnections, wsConnections }) {
   const router = express.Router();
   // Store dello scenario runtime, passati alle mutazioni che possono invalidarlo: il reload da
   // solo non basta, perche' aggrega piu' scritture in un giro unico (vedi invalidateScenario).
   const scenarioStates = { sequenceStates, handlerStates };
   // Registri del runtime installato: il bersaglio delle console SSE/WS si risolve da qui.
   const installed = { registry, proxyMiddlewareRegistry };
+  // Configurazione di avvio, fotografata alla creazione del runtime (§13 C2).
+  const startupConfig = pickRuntimeConfig(config);
   const workspaceKey = canonicalWorkspaceKey(config?.mocksDir);
   // Esegue il gestore di una rotta di mutazione nel turno del workspace, dopo parsing e limiti
   // del body (già applicati dai middleware della rotta).
@@ -160,6 +167,18 @@ function createAdminApiRouter({ config, registry, proxyMiddlewareRegistry, reloa
     });
 
   router.use(express.json({ limit: "2mb", verify: markParsedJsonBodyLength }));
+
+  // Contratto della versione in esecuzione, dalla fonte confezionata col motore (§13 C2).
+  router.get("/openapi.yaml", async (_req, res) => {
+    const source = await fs.promises.readFile(ADMIN_OPENAPI_PATH);
+    setNoCacheHeaders(res);
+    res.status(200).type("application/yaml").send(source);
+  });
+
+  // Configurazione effettiva in sola lettura: le nove chiavi di C8, senza altre variabili d'ambiente.
+  router.get("/config", (_req, res) => {
+    sendJson(res, 200, describeRuntimeConfig({ runtimeId: runtimeIdentity?.runtimeId ?? null, startup: startupConfig, config }));
+  });
 
   router.get('/monitoring/requests', (_req, res) => {
     const items = requestMonitor?.listEntries() || [];

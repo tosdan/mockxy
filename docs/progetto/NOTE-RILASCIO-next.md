@@ -86,6 +86,19 @@ esistenti restano compatibili: nessuna migrazione richiesta.
 - **Per i client:** su `READ_INCONSISTENT` ripetere la lettura al massimo una volta in
   automatico; chi riconosceva il `404` di un asset o sorgente mancante deve gestire il `409`.
 
+#### Contratto e configurazione letti dal runtime
+
+- **Prima:** il contratto OpenAPI esisteva solo nel repository, in `docs/admin-api.openapi.yaml`,
+  assente dall'app desktop e dall'immagine Docker; la configurazione effettiva non era leggibile
+  via API.
+- **Ora:** `GET /openapi.yaml` restituisce il contratto della versione in esecuzione, anche
+  dall'app desktop e dall'immagine Docker di sviluppo, e `GET /config` la configurazione
+  effettiva in sola lettura: le nove chiavi che le prossime versioni renderanno modificabili a
+  runtime, con il `runtimeId` dell'avvio. Nessun'altra variabile d'ambiente viene esposta. Le due
+  rotte seguono l'abilitazione dell'admin API e restano spente nell'immagine standalone.
+- **Per i client:** la fonte del contratto si è spostata in `src/admin/admin-api.openapi.yaml`;
+  chi la leggeva dal percorso precedente deve aggiornarlo o usare la rotta.
+
 ### Interfaccia
 
 - **Descrizione e abilitazione:** salvare la descrizione invia solo la descrizione, e il toggle

@@ -26,7 +26,7 @@ function inlinePathParameterReferences(document) {
 async function validateAdminOpenapi() {
   const { validate } = await import("@scalar/openapi-parser");
   const source = await fs.promises.readFile(
-    path.join(__dirname, "..", "docs", "admin-api.openapi.yaml"),
+    path.join(__dirname, "..", "src", "admin", "admin-api.openapi.yaml"),
     "utf8"
   );
   // Scalar's path-template pass does not follow reusable Parameter Object references. Inline

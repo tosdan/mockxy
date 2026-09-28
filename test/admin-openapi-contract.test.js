@@ -5,7 +5,7 @@ const express = require("express");
 const yaml = require("js-yaml");
 const { createAdminApiRouter } = require("../src/admin/admin-api");
 
-const SPEC_PATH = path.join(__dirname, "..", "docs", "admin-api.openapi.yaml");
+const SPEC_PATH = path.join(__dirname, "..", "src", "admin", "admin-api.openapi.yaml");
 // Tutte le chiavi di operazione di un Path Item OpenAPI 3.1: un'operazione dichiarata solo nello
 // spec con un metodo meno comune deve emergere dal confronto, non essere scartata in silenzio.
 const SPEC_METHODS = ["get", "put", "post", "delete", "options", "head", "patch", "trace"];
