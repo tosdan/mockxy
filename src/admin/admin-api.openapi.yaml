@@ -635,6 +635,7 @@ paths:
               schema: { $ref: "#/components/schemas/MockDetailAfterMutation" }
         "400": { $ref: "#/components/responses/BadRequest" }
         "404": { $ref: "#/components/responses/MockNotFound" }
+        "409": { $ref: "#/components/responses/RevisionConflict" }
         "500": { $ref: "#/components/responses/MutationFailed" }
     delete:
       tags: [Endpoints]
@@ -669,8 +670,14 @@ paths:
                   type: [string, "null"]
                   description: "`null` clears it."
                 enabled: { type: boolean }
+                expectedRevision:
+                  allOf: [{ $ref: "#/components/schemas/RevisionToken" }]
+                  description: |
+                    Optional precondition: the `descriptionRevision` read with the draft. It
+                    protects `description` only, so it must come with `description` and without
+                    `enabled` (`400` otherwise); a mismatch is `409 REVISION_CONFLICT`.
               additionalProperties: false
-            example: { description: Returns the paginated user list, enabled: true }
+            example: { description: Returns the paginated user list, expectedRevision: "rev-v1:9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08" }
       responses:
         "200":
           description: The updated endpoint
@@ -679,6 +686,7 @@ paths:
               schema: { $ref: "#/components/schemas/MockDetailAfterMutation" }
         "400": { $ref: "#/components/responses/BadRequest" }
         "404": { $ref: "#/components/responses/MockNotFound" }
+        "409": { $ref: "#/components/responses/RevisionConflict" }
         "500": { $ref: "#/components/responses/MutationFailed" }
 
   /mocks/{id}/copy:
@@ -1092,6 +1100,7 @@ paths:
               schema: { $ref: "#/components/schemas/ResponseVariantUpdated" }
         "400": { $ref: "#/components/responses/BadRequest" }
         "404": { $ref: "#/components/responses/MockNotFound" }
+        "409": { $ref: "#/components/responses/RevisionConflict" }
         "500": { $ref: "#/components/responses/MutationFailed" }
     delete:
       tags: [Response variants]
@@ -1147,6 +1156,13 @@ paths:
           description: MIME type to store as the variant's `content-type` header.
           schema: { type: string }
           example: application/pdf
+        - name: X-Mockxy-Expected-Revision
+          in: header
+          description: |
+            Optional precondition, as `expectedRevision` of the JSON updates: the revision of this
+            variant read with the draft. A mismatch is `409 REVISION_CONFLICT`. Control data never
+            travels inside the uploaded file.
+          schema: { $ref: "#/components/schemas/RevisionToken" }
       requestBody:
         required: true
         description: The raw bytes. Any content type is accepted; `application/octet-stream` is the intended one.
@@ -1160,11 +1176,12 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/ResponseVariantUpdated" }
         "400":
-          description: Empty upload, or the variant is not a `mock` one.
+          description: Empty upload, the variant is not a `mock` one, or a malformed precondition.
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
         "404": { $ref: "#/components/responses/MockNotFound" }
+        "409": { $ref: "#/components/responses/RevisionConflict" }
         "500": { $ref: "#/components/responses/MutationFailed" }
 
   # ─────────────────────────────── OpenAPI import ─────────────────────────────
@@ -1956,6 +1973,16 @@ components:
       content:
         application/json:
           schema: { $ref: "#/components/schemas/Error" }
+    RevisionConflict:
+      description: |
+        `details.code: REVISION_CONFLICT`: the resource changed since the draft was read, so
+        nothing was written or reloaded. `details.resource` is `{ kind: description, endpointId }`
+        or `{ kind: response, endpointId, responseFile }`, with `details.expectedRevision` and
+        `details.currentRevision`. Do not retry blindly: read the current version, compare it with
+        the draft, then save deliberately with the new revision.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
     ReadInconsistent:
       description: |
         `details.code: READ_INCONSISTENT`, `details.retryable: true`. A file the detail
@@ -2113,7 +2140,7 @@ components:
               description: |
                 Stable error code, present on newer errors: `ADMIN_ROUTE_NOT_FOUND`,
                 `MUTATION_REJECTED`, `RUNTIME_APPLY_FAILED`, `MUTATION_FAILED`, `ROLLBACK_FAILED`,
-                `BATCH_RUNTIME_FAILED`, `READ_INCONSISTENT`.
+                `BATCH_RUNTIME_FAILED`, `READ_INCONSISTENT`, `REVISION_CONFLICT`.
             rollback:
               type: string
               enum: [not_needed, restored, failed]
@@ -2127,6 +2154,15 @@ components:
             retryable:
               type: boolean
               description: "`READ_INCONSISTENT` only: repeating the read may succeed."
+            resource:
+              type: object
+              description: "`REVISION_CONFLICT` only: the protected resource (`kind`, `endpointId`, and `responseFile` for a variant)."
+            expectedRevision:
+              type: string
+              description: "`REVISION_CONFLICT` only: the precondition that was sent."
+            currentRevision:
+              type: string
+              description: "`REVISION_CONFLICT` only: the revision of the current content."
             result:
               type: object
               description: "Batch errors only (`BATCH_RUNTIME_FAILED`, or `ROLLBACK_FAILED` from a batch): the batch result, as in the 201 response."
@@ -2528,6 +2564,17 @@ components:
               type: string
               description: Why the detail could not be composed.
 
+    RevisionToken:
+      type: string
+      pattern: "^rev-v1:[0-9a-f]{64}$"
+      description: |
+        Opaque content revision of a draftable resource: `rev-v1:` and a SHA-256 over the format,
+        the workspace, the endpoint, the kind of resource, the variant file name and the covered
+        content. A description covers its persisted value; a variant covers its persisted JSON
+        definition (key order and indentation do not matter) and the bytes of its direct source
+        and asset, names included — not the selection, `enabled`, the description or the variants
+        a sequence uses as steps. It describes the current content, not a history: going back to
+        the same content gives back the same token, and a restart keeps it.
     ResponseVariantCreated:
       description: The endpoint after the mutation, plus the file name of the variant just created.
       allOf:
@@ -2543,12 +2590,17 @@ components:
       allOf:
         - $ref: "#/components/schemas/MockDetailAfterMutation"
         - type: object
-          required: [updatedResponseFile]
+          required: [updatedResponseFile, updatedResponseRevision]
           properties:
             updatedResponseFile: { type: string, examples: [002.response.json] }
+            updatedResponseRevision:
+              description: Revision of the updated variant after the write; `null` only if it could not be read back.
+              anyOf:
+                - $ref: "#/components/schemas/RevisionToken"
+                - type: "null"
     ResponseVariant:
       type: object
-      required: [id, responseFile, selected, active, response, source, fileInfo]
+      required: [id, responseFile, selected, active, response, source, fileInfo, revision]
       properties:
         id: { type: string, description: Endpoint id. }
         responseFile: { type: string }
@@ -2562,6 +2614,9 @@ components:
         source:
           type: [string, "null"]
           description: Text of the direct source of a `handler` or `middleware` variant; `null` otherwise.
+        revision:
+          allOf: [{ $ref: "#/components/schemas/RevisionToken" }]
+          description: Revision of this variant, computed from the very data of this response.
         fileInfo:
           description: Name and size of the asset of a file-backed `mock`; `null` otherwise.
           anyOf:
@@ -2628,6 +2683,12 @@ components:
               type: object
               description: The selected variant, normalized. Its fields depend on `type`.
               additionalProperties: true
+            descriptionRevision:
+              allOf: [{ $ref: "#/components/schemas/RevisionToken" }]
+              description: Revision of `endpoint.description`, the precondition of a description draft.
+            responseRevision:
+              allOf: [{ $ref: "#/components/schemas/RevisionToken" }]
+              description: Revision of the selected variant, computed from the very data of this response.
             sequenceState:
               $ref: "#/components/schemas/SequenceState"
             sequence: { $ref: "#/components/schemas/SequenceVariantConfig" }
@@ -2977,6 +3038,13 @@ components:
                 templated: { type: boolean }
             body:
               description: New payload; the current one is kept when absent.
+            expectedRevision:
+              allOf: [{ $ref: "#/components/schemas/RevisionToken" }]
+              description: |
+                Optional precondition on the **selected** variant (`responseRevision` of the
+                detail). The token includes the file name, so it never authorizes a write on a
+                different selection. A protected payload that would also change `enabled` is a
+                `400`: change it with `PUT /mocks/{id}/endpoint`.
         - type: object
           title: Rewrite the selected script variant
           required: [type, definition]
@@ -2994,6 +3062,13 @@ components:
             source:
               type: string
               description: New module source; a scaffold is written when absent.
+            expectedRevision:
+              allOf: [{ $ref: "#/components/schemas/RevisionToken" }]
+              description: |
+                Optional precondition on the **selected** variant (`responseRevision` of the
+                detail). The token includes the file name, so it never authorizes a write on a
+                different selection. A protected payload that would also change `enabled` is a
+                `400`: change it with `PUT /mocks/{id}/endpoint`.
 
     CreateResponseRequest:
       description: |
@@ -3069,6 +3144,12 @@ components:
         fields depends on the variant type — sending a `type` different from the current one is
         rejected.
       properties:
+        expectedRevision:
+          allOf: [{ $ref: "#/components/schemas/RevisionToken" }]
+          description: |
+            Optional precondition: the revision of this variant read with the draft (`revision`
+            of the variant, or `responseRevision` of the detail for the selected one). A
+            mismatch is `409 REVISION_CONFLICT`, with nothing written.
         type: { $ref: "#/components/schemas/ResponseType" }
         title: { type: [string, "null"], description: "`null` clears it." }
         status: { type: integer, description: "`mock` only." }

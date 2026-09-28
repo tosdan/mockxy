@@ -55,7 +55,14 @@ const {
   removeRefFromChildOrder,
   serializedByWorkspace,
 } = require("./collections-state");
-const { listAdminMocks, getAdminMockDetailAfterCommit } = require("./mock-catalog");
+const {
+  currentDescriptionRevision,
+  currentResponseRevision,
+  endpointIdOf,
+  getAdminMockDetailAfterCommit,
+  listAdminMocks,
+} = require("./mock-catalog");
+const { assertRevision, readExpectedRevision } = require("./revision-tokens");
 const { normalizeSequenceResponse, computeSequenceSignature } = require("../mocks/sequence-config");
 const { normalizeSseConfig, validateSseMessage } = require("../mocks/sse-config");
 const { normalizeWsConfig, validateWsMessage } = require("../mocks/ws-config");
@@ -662,6 +669,37 @@ async function createAdminResponse(mocksDir, id, payload, reloadRuntime, scenari
   return { ...(await getAdminMockDetailAfterCommit(mocksDir, id)), createdResponseFile: responseFileName };
 }
 
+// Separa la precondizione dal payload: i builder rifiutano i campi che non conoscono. Un valore
+// assente conserva il comportamento legacy; malformato è un 400 (§13 C4).
+function splitExpectedRevision(payload) {
+  if (payload == null || typeof payload !== "object" || Array.isArray(payload) || !Object.prototype.hasOwnProperty.call(payload, "expectedRevision")) {
+    return { expectedRevision: null, rest: payload };
+  }
+  const { expectedRevision, ...rest } = payload;
+  return { expectedRevision: readExpectedRevision(expectedRevision), rest };
+}
+
+// Confronta la precondizione con la revisione corrente della variante, riletta nella coda.
+async function assertResponseRevision(mocksDir, endpointPath, responseFileName, expectedRevision) {
+  if (expectedRevision == null) {
+    return;
+  }
+  assertRevision({
+    resource: { kind: "response", endpointId: endpointIdOf(mocksDir, endpointPath), responseFile: responseFileName },
+    expectedRevision,
+    currentRevision: await currentResponseRevision(mocksDir, endpointPath, responseFileName),
+  });
+}
+
+// La revisione di una variante appena scritta; la scrittura è riuscita anche se non si compone.
+async function revisionAfterCommit(mocksDir, endpointPath, responseFileName) {
+  try {
+    return await currentResponseRevision(mocksDir, endpointPath, responseFileName);
+  } catch {
+    return null;
+  }
+}
+
 // Separa l'opzione `select` dalla definizione della variante: i builder trattano ogni campo
 // diverso dal titolo come una definizione esplicita.
 function splitSelectOption(payload) {
@@ -774,7 +812,9 @@ async function updateAdminResponse(mocksDir, id, responseFileName, payload, relo
 
   const { endpoint, response, responseFileName: updatedResponseFile, responseFilePath, responseDir } =
     await readEndpointResponseByName(endpointPath, responseFileName);
-  const nextResponse = buildUpdatedEndpointResponse(response, payload, endpoint);
+  const { expectedRevision, rest: responsePayload } = splitExpectedRevision(payload);
+  await assertResponseRevision(mocksDir, endpointPath, updatedResponseFile, expectedRevision);
+  const nextResponse = buildUpdatedEndpointResponse(response, responsePayload, endpoint);
   const backups = [await readBackup(responseFilePath)];
   let sourcePath;
   let nextSource;
@@ -785,11 +825,11 @@ async function updateAdminResponse(mocksDir, id, responseFileName, payload, relo
       throw createAdminError(404, "Response source file not found.");
     }
     backups.push(await readBackup(sourcePath));
-    if (Object.prototype.hasOwnProperty.call(payload || {}, "source")) {
-      if (typeof payload.source !== "string" || payload.source.trim() === "") {
+    if (Object.prototype.hasOwnProperty.call(responsePayload || {}, "source")) {
+      if (typeof responsePayload.source !== "string" || responsePayload.source.trim() === "") {
         throw createAdminError(400, "source must be a non-empty string.");
       }
-      nextSource = payload.source;
+      nextSource = responsePayload.source;
     }
   }
 
@@ -827,8 +867,13 @@ async function updateAdminResponse(mocksDir, id, responseFileName, payload, relo
     }
   }
 
-  // La variante aggiornata, indipendente dalla selezionata descritta dal dettaglio (§13 C3).
-  return { ...(await getAdminMockDetailAfterCommit(mocksDir, id)), updatedResponseFile };
+  // La variante aggiornata e la sua nuova revisione, indipendenti dalla selezionata descritta dal
+  // dettaglio (§13 C3 e C4).
+  return {
+    ...(await getAdminMockDetailAfterCommit(mocksDir, id)),
+    updatedResponseFile,
+    updatedResponseRevision: await revisionAfterCommit(mocksDir, endpointPath, updatedResponseFile),
+  };
 }
 
 function sanitizeUploadExtension(filename) {
@@ -863,6 +908,12 @@ async function setAdminResponseFile(mocksDir, id, responseFileName, fileBuffer, 
 
   const { endpoint, response, responseFileName: updatedResponseFile, responseFilePath, responseDir } =
     await readEndpointResponseByName(endpointPath, responseFileName);
+  await assertResponseRevision(
+    mocksDir,
+    endpointPath,
+    updatedResponseFile,
+    readExpectedRevision(options?.expectedRevision, "X-Mockxy-Expected-Revision")
+  );
   if (response.type !== "mock") {
     throw createAdminError(400, "Only mock responses can be backed by a file.");
   }
@@ -924,7 +975,11 @@ async function setAdminResponseFile(mocksDir, id, responseFileName, fileBuffer, 
     invalidateScenario(scenarioStates, endpoint.method, endpoint.path);
   }
 
-  return { ...(await getAdminMockDetailAfterCommit(mocksDir, id)), updatedResponseFile };
+  return {
+    ...(await getAdminMockDetailAfterCommit(mocksDir, id)),
+    updatedResponseFile,
+    updatedResponseRevision: await revisionAfterCommit(mocksDir, endpointPath, updatedResponseFile),
+  };
 }
 
 async function deleteAdminResponse(mocksDir, id, responseFileName, reloadRuntime, scenarioStates) {
@@ -1043,7 +1098,23 @@ async function updateAdminEndpoint(mocksDir, id, payload, reloadRuntime) {
   }
 
   const endpoint = await readEndpointConfig(endpointPath);
-  const nextEndpoint = buildUpdatedEndpointConfig(endpoint, payload);
+  const { expectedRevision, rest: endpointPayload } = splitExpectedRevision(payload);
+  if (expectedRevision != null) {
+    // La precondizione protegge la sola descrizione: un payload protetto che cambia anche
+    // `enabled` mescolerebbe ambiti di revisione (§13 C4).
+    if (Object.prototype.hasOwnProperty.call(endpointPayload, "enabled")) {
+      throw createAdminError(400, "expectedRevision protects only description: change enabled in a separate request.");
+    }
+    if (!Object.prototype.hasOwnProperty.call(endpointPayload, "description")) {
+      throw createAdminError(400, "expectedRevision protects description: send description with it.");
+    }
+    assertRevision({
+      resource: { kind: "description", endpointId: endpointIdOf(mocksDir, endpointPath) },
+      expectedRevision,
+      currentRevision: await currentDescriptionRevision(mocksDir, endpointPath),
+    });
+  }
+  const nextEndpoint = buildUpdatedEndpointConfig(endpoint, endpointPayload);
   const backups = [await readBackup(endpointPath)];
 
   await commitWithRollback({
@@ -1094,8 +1165,14 @@ async function updateAdminMock(mocksDir, id, payload, reloadRuntime, scenarioSta
   if (Object.prototype.hasOwnProperty.call(payload || {}, "sequence")) {
     throw createAdminError(400, "Update sequence responses via PUT /mocks/:id/responses/:file.");
   }
+  // Nella forma legacy la precondizione protegge la variante selezionata (§13 C4): il token
+  // incorpora il filename, quindi non autorizza la scrittura su una selezione diversa.
+  const { expectedRevision } = splitExpectedRevision(payload);
 
   if (Object.prototype.hasOwnProperty.call(payload || {}, "selectedResponseFile")) {
+    if (expectedRevision != null) {
+      throw createAdminError(400, "expectedRevision does not apply to a selection change.");
+    }
     const endpoint = await readEndpointConfig(endpointPath);
     const selectedResponseFile = assertSafeResponseFileName(payload.selectedResponseFile);
     if (!endpoint.responseFiles.includes(selectedResponseFile)) {
@@ -1195,6 +1272,15 @@ async function updateAdminMock(mocksDir, id, payload, reloadRuntime, scenarioSta
     if (normalizeTemplatedFlag(payload?.config, response)) {
       nextResponse.templated = true;
     }
+  }
+
+  if (expectedRevision != null) {
+    // Questa forma riscrive anche `enabled`: un payload protetto che lo cambierebbe mescola due
+    // ambiti di revisione (§13 C4).
+    if (nextEndpoint.enabled !== endpoint.enabled) {
+      throw createAdminError(400, "expectedRevision protects only the selected variant: change enabled with PUT /mocks/:id/endpoint.");
+    }
+    await assertResponseRevision(mocksDir, endpointPath, endpoint.selectedResponseFile, expectedRevision);
   }
 
   await commitWithRollback({

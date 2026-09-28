@@ -231,9 +231,20 @@ async function readEndpointConfig(filePath) {
   return normalizeEndpointConfig(endpoint, filePath);
 }
 
+// Definizione della variante così come è persistita, allegata alla forma normalizzata dalla stessa
+// lettura: i token di revisione (§13 C4) la coprono senza rileggere il file. Non enumerabile, così
+// spread e serializzazioni della risposta non la espongono.
+const PERSISTED_DEFINITION = Symbol("persistedDefinition");
+
 async function readEndpointResponse(responseFilePath, endpoint) {
-  const response = await readJsonFile(responseFilePath);
-  return normalizeEndpointResponse(response, responseFilePath, endpoint?.responseFiles);
+  const persisted = await readJsonFile(responseFilePath);
+  const response = normalizeEndpointResponse(persisted, responseFilePath, endpoint?.responseFiles);
+  Object.defineProperty(response, PERSISTED_DEFINITION, { value: persisted, enumerable: false });
+  return response;
+}
+
+function persistedDefinitionOf(response) {
+  return response?.[PERSISTED_DEFINITION];
 }
 
 function resolveEndpointResponseFilePath(endpointFilePath, endpoint, responseFileName) {
@@ -444,6 +455,7 @@ function createClonedResponseAssetFileName(responseFileName, sourceFileName, fal
 }
 
 module.exports = {
+  persistedDefinitionOf,
   isEndpointFileName,
   extractMethodFromEndpointFileName,
   getEndpointResponsesDir,

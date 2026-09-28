@@ -11,10 +11,13 @@ const { listFiles, resolvePayloadPath } = require("./admin-fs");
 const { encodeMockId, resolveAdminFilePath, toPosixRelativePath } = require("./mock-ids");
 const {
   isEndpointFileName,
+  persistedDefinitionOf,
+  readEndpointConfig,
   readEndpointResponseByName,
   readEndpointSelectedResponse,
   readEndpointResponseSummaries,
 } = require("./endpoint-files");
+const { descriptionRevision, digestBytes, digestFile, responseRevision } = require("./revision-tokens");
 const {
   attachCollectionId,
   listCollectionSummaries,
@@ -158,20 +161,20 @@ async function readWithBoundedRetry(endpointPath, build) {
  */
 async function getAdminMockResponse(mocksDir, id, responseFileName) {
   const endpointPath = resolveAdminFilePath(mocksDir, id);
-  return readWithBoundedRetry(endpointPath, () => buildAdminMockResponse(endpointPath, id, responseFileName));
+  return readWithBoundedRetry(endpointPath, () => buildAdminMockResponse(mocksDir, endpointPath, id, responseFileName));
 }
 
-async function buildAdminMockResponse(endpointPath, id, responseFileName) {
+async function buildAdminMockResponse(mocksDir, endpointPath, id, responseFileName) {
   if (!fs.existsSync(endpointPath)) {
     throw createAdminError(404, "Endpoint definition not found.");
   }
   const { endpoint, response, responseFileName: name, responseDir } = await readEndpointResponseByName(endpointPath, responseFileName);
   const selected = name === endpoint.selectedResponseFile;
 
-  let source = null;
+  let sourceBytes = null;
   if (response.type === "handler" || response.type === "middleware") {
     try {
-      source = await fs.promises.readFile(resolvePayloadPath(responseDir, response.sourceFile), "utf8");
+      sourceBytes = await fs.promises.readFile(resolvePayloadPath(responseDir, response.sourceFile));
     } catch (error) {
       if (error.code === "ENOENT") {
         throw markMissingFile(createAdminError(404, "Response source file not found on disk."));
@@ -181,9 +184,11 @@ async function buildAdminMockResponse(endpointPath, id, responseFileName) {
   }
 
   let fileInfo = null;
+  let assetDigest = null;
   if (response.type === "mock" && response.file != null) {
+    const assetPath = resolvePayloadPath(responseDir, response.file);
     try {
-      const stats = await fs.promises.stat(resolvePayloadPath(responseDir, response.file));
+      const stats = await fs.promises.stat(assetPath);
       fileInfo = { name: response.file, size: stats.size };
     } catch (error) {
       if (error.code === "ENOENT") {
@@ -191,6 +196,7 @@ async function buildAdminMockResponse(endpointPath, id, responseFileName) {
       }
       throw error;
     }
+    assetDigest = await digestFile(assetPath, "Response asset file not found on disk.");
   }
 
   return {
@@ -199,8 +205,10 @@ async function buildAdminMockResponse(endpointPath, id, responseFileName) {
     selected,
     active: selected || await isStepOfSelectedSequence(endpointPath, name),
     response: { ...response, responseFilePath: undefined },
-    source,
+    source: sourceBytes == null ? null : sourceBytes.toString("utf8"),
     fileInfo,
+    // Stessa acquisizione dei dati restituiti (§13 C4).
+    revision: responseRevisionOf({ mocksDir, endpointId: endpointIdOf(mocksDir, endpointPath), responseFile: name, response, sourceBytes, assetDigest }),
   };
 }
 
@@ -241,6 +249,10 @@ async function buildAdminMockDetail(mocksDir, filePath) {
       responseFilePath: undefined,
     },
   };
+  // Byte del sorgente e impronta dell'asset letti qui sotto: i token di revisione (§13 C4) li
+  // coprono dalla stessa acquisizione dei dati restituiti, senza rileggere i file.
+  let sourceBytes = null;
+  let assetDigest = null;
 
   if (response.type === "mock") {
     detail.config = {
@@ -269,15 +281,13 @@ async function buildAdminMockDetail(mocksDir, filePath) {
         name: response.file,
         size: stat.size,
       };
+      assetDigest = await digestFile(payloadPath, "Response asset file not found on disk.");
     } else {
       detail.payloadFilePath = responseFilePath;
       detail.body = response.body;
     }
-    return detail;
-  }
-
-  // Variante SSE: niente sorgente su disco, la definizione È il copione (script/onEnd/...).
-  if (response.type === "sse") {
+  } else if (response.type === "sse") {
+    // Variante SSE: niente sorgente su disco, la definizione È il copione (script/onEnd/...).
     detail.sse = {
       retryMs: response.retryMs,
       script: response.script,
@@ -285,11 +295,8 @@ async function buildAdminMockDetail(mocksDir, filePath) {
       presets: response.presets,
     };
     detail.payloadFilePath = responseFilePath;
-    return detail;
-  }
-
-  // Variante WS: come la SSE, la definizione è copione + regole (+ presets della console).
-  if (response.type === "ws") {
+  } else if (response.type === "ws") {
+    // Variante WS: come la SSE, la definizione è copione + regole (+ presets della console).
     detail.ws = {
       script: response.script,
       onEnd: response.onEnd,
@@ -299,37 +306,91 @@ async function buildAdminMockDetail(mocksDir, filePath) {
       presets: response.presets,
     };
     detail.payloadFilePath = responseFilePath;
-    return detail;
-  }
-
-  // Variante sequence: la definizione vive nel file response selezionato, come SSE/WS.
-  if (response.type === "sequence") {
+  } else if (response.type === "sequence") {
+    // Variante sequence: la definizione vive nel file response selezionato, come SSE/WS.
     detail.sequence = {
       steps: response.steps,
       onEnd: response.onEnd,
       resetAfterMs: response.resetAfterMs,
     };
     detail.payloadFilePath = responseFilePath;
-    return detail;
+  } else {
+    const sourcePath = resolvePayloadPath(responseDir, response.sourceFile);
+    detail.definition = {
+      method: endpoint.method,
+      path: endpoint.path,
+      disabled: endpoint.enabled !== true,
+    };
+    try {
+      sourceBytes = await fs.promises.readFile(sourcePath);
+    } catch (error) {
+      if (error.code === "ENOENT") {
+        throw markMissingFile(createAdminError(404, "Response source file not found on disk."));
+      }
+      throw error;
+    }
+    detail.source = sourceBytes.toString("utf8");
+    detail.sourceFilePath = sourcePath;
+    detail.payloadFilePath = sourcePath;
   }
 
-  const sourcePath = resolvePayloadPath(responseDir, response.sourceFile);
-  detail.definition = {
-    method: endpoint.method,
-    path: endpoint.path,
-    disabled: endpoint.enabled !== true,
-  };
-  try {
-    detail.source = await fs.promises.readFile(sourcePath, "utf8");
-  } catch (error) {
-    if (error.code === "ENOENT") {
-      throw markMissingFile(createAdminError(404, "Response source file not found on disk."));
-    }
-    throw error;
-  }
-  detail.sourceFilePath = sourcePath;
-  detail.payloadFilePath = sourcePath;
+  const endpointId = summary.id;
+  detail.descriptionRevision = descriptionRevision({ mocksDir, endpointId, description: endpoint.description });
+  detail.responseRevision = responseRevisionOf({
+    mocksDir,
+    endpointId,
+    responseFile: endpoint.selectedResponseFile,
+    response,
+    sourceBytes,
+    assetDigest,
+  });
   return detail;
+}
+
+// Token della variante dai dati di un'unica acquisizione: definizione persistita letta insieme
+// alla forma normalizzata, byte del sorgente e impronta dell'asset già letti dal chiamante.
+function responseRevisionOf({ mocksDir, endpointId, responseFile, response, sourceBytes, assetDigest }) {
+  const hasSource = response.type === "handler" || response.type === "middleware";
+  const hasAsset = response.type === "mock" && response.file != null;
+  return responseRevision({
+    mocksDir,
+    endpointId,
+    responseFile,
+    definition: persistedDefinitionOf(response),
+    source: hasSource ? { name: response.sourceFile, sha256: digestBytes(sourceBytes) } : null,
+    asset: hasAsset ? { name: response.file, sha256: assetDigest } : null,
+  });
+}
+
+// Revisioni correnti per il controllo delle precondizioni: dentro la coda delle mutazioni si
+// rileggono i contenuti effettivi, senza fidarsi di cache di mtime o dimensione (§13 C4).
+async function currentDescriptionRevision(mocksDir, endpointPath) {
+  const endpoint = await readEndpointConfig(endpointPath);
+  return descriptionRevision({ mocksDir, endpointId: endpointIdOf(mocksDir, endpointPath), description: endpoint.description });
+}
+
+async function currentResponseRevision(mocksDir, endpointPath, responseFileName) {
+  const { response, responseFileName: name, responseDir } = await readEndpointResponseByName(endpointPath, responseFileName);
+  let sourceBytes = null;
+  let assetDigest = null;
+  if (response.type === "handler" || response.type === "middleware") {
+    try {
+      sourceBytes = await fs.promises.readFile(resolvePayloadPath(responseDir, response.sourceFile));
+    } catch (error) {
+      if (error.code === "ENOENT") {
+        throw markMissingFile(createAdminError(404, "Response source file not found on disk."));
+      }
+      throw error;
+    }
+  }
+  if (response.type === "mock" && response.file != null) {
+    assetDigest = await digestFile(resolvePayloadPath(responseDir, response.file), "Response asset file not found on disk.");
+  }
+  return responseRevisionOf({ mocksDir, endpointId: endpointIdOf(mocksDir, endpointPath), responseFile: name, response, sourceBytes, assetDigest });
+}
+
+function endpointIdOf(mocksDir, endpointPath) {
+  return encodeMockId(toPosixRelativePath(path.relative(mocksDir, endpointPath)));
 }
 
 // Il dettaglio come CORPO della risposta di una mutazione già scritta su disco e già oltre la
@@ -402,5 +463,8 @@ module.exports = {
   getAdminMockDetail,
   getAdminMockDetailAfterCommit,
   getAdminMockResponse,
+  currentDescriptionRevision,
+  currentResponseRevision,
+  endpointIdOf,
   resolveAdminMockForRequest,
 };

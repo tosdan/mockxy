@@ -56,6 +56,7 @@ const { canonicalPath } = require("../utils/canonical-path");
 const { trackWrites } = require("../utils/write-tracking");
 const { getEndpointResponsesDir } = require("./endpoint-files");
 const { resolveAdminFilePath } = require("./mock-ids");
+const { registerWorkspaceId } = require("./revision-tokens");
 const {
   listDumpFiles,
   readDumpPage,
@@ -223,8 +224,13 @@ function createAdminApiRouter({ config, runtimeIdentity, runtimeStatus, catalogR
       throw markRejectedBeforeWriting(error);
     });
   // Identità del workspace (calcolata alla prima lettura: i percorsi sono fissi per il runtime)
-  // e revisioni degli stati configurabili, per GET /info.
+  // e revisioni degli stati configurabili, per GET /info. I token di revisione delle bozze usano
+  // la stessa identità, registrata per mocksDir.
   let workspace = null;
+  if (config?.mocksDir) {
+    workspace = describeWorkspace(config);
+    registerWorkspaceId(config.mocksDir, workspace.id);
+  }
   const serverRevision = new ObservedRevision(() => JSON.stringify(serverState?.getState() ?? null));
   const dumpRevision = new ObservedRevision(() => JSON.stringify(monitorDump == null ? null : {
     enabled: monitorDump.enabled,
@@ -693,7 +699,12 @@ function createAdminApiRouter({ config, runtimeIdentity, runtimeStatus, catalogR
         req.params.id,
         req.params.responseFileName,
         req.body,
-        { filename: req.query.filename, contentType: req.query.contentType },
+        {
+          filename: req.query.filename,
+          contentType: req.query.contentType,
+          // Precondizione dell'upload raw (§13 C4): header dedicato, mai dati di controllo nel file.
+          expectedRevision: req.get("x-mockxy-expected-revision"),
+        },
         reloadRuntime
       );
       sendJson(res, 200, detail);

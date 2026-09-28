@@ -61,6 +61,16 @@ resettano lo stato tra i test, pipeline che importano una specifica aggiornata.
   `details: { code: "READ_INCONSISTENT", retryable: true }` e nessun dettaglio parziale: si
   ripete la lettura al massimo una volta in automatico. Il messaggio nomina il file mancante,
   che può anche essere stato cancellato a mano.
+- **Bozze protette da revisione:** il dettaglio riporta `descriptionRevision` e `responseRevision`
+  (la variante selezionata), la lettura di una variante `revision`. Sono token di contenuto
+  (`rev-v1:…`) calcolati dagli stessi dati restituiti: la descrizione copre il solo valore, la
+  variante la definizione persistita e i byte del sorgente e dell'asset diretti. Tornare allo
+  stesso contenuto ridà lo stesso token, anche dopo un riavvio. Chi salva da una bozza manda
+  `expectedRevision` (per l'upload l'header `X-Mockxy-Expected-Revision`): il controllo avviene
+  nella coda, rileggendo il contenuto reale, e se è cambiato la risposta è
+  `409 REVISION_CONFLICT` con `details.resource`, `expectedRevision` e `currentRevision`, senza
+  scrivere né ricaricare. Non va ripetuto alla cieca: si rilegge, si confronta e si salva
+  deliberatamente con la nuova revisione. Senza precondizione tutto funziona come prima.
 - I file dati non ricaricano nulla ([`data()` rilegge a ogni chiamata](DATI.md)), con
   un'eccezione: la rinomina con riscrittura dei riferimenti ricarica, perché ha toccato i
   sorgenti degli handler, e verifica gli handler riscritti come ogni altra mutazione.
@@ -73,14 +83,14 @@ resettano lo stato tra i test, pipeline che importano una specifica aggiornata.
 | `GET /mocks/resolve?method&path` | l'endpoint che oggi coprirebbe una richiesta concreta (path con eventuale query), disabilitati inclusi; `{ mock: null }` se nessuno. Fatto derivato col matching del serving, usato dal monitor per "vai al mock" |
 | `POST /mocks` | crea un endpoint (mock statico, o handler/middleware con sorgente); se per rotta+metodo esiste già risponde `409` con `details.existingMockId`, così il client può proporre l'aggiunta di una variante a quell'endpoint |
 | `GET /mocks/:id` | dettaglio con varianti e configurazione normalizzata della response selezionata; con `type: sequence` espone `sequence` e `sequenceState`, mai `endpoint.sequence`. `409 READ_INCONSISTENT` se un file referenziato manca anche al secondo tentativo |
-| `PUT /mocks/:id` | seleziona una response con `{ selectedResponseFile }`, oppure aggiorna la response ordinaria selezionata; il vecchio body `{ sequence }` è rifiutato |
+| `PUT /mocks/:id` | seleziona una response con `{ selectedResponseFile }`, oppure aggiorna la response ordinaria selezionata; il vecchio body `{ sequence }` è rifiutato. Nell'aggiornamento `expectedRevision` protegge la variante selezionata (il token include il filename); un payload protetto che cambierebbe `enabled`, o un cambio di selezione protetto, è `400` |
 | `GET /mocks/:id/sequence/state` | stato live leggero della sequence selezionata: `{ sequenceFile, sequenceState }`; `400` su un altro tipo |
 | `POST /mocks/:id/sequence/reset` | azzera cursore e memoria handler della sequence selezionata; body `{}`; risponde `{ sequenceFile, sequenceState }` |
 | `POST /mocks/:id/sse/push` | push manuale della console [SSE](RESPONSE.md): body `{ data, event?, id? }`, broadcast a tutte le connessioni aperte — risponde `{ delivered, connections }`. Il bersaglio è la definizione servita dal runtime, anche la vecchia rotta mantenuta quando una nuova selezione non si carica, non la selezione su disco: `404` se il runtime non serve l'endpoint, `400` se la serve con un altro tipo, middleware compresi. Vale anche per le altre tre rotte delle console |
 | `GET /mocks/:id/sse/connections` | stato della console SSE: connessioni aperte (con posizione nel copione) e storico dei messaggi usciti |
 | `POST /mocks/:id/ws/push` | push manuale della console [WS](RESPONSE.md): body `{ data }`, broadcast a tutte le connessioni aperte — risponde `{ delivered, connections }` |
 | `GET /mocks/:id/ws/connections` | stato della console WS: connessioni aperte (con posizione nel copione) e transcript bidirezionale (usciti e ricevuti) |
-| `PUT /mocks/:id/endpoint` | aggiorna **solo** `description` ed `enabled` (qualunque altro campo è `400`): metodo e percorso sono fissati alla creazione — il percorso determina la cartella dei file — e si cambiano con `POST /mocks/:id/copy` |
+| `PUT /mocks/:id/endpoint` | aggiorna **solo** `description` ed `enabled` (qualunque altro campo è `400`): metodo e percorso sono fissati alla creazione — il percorso determina la cartella dei file — e si cambiano con `POST /mocks/:id/copy`. Con `expectedRevision` (la `descriptionRevision` letta) protegge la sola descrizione: va inviata con `description` e senza `enabled` |
 | `POST /mocks/:id/copy` | duplica su nuovo metodo+percorso — body `{ method, path, copyResponses }`; con `?dryRun=true` restituisce il piano senza scrivere né ricaricare |
 | `PATCH /mocks/enabled` | abilita o disabilita un elenco di endpoint — body `{ ids, enabled }`, con `ids` non vuoto (i duplicati vengono unificati); un id sconosciuto fa fallire la richiesta prima di scrivere; risponde col catalogo aggiornato `{ items, collections, childOrder }`. È la rotta dietro la selezione multipla del catalogo |
 | `PUT /mocks/:id/collection` | assegna l'endpoint a una collezione |
@@ -93,7 +103,7 @@ resettano lo stato tra i test, pipeline che importano una specifica aggiornata.
 | `GET /mocks/:id/responses/:file` | una variante per filename, selezionata o no: `{ id, responseFile, selected, active, response, source, fileInfo }`, con il sorgente di handler e middleware e i metadati (`name`, `size`) dell'asset di un mock servito da file, mai il contenuto binario. `active` dice se è la selezionata o uno step della sequence selezionata: va controllato prima di considerare innocua una modifica; se la variante selezionata è illeggibile la risposta è `400`, non un `active` inventato. Leggerla non cambia selezione né scenario; una variante non più elencata è `404`, un file mancante segue la procedura `READ_INCONSISTENT` del dettaglio |
 | `POST /mocks/:id/responses` | aggiunge e seleziona una variante `mock`, `handler`, `middleware`, `sse`, `ws` o `sequence`; il clone generico vale anche per sequence. Con `select: false` la prepara senza attivarla: selezione, cursore della sequence e memoria handler non cambiano, la validazione è la stessa. La risposta riporta `createdResponseFile` |
 | `PUT /mocks/:id/responses/:file` | aggiorna una variante; per sequence modifica titolo/step/fine/reset e valida tutto il grafo. La risposta riporta `updatedResponseFile`, indipendente dalla variante selezionata del dettaglio |
-| `PUT /mocks/:id/responses/:file/file` | carica i byte grezzi che rendono la variante [file-backed](RESPONSE.md) — body `application/octet-stream` (fino a 12 MB), MIME e nome in query (`?contentType=…&filename=…`) |
+| `PUT /mocks/:id/responses/:file/file` | carica i byte grezzi che rendono la variante [file-backed](RESPONSE.md) — body `application/octet-stream` (fino a 12 MB), MIME e nome in query (`?contentType=…&filename=…`). La precondizione va nell'header `X-Mockxy-Expected-Revision` |
 | `DELETE /mocks/:id/responses/:file` | elimina una variante; risponde `409` con `details.referencedBy` se è usata da una sequence |
 
 ## Collezioni
