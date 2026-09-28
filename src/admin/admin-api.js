@@ -149,7 +149,7 @@ function sendJson(res, status, payload) {
   res.status(status).json(payload);
 }
 
-function createAdminApiRouter({ config, runtimeIdentity, registry, proxyMiddlewareRegistry, reloadRuntime, requestMonitor, serverState, monitorDump, sequenceStates, handlerStates, sharedStates, sseConnections, wsConnections }) {
+function createAdminApiRouter({ config, runtimeIdentity, runtimeStatus, registry, proxyMiddlewareRegistry, reloadRuntime, requestMonitor, serverState, monitorDump, sequenceStates, handlerStates, sharedStates, sseConnections, wsConnections }) {
   const router = express.Router();
   // Store dello scenario runtime, passati alle mutazioni che possono invalidarlo: il reload da
   // solo non basta, perche' aggrega piu' scritture in un giro unico (vedi invalidateScenario).
@@ -178,6 +178,19 @@ function createAdminApiRouter({ config, runtimeIdentity, registry, proxyMiddlewa
   // Configurazione effettiva in sola lettura: le nove chiavi di C8, senza altre variabili d'ambiente.
   router.get("/config", (_req, res) => {
     sendJson(res, 200, describeRuntimeConfig({ runtimeId: runtimeIdentity?.runtimeId ?? null, startup: startupConfig, config }));
+  });
+
+  // Esito dell'ultimo tentativo di caricamento ed errori per file del registro installato: 200
+  // anche in stato degradato o fallito (§13 C2).
+  router.get("/runtime/status", (_req, res) => {
+    const status = runtimeStatus?.snapshot() ?? {
+      runtimeId: runtimeIdentity?.runtimeId ?? null,
+      lastAttempt: null,
+      lastAppliedAttemptId: null,
+      errors: [],
+      fatalError: null,
+    };
+    sendJson(res, 200, status);
   });
 
   router.get('/monitoring/requests', (_req, res) => {

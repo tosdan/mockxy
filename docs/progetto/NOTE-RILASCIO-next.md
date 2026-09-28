@@ -99,6 +99,18 @@ esistenti restano compatibili: nessuna migrazione richiesta.
 - **Per i client:** la fonte del contratto si è spostata in `src/admin/admin-api.openapi.yaml`;
   chi la leggeva dal percorso precedente deve aggiornarlo o usare la rotta.
 
+#### Esito dei caricamenti leggibile via API
+
+- **Prima:** gli errori di caricamento degli endpoint comparivano solo nei log e, per i file
+  illeggibili, in `loadErrors` del catalogo; un fallimento globale del reload o una rotta
+  mantenuta nella versione precedente non erano visibili.
+- **Ora:** `GET /runtime/status` riporta l'ultimo tentativo di caricamento (avvio, mutazione
+  admin o modifica vista dal watcher) con il suo esito, gli errori per file del registro
+  installato, indicando se la versione precedente resta servita, e l'eventuale fallimento
+  globale. Nessuno storico dei tentativi.
+- **Per i client:** dopo un `500 ROLLBACK_FAILED` o `RUNTIME_APPLY_FAILED` questa rotta dice in
+  che stato è rimasto il runtime.
+
 ### Interfaccia
 
 - **Descrizione e abilitazione:** salvare la descrizione invia solo la descrizione, e il toggle

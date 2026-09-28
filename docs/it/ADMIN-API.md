@@ -49,7 +49,8 @@ resettano lo stato tra i test, pipeline che importano una specifica aggiornata.
   - `500 ROLLBACK_FAILED`: è fallito anche il ripristino (`rollback: "failed"`, con `cause` e
     `recoveryError`), anche solo perché dopo il ripristino un endpoint coinvolto non è servito
     com'era prima: non è più servito, oppure resta la versione della modifica rifiutata perché il
-    ripristino non è riuscito a ricaricarlo. Lo stato del workspace non va considerato coerente.
+    ripristino non è riuscito a ricaricarlo. Lo stato del workspace non va considerato coerente:
+    `GET /runtime/status` mostra l'esito dell'ultimo caricamento e gli errori per file.
 - **Una mutazione alla volta** per workspace: le mutazioni vengono messe in coda, mentre letture,
   traffico e push delle console SSE/WS non le aspettano. Un client che si disconnette non
   interrompe una mutazione già partita.
@@ -170,6 +171,7 @@ client e polling, eseguire il reset, poi avviare lo scenario.
 | Metodo e percorso | Cosa fa |
 |---|---|
 | `GET /config` | configurazione effettiva in sola lettura: `{ runtimeId, startup, effective, overrides, persisted }`, con le sole nove chiavi modificabili a runtime nelle prossime versioni (`backendUrl` è `null` senza backend). Nessun'altra variabile d'ambiente. Per ora `effective` coincide con `startup` e `overrides` è `{}`; `runtimeId` cambia a ogni avvio |
+| `GET /runtime/status` | esito dell'ultimo caricamento del workspace, `200` anche se degradato o fallito: `lastAttempt` (`id`, istanti, `reasons` fra `startup`, `admin`, `watcher`, `status` `applied`, `degraded` o `failed`), `lastAppliedAttemptId`, `errors` per file (`endpointId`, `filePath`, `message`, `serving`: `retained` se resta servita la versione precedente, `missing` se nulla la serve) e `fatalError`. Solo l'ultimo tentativo, senza storico |
 | `GET /openapi.yaml` | il [contratto](#la-descrizione-leggibile-dalle-macchine) della versione in esecuzione, come `application/yaml` |
 
 ## Esempi

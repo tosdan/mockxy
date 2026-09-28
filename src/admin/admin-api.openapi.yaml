@@ -136,7 +136,7 @@ tags:
   - name: Shared runtime state
     description: Metadata and reset actions for named JSON resources shared by local handlers. Values are never exposed.
   - name: Runtime
-    description: The running engine itself — its effective configuration and the contract of the version that answers.
+    description: The running engine itself — its effective configuration, the outcome of its loads and the contract of the version that answers.
 
 paths:
   # ───────────────────────────────── Catalog ─────────────────────────────────
@@ -1729,6 +1729,32 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/RuntimeConfigState" }
 
+  /runtime/status:
+    get:
+      tags: [Runtime]
+      operationId: getRuntimeStatus
+      summary: Outcome of the last load of the workspace
+      description: |
+        The last completed attempt to load the workspace — at startup, after an admin mutation or
+        after a change seen by the watcher — and the per-file errors of the registry currently
+        installed. It answers `200` in a degraded or failed state too. Only the last attempt is
+        kept, with no history; while a reload runs, the previous attempt stays visible until the
+        new one completes.
+
+        - `reasons` lists every cause the attempt served, in the fixed order `startup`, `admin`,
+          `watcher`: calls that arrive while a scan is running belong to the next attempt.
+        - `errors` are the load errors of the installed registry. `serving: retained` means the
+          previous version of that definition is still served; `missing` means nothing serves it.
+          A file that loads again leaves the list.
+        - A global failure installs nothing: `errors` keep describing the registry in use, and
+          `fatalError` reports the failure until the next attempt that installs.
+      responses:
+        "200":
+          description: Load outcome
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RuntimeStatus" }
+
   /openapi.yaml:
     get:
       tags: [Runtime]
@@ -2024,6 +2050,84 @@ components:
         error: Bad Request
         message: config.status must be an integer HTTP status code.
 
+    RuntimeAttempt:
+      type: object
+      required: [id, startedAt, completedAt, reasons, status]
+      properties:
+        id:
+          type: integer
+          minimum: 1
+          description: Increasing within this runtime; the startup load is attempt 1.
+        startedAt: { type: string, format: date-time }
+        completedAt: { type: string, format: date-time }
+        reasons:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items: { type: string, enum: [startup, admin, watcher] }
+          description: Every cause the attempt served, in the fixed order `startup`, `admin`, `watcher`.
+        status:
+          type: string
+          enum: [applied, degraded, failed]
+          description: |
+            `applied`: installed without errors. `degraded`: installed, with load errors on some
+            files. `failed`: the load failed as a whole and nothing was installed.
+    RuntimeLoadError:
+      type: object
+      required: [endpointId, filePath, message, serving]
+      properties:
+        endpointId:
+          type: [string, "null"]
+          description: Id of the endpoint, when the file is an endpoint definition inside the mocks folder.
+        filePath:
+          type: string
+          description: Path relative to the mocks folder, with `/` separators.
+        message: { type: string }
+        serving:
+          type: string
+          enum: [retained, missing]
+          description: "`retained`: the previous version of the definition is still served. `missing`: nothing serves it."
+    RuntimeStatus:
+      type: object
+      required: [runtimeId, lastAttempt, lastAppliedAttemptId, errors, fatalError]
+      properties:
+        runtimeId: { type: string, format: uuid }
+        lastAttempt:
+          description: |
+            The last completed attempt. Always present in a running server, where the startup
+            load is the first attempt; `null` only when the engine is embedded without it.
+          anyOf:
+            - $ref: "#/components/schemas/RuntimeAttempt"
+            - type: "null"
+        lastAppliedAttemptId:
+          type: [integer, "null"]
+          description: The last attempt that installed a registry, degraded or not; `null` if none did.
+        errors:
+          type: array
+          items: { $ref: "#/components/schemas/RuntimeLoadError" }
+        fatalError:
+          description: The global failure of the last attempt; `null` once an attempt installs again.
+          anyOf:
+            - type: object
+              required: [message]
+              properties:
+                message: { type: string }
+            - type: "null"
+      example:
+        runtimeId: 7d9f1c4e-2b0a-4c7e-9f3a-5e8d2c1b4a60
+        lastAttempt:
+          id: 4
+          startedAt: "2026-09-28T09:15:02.118Z"
+          completedAt: "2026-09-28T09:15:02.164Z"
+          reasons: [admin, watcher]
+          status: degraded
+        lastAppliedAttemptId: 4
+        errors:
+          - endpointId: dXNlcnMvR0VULmVuZHBvaW50Lmpzb24
+            filePath: users/GET.endpoint.json
+            message: "001.handler.js: Unexpected token '{'"
+            serving: retained
+        fatalError: null
     RuntimeConfig:
       type: object
       description: |
