@@ -514,7 +514,8 @@ function createAdminApiRouter({ config, runtimeIdentity, runtimeStatus, catalogR
     const detail = await getAdminMockDetail(config.mocksDir, req.params.id);
     // Il dettaglio legge i contenuti effettivi: se differiscono da quelli in cache (una modifica
     // esterna a firma invariata, un file comparso), la revisione del catalogo lo registra (§13 C2).
-    await catalogRevision?.verify(detailReadPaths(detail)).catch(() => {});
+    // L'osservazione non entra nella coda delle scansioni: una scansione lenta non ritarda la GET.
+    await catalogRevision?.observeFiles(detailReadPaths(detail)).catch(() => {});
     // Stato runtime presente solo quando la response selezionata è una sequence.
     if (sequenceStates != null && detail.sequence != null) {
       detail.sequenceState = sequenceStates.getState(

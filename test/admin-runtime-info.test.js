@@ -265,6 +265,31 @@ describe("GET /info", () => {
       expect((await readInfo(runtime.app)).revisions.catalog).toBe(2);
     });
 
+    test("con una scansione sospesa la GET del dettaglio risponde comunque e registra il contenuto letto", async () => {
+      await writeMock({ mocksDir, folder: "items", method: "GET", routePath: "/items", body: { v: 1 } });
+      const tick = new Date(Math.floor(Date.now() / 1000) * 1000);
+      await fs.promises.utimes(responsePath(), tick, tick);
+      const runtime = await createRuntime();
+      const original = await fs.promises.readFile(responsePath(), "utf8");
+      await fs.promises.writeFile(responsePath(), original.replace(/("v":\s*)1/, "$12"));
+      await fs.promises.utimes(responsePath(), tick, tick);
+      let release;
+      runtime.catalogRevision.enqueue(() => new Promise((resolve) => {
+        release = resolve;
+      }));
+      try {
+        const detail = await Promise.race([
+          request(runtime.app).get(`/_admin/api/mocks/${encodeMockId("items/GET.endpoint.json")}`),
+          new Promise((resolve) => setTimeout(() => resolve(null), 1000)),
+        ]);
+        expect(detail?.status).toBe(200);
+        expect(detail.body.body).toEqual({ v: 2 });
+        expect((await readInfo(runtime.app)).revisions.catalog).toBe(2);
+      } finally {
+        release();
+      }
+    });
+
     test("/info non attende una scansione in corso", async () => {
       const runtime = await createRuntime();
       let release;

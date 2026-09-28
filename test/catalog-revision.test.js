@@ -94,14 +94,67 @@ describe("CatalogRevisionTracker", () => {
 
     await keepSignature(JSON.stringify({ type: "mock", status: 501, file: "assets/logo.png" }));
     // Una lettura effettiva del contenuto (GET di dettaglio) lo confronta con la cache.
-    expect(await tracker.verify([response])).toBe(3);
-    expect(await tracker.verify([response])).toBe(3);
+    expect(await tracker.observeFiles([response])).toBe(3);
+    expect(await tracker.observeFiles([response])).toBe(3);
+    // La scansione successiva non la annulla.
+    expect(await tracker.refresh()).toBe(3);
   });
 
-  test("la verifica registra anche un file comparso fuori dalla cache", async () => {
+  test("un'osservazione non attende le scansioni pendenti", async () => {
+    let release;
+    tracker.enqueue(() => new Promise((resolve) => {
+      release = resolve;
+    }));
+    await write(".collections.json", "{\"x\":1}");
+    try {
+      expect(await tracker.observeFiles([at(".collections.json")])).toBe(2);
+    } finally {
+      release();
+    }
+  });
+
+  test("una scansione iniziata prima non sovrascrive un'osservazione più recente", async () => {
+    const collections = at(".collections.json");
+    await write(".collections.json", "{\"v\":1}");
+    // La scansione legge la versione 1 e resta ferma prima di registrarla.
+    const realReadFile = fs.promises.readFile.bind(fs.promises);
+    let resumeScan;
+    let scanRead;
+    const scanHasRead = new Promise((resolve) => {
+      scanRead = resolve;
+    });
+    const spy = jest.spyOn(fs.promises, "readFile").mockImplementation(async (filePath, ...rest) => {
+      const content = await realReadFile(filePath, ...rest);
+      if (filePath === collections && resumeScan == null) {
+        await new Promise((resolve) => {
+          resumeScan = resolve;
+          scanRead();
+        });
+      }
+      return content;
+    });
+    try {
+      const scan = tracker.refresh();
+      await scanHasRead;
+      await write(".collections.json", "{\"v\":2}");
+      const observed = await tracker.observeFiles([collections]);
+      resumeScan();
+      const scanned = await scan;
+
+      expect(observed).toBe(2);
+      // La versione 2 resta in cache: la scansione successiva non vede cambiamenti.
+      expect(scanned).toBe(2);
+      spy.mockRestore();
+      expect(await tracker.refresh()).toBe(2);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  test("un'osservazione registra anche un file comparso fuori dalla cache", async () => {
     await write("items/GET.responses/003.response.json", JSON.stringify({ type: "mock", status: 204 }));
     await writeEndpoint(["001.response.json", "002.response.json", "003.response.json"]);
-    expect(await tracker.verify([at("items/GET.responses/003.response.json")])).toBe(2);
+    expect(await tracker.observeFiles([at("items/GET.responses/003.response.json")])).toBe(2);
   });
 
   (process.platform === "win32" ? test.skip : test)("un file del perimetro che non si riesce a leggere la muove", async () => {

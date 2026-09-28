@@ -3,6 +3,7 @@ const fs = require("fs");
 const path = require("path");
 
 const ENDPOINT_SUFFIX = ".endpoint.json";
+const RESPONSE_SUFFIX = ".response.json";
 const RESPONSES_DIR_SUFFIX = ".responses";
 const COLLECTIONS_FILE = ".collections.json";
 
@@ -17,12 +18,20 @@ const COLLECTIONS_FILE = ".collections.json";
 // esplicitamente. Una modifica esterna che lascia identici mtime e dimensione resta invisibile
 // finché il file non viene riletto davvero (una scrittura API, una GET di dettaglio): è il limite
 // dichiarato del contratto.
+//
+// Le scansioni sono serializzate fra loro; le osservazioni delle letture (GET di dettaglio) no:
+// non attendono le scansioni pendenti. Ogni lettura di un file prende un numero da un orologio
+// logico, e per ogni file vince la lettura iniziata per ultima: una scansione partita prima non
+// sovrascrive un'osservazione più recente.
 class CatalogRevisionTracker {
   constructor({ mocksDir }) {
     this.mocksDir = path.resolve(mocksDir);
     this.revision = 1;
     this.files = new Map();
+    // Voci del perimetro che non sono file letti: riferimenti mancanti, errori, non-file.
+    this.structure = [];
     this.fingerprint = null;
+    this.clock = 0;
     this.tail = Promise.resolve();
   }
 
@@ -32,25 +41,47 @@ class CatalogRevisionTracker {
     return this.enqueue(() => this.scan(new Set([...(invalidate || [])].map((filePath) => path.resolve(filePath)))));
   }
 
-  // Confronta con la cache i contenuti effettivi dei file indicati (per esempio quelli appena
-  // letti da una GET di dettaglio): se uno è cambiato, o è comparso, la scansione lo rilegge.
-  verify(filePaths) {
-    return this.enqueue(async () => {
-      const changed = [];
-      for (const filePath of filePaths.map((candidate) => path.resolve(candidate))) {
-        const cached = this.files.get(filePath);
-        if (cached == null) {
-          if (await isFile(filePath)) {
-            changed.push(filePath);
-          }
-          continue;
-        }
-        if ((await readDigest(filePath, cached.kind)).digest !== cached.digest) {
-          changed.push(filePath);
-        }
+  // Registra i contenuti effettivi dei file indicati, appena letti da una GET di dettaglio,
+  // senza attendere le scansioni pendenti: un file cambiato o comparso muove subito la revisione.
+  // Se cambia la struttura (un file nuovo, riferimenti diversi) accoda una scansione, senza
+  // attenderla.
+  async observeFiles(filePaths) {
+    const seq = this.tick();
+    const observations = [];
+    for (const filePath of new Set(filePaths.map((candidate) => path.resolve(candidate)))) {
+      let stats;
+      try {
+        stats = await fs.promises.stat(filePath);
+      } catch {
+        continue;
       }
-      return changed.length > 0 ? this.scan(new Set(changed)) : this.revision;
-    });
+      if (!stats.isFile()) {
+        continue;
+      }
+      const kind = this.files.get(filePath)?.kind ?? inferKind(filePath);
+      const read = await readDigest(filePath, kind);
+      if (!read.digest.startsWith("error:")) {
+        observations.push({ filePath, kind, mtimeMs: stats.mtimeMs, size: stats.size, ...read, seq });
+      }
+    }
+
+    // Applicazione sincrona: nessuna scansione può concludersi a metà.
+    let structureChanged = false;
+    for (const observation of observations) {
+      const current = this.files.get(observation.filePath);
+      if (current != null && current.seq > seq) {
+        continue;
+      }
+      if (current == null || !sameReferences(current.references, observation.references)) {
+        structureChanged = true;
+      }
+      this.files.set(observation.filePath, observation);
+    }
+    this.publish();
+    if (structureChanged) {
+      this.refresh().catch(() => {});
+    }
+    return this.revision;
   }
 
   // Le scansioni sono serializzate: ognuna parte dalla cache lasciata dalla precedente.
@@ -60,9 +91,15 @@ class CatalogRevisionTracker {
     return run;
   }
 
+  tick() {
+    this.clock += 1;
+    return this.clock;
+  }
+
   async scan(invalidated) {
-    const files = new Map();
-    const entries = [];
+    const startedAt = this.clock;
+    const scanned = new Map();
+    const structure = [];
     const visited = new Set();
 
     const visit = async (filePath, kind) => {
@@ -77,12 +114,12 @@ class CatalogRevisionTracker {
       } catch (error) {
         // Un riferimento a un file assente è uno stato del catalogo; un file radice sparito no.
         if (kind !== "root" || error.code !== "ENOENT") {
-          entries.push(`${relativePath}\0${error.code === "ENOENT" ? "missing" : `error:${error.code || "EREAD"}`}`);
+          structure.push(`${relativePath}\0${error.code === "ENOENT" ? "missing" : `error:${error.code || "EREAD"}`}`);
         }
         return;
       }
       if (!stats.isFile()) {
-        entries.push(`${relativePath}\0not-a-file`);
+        structure.push(`${relativePath}\0not-a-file`);
         return;
       }
       const cached = this.files.get(filePath);
@@ -91,33 +128,56 @@ class CatalogRevisionTracker {
         && cached.mtimeMs === stats.mtimeMs
         && cached.size === stats.size
         && !invalidated.has(filePath);
-      const entry = reusable
-        ? cached
-        : { kind, mtimeMs: stats.mtimeMs, size: stats.size, ...(await readDigest(filePath, kind)) };
-      files.set(filePath, entry);
-      entries.push(`${relativePath}\0${entry.digest}`);
+      let entry = cached;
+      if (!reusable) {
+        const seq = this.tick();
+        entry = { kind, mtimeMs: stats.mtimeMs, size: stats.size, ...(await readDigest(filePath, kind)), seq };
+      }
+      scanned.set(filePath, entry);
       for (const reference of entry.references) {
         await visit(reference.filePath, reference.kind);
       }
     };
 
-    for (const root of await this.listRoots(entries)) {
+    for (const root of await this.listRoots(structure)) {
       await visit(root, root.endsWith(ENDPOINT_SUFFIX) ? "endpoint" : "root");
     }
 
+    // Per ogni file vince la lettura più recente; un file osservato durante la scansione e non
+    // visitato resta, finché la prossima scansione non lo ricolloca nel perimetro.
+    const files = new Map();
+    for (const [filePath, entry] of scanned) {
+      const current = this.files.get(filePath);
+      files.set(filePath, current != null && current.seq > entry.seq ? current : entry);
+    }
+    for (const [filePath, current] of this.files) {
+      if (!files.has(filePath) && current.seq > startedAt) {
+        files.set(filePath, current);
+      }
+    }
+    this.files = files;
+    this.structure = structure;
+    return this.publish();
+  }
+
+  // Ricalcola l'impronta del perimetro e avanza la revisione se è cambiata.
+  publish() {
+    const entries = [...this.structure];
+    for (const [filePath, entry] of this.files) {
+      entries.push(`${this.relative(filePath)}\0${entry.digest}`);
+    }
     entries.sort();
     const fingerprint = crypto.createHash("sha256").update(entries.join("\n")).digest("hex");
     if (this.fingerprint != null && fingerprint !== this.fingerprint) {
       this.revision += 1;
     }
     this.fingerprint = fingerprint;
-    this.files = files;
     return this.revision;
   }
 
   // `.collections.json` e i file endpoint in tutte le sottocartelle, come il loader. Una cartella
   // illeggibile diventa una voce d'errore: potrebbe nascondere endpoint.
-  async listRoots(entries) {
+  async listRoots(structure) {
     const roots = [path.join(this.mocksDir, COLLECTIONS_FILE)];
     const walk = async (dir) => {
       let dirents;
@@ -125,7 +185,7 @@ class CatalogRevisionTracker {
         dirents = await fs.promises.readdir(dir, { withFileTypes: true });
       } catch (error) {
         if (error.code !== "ENOENT") {
-          entries.push(`${this.relative(dir)}/\0error:${error.code || "EREAD"}`);
+          structure.push(`${this.relative(dir)}/\0error:${error.code || "EREAD"}`);
         }
         return;
       }
@@ -145,6 +205,18 @@ class CatalogRevisionTracker {
   relative(filePath) {
     return path.relative(this.mocksDir, filePath).split(path.sep).join("/") || ".";
   }
+}
+
+function inferKind(filePath) {
+  if (filePath.endsWith(ENDPOINT_SUFFIX)) {
+    return "endpoint";
+  }
+  return filePath.endsWith(RESPONSE_SUFFIX) ? "response" : "dependency";
+}
+
+function sameReferences(left, right) {
+  return left.length === right.length
+    && left.every((reference, index) => reference.filePath === right[index].filePath && reference.kind === right[index].kind);
 }
 
 // Impronta del contenuto e riferimenti diretti: le varianti (`response`) elencate da un endpoint,
@@ -184,14 +256,6 @@ function referencesOf(filePath, kind, content) {
     .map((name) => path.resolve(responsesDir, name))
     .filter((target) => target.startsWith(`${responsesDir}${path.sep}`))
     .map((target) => ({ filePath: target, kind: "dependency" }));
-}
-
-async function isFile(filePath) {
-  try {
-    return (await fs.promises.stat(filePath)).isFile();
-  } catch {
-    return false;
-  }
 }
 
 module.exports = {
