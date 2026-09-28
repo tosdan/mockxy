@@ -20,6 +20,7 @@ const { ServerStateStore } = require("./server-state");
 const { MonitorDumpWriter } = require("./monitoring/monitor-dump");
 const { createUpgradeHandler } = require("./proxy/upgrade-proxy");
 const { createRuntimeIdentity } = require("./runtime-identity");
+const { RELOAD_REASONS, RuntimeStatusStore } = require("./runtime-status");
 
 // Reintegra nelle nuove route la versione precedente degli endpoint il cui file oggi non
 // carica: a caldo un errore su un singolo file non deve far sparire una route che funzionava
@@ -67,11 +68,26 @@ function collectInstalledDefinitions(routeGroups) {
   return installed;
 }
 
-function createReloadHandler({ mocksDir, registry, proxyMiddlewareRegistry, logger, handlerStates, sseConnections, wsConnections }) {
+function createReloadHandler({ mocksDir, registry, proxyMiddlewareRegistry, logger, handlerStates, sseConnections, wsConnections, runtimeStatus }) {
   let drainPromise = null;
   let queuedWaiters = [];
 
-  const performReload = async () => {
+  // Esegue un tentativo e lo registra, concluso, nello stato del runtime con le cause delle
+  // richieste che serve (§13 C2).
+  const performReload = async (reasons) => {
+    const startedAt = new Date().toISOString();
+    const outcome = await loadAndInstall();
+    runtimeStatus?.recordAttempt({
+      reasons,
+      startedAt,
+      completedAt: new Date().toISOString(),
+      outcome,
+      registries: [registry, proxyMiddlewareRegistry],
+    });
+    return outcome;
+  };
+
+  const loadAndInstall = async () => {
     try {
       const { mockRouteGroups, handlerRouteGroups, proxyMiddlewareRouteGroups, sequenceRouteGroups, sseRouteGroups, wsRouteGroups, loadErrors } =
         await loadEndpointRouteGroups(mocksDir);
@@ -134,20 +150,23 @@ function createReloadHandler({ mocksDir, registry, proxyMiddlewareRegistry, logg
   // Ogni chiamante attende un giro iniziato dopo la propria richiesta. Le chiamate durante un
   // giro vengono aggregate nel successivo, ma non risolte prematuramente col risultato del giro
   // già in corso: le mutazioni admin possono così sapere che la loro scrittura è stata vista.
+  // Il tentativo porta le cause di tutte le richieste che serve.
   const drainReloadQueue = async () => {
     while (queuedWaiters.length > 0) {
       const waiters = queuedWaiters;
       queuedWaiters = [];
-      const outcome = await performReload();
-      for (const resolve of waiters) {
+      const outcome = await performReload(waiters.map((waiter) => waiter.reason));
+      for (const { resolve } of waiters) {
         resolve(outcome);
       }
     }
     drainPromise = null;
   };
 
-  const reload = () => new Promise((resolve) => {
-    queuedWaiters.push(resolve);
+  // `reason` è la causa riportata da GET /runtime/status: le mutazioni admin chiamano senza
+  // argomenti, il watcher passa "watcher".
+  const reload = (reason = "admin") => new Promise((resolve) => {
+    queuedWaiters.push({ resolve, reason: RELOAD_REASONS.includes(reason) ? reason : "admin" });
     if (drainPromise == null) {
       drainPromise = drainReloadQueue();
     }
@@ -199,11 +218,13 @@ function startMockWatcher({ config, registry, proxyMiddlewareRegistry, logger, r
     },
   });
 
-  watcher.on("add", reload);
-  watcher.on("change", reload);
-  watcher.on("unlink", reload);
-  watcher.on("unlinkDir", reload);
-  watcher.on("addDir", reload);
+  // Gli eventi passano il percorso come primo argomento: la causa del reload va resa esplicita.
+  const reloadFromWatcher = () => reload("watcher");
+  watcher.on("add", reloadFromWatcher);
+  watcher.on("change", reloadFromWatcher);
+  watcher.on("unlink", reloadFromWatcher);
+  watcher.on("unlinkDir", reloadFromWatcher);
+  watcher.on("addDir", reloadFromWatcher);
   watcher.on("error", (error) => {
     logger.error("Mock watcher error.", { error: error.message });
   });
@@ -235,6 +256,8 @@ async function createServerRuntime({ configOverrides = {}, logger: extLogger } =
       "BACKEND_URL is not configured. Mocks and local handlers work normally, but requests that fall through to the backend (proxy fallback) or use proxy middleware will return 501 until BACKEND_URL is set."
     );
   }
+  const runtimeStatus = new RuntimeStatusStore({ runtimeId: runtimeIdentity.runtimeId, mocksDir: config.mocksDir });
+  const startupStartedAt = new Date().toISOString();
   const { mockRouteGroups, handlerRouteGroups, proxyMiddlewareRouteGroups, sequenceRouteGroups, sseRouteGroups, wsRouteGroups, loadErrors } =
     await loadEndpointRouteGroups(config.mocksDir);
   // Avvio resiliente: un file rotto non blocca il boot — l'endpoint viene saltato con un
@@ -267,6 +290,14 @@ async function createServerRuntime({ configOverrides = {}, logger: extLogger } =
   const wsConnections = new WsConnectionStore();
   const registry = new MockRegistry(routeGroups, sequenceStates);
   const proxyMiddlewareRegistry = new ProxyMiddlewareRegistry(proxyMiddlewareRouteGroups);
+  // Il caricamento iniziale è il primo tentativo: all'avvio nessuna versione precedente da mantenere.
+  runtimeStatus.recordAttempt({
+    reasons: ["startup"],
+    startedAt: startupStartedAt,
+    completedAt: new Date().toISOString(),
+    outcome: { applied: true, loadErrors, fatalError: null },
+    registries: [registry, proxyMiddlewareRegistry],
+  });
   const requestMonitor = new RequestMonitorStore(undefined, logger);
   const serverState = new ServerStateStore();
   const monitorDump = new MonitorDumpWriter({
@@ -285,12 +316,14 @@ async function createServerRuntime({ configOverrides = {}, logger: extLogger } =
     handlerStates,
     sseConnections,
     wsConnections,
+    runtimeStatus,
   });
   const app = createApp({
     registry,
     config,
     logger,
     runtimeIdentity,
+    runtimeStatus,
     proxyMiddlewareRegistry,
     reloadRuntime,
     requestMonitor,
@@ -327,6 +360,7 @@ async function createServerRuntime({ configOverrides = {}, logger: extLogger } =
     reloadRuntime,
     watcher,
     runtimeIdentity,
+    runtimeStatus,
   };
 }
 

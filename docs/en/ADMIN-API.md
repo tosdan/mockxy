@@ -48,7 +48,8 @@ state between tests, pipelines that import an updated spec.
   - `500 ROLLBACK_FAILED`: the restore failed too (`rollback: "failed"`, with `cause` and
     `recoveryError`), even just because after the restore an endpoint involved is not served as
     it was before: it is no longer served, or the rejected version is still served because the
-    restore could not reload it. The workspace state must not be assumed consistent.
+    restore could not reload it. The workspace state must not be assumed consistent:
+    `GET /runtime/status` shows the outcome of the last load and the per-file errors.
 - **One mutation at a time** per workspace: mutations are queued, while reads, traffic and the
   SSE/WS console pushes do not wait for them. A client that disconnects does not cut a running
   mutation short.
@@ -167,6 +168,7 @@ then start the scenario.
 | Method and path | What it does |
 |---|---|
 | `GET /config` | effective configuration, read-only: `{ runtimeId, startup, effective, overrides, persisted }`, with only the nine keys that upcoming versions will let you change at runtime (`backendUrl` is `null` without a backend). No other environment variable. For now `effective` equals `startup` and `overrides` is `{}`; `runtimeId` changes at every start |
+| `GET /runtime/status` | outcome of the last load of the workspace, `200` even when degraded or failed: `lastAttempt` (`id`, timestamps, `reasons` among `startup`, `admin`, `watcher`, `status` `applied`, `degraded` or `failed`), `lastAppliedAttemptId`, per-file `errors` (`endpointId`, `filePath`, `message`, `serving`: `retained` when the previous version is still served, `missing` when nothing serves it) and `fatalError`. Only the last attempt, no history |
 | `GET /openapi.yaml` | the [contract](#the-machine-readable-description) of the running version, as `application/yaml` |
 
 ## Examples
