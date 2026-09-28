@@ -733,8 +733,17 @@ export class MocksNextDetail {
     if (!this.draft.isScript() && this.draft.payloadType() === 'file') {
       const file = this.draft.file();
       if (!file) return;
-      // crea la response (metadati) e vi carica sopra il file scelto, selezionata o no.
-      this.store.addResponse(payload, (created) => this.store.uploadResponseFile(file, () => this.closeResponseForm(), created));
+      // crea la response (metadati) e vi carica sopra il file scelto, selezionata o no. Una
+      // variante preparata senza filename creato non riceve l'upload: il ripiego sulla selezionata
+      // ne sovrascriverebbe il contenuto.
+      const activate = this.activateNewResponse();
+      this.store.addResponse(payload, (created) => {
+        if (!activate && !created) {
+          this.store.error.set(this.transloco.translate('detail.createdResponseFileMissing'));
+          return;
+        }
+        this.store.uploadResponseFile(file, () => this.closeResponseForm(), created);
+      });
       return;
     }
     this.store.addResponse(payload, () => this.closeResponseForm());

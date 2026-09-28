@@ -421,6 +421,7 @@
     "addResponseTip": "Add a response (mock / handler / middleware)",
     "activateNewResponse": "Activate now",
     "activateNewResponseTip": "Unchecked, the variant is prepared: the served response and the scenario do not change.",
+    "createdResponseFileMissing": "Variant created, but the server did not report its name: upload the file from the variant in the list.",
     "responseActions": "Variant actions",
     "delayAria": "Response delay in milliseconds",
     "editSelectedResponseTip": "Edit the selected response",

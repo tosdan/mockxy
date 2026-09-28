@@ -228,6 +228,19 @@ describe('MocksNextDetail', () => {
       expect(store.uploadResponseFile).toHaveBeenCalledWith(file, expect.any(Function), '002.response.json');
     });
 
+    it('senza filename creato una variante preparata non riceve l’upload e l’errore è esplicito', () => {
+      const fixture = create();
+      const c = fixture.componentInstance as any;
+      c.createResponseOfType('mock');
+      c.activateNewResponse.set(false);
+      c.draft.payloadType.set('file');
+      c.draft.file.set(new File(['x'], 'logo.png', { type: 'image/png' }));
+      store.addResponse.mockImplementation((_payload: unknown, onSuccess: (created?: string) => void) => onSuccess(undefined));
+      c.saveEditResponse();
+      expect(store.uploadResponseFile).not.toHaveBeenCalled();
+      expect(store.error()).toContain('carica il file dalla variante');
+    });
+
     it('riaprendo il form l’opzione torna attiva', () => {
       const fixture = create();
       const c = fixture.componentInstance as any;

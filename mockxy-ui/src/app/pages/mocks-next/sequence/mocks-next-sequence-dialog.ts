@@ -377,7 +377,8 @@ export class MocksNextSequenceDialog {
     const sequence = this.buildSequence();
     const prepared = !this.isEdit && !this.activateNow();
     const onSuccess = () => {
-      this.toast.show({ tone: 'success', title: this.transloco.translate(prepared ? 'sequenceDialog.preparedTitle' : 'sequenceDialog.savedTitle') });
+      const title = prepared ? 'sequenceDialog.preparedTitle' : 'sequenceDialog.savedTitle';
+      this.toast.show({ tone: 'success', title: this.transloco.translate(title) });
       this.dialogRef.close('saved');
     };
     if (this.isEdit) {

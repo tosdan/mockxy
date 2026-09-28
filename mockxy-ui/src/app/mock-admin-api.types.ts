@@ -435,7 +435,7 @@ export type CreateResponseRequest = (
 ) & { select?: boolean };
 
 /** Esito di una creazione di variante: il dettaglio più il filename della variante creata. */
-export type ResponseCreatedResult = MockDetailAfterMutation & { createdResponseFile?: string };
+export type ResponseCreatedResult = MockDetailAfterMutation & { createdResponseFile: string };
 
 /** Accende o spegne un elenco arbitrario di endpoint in una sola chiamata, tutto-o-niente. */
 export interface EndpointsEnabledUpdateRequest {

@@ -421,6 +421,7 @@
     "addResponseTip": "Aggiungi una response (mock / handler / middleware)",
     "activateNewResponse": "Attiva subito",
     "activateNewResponseTip": "Senza spunta la variante viene preparata: la risposta servita e lo scenario non cambiano.",
+    "createdResponseFileMissing": "Variante creata, ma il server non ne ha indicato il nome: carica il file dalla variante nell'elenco.",
     "responseActions": "Azioni sulla variante",
     "delayAria": "Ritardo della risposta in millisecondi",
     "editSelectedResponseTip": "Modifica la response selezionata",
