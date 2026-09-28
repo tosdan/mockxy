@@ -188,6 +188,8 @@ function uiDistDir() {
 async function launchEngine(root) {
   const ws = openWorkspace(root, { defaultPort: await findFreePort() });
   const base = {
+    // Radice del workspace: il motore la riporta in GET /_admin/api/info.
+    workspaceRoot: root,
     mocksDir: ws.mocksDir,
     filesDir: ws.filesDir,
     monitorDumpDir: ws.monitorDumpDir,

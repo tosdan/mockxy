@@ -136,7 +136,7 @@ tags:
   - name: Shared runtime state
     description: Metadata and reset actions for named JSON resources shared by local handlers. Values are never exposed.
   - name: Runtime
-    description: The running engine itself — its effective configuration, the outcome of its loads and the contract of the version that answers.
+    description: The running engine itself — its identity, its effective configuration, the outcome of its loads and the contract of the version that answers.
 
 paths:
   # ───────────────────────────────── Catalog ─────────────────────────────────
@@ -1711,6 +1711,49 @@ paths:
         "400": { $ref: "#/components/responses/BadRequest" }
 
   # ────────────────────────────────── Runtime ─────────────────────────────────
+  /info:
+    get:
+      tags: [Runtime]
+      operationId: getRuntimeInfo
+      summary: Identity of the runtime and of its workspace
+      description: |
+        Who answers and on what: the engine version, an identity that changes at every start,
+        the workspace it serves, the address it listens on, the watcher, and lightweight
+        revisions of the observable resources. Cheap to poll: it reads an in-memory snapshot and
+        never scans the workspace nor waits for a scan in progress.
+
+        `workspace.id` identifies the **location** of the workspace: `workspace-v1:` followed by
+        the lowercase hexadecimal SHA-256 of the UTF-8 bytes of the compact JSON array
+        `[mocksDir, filesDir]`, with the canonical paths reported here (`null` for a missing
+        `filesDir`). A folder that does not exist yet is canonicalized through its deepest
+        existing ancestor, so the identity does not change once it is created. It does not depend on the desktop root, the port or the start, and it does
+        not travel with the files: two runtimes on the same folders share it, with different
+        `runtimeId`s.
+
+        `revisions` start at 1 and grow within this runtime when the matching resource changes:
+        compare them with the values you saw to know what to read again. They are informative,
+        never write preconditions, and may advance more than once for a single action.
+
+        - `catalog`: the collections file, every endpoint file, every variant it lists
+          (inactive ones too) and the source and asset each variant references, including files
+          that appear, disappear or cannot be read; other files under the mocks folder do not
+          count. Reloads, catalog reads and endpoint detail reads update it, and an admin
+          mutation publishes it before answering, re-reading exactly the files it wrote. An
+          external change that keeps both size and modification time may stay invisible until
+          the file is read again.
+        - `server`: `serverEnabled` or `proxyAll`.
+        - `dump`: the configurable state of the monitor dump (enabled, interval, threshold,
+          limits), not its traffic counters.
+        - `diagnostics`: status, errors or route availability reported by `GET /runtime/status`,
+          not the attempt number alone.
+        - `config`: the effective configuration; always 1 while it cannot change at runtime.
+      responses:
+        "200":
+          description: Runtime identity
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RuntimeInfo" }
+
   /config:
     get:
       tags: [Runtime]
@@ -2050,6 +2093,77 @@ components:
         error: Bad Request
         message: config.status must be an integer HTTP status code.
 
+    RuntimeInfo:
+      type: object
+      required: [version, runtimeId, startedAt, workspace, listener, watcher, revisions]
+      properties:
+        version:
+          type: string
+          description: Version of the package that ships the engine.
+        runtimeId:
+          type: string
+          format: uuid
+          description: New at every start of the engine.
+        startedAt: { type: string, format: date-time }
+        workspace:
+          type: object
+          required: [id, root, mocksDir, filesDir]
+          properties:
+            id:
+              type: string
+              pattern: "^workspace-v1:[0-9a-f]{64}$"
+            root:
+              type: [string, "null"]
+              description: Workspace root known to the desktop app; `null` otherwise.
+            mocksDir:
+              type: string
+              description: Canonical absolute path of the mocks folder.
+            filesDir:
+              type: [string, "null"]
+              description: Canonical absolute path of the data files folder; `null` if none is configured.
+        listener:
+          description: |
+            The address the server actually listens on, also when port 0 was requested; `null`
+            only when the engine runs without its own HTTP server.
+          anyOf:
+            - type: object
+              required: [host, port]
+              properties:
+                host: { type: string }
+                port: { type: integer, minimum: 1, maximum: 65535 }
+            - type: "null"
+        watcher:
+          type: object
+          required: [state, polling, lastError]
+          properties:
+            state:
+              type: string
+              enum: [disabled, starting, ready, error]
+            polling:
+              type: boolean
+              description: Whether the watcher polls instead of using filesystem events.
+            lastError: { type: [string, "null"] }
+        revisions:
+          type: object
+          required: [catalog, server, dump, diagnostics, config]
+          properties:
+            catalog: { type: integer, minimum: 1 }
+            server: { type: integer, minimum: 1 }
+            dump: { type: integer, minimum: 1 }
+            diagnostics: { type: integer, minimum: 1 }
+            config: { type: integer, minimum: 1 }
+      example:
+        version: 1.4.0
+        runtimeId: 7d9f1c4e-2b0a-4c7e-9f3a-5e8d2c1b4a60
+        startedAt: "2026-09-28T09:14:57.402Z"
+        workspace:
+          id: workspace-v1:3b1f0c9a8e7d6c5b4a39281706f5e4d3c2b1a09f8e7d6c5b4a3928170605f4e3
+          root: /home/me/workspaces/shop
+          mocksDir: /home/me/workspaces/shop/mocks
+          filesDir: /home/me/workspaces/shop/files
+        listener: { host: 127.0.0.1, port: 3000 }
+        watcher: { state: ready, polling: false, lastError: null }
+        revisions: { catalog: 7, server: 1, dump: 2, diagnostics: 3, config: 1 }
     RuntimeAttempt:
       type: object
       required: [id, startedAt, completedAt, reasons, status]

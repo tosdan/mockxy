@@ -60,6 +60,7 @@ const { normalizeSequenceResponse, computeSequenceSignature } = require("../mock
 const { normalizeSseConfig, validateSseMessage } = require("../mocks/sse-config");
 const { normalizeWsConfig, validateWsMessage } = require("../mocks/ws-config");
 const { findLiteralSharedStateReferences } = require("../mocks/shared-state-usage");
+const { recordWrite } = require("../utils/write-tracking");
 
 // Mutazioni degli endpoint e delle loro response: creazione (mock o script), aggiornamento,
 // upload di asset, cancellazione e copia. Ogni mutazione scrive su disco con backup e, se il
@@ -614,6 +615,7 @@ async function createAdminResponse(mocksDir, id, payload, reloadRuntime, scenari
     commit: async () => {
       await fs.promises.mkdir(responseDir, { recursive: true });
       for (const assetCopy of assetCopies) {
+        recordWrite(assetCopy.targetPath);
         await fs.promises.copyFile(assetCopy.sourcePath, assetCopy.targetPath);
       }
       for (const assetWrite of assetWrites) {
@@ -1546,6 +1548,7 @@ async function copyAdminEndpoint(mocksDir, id, payload, reloadRuntime) {
     commit: async () => {
       await fs.promises.mkdir(targetResponseDir, { recursive: true });
       for (const fileCopy of fileCopies) {
+        recordWrite(fileCopy.targetPath);
         await fs.promises.copyFile(fileCopy.sourcePath, fileCopy.targetPath);
       }
       await writeFileAtomic(targetEndpointPath, `${JSON.stringify(targetEndpoint, null, 2)}\n`, "utf8");

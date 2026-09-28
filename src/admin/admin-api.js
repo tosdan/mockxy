@@ -50,6 +50,9 @@ const {
 } = require("./admin-data-files");
 const { setNoCacheHeaders } = require("../utils/cache");
 const { describeRuntimeConfig, pickRuntimeConfig } = require("./runtime-config");
+const { ENGINE_VERSION, ObservedRevision, describeWorkspace } = require("../runtime-info");
+const { canonicalPath } = require("../utils/canonical-path");
+const { trackWrites } = require("../utils/write-tracking");
 const {
   listDumpFiles,
   readDumpPage,
@@ -74,11 +77,7 @@ function canonicalWorkspaceKey(mocksDir) {
   if (typeof mocksDir !== "string" || mocksDir === "") {
     return "";
   }
-  try {
-    return fs.realpathSync.native(mocksDir);
-  } catch {
-    return path.resolve(mocksDir);
-  }
+  return canonicalPath(mocksDir);
 }
 
 function runInMutationQueue(key, task) {
@@ -102,6 +101,35 @@ function markRejectedBeforeWriting(error) {
     error.details = { ...(error.details || {}), code: "MUTATION_REJECTED", rollback: "not_needed" };
   }
   return error;
+}
+
+// Trattiene la fine della risposta finché non viene rilasciata: il gestore compone la risposta
+// come sempre, ma arriva al client solo dopo il lavoro che deve precederla. Il rilascio ripristina
+// il metodo originale e invia la risposta trattenuta, se c'è.
+function holdResponse(res) {
+  const originalEnd = res.end;
+  let pending = null;
+  res.end = function heldEnd(...args) {
+    pending = args;
+    return res;
+  };
+  return () => {
+    res.end = originalEnd;
+    if (pending != null) {
+      originalEnd.apply(res, pending);
+    }
+  };
+}
+
+// File del catalogo di cui GET /mocks/:id ha letto il contenuto: definizione, varianti elencate
+// e sorgente della variante selezionata (l'asset di un mock file-backed non viene letto).
+function detailReadPaths(detail) {
+  const responsesDir = detail.responseFilePath ? path.dirname(detail.responseFilePath) : null;
+  return [
+    detail.definitionFilePath,
+    ...(responsesDir == null ? [] : (detail.responses || []).map((response) => path.join(responsesDir, response.fileName))),
+    detail.sourceFilePath,
+  ].filter((filePath) => typeof filePath === "string" && filePath !== "");
 }
 
 function markParsedJsonBodyLength(req, _res, buffer) {
@@ -149,7 +177,7 @@ function sendJson(res, status, payload) {
   res.status(status).json(payload);
 }
 
-function createAdminApiRouter({ config, runtimeIdentity, runtimeStatus, registry, proxyMiddlewareRegistry, reloadRuntime, requestMonitor, serverState, monitorDump, sequenceStates, handlerStates, sharedStates, sseConnections, wsConnections }) {
+function createAdminApiRouter({ config, runtimeIdentity, runtimeStatus, catalogRevision, watcherStatus, listener, registry, proxyMiddlewareRegistry, reloadRuntime, requestMonitor, serverState, monitorDump, sequenceStates, handlerStates, sharedStates, sseConnections, wsConnections }) {
   const router = express.Router();
   // Store dello scenario runtime, passati alle mutazioni che possono invalidarlo: il reload da
   // solo non basta, perche' aggrega piu' scritture in un giro unico (vedi invalidateScenario).
@@ -161,10 +189,34 @@ function createAdminApiRouter({ config, runtimeIdentity, runtimeStatus, registry
   const workspaceKey = canonicalWorkspaceKey(config?.mocksDir);
   // Esegue il gestore di una rotta di mutazione nel turno del workspace, dopo parsing e limiti
   // del body (già applicati dai middleware della rotta).
+  // La revisione del catalogo si pubblica prima della risposta della mutazione (§13 C2): la
+  // risposta resta trattenuta finché la scansione, che rilegge esattamente i file scritti dalla
+  // mutazione anche a firma invariata, non è conclusa. GET /info legge poi soltanto l'ultima
+  // revisione pubblicata, senza attese.
   const mutation = (handler) => (req, res) =>
-    runInMutationQueue(workspaceKey, () => handler(req, res)).catch((error) => {
+    runInMutationQueue(workspaceKey, async () => {
+      const written = new Set();
+      const releaseResponse = holdResponse(res);
+      try {
+        return await trackWrites(written, () => handler(req, res));
+      } finally {
+        await catalogRevision?.refresh({ invalidate: written }).catch(() => {});
+        releaseResponse();
+      }
+    }).catch((error) => {
       throw markRejectedBeforeWriting(error);
     });
+  // Identità del workspace (calcolata alla prima lettura: i percorsi sono fissi per il runtime)
+  // e revisioni degli stati configurabili, per GET /info.
+  let workspace = null;
+  const serverRevision = new ObservedRevision(() => JSON.stringify(serverState?.getState() ?? null));
+  const dumpRevision = new ObservedRevision(() => JSON.stringify(monitorDump == null ? null : {
+    enabled: monitorDump.enabled,
+    intervalMs: monitorDump.intervalMs,
+    threshold: monitorDump.threshold,
+    maxFileBytes: monitorDump.maxFileBytes,
+    maxTotalBytes: monitorDump.maxTotalBytes,
+  }));
 
   router.use(express.json({ limit: "2mb", verify: markParsedJsonBodyLength }));
 
@@ -178,6 +230,30 @@ function createAdminApiRouter({ config, runtimeIdentity, runtimeStatus, registry
   // Configurazione effettiva in sola lettura: le nove chiavi di C8, senza altre variabili d'ambiente.
   router.get("/config", (_req, res) => {
     sendJson(res, 200, describeRuntimeConfig({ runtimeId: runtimeIdentity?.runtimeId ?? null, startup: startupConfig, config }));
+  });
+
+  // Identità del runtime e del workspace, indirizzo, watcher e revisioni leggere delle risorse
+  // osservabili (§13 C2): uno snapshot in memoria, senza scansioni né attese. Le revisioni si
+  // aggiornano con le operazioni.
+  router.get("/info", (_req, res) => {
+    sendJson(res, 200, {
+      version: ENGINE_VERSION,
+      runtimeId: runtimeIdentity?.runtimeId ?? null,
+      startedAt: runtimeIdentity?.startedAt ?? null,
+      workspace: (workspace ??= describeWorkspace(config ?? {})),
+      listener: listener?.address ?? null,
+      watcher: watcherStatus == null
+        ? { state: "disabled", polling: false, lastError: null }
+        : { state: watcherStatus.state, polling: watcherStatus.polling, lastError: watcherStatus.lastError },
+      revisions: {
+        catalog: catalogRevision?.revision ?? 1,
+        server: serverRevision.observe(),
+        dump: dumpRevision.observe(),
+        diagnostics: runtimeStatus?.revision ?? 1,
+        // Nessuna configurazione modificabile a runtime prima di S8.
+        config: 1,
+      },
+    });
   });
 
   // Esito dell'ultimo tentativo di caricamento ed errori per file del registro installato: 200
@@ -254,6 +330,7 @@ function createAdminApiRouter({ config, runtimeIdentity, runtimeStatus, registry
     } else if (body.enabled === false) {
       await monitorDump.stop();
     }
+    dumpRevision.observe();
     sendJson(res, 200, monitorDump.getStatus());
   }));
 
@@ -308,7 +385,9 @@ function createAdminApiRouter({ config, runtimeIdentity, runtimeStatus, registry
     if ('proxyAll' in body && typeof body.proxyAll !== 'boolean') {
       throw createAdminError(400, 'proxyAll must be a boolean.');
     }
-    sendJson(res, 200, serverState ? serverState.setState(body) : DEFAULT_SERVER_STATE);
+    const state = serverState ? serverState.setState(body) : DEFAULT_SERVER_STATE;
+    serverRevision.observe();
+    sendJson(res, 200, state);
   }));
 
   // Runtime shared state is intentionally metadata-only: values remain private to handlers.
@@ -348,6 +427,8 @@ function createAdminApiRouter({ config, runtimeIdentity, runtimeStatus, registry
     const collections = await listAdminCollections(config.mocksDir, items);
     const childOrder = await listAdminChildOrder(config.mocksDir, items);
     sendJson(res, 200, { items, collections, childOrder, loadErrors });
+    // Una lettura del catalogo è un'occasione per riallineare la revisione senza watcher.
+    catalogRevision?.refresh().catch(() => {});
   });
 
   // Risolve una richiesta concreta (es. una entry del monitor) nell'endpoint del catalogo
@@ -431,6 +512,10 @@ function createAdminApiRouter({ config, runtimeIdentity, runtimeStatus, registry
 
   router.get("/mocks/:id", async (req, res) => {
     const detail = await getAdminMockDetail(config.mocksDir, req.params.id);
+    // Il dettaglio legge i contenuti effettivi: se differiscono da quelli in cache (una modifica
+    // esterna a firma invariata, un file comparso), la revisione del catalogo lo registra (§13 C2).
+    // L'osservazione non entra nella coda delle scansioni: una scansione lenta non ritarda la GET.
+    await catalogRevision?.observeFiles(detailReadPaths(detail)).catch(() => {});
     // Stato runtime presente solo quando la response selezionata è una sequence.
     if (sequenceStates != null && detail.sequence != null) {
       detail.sequenceState = sequenceStates.getState(

@@ -334,6 +334,9 @@ function loadConfig(overrides = {}) {
     // Cartella dei file dati JSON referenziabili dagli handler/middleware via data() (pagina Dati).
     filesDir:
       overrides.filesDir ?? path.resolve(baseDir, process.env.FILES_DIR || "files"),
+    // Radice del workspace, nota solo all'app desktop (GET /info la riporta); nessuna variabile
+    // d'ambiente: senza app desktop resta null e l'identità usa le sole cartelle configurate.
+    workspaceRoot: overrides.workspaceRoot ?? null,
     // Cartella dell'interfaccia compilata da servire (es. app desktop). Assente = non servita.
     uiDistDir: uiDistDir ? path.resolve(baseDir, uiDistDir) : undefined,
     // Interfaccia di rete su cui ascoltare. Default 127.0.0.1 (solo loopback); 0.0.0.0 espone

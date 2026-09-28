@@ -1,6 +1,7 @@
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
+const { recordWrite } = require("./write-tracking");
 
 // Scrittura atomica: file temporaneo nella stessa cartella + rename sul target. Un crash a
 // metà scrittura lascia al più un temporaneo orfano, mai il target troncato — il rename è
@@ -9,6 +10,7 @@ const crypto = require("crypto");
 // Il nome inizia col punto e finisce in .tmp: non combacia con nessun suffisso caricato dal
 // loader degli endpoint, quindi un orfano non inquina mai il workspace.
 async function writeFileAtomic(filePath, data, options) {
+  recordWrite(filePath);
   const directory = path.dirname(filePath);
   const temporaryPath = path.join(
     directory,

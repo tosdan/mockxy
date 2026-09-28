@@ -111,6 +111,19 @@ esistenti restano compatibili: nessuna migrazione richiesta.
 - **Per i client:** dopo un `500 ROLLBACK_FAILED` o `RUNTIME_APPLY_FAILED` questa rotta dice in
   che stato è rimasto il runtime.
 
+#### Identità del runtime e revisioni
+
+- **Prima:** nessuna rotta diceva quale istanza stesse rispondendo, su quale workspace, dopo quale
+  avvio: `GET /server` rispondeva allo stesso modo per qualunque workspace.
+- **Ora:** `GET /info` riporta versione, `runtimeId` nuovo a ogni avvio, identità e percorsi
+  canonici del workspace, indirizzo realmente in ascolto, stato del watcher e revisioni leggere
+  di catalogo, stato del server, dump, diagnostica e configurazione. Le revisioni crescono quando
+  la risorsa cambia e non richiedono di scansionare il workspace a ogni lettura; una modifica
+  esterna che lascia identici dimensione e data di modifica di un file può restare invisibile
+  finché il file non viene riletto.
+- **Per i client:** confrontare `workspace.id` e `runtimeId` prima di agire su un'istanza, e le
+  revisioni per decidere cosa rileggere.
+
 ### Interfaccia
 
 - **Descrizione e abilitazione:** salvare la descrizione invia solo la descrizione, e il toggle

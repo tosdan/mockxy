@@ -167,6 +167,7 @@ then start the scenario.
 
 | Method and path | What it does |
 |---|---|
+| `GET /info` | who answers and on what: `version`, `runtimeId` and `startedAt` (new at every start), `workspace` (canonical `id`, `root`, `mocksDir`, `filesDir`; `root` only from the desktop app), the `listener` actually in use, the `watcher` (`state` among `disabled`, `starting`, `ready`, `error`) and `revisions` (`catalog`, `server`, `dump`, `diagnostics`, `config`). Revisions start at 1 and grow when the resource changes: they tell what to read again and are not write preconditions. It never scans the workspace |
 | `GET /config` | effective configuration, read-only: `{ runtimeId, startup, effective, overrides, persisted }`, with only the nine keys that upcoming versions will let you change at runtime (`backendUrl` is `null` without a backend). No other environment variable. For now `effective` equals `startup` and `overrides` is `{}`; `runtimeId` changes at every start |
 | `GET /runtime/status` | outcome of the last load of the workspace, `200` even when degraded or failed: `lastAttempt` (`id`, timestamps, `reasons` among `startup`, `admin`, `watcher`, `status` `applied`, `degraded` or `failed`), `lastAppliedAttemptId`, per-file `errors` (`endpointId`, `filePath`, `message`, `serving`: `retained` when the previous version is still served, `missing` when nothing serves it) and `fatalError`. Only the last attempt, no history |
 | `GET /openapi.yaml` | the [contract](#the-machine-readable-description) of the running version, as `application/yaml` |

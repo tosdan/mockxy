@@ -112,13 +112,13 @@ describe("admin API", () => {
       try {
         const app = await buildApp({ backendUrl: sentinel.url, proxyFallbackEnabled: true });
 
-        const unknownGet = await request(app).get("/_admin/api/info");
+        const unknownGet = await request(app).get("/_admin/api/non-esiste");
         expect(unknownGet.status).toBe(404);
         expect(unknownGet.body).toMatchObject({
           error: "Not Found",
           details: { code: "ADMIN_ROUTE_NOT_FOUND" },
         });
-        expect(unknownGet.body.message).toContain("GET /_admin/api/info");
+        expect(unknownGet.body.message).toContain("GET /_admin/api/non-esiste");
 
         const unknownPost = await request(app).post("/_admin/api/typo").send({ secret: "x" });
         expect(unknownPost.status).toBe(404);
