@@ -313,7 +313,8 @@ async function readEndpointResponseByName(endpointPath, responseFileName) {
 
   const responseFilePath = resolveEndpointResponseFilePath(endpointPath, endpoint, selectedResponseFile);
   if (!fs.existsSync(responseFilePath)) {
-    throw createAdminError(404, "Response file not found.");
+    // Elencata ma assente: per le letture è un file mancante (§13 C4), non una variante inesistente.
+    throw markMissingFile(createAdminError(404, "Response file not found."));
   }
 
   return {

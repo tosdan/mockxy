@@ -124,6 +124,19 @@ esistenti restano compatibili: nessuna migrazione richiesta.
 - **Per i client:** confrontare `workspace.id` e `runtimeId` prima di agire su un'istanza, e le
   revisioni per decidere cosa rileggere.
 
+#### Varianti inattive: lettura e preparazione
+
+- **Prima:** una variante si leggeva solo selezionandola, e crearne una la selezionava sempre,
+  cambiando la risposta servita e azzerando lo scenario della sequence.
+- **Ora:** `GET /mocks/:id/responses/:file` legge una variante qualsiasi, con `active` che dice
+  se appartiene alla selezione o ai suoi step. `POST /mocks/:id/responses` accetta
+  `select: false` per prepararla senza attivarla (stessa validazione, nessun azzeramento dello
+  scenario) e riporta `createdResponseFile`; gli aggiornamenti di variante riportano
+  `updatedResponseFile`.
+- **Per i client:** senza `select` il comportamento non cambia. Prima di modificare una variante
+  per filename conviene leggerne `active`: modificare uno step della sequence in uso cambia lo
+  scenario in corso.
+
 ### Interfaccia
 
 - **Descrizione e abilitazione:** salvare la descrizione invia solo la descrizione, e il toggle

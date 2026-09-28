@@ -11,6 +11,7 @@ const { listFiles, resolvePayloadPath } = require("./admin-fs");
 const { encodeMockId, resolveAdminFilePath, toPosixRelativePath } = require("./mock-ids");
 const {
   isEndpointFileName,
+  readEndpointResponseByName,
   readEndpointSelectedResponse,
   readEndpointResponseSummaries,
 } = require("./endpoint-files");
@@ -118,20 +119,27 @@ async function listAdminChildOrder(mocksDir, existingItems) {
 // e ripetibile, senza dettaglio parziale. Gli altri errori restano quello che sono.
 async function getAdminMockDetail(mocksDir, id) {
   const filePath = resolveAdminFilePath(mocksDir, id);
+  return readWithBoundedRetry(filePath, () => buildAdminMockDetail(mocksDir, filePath));
+}
+
+// Lettura incompleta, procedura limitata (§13 C4): un file mancante fa ricostruire tutto una sola
+// volta, rileggendo la definizione; un endpoint eliminato nel frattempo è un 404, un file ancora
+// mancante un 409 ripetibile. Gli altri errori restano quello che sono.
+async function readWithBoundedRetry(endpointPath, build) {
   try {
-    return await buildAdminMockDetail(mocksDir, filePath);
+    return await build();
   } catch (error) {
     if (!isMissingFileError(error)) {
       throw error;
     }
   }
   try {
-    return await buildAdminMockDetail(mocksDir, filePath);
+    return await build();
   } catch (error) {
     if (!isMissingFileError(error)) {
       throw error;
     }
-    if (!fs.existsSync(filePath)) {
+    if (!fs.existsSync(endpointPath)) {
       throw createAdminError(404, "Endpoint definition not found.");
     }
     throw createAdminError(409, `The endpoint could not be read consistently: ${error.message}`, {
@@ -139,6 +147,77 @@ async function getAdminMockDetail(mocksDir, id) {
       retryable: true,
     });
   }
+}
+
+/**
+ * Una variante per filename, attiva o no (piano agent/API, §13 C3): definizione normalizzata,
+ * sorgente diretto per handler e middleware, metadati dell'asset per un mock servito da file (mai
+ * il contenuto binario). `active` dice se la variante appartiene alla selezione o ai suoi step,
+ * indipendentemente dai flag del server. Leggerla non cambia selezione né scenario. Una variante
+ * non più elencata dall'endpoint è un 404 anche se il file esiste ancora.
+ */
+async function getAdminMockResponse(mocksDir, id, responseFileName) {
+  const endpointPath = resolveAdminFilePath(mocksDir, id);
+  return readWithBoundedRetry(endpointPath, () => buildAdminMockResponse(endpointPath, id, responseFileName));
+}
+
+async function buildAdminMockResponse(endpointPath, id, responseFileName) {
+  if (!fs.existsSync(endpointPath)) {
+    throw createAdminError(404, "Endpoint definition not found.");
+  }
+  const { endpoint, response, responseFileName: name, responseDir } = await readEndpointResponseByName(endpointPath, responseFileName);
+  const selected = name === endpoint.selectedResponseFile;
+
+  let source = null;
+  if (response.type === "handler" || response.type === "middleware") {
+    try {
+      source = await fs.promises.readFile(resolvePayloadPath(responseDir, response.sourceFile), "utf8");
+    } catch (error) {
+      if (error.code === "ENOENT") {
+        throw markMissingFile(createAdminError(404, "Response source file not found on disk."));
+      }
+      throw error;
+    }
+  }
+
+  let fileInfo = null;
+  if (response.type === "mock" && response.file != null) {
+    try {
+      const stats = await fs.promises.stat(resolvePayloadPath(responseDir, response.file));
+      fileInfo = { name: response.file, size: stats.size };
+    } catch (error) {
+      if (error.code === "ENOENT") {
+        throw markMissingFile(createAdminError(404, "Response asset file not found on disk."));
+      }
+      throw error;
+    }
+  }
+
+  return {
+    id,
+    responseFile: name,
+    selected,
+    active: selected || await isStepOfSelectedSequence(endpointPath, name),
+    response: { ...response, responseFilePath: undefined },
+    source,
+    fileInfo,
+  };
+}
+
+// Una variante non selezionata è attiva se la selezionata è una sequence che la usa come step.
+// Una selezionata illeggibile non ha step: il file mancante segue invece la procedura C4.
+async function isStepOfSelectedSequence(endpointPath, responseFileName) {
+  let selected;
+  try {
+    selected = (await readEndpointSelectedResponse(endpointPath)).response;
+  } catch (error) {
+    if (isMissingFileError(error)) {
+      throw error;
+    }
+    return false;
+  }
+  return selected.type === "sequence"
+    && (selected.steps || []).some((step) => step?.response === responseFileName);
 }
 
 async function buildAdminMockDetail(mocksDir, filePath) {
@@ -328,5 +407,6 @@ module.exports = {
   listAdminChildOrder,
   getAdminMockDetail,
   getAdminMockDetailAfterCommit,
+  getAdminMockResponse,
   resolveAdminMockForRequest,
 };

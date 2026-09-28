@@ -549,11 +549,15 @@ function validateEndpointReload(endpointPath, mocksDir) {
   };
 }
 
+// Crea una variante. Con `select: false` (piano agent/API, §13 C3) la prepara senza attivarla:
+// selezione, cursore della sequence e memoria handler restano quelli di prima; la validazione è
+// la stessa delle scritture normali. Il valore omesso conserva la selezione automatica.
 async function createAdminResponse(mocksDir, id, payload, reloadRuntime, scenarioStates) {
   const endpointPath = resolveAdminFilePath(mocksDir, id);
   if (!fs.existsSync(endpointPath)) {
     throw createAdminError(404, "Endpoint definition not found.");
   }
+  const { select, responsePayload } = splitSelectOption(payload);
 
   const { endpoint, response, responseDir } = await readEndpointSelectedResponse(endpointPath);
   const responseFileName = createNextResponseFileName(endpoint.responseFiles);
@@ -562,10 +566,10 @@ async function createAdminResponse(mocksDir, id, payload, reloadRuntime, scenari
     throw createAdminError(409, "Generated response file already exists.");
   }
 
-  const wantsNewType = NEW_RESPONSE_TYPES.has(payload?.type) && payload.type !== response.type;
+  const wantsNewType = NEW_RESPONSE_TYPES.has(responsePayload?.type) && responsePayload.type !== response.type;
   const { nextResponse, assetCopies, assetWrites } = wantsNewType
-    ? buildNewTypedResponse(responseDir, responseFileName, payload, endpoint)
-    : buildEndpointResponseClone(responseDir, response, responseFileName, payload, endpoint);
+    ? buildNewTypedResponse(responseDir, responseFileName, responsePayload, endpoint)
+    : buildEndpointResponseClone(responseDir, response, responseFileName, responsePayload, endpoint);
   const targetAssetPaths = new Set();
   for (const assetCopy of assetCopies) {
     if (!fs.existsSync(assetCopy.sourcePath)) {
@@ -605,7 +609,7 @@ async function createAdminResponse(mocksDir, id, payload, reloadRuntime, scenari
   const nextEndpoint = {
     ...endpoint,
     responseFiles: [...endpoint.responseFiles, responseFileName],
-    selectedResponseFile: responseFileName,
+    selectedResponseFile: select ? responseFileName : endpoint.selectedResponseFile,
   };
 
   await commitWithRollback({
@@ -636,10 +640,26 @@ async function createAdminResponse(mocksDir, id, payload, reloadRuntime, scenari
     baseDir: mocksDir,
   });
 
-  // La variante creata diventa la selezionata: lo scenario precedente non vale piu'.
-  invalidateScenario(scenarioStates, endpoint.method, endpoint.path);
+  // La variante creata e selezionata sostituisce lo scenario precedente. Una variante preparata
+  // senza selezione è nuova, quindi non può essere uno step della sequence in uso: nulla da azzerare.
+  if (select) {
+    invalidateScenario(scenarioStates, endpoint.method, endpoint.path);
+  }
 
-  return getAdminMockDetailAfterCommit(mocksDir, id);
+  return { ...(await getAdminMockDetailAfterCommit(mocksDir, id)), createdResponseFile: responseFileName };
+}
+
+// Separa l'opzione `select` dalla definizione della variante: i builder trattano ogni campo
+// diverso dal titolo come una definizione esplicita.
+function splitSelectOption(payload) {
+  if (payload == null || typeof payload !== "object" || Array.isArray(payload) || !Object.prototype.hasOwnProperty.call(payload, "select")) {
+    return { select: true, responsePayload: payload };
+  }
+  const { select, ...responsePayload } = payload;
+  if (typeof select !== "boolean") {
+    throw createAdminError(400, "select must be a boolean.");
+  }
+  return { select, responsePayload };
 }
 
 /**
@@ -739,7 +759,8 @@ async function updateAdminResponse(mocksDir, id, responseFileName, payload, relo
     throw createAdminError(404, "Endpoint definition not found.");
   }
 
-  const { endpoint, response, responseFilePath, responseDir } = await readEndpointResponseByName(endpointPath, responseFileName);
+  const { endpoint, response, responseFileName: updatedResponseFile, responseFilePath, responseDir } =
+    await readEndpointResponseByName(endpointPath, responseFileName);
   const nextResponse = buildUpdatedEndpointResponse(response, payload, endpoint);
   const backups = [await readBackup(responseFilePath)];
   let sourcePath;
@@ -792,7 +813,8 @@ async function updateAdminResponse(mocksDir, id, responseFileName, payload, relo
     }
   }
 
-  return getAdminMockDetailAfterCommit(mocksDir, id);
+  // La variante aggiornata, indipendente dalla selezionata descritta dal dettaglio (§13 C3).
+  return { ...(await getAdminMockDetailAfterCommit(mocksDir, id)), updatedResponseFile };
 }
 
 function sanitizeUploadExtension(filename) {
@@ -825,7 +847,8 @@ async function setAdminResponseFile(mocksDir, id, responseFileName, fileBuffer, 
     throw createAdminError(400, "Uploaded file is empty.");
   }
 
-  const { endpoint, response, responseFilePath, responseDir } = await readEndpointResponseByName(endpointPath, responseFileName);
+  const { endpoint, response, responseFileName: updatedResponseFile, responseFilePath, responseDir } =
+    await readEndpointResponseByName(endpointPath, responseFileName);
   if (response.type !== "mock") {
     throw createAdminError(400, "Only mock responses can be backed by a file.");
   }
@@ -887,7 +910,7 @@ async function setAdminResponseFile(mocksDir, id, responseFileName, fileBuffer, 
     invalidateScenario(scenarioStates, endpoint.method, endpoint.path);
   }
 
-  return getAdminMockDetailAfterCommit(mocksDir, id);
+  return { ...(await getAdminMockDetailAfterCommit(mocksDir, id)), updatedResponseFile };
 }
 
 async function deleteAdminResponse(mocksDir, id, responseFileName, reloadRuntime, scenarioStates) {

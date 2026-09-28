@@ -942,7 +942,16 @@ paths:
       operationId: createResponse
       summary: Add a response variant
       description: |
-        Adds a variant and **selects it**. The new file name is the next free `NNN.response.json`.
+        Adds a variant and **selects it**, unless `select: false`. The new file name is the next
+        free `NNN.response.json` and comes back as `createdResponseFile`.
+
+        With `select: false` the variant is **prepared without being activated**: the selection,
+        the sequence cursor and the handler memory stay as they were, so the current response and
+        scenario do not change. It goes through the same validation as any write: schema, direct
+        source or asset, compilation, and step references and compatibility for a sequence (the
+        handler is not executed). A variant prepared this way is never part of the active
+        scenario; to change a step of the sequence in use without touching it, prepare a separate
+        variant, and a separate sequence if needed.
 
         - With no body (or only `title`), the currently selected variant is **cloned**, assets
           included (the copy gets its own asset files).
@@ -986,12 +995,15 @@ paths:
                   steps:
                     - { response: 001.response.json, times: 2 }
                     - { response: 002.response.json }
+              prepare:
+                summary: Prepare an error variant without activating it
+                value: { type: mock, title: Server error, status: 500, body: { error: boom }, select: false }
       responses:
         "201":
-          description: The endpoint, with the new variant selected
+          description: The endpoint, with the new variant selected unless `select` was `false`
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/MockDetailAfterMutation" }
+              schema: { $ref: "#/components/schemas/ResponseVariantCreated" }
         "400": { $ref: "#/components/responses/BadRequest" }
         "404": { $ref: "#/components/responses/MockNotFound" }
         "409":
@@ -1005,6 +1017,33 @@ paths:
     parameters:
       - $ref: "#/components/parameters/MockId"
       - $ref: "#/components/parameters/ResponseFileName"
+    get:
+      tags: [Response variants]
+      operationId: getResponse
+      summary: One response variant, active or not
+      description: |
+        The normalized definition of the variant named in the path, selected or not, with the
+        text of its direct source (`handler`, `middleware`) or the metadata of its asset (a
+        file-backed `mock`; binary content is never returned). Reading it changes neither the
+        selection nor the scenario.
+
+        `active` tells whether the variant is the selected one or a step of the selected
+        sequence, whatever the `/server` switches: it does not mean currently reachable. Check it
+        before calling an update by filename non-invasive: changing an active step changes the
+        running scenario.
+
+        A variant no longer listed by the endpoint answers `404`, even if its file is still on
+        disk. A file missing during the read follows the same bounded procedure as the endpoint
+        detail (`409 READ_INCONSISTENT`); other definition errors keep their explicit `400`.
+      responses:
+        "200":
+          description: The variant
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ResponseVariant" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/MockNotFound" }
+        "409": { $ref: "#/components/responses/ReadInconsistent" }
     put:
       tags: [Response variants]
       operationId: updateResponse
@@ -1045,10 +1084,10 @@ paths:
                     };
       responses:
         "200":
-          description: The updated endpoint
+          description: The updated endpoint, with the variant that was updated in `updatedResponseFile`
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/MockDetailAfterMutation" }
+              schema: { $ref: "#/components/schemas/ResponseVariantUpdated" }
         "400": { $ref: "#/components/responses/BadRequest" }
         "404": { $ref: "#/components/responses/MockNotFound" }
         "500": { $ref: "#/components/responses/MutationFailed" }
@@ -1117,7 +1156,7 @@ paths:
           description: The updated endpoint
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/MockDetailAfterMutation" }
+              schema: { $ref: "#/components/schemas/ResponseVariantUpdated" }
         "400":
           description: Empty upload, or the variant is not a `mock` one.
           content:
@@ -2487,6 +2526,57 @@ components:
               type: string
               description: Why the detail could not be composed.
 
+    ResponseVariantCreated:
+      description: The endpoint after the mutation, plus the file name of the variant just created.
+      allOf:
+        - $ref: "#/components/schemas/MockDetailAfterMutation"
+        - type: object
+          required: [createdResponseFile]
+          properties:
+            createdResponseFile: { type: string, examples: [003.response.json] }
+    ResponseVariantUpdated:
+      description: |
+        The endpoint after the mutation, plus the file name of the variant that was updated —
+        independent of the selected variant the detail describes.
+      allOf:
+        - $ref: "#/components/schemas/MockDetailAfterMutation"
+        - type: object
+          required: [updatedResponseFile]
+          properties:
+            updatedResponseFile: { type: string, examples: [002.response.json] }
+    ResponseVariant:
+      type: object
+      required: [id, responseFile, selected, active, response, source, fileInfo]
+      properties:
+        id: { type: string, description: Endpoint id. }
+        responseFile: { type: string }
+        selected: { type: boolean }
+        active:
+          type: boolean
+          description: The selected variant, or a step of the selected sequence.
+        response:
+          type: object
+          description: The normalized definition of the variant, as in the `response` of the endpoint detail.
+        source:
+          type: [string, "null"]
+          description: Text of the direct source of a `handler` or `middleware` variant; `null` otherwise.
+        fileInfo:
+          description: Name and size of the asset of a file-backed `mock`; `null` otherwise.
+          anyOf:
+            - type: object
+              required: [name, size]
+              properties:
+                name: { type: string }
+                size: { type: integer, minimum: 0 }
+            - type: "null"
+      example:
+        id: dXNlcnMvR0VULmVuZHBvaW50Lmpzb24
+        responseFile: 002.response.json
+        selected: false
+        active: true
+        response: { type: mock, title: Empty page, status: 200, headers: {}, delayMs: 0, body: [] }
+        source: null
+        fileInfo: null
     MockDetailAfterMutation:
       description: >
         The affected endpoint's `MockDetail`, or `MockDetailUnavailable` when the mutation
@@ -2907,61 +2997,68 @@ components:
       description: |
         Omit the body (or send only `title`) to clone the selected variant. Send `type` to build a
         fresh variant of that type instead.
-      oneOf:
+      allOf:
         - type: object
-          title: Clone the selected variant
           properties:
-            title: { type: string }
-        - type: object
-          title: New mock variant
-          required: [type]
-          properties:
-            type: { type: string, const: mock }
-            title: { type: string }
-            status: { type: integer, default: 200 }
-            headers: { $ref: "#/components/schemas/Headers" }
-            delayMs: { type: integer, minimum: 0, default: 0 }
-            templated: { type: boolean }
-            body:
-              description: The payload — any JSON value. Defaults to an empty object.
-        - type: object
-          title: New handler or middleware variant
-          required: [type]
-          properties:
-            type: { type: string, enum: [handler, middleware] }
-            title: { type: string }
-            source: { type: string, description: A scaffold is written when absent. }
-        - type: object
-          title: New SSE variant
-          required: [type]
-          properties:
-            type: { type: string, const: sse }
-            title: { type: string }
-            retryMs: { type: integer, minimum: 0 }
-            script: { $ref: "#/components/schemas/SseConfig/properties/script" }
-            onEnd: { type: string, enum: [keep-open, close, loop] }
-            presets: { $ref: "#/components/schemas/SseConfig/properties/presets" }
-        - type: object
-          title: New WebSocket variant
-          required: [type]
-          properties:
-            type: { type: string, const: ws }
-            title: { type: string }
-            script: { $ref: "#/components/schemas/WsConfig/properties/script" }
-            onEnd: { type: string, enum: [keep-open, close, loop] }
-            closeCode: { type: integer }
-            closeReason: { type: string, maxLength: 123 }
-            rules: { $ref: "#/components/schemas/WsConfig/properties/rules" }
-            presets: { $ref: "#/components/schemas/WsConfig/properties/presets" }
-        - type: object
-          title: New sequence variant
-          required: [type, steps]
-          properties:
-            type: { type: string, const: sequence }
-            title: { type: string }
-            steps: { $ref: "#/components/schemas/SequenceVariantConfig/properties/steps" }
-            onEnd: { type: string, enum: [stay, loop], default: stay }
-            resetAfterMs: { type: [integer, "null"], minimum: 1 }
+            select:
+              type: boolean
+              default: true
+              description: "`false` prepares the variant without selecting it: current response and scenario do not change."
+        - oneOf:
+            - type: object
+              title: Clone the selected variant
+              properties:
+                title: { type: string }
+            - type: object
+              title: New mock variant
+              required: [type]
+              properties:
+                type: { type: string, const: mock }
+                title: { type: string }
+                status: { type: integer, default: 200 }
+                headers: { $ref: "#/components/schemas/Headers" }
+                delayMs: { type: integer, minimum: 0, default: 0 }
+                templated: { type: boolean }
+                body:
+                  description: The payload — any JSON value. Defaults to an empty object.
+            - type: object
+              title: New handler or middleware variant
+              required: [type]
+              properties:
+                type: { type: string, enum: [handler, middleware] }
+                title: { type: string }
+                source: { type: string, description: A scaffold is written when absent. }
+            - type: object
+              title: New SSE variant
+              required: [type]
+              properties:
+                type: { type: string, const: sse }
+                title: { type: string }
+                retryMs: { type: integer, minimum: 0 }
+                script: { $ref: "#/components/schemas/SseConfig/properties/script" }
+                onEnd: { type: string, enum: [keep-open, close, loop] }
+                presets: { $ref: "#/components/schemas/SseConfig/properties/presets" }
+            - type: object
+              title: New WebSocket variant
+              required: [type]
+              properties:
+                type: { type: string, const: ws }
+                title: { type: string }
+                script: { $ref: "#/components/schemas/WsConfig/properties/script" }
+                onEnd: { type: string, enum: [keep-open, close, loop] }
+                closeCode: { type: integer }
+                closeReason: { type: string, maxLength: 123 }
+                rules: { $ref: "#/components/schemas/WsConfig/properties/rules" }
+                presets: { $ref: "#/components/schemas/WsConfig/properties/presets" }
+            - type: object
+              title: New sequence variant
+              required: [type, steps]
+              properties:
+                type: { type: string, const: sequence }
+                title: { type: string }
+                steps: { $ref: "#/components/schemas/SequenceVariantConfig/properties/steps" }
+                onEnd: { type: string, enum: [stay, loop], default: stay }
+                resetAfterMs: { type: [integer, "null"], minimum: 1 }
 
     UpdateResponseRequest:
       type: object

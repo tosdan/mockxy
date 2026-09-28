@@ -42,7 +42,7 @@ Ogni passo è un insieme di modifiche verificabile e può essere suddiviso in co
 | S0 | Correggere default, namespace admin e guardia del contratto | Nessuna | Completato | [#20](https://github.com/tosdan/mockxy/pull/20) integrata; [mockxy-skills#3](https://github.com/tosdan/mockxy-skills/pull/3) integrata |
 | S1 | Serializzare mutazioni e rendere affidabili esiti/reload | S0 | Completato | [#21](https://github.com/tosdan/mockxy/pull/21), [#22](https://github.com/tosdan/mockxy/pull/22) e [#23](https://github.com/tosdan/mockxy/pull/23) integrate; [mockxy-skills#4](https://github.com/tosdan/mockxy-skills/pull/4) integrata |
 | S2 | Esporre identità, configurazione effettiva e diagnostica | S1 per gli esiti coerenti | Completato | [#24](https://github.com/tosdan/mockxy/pull/24), [#25](https://github.com/tosdan/mockxy/pull/25) e [#26](https://github.com/tosdan/mockxy/pull/26) integrate; [mockxy-skills#5](https://github.com/tosdan/mockxy-skills/pull/5), [#6](https://github.com/tosdan/mockxy-skills/pull/6) e [#7](https://github.com/tosdan/mockxy-skills/pull/7) integrate |
-| S3 | Leggere/preparare varianti inattive e preservare stream | S1 | Da fare | — |
+| S3 | Leggere/preparare varianti inattive e preservare stream | S1 | In corso | Prima PR in preparazione |
 | S4 | Proteggere bozze e sincronizzare GUI senza perderle | S1–S3; bozza stabile prima del polling del dettaglio | Da fare | — |
 | S5 | Rendere il Monitor interrogabile e la perdita di traffico rilevabile | S2 per l'identità runtime | Da fare | — |
 | S6 | Consegnare setup ripetibile, esempio Playwright e flusso nello skill | S0–S5 | Da fare | — |
@@ -182,6 +182,13 @@ Non serve impedire ogni scansione duplicata del watcher. Serve che una scansione
 **Accettazione:** leggere una variante inattiva non cambia selezione; creazione `select: false` non cambia risposta o scenario corrente; input invalido rifiutato dalla scrittura API anche se inattivo, senza introdurre la validazione globale delle varianti non caricate dal filesystem. Aggiungere un caso in cui si modifica una variante non selezionata usata da uno step attivo: il cambiamento deve essere riconosciuto come modifica dello scenario; preparare la variante separata lascia lo scenario invariato. Stream SSE e WS aperti sopravvivono a descrizione, variante inattiva sullo stesso endpoint, endpoint estraneo ed eco del watcher. Cambiamenti allo scenario attivo chiudono soltanto le connessioni interessate; gli store e lo shutdown non lasciano connessioni residue.
 
 Una rotta di reload esplicito per writer esterni è esclusa da S0–S8. Le mutazioni API attendono già l’applicazione necessaria; non aggiungere `POST /runtime/reload` come dipendenza del setup.
+
+> **Avanzamento S3 — aggiornato il 2026-09-28**
+>
+> - **Consegnato / restante:** S3 è diviso in tre PR. La prima prepara le varianti inattive: `GET /mocks/:id/responses/:file` (definizione normalizzata, sorgente diretto, metadati dell'asset, `selected` e `active`, con la procedura di lettura incompleta del dettaglio portata in un helper comune; una variante non più elencata è `404`); `select: false` alla creazione, che non cambia selezione né scenario, con `createdResponseFile`; `updatedResponseFile` negli aggiornamenti per filename, upload compreso. La validazione delle varianti create o aggiornate esisteva già a prescindere dalla selezione (schema, sorgente compilato, asset, grafo della sequence): i test la confermano per le varianti preparate. Restano la riconciliazione degli stream per firma (seconda PR) e GUI e skill (terza PR).
+> - **Verifiche:** 13 nuovi test col runtime reale, fra cui i criteri di accettazione: lettura inattiva senza effetti, `select: false` con cursore della sequence invariato, varianti invalide rifiutate anche se inattive, step attivo modificato che cambia lo scenario mentre la variante separata lo lascia invariato. Sul codice precedente ne falliscono 10; passano i 3 sulle varianti invalide, perché quella validazione c'era già.
+> - **Impedimenti:** nessuno.
+> - **Modifiche al contratto:** nessuna.
 
 ## 7. S4 — Protezione delle bozze e sincronizzazione GUI
 
