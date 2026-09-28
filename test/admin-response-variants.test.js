@@ -73,6 +73,7 @@ describe("varianti inattive", () => {
         response: expect.objectContaining({ type: "mock", title: "Vuota", status: 404, body: [] }),
         source: null,
         fileInfo: null,
+        revision: expect.stringMatching(/^rev-v1:[0-9a-f]{64}$/),
       });
       expect((await readDetail()).selectedResponseFile).toBe("001.response.json");
       expect(await served()).toEqual({ step: 1 });

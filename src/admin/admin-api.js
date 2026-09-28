@@ -56,6 +56,7 @@ const { canonicalPath } = require("../utils/canonical-path");
 const { trackWrites } = require("../utils/write-tracking");
 const { getEndpointResponsesDir } = require("./endpoint-files");
 const { resolveAdminFilePath } = require("./mock-ids");
+const { runWithWorkspaceId } = require("./revision-tokens");
 const {
   listDumpFiles,
   readDumpPage,
@@ -124,19 +125,20 @@ function holdResponse(res) {
   };
 }
 
-// File del catalogo di cui GET /mocks/:id ha letto il contenuto: definizione, varianti elencate
-// e sorgente della variante selezionata (l'asset di un mock file-backed non viene letto).
+// File del catalogo di cui GET /mocks/:id ha letto il contenuto: definizione, varianti elencate,
+// sorgente della variante selezionata e asset di un mock servito da file (letto per il token).
 function detailReadPaths(detail) {
   const responsesDir = detail.responseFilePath ? path.dirname(detail.responseFilePath) : null;
   return [
     detail.definitionFilePath,
     ...(responsesDir == null ? [] : (detail.responses || []).map((response) => path.join(responsesDir, response.fileName))),
     detail.sourceFilePath,
+    detail.fileInfo != null ? detail.payloadFilePath : null,
   ].filter((filePath) => typeof filePath === "string" && filePath !== "");
 }
 
 // File del catalogo di cui GET /mocks/:id/responses/:file ha letto il contenuto: definizione,
-// variante e sorgente diretto.
+// variante, sorgente diretto e asset (letto per il token).
 function variantReadPaths(mocksDir, variant) {
   const endpointPath = resolveAdminFilePath(mocksDir, variant.id);
   const responsesDir = getEndpointResponsesDir(endpointPath);
@@ -145,6 +147,7 @@ function variantReadPaths(mocksDir, variant) {
     endpointPath,
     path.join(responsesDir, variant.responseFile),
     ...(typeof sourceFile === "string" ? [path.join(responsesDir, sourceFile)] : []),
+    ...(variant.fileInfo != null ? [path.resolve(responsesDir, variant.fileInfo.name)] : []),
   ];
 }
 
@@ -214,7 +217,7 @@ function createAdminApiRouter({ config, runtimeIdentity, runtimeStatus, catalogR
       const written = new Set();
       const releaseResponse = holdResponse(res);
       try {
-        return await trackWrites(written, () => handler(req, res));
+        return await trackWrites(written, () => withWorkspace(() => handler(req, res)));
       } finally {
         await catalogRevision?.refresh({ invalidate: written }).catch(() => {});
         releaseResponse();
@@ -222,9 +225,12 @@ function createAdminApiRouter({ config, runtimeIdentity, runtimeStatus, catalogR
     }).catch((error) => {
       throw markRejectedBeforeWriting(error);
     });
-  // Identità del workspace (calcolata alla prima lettura: i percorsi sono fissi per il runtime)
-  // e revisioni degli stati configurabili, per GET /info.
-  let workspace = null;
+  // Identità del workspace (i percorsi sono fissi per il runtime; senza mocksDir si calcola alla
+  // prima lettura di GET /info) e revisioni degli stati configurabili. Le letture e le mutazioni
+  // del router calcolano i token di revisione con la stessa identità, nel contesto di questo
+  // runtime e non in un registro globale.
+  let workspace = config?.mocksDir ? describeWorkspace(config) : null;
+  const withWorkspace = (task) => runWithWorkspaceId(workspace?.id, task);
   const serverRevision = new ObservedRevision(() => JSON.stringify(serverState?.getState() ?? null));
   const dumpRevision = new ObservedRevision(() => JSON.stringify(monitorDump == null ? null : {
     enabled: monitorDump.enabled,
@@ -527,7 +533,7 @@ function createAdminApiRouter({ config, runtimeIdentity, runtimeStatus, catalogR
   }));
 
   router.get("/mocks/:id", async (req, res) => {
-    const detail = await getAdminMockDetail(config.mocksDir, req.params.id);
+    const detail = await withWorkspace(() => getAdminMockDetail(config.mocksDir, req.params.id));
     // Il dettaglio legge i contenuti effettivi: se differiscono da quelli in cache (una modifica
     // esterna a firma invariata, un file comparso), la revisione del catalogo lo registra (§13 C2).
     // L'osservazione non entra nella coda delle scansioni: una scansione lenta non ritarda la GET.
@@ -664,7 +670,7 @@ function createAdminApiRouter({ config, runtimeIdentity, runtimeStatus, catalogR
 
   // Una variante per filename, attiva o no, senza cambiare selezione né scenario (§13 C3).
   router.get("/mocks/:id/responses/:responseFileName", async (req, res) => {
-    const variant = await getAdminMockResponse(config.mocksDir, req.params.id, req.params.responseFileName);
+    const variant = await withWorkspace(() => getAdminMockResponse(config.mocksDir, req.params.id, req.params.responseFileName));
     await catalogRevision?.observeFiles(variantReadPaths(config.mocksDir, variant)).catch(() => {});
     sendJson(res, 200, variant);
   });
@@ -693,7 +699,12 @@ function createAdminApiRouter({ config, runtimeIdentity, runtimeStatus, catalogR
         req.params.id,
         req.params.responseFileName,
         req.body,
-        { filename: req.query.filename, contentType: req.query.contentType },
+        {
+          filename: req.query.filename,
+          contentType: req.query.contentType,
+          // Precondizione dell'upload raw (§13 C4): header dedicato, mai dati di controllo nel file.
+          expectedRevision: req.get("x-mockxy-expected-revision"),
+        },
         reloadRuntime
       );
       sendJson(res, 200, detail);

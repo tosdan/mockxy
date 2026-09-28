@@ -148,6 +148,18 @@ esistenti restano compatibili: nessuna migrazione richiesta.
 - **Per i client:** una riconnessione non segue più ogni modifica del workspace; se serve
   ripartire dall'inizio del copione, basta riaprire la connessione.
 
+#### Revisioni e precondizioni per i salvataggi da bozza
+
+- **Prima:** un salvataggio poteva sovrascrivere in silenzio una modifica fatta nel frattempo da
+  un altro client, dall'app o da un agente.
+- **Ora:** il dettaglio e la lettura di una variante riportano token di revisione del contenuto
+  (`descriptionRevision`, `responseRevision`, `revision`). Le scritture di descrizione e varianti,
+  compreso l'upload (header `X-Mockxy-Expected-Revision`) e la forma legacy di `PUT /mocks/:id`,
+  accettano `expectedRevision`: se il contenuto è cambiato rispondono `409 REVISION_CONFLICT`
+  senza scrivere. Gli aggiornamenti di variante riportano `updatedResponseRevision`.
+- **Per i client:** la precondizione è facoltativa, e senza di essa nulla cambia; chi la usa deve
+  gestire il `409` rileggendo e confrontando, non ripetendo alla cieca.
+
 ### Interfaccia
 
 - **Descrizione e abilitazione:** salvare la descrizione invia solo la descrizione, e il toggle
