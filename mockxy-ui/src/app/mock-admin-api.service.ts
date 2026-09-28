@@ -24,6 +24,7 @@ import {
   MockCreateRequest,
   MockDetail,
   MockDetailAfterMutation,
+  ResponseCreatedResult,
   MockListResponse,
   MockSummary,
   OpenapiImportPreview,
@@ -236,7 +237,7 @@ export class MockAdminApiService {
   }
 
   /** Crea una variante sequence e la seleziona. */
-  createSequence(id: string, sequence: ResponseSequenceCreateRequest): Observable<MockDetailAfterMutation> {
+  createSequence(id: string, sequence: ResponseSequenceCreateRequest): Observable<ResponseCreatedResult> {
     return this.createResponse(id, sequence);
   }
 
@@ -285,8 +286,8 @@ export class MockAdminApiService {
   }
 
   /** Crea una nuova response per l'endpoint selezionato partendo dai valori confermati dall'utente. */
-  createResponse(id: string, request: CreateResponseRequest = {}): Observable<MockDetailAfterMutation> {
-    return this.http.post<MockDetailAfterMutation>(`${this.baseUrl}/mocks/${encodeURIComponent(id)}/responses`, request);
+  createResponse(id: string, request: CreateResponseRequest = {}): Observable<ResponseCreatedResult> {
+    return this.http.post<ResponseCreatedResult>(`${this.baseUrl}/mocks/${encodeURIComponent(id)}/responses`, request);
   }
 
   /** Aggiorna solo la response indicata per l'endpoint selezionato. */

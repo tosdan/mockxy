@@ -214,6 +214,16 @@ describe('MocksNextSequenceDialog', () => {
     expect(dialogRef.close).toHaveBeenCalledWith('saved');
   });
 
+  it('in creazione senza «Attiva subito» prepara la sequence con select false', () => {
+    const { c } = create(detailWith(), 'create');
+    store.createSequence.mockImplementation((_sequence: unknown, onSuccess: () => void) => onSuccess());
+    c.title.set('Alternativa');
+    c.activateNow.set(false);
+    c.save();
+    expect(store.createSequence).toHaveBeenCalledWith(expect.objectContaining({ type: 'sequence', title: 'Alternativa', select: false }), expect.any(Function));
+    expect(dialogRef.close).toHaveBeenCalledWith('saved');
+  });
+
   it('in modifica usa la rotta della response e mantiene il criterio misto', () => {
     const { c } = create(editDetail(), 'edit');
     store.updateSequence.mockImplementation((_sequence: unknown, onSuccess: () => void) => onSuccess());

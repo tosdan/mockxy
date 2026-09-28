@@ -14,6 +14,7 @@ import { UiMenu, UiMenuItem } from '../../../ui/ui-menu/ui-menu';
 import { UiSelect, type UiSelectOption } from '../../../ui/ui-select/ui-select';
 import { UiSkeleton } from '../../../ui/ui-skeleton/ui-skeleton';
 import { UiSwitch } from '../../../ui/ui-switch/ui-switch';
+import { UiCheckbox } from '../../../ui/ui-checkbox/ui-checkbox';
 import { UiTable } from '../../../ui/ui-table/ui-table';
 import { UiTooltip } from '../../../ui/ui-tooltip/ui-tooltip';
 import { UiDialog } from '../../../ui/ui-dialog/ui-dialog';
@@ -41,7 +42,7 @@ const METHOD_TONES: ReadonlySet<string> = new Set(['get', 'post', 'put', 'delete
  */
 @Component({
   selector: 'mocks-next-detail',
-  imports: [CdkMenuTrigger, CdkCopyToClipboard, NgIcon, StatusCombobox, TranslocoPipe, UiBadge, UiButton, UiChip, UiCode, UiCollapsible, UiInput, UiMenu, UiMenuItem, UiSelect, UiSkeleton, UiSwitch, UiTable, UiTooltip, MocksNextResponseForm, MocksNextSequenceSummary, MocksNextSseConsole, MocksNextWsConsole],
+  imports: [CdkMenuTrigger, CdkCopyToClipboard, NgIcon, StatusCombobox, TranslocoPipe, UiBadge, UiButton, UiCheckbox, UiChip, UiCode, UiCollapsible, UiInput, UiMenu, UiMenuItem, UiSelect, UiSkeleton, UiSwitch, UiTable, UiTooltip, MocksNextResponseForm, MocksNextSequenceSummary, MocksNextSseConsole, MocksNextWsConsole],
   providers: [provideIcons({ lucideCable, lucideCheck, lucideCog, lucideCopy, lucideEllipsisVertical, lucideFile, lucideFolder, lucideFileCode, lucideLayers, lucideListOrdered, lucideMessageSquare, lucidePencil, lucidePlus, lucideRadio, lucideTrash2, lucideTriangleAlert, lucideX })],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { class: 'relative flex min-w-0 flex-1 flex-col overflow-hidden bg-muted' },
@@ -169,6 +170,11 @@ const METHOD_TONES: ReadonlySet<string> = new Set(['get', 'post', 'put', 'delete
           @if (responseFormOpen()) {
           @if (creatingResponse()) {
           <span class="text-[12.5px] font-semibold text-brand">{{ newResponseLabel() }}</span>
+          <!-- Senza spunta la variante viene preparata: la risposta servita e lo scenario restano quelli di adesso. -->
+          <label class="flex items-center gap-2 text-[12px] text-muted-foreground" [uiTooltip]="'detail.activateNewResponseTip' | transloco">
+            <ui-checkbox [(checked)]="activateNewResponse" [ariaLabel]="'detail.activateNewResponse' | transloco" />
+            {{ 'detail.activateNewResponse' | transloco }}
+          </label>
           } @else {
           <span class="text-[12.5px] font-semibold text-brand">{{ 'detail.editResponse' | transloco }}</span>
           }
@@ -472,6 +478,8 @@ export class MocksNextDetail {
 
   protected readonly busy = computed(() => this.store.savingId() === this.detail()?.id);
   /** Form response aperto: modifica di una esistente, o creazione di una nuova bozza. */
+  /** In creazione: attivare subito la nuova variante (default) o solo prepararla. */
+  protected readonly activateNewResponse = signal(true);
   protected readonly responseFormOpen = computed(() => this.editingResponse() || this.creatingResponse());
   /** Etichetta della testata del form in creazione (es. "Nuova response handler"). */
   protected readonly newResponseLabel = computed(() =>
@@ -714,15 +722,28 @@ export class MocksNextDetail {
     this.store.saveResponse(payload, () => this.closeResponseForm());
   }
 
-  /** Crea sul backend la response in bozza (solo a "Salva"); in modalità File carica il file dopo la create. */
+  /**
+   * Crea sul backend la response in bozza (solo a "Salva"); in modalità File carica il file dopo la
+   * create, sulla variante creata. Senza "Attiva subito" la variante è preparata (`select: false`).
+   */
   private createDraftResponse(): void {
-    const payload = this.draft.buildCreatePayload();
-    if (!payload) return;
+    const draftPayload = this.draft.buildCreatePayload();
+    if (!draftPayload) return;
+    const payload = this.activateNewResponse() ? draftPayload : { ...draftPayload, select: false };
     if (!this.draft.isScript() && this.draft.payloadType() === 'file') {
       const file = this.draft.file();
       if (!file) return;
-      // crea la response (metadati) e, una volta selezionata, vi carica sopra il file scelto.
-      this.store.addResponse(payload, () => this.store.uploadResponseFile(file, () => this.closeResponseForm()));
+      // crea la response (metadati) e vi carica sopra il file scelto, selezionata o no. Una
+      // variante preparata senza filename creato non riceve l'upload: il ripiego sulla selezionata
+      // ne sovrascriverebbe il contenuto.
+      const activate = this.activateNewResponse();
+      this.store.addResponse(payload, (created) => {
+        if (!activate && !created) {
+          this.store.error.set(this.transloco.translate('detail.createdResponseFileMissing'));
+          return;
+        }
+        this.store.uploadResponseFile(file, () => this.closeResponseForm(), created);
+      });
       return;
     }
     this.store.addResponse(payload, () => this.closeResponseForm());
@@ -749,6 +770,7 @@ export class MocksNextDetail {
     this.resetEditState();
     const seededSource = type !== 'mock' && seed === 'clone' ? this.seedSourceFromMock(type) : undefined;
     this.draft.seedForCreate(type, seededSource);
+    this.activateNewResponse.set(true);
     this.creatingResponse.set(true);
   }
 
