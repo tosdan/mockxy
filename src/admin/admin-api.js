@@ -52,6 +52,7 @@ const { setNoCacheHeaders } = require("../utils/cache");
 const { describeRuntimeConfig, pickRuntimeConfig } = require("./runtime-config");
 const { ENGINE_VERSION, ObservedRevision, describeWorkspace } = require("../runtime-info");
 const { canonicalPath } = require("../utils/canonical-path");
+const { trackWrites } = require("../utils/write-tracking");
 const {
   listDumpFiles,
   readDumpPage,
@@ -100,6 +101,35 @@ function markRejectedBeforeWriting(error) {
     error.details = { ...(error.details || {}), code: "MUTATION_REJECTED", rollback: "not_needed" };
   }
   return error;
+}
+
+// Trattiene la fine della risposta finché non viene rilasciata: il gestore compone la risposta
+// come sempre, ma arriva al client solo dopo il lavoro che deve precederla. Il rilascio ripristina
+// il metodo originale e invia la risposta trattenuta, se c'è.
+function holdResponse(res) {
+  const originalEnd = res.end;
+  let pending = null;
+  res.end = function heldEnd(...args) {
+    pending = args;
+    return res;
+  };
+  return () => {
+    res.end = originalEnd;
+    if (pending != null) {
+      originalEnd.apply(res, pending);
+    }
+  };
+}
+
+// File del catalogo di cui GET /mocks/:id ha letto il contenuto: definizione, varianti elencate
+// e sorgente della variante selezionata (l'asset di un mock file-backed non viene letto).
+function detailReadPaths(detail) {
+  const responsesDir = detail.responseFilePath ? path.dirname(detail.responseFilePath) : null;
+  return [
+    detail.definitionFilePath,
+    ...(responsesDir == null ? [] : (detail.responses || []).map((response) => path.join(responsesDir, response.fileName))),
+    detail.sourceFilePath,
+  ].filter((filePath) => typeof filePath === "string" && filePath !== "");
 }
 
 function markParsedJsonBodyLength(req, _res, buffer) {
@@ -159,15 +189,19 @@ function createAdminApiRouter({ config, runtimeIdentity, runtimeStatus, catalogR
   const workspaceKey = canonicalWorkspaceKey(config?.mocksDir);
   // Esegue il gestore di una rotta di mutazione nel turno del workspace, dopo parsing e limiti
   // del body (già applicati dai middleware della rotta).
-  // Chiude il turno riallineando la revisione del catalogo: la scansione rilegge per forza i
-  // file scritti durante la mutazione, anche se dimensione e mtime non sono cambiati (§13 C2).
+  // La revisione del catalogo si pubblica prima della risposta della mutazione (§13 C2): la
+  // risposta resta trattenuta finché la scansione, che rilegge esattamente i file scritti dalla
+  // mutazione anche a firma invariata, non è conclusa. GET /info legge poi soltanto l'ultima
+  // revisione pubblicata, senza attese.
   const mutation = (handler) => (req, res) =>
     runInMutationQueue(workspaceKey, async () => {
-      const startedAt = Date.now();
+      const written = new Set();
+      const releaseResponse = holdResponse(res);
       try {
-        return await handler(req, res);
+        return await trackWrites(written, () => handler(req, res));
       } finally {
-        await catalogRevision?.refresh({ writtenSince: startedAt }).catch(() => {});
+        await catalogRevision?.refresh({ invalidate: written }).catch(() => {});
+        releaseResponse();
       }
     }).catch((error) => {
       throw markRejectedBeforeWriting(error);
@@ -199,10 +233,9 @@ function createAdminApiRouter({ config, runtimeIdentity, runtimeStatus, catalogR
   });
 
   // Identità del runtime e del workspace, indirizzo, watcher e revisioni leggere delle risorse
-  // osservabili (§13 C2). Non avvia scansioni: le revisioni si aggiornano con le operazioni, e
-  // qui si attendono soltanto quelle già in corso.
-  router.get("/info", async (_req, res) => {
-    const catalog = catalogRevision ? await catalogRevision.settled() : 1;
+  // osservabili (§13 C2): uno snapshot in memoria, senza scansioni né attese. Le revisioni si
+  // aggiornano con le operazioni.
+  router.get("/info", (_req, res) => {
     sendJson(res, 200, {
       version: ENGINE_VERSION,
       runtimeId: runtimeIdentity?.runtimeId ?? null,
@@ -213,7 +246,7 @@ function createAdminApiRouter({ config, runtimeIdentity, runtimeStatus, catalogR
         ? { state: "disabled", polling: false, lastError: null }
         : { state: watcherStatus.state, polling: watcherStatus.polling, lastError: watcherStatus.lastError },
       revisions: {
-        catalog,
+        catalog: catalogRevision?.revision ?? 1,
         server: serverRevision.observe(),
         dump: dumpRevision.observe(),
         diagnostics: runtimeStatus?.revision ?? 1,
@@ -479,6 +512,9 @@ function createAdminApiRouter({ config, runtimeIdentity, runtimeStatus, catalogR
 
   router.get("/mocks/:id", async (req, res) => {
     const detail = await getAdminMockDetail(config.mocksDir, req.params.id);
+    // Il dettaglio legge i contenuti effettivi: se differiscono da quelli in cache (una modifica
+    // esterna a firma invariata, un file comparso), la revisione del catalogo lo registra (§13 C2).
+    await catalogRevision?.verify(detailReadPaths(detail)).catch(() => {});
     // Stato runtime presente solo quando la response selezionata è una sequence.
     if (sequenceStates != null && detail.sequence != null) {
       detail.sequenceState = sequenceStates.getState(

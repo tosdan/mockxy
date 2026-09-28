@@ -1719,12 +1719,14 @@ paths:
       description: |
         Who answers and on what: the engine version, an identity that changes at every start,
         the workspace it serves, the address it listens on, the watcher, and lightweight
-        revisions of the observable resources. Cheap to poll: it never scans the workspace.
+        revisions of the observable resources. Cheap to poll: it reads an in-memory snapshot and
+        never scans the workspace nor waits for a scan in progress.
 
         `workspace.id` identifies the **location** of the workspace: `workspace-v1:` followed by
         the lowercase hexadecimal SHA-256 of the UTF-8 bytes of the compact JSON array
         `[mocksDir, filesDir]`, with the canonical paths reported here (`null` for a missing
-        `filesDir`). It does not depend on the desktop root, the port or the start, and it does
+        `filesDir`). A folder that does not exist yet is canonicalized through its deepest
+        existing ancestor, so the identity does not change once it is created. It does not depend on the desktop root, the port or the start, and it does
         not travel with the files: two runtimes on the same folders share it, with different
         `runtimeId`s.
 
@@ -1732,11 +1734,13 @@ paths:
         compare them with the values you saw to know what to read again. They are informative,
         never write preconditions, and may advance more than once for a single action.
 
-        - `catalog`: endpoint files, collections and their ordering, every variant (inactive
-          ones too) with its sources and assets, including files that appear, disappear or
-          cannot be read. Reloads, admin mutations and catalog reads update it. An external
-          change that keeps both size and modification time may stay invisible until the file
-          is read again.
+        - `catalog`: the collections file, every endpoint file, every variant it lists
+          (inactive ones too) and the source and asset each variant references, including files
+          that appear, disappear or cannot be read; other files under the mocks folder do not
+          count. Reloads, catalog reads and endpoint detail reads update it, and an admin
+          mutation publishes it before answering, re-reading exactly the files it wrote. An
+          external change that keeps both size and modification time may stay invisible until
+          the file is read again.
         - `server`: `serverEnabled` or `proxyAll`.
         - `dump`: the configurable state of the monitor dump (enabled, interval, threshold,
           limits), not its traffic counters.

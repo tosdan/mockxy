@@ -10,7 +10,6 @@ const { createNoopLogger, createTempDir, removeDir, waitFor, writeMock } = requi
 
 const SPEC = yaml.safeLoad(fs.readFileSync(path.join(__dirname, "..", "src", "admin", "admin-api.openapi.yaml"), "utf8"));
 const PACKAGE_VERSION = require("../package.json").version;
-const BROKEN_HANDLER = "module.exports = { async resolveResponse( { return 1; } };\n";
 
 // Identità del runtime e del workspace, indirizzo, watcher e revisioni (piano agent/API, §5 S2
 // e §13 C2).
@@ -129,6 +128,20 @@ describe("GET /info", () => {
     expect(linked.workspace).toEqual(direct.workspace);
   });
 
+  (process.platform === "win32" ? test.skip : test)("con la cartella dati ancora assente, symlink e percorso diretto danno la stessa identità", async () => {
+    await fs.promises.rm(filesDir, { recursive: true, force: true });
+    const linkedWorkspace = path.join(workspaceDir, "link");
+    await fs.promises.symlink(workspaceDir, linkedWorkspace, "dir");
+    const direct = await readInfo((await createRuntime()).app);
+    const linked = await readInfo((await createRuntime({
+      mocksDir: path.join(linkedWorkspace, "mocks"),
+      filesDir: path.join(linkedWorkspace, "files"),
+    })).app);
+
+    expect(direct.workspace.filesDir).toBe(path.join(fs.realpathSync.native(workspaceDir), "files"));
+    expect(linked.workspace).toEqual(direct.workspace);
+  });
+
   test("con il watcher attivo lo stato passa a ready", async () => {
     const runtime = await createRuntime({ devWatch: true });
 
@@ -199,11 +212,15 @@ describe("GET /info", () => {
       expect((await readInfo(runtime.app)).revisions.catalog).toBe(before + 1);
     });
 
+    const responsePath = () => path.join(mocksDir, "items", "GET.responses", "001.response.json");
+    const writeResponseBody = (body) =>
+      fs.promises.writeFile(responsePath(), JSON.stringify({ type: "mock", title: "", status: 200, headers: {}, delayMs: 0, body }));
+
     test("senza watcher una modifica esterna emerge alla lettura successiva del catalogo, non da /info", async () => {
       await writeMock({ mocksDir, folder: "items", method: "GET", routePath: "/items", body: { ok: true } });
       const runtime = await createRuntime();
 
-      await fs.promises.writeFile(path.join(mocksDir, "items", "GET.responses", "002.response.json"), JSON.stringify({ type: "mock", status: 500 }));
+      await writeResponseBody({ changed: "yes" });
       expect((await readInfo(runtime.app)).revisions.catalog).toBe(1);
 
       await request(runtime.app).get("/_admin/api/mocks");
@@ -214,13 +231,55 @@ describe("GET /info", () => {
       await writeMock({ mocksDir, folder: "items", method: "GET", routePath: "/items", body: { ok: true } });
       const runtime = await createRuntime();
 
-      await fs.promises.writeFile(
-        path.join(mocksDir, "items", "GET.responses", "001.handler.js"),
-        BROKEN_HANDLER
-      );
+      await writeResponseBody({ changed: "yes" });
       await runtime.reloadRuntime("watcher");
 
       expect((await readInfo(runtime.app)).revisions.catalog).toBe(2);
+    });
+
+    test("un file estraneo al catalogo non la muove", async () => {
+      await writeMock({ mocksDir, folder: "items", method: "GET", routePath: "/items", body: { ok: true } });
+      const runtime = await createRuntime();
+
+      await fs.promises.writeFile(path.join(mocksDir, "notes.txt"), "appunti");
+      await runtime.reloadRuntime("watcher");
+
+      expect((await readInfo(runtime.app)).revisions.catalog).toBe(1);
+    });
+
+    test("la GET del dettaglio registra un contenuto nuovo anche a firma invariata", async () => {
+      await writeMock({ mocksDir, folder: "items", method: "GET", routePath: "/items", body: { v: 1 } });
+      const tick = new Date(Math.floor(Date.now() / 1000) * 1000);
+      await fs.promises.utimes(responsePath(), tick, tick);
+      const runtime = await createRuntime();
+
+      // Stessa dimensione e stesso mtime: invisibile alla scansione.
+      const original = await fs.promises.readFile(responsePath(), "utf8");
+      await fs.promises.writeFile(responsePath(), original.replace(/("v":\s*)1/, "$12"));
+      await fs.promises.utimes(responsePath(), tick, tick);
+      await runtime.reloadRuntime("watcher");
+      expect((await readInfo(runtime.app)).revisions.catalog).toBe(1);
+
+      const detail = await request(runtime.app).get(`/_admin/api/mocks/${encodeMockId("items/GET.endpoint.json")}`);
+      expect(detail.body.body).toEqual({ v: 2 });
+      expect((await readInfo(runtime.app)).revisions.catalog).toBe(2);
+    });
+
+    test("/info non attende una scansione in corso", async () => {
+      const runtime = await createRuntime();
+      let release;
+      runtime.catalogRevision.enqueue(() => new Promise((resolve) => {
+        release = resolve;
+      }));
+      try {
+        const answered = await Promise.race([
+          readInfo(runtime.app).then(() => true),
+          new Promise((resolve) => setTimeout(() => resolve(false), 1000)),
+        ]);
+        expect(answered).toBe(true);
+      } finally {
+        release();
+      }
     });
   });
 });
