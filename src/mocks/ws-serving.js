@@ -4,7 +4,7 @@
 // esistente (upgrade-proxy.js), che non viene toccato.
 
 const { WebSocketServer } = require("ws");
-const { matchWsRule } = require("./ws-config");
+const { WS_DEFAULT_CLOSE_CODE, WS_DEFAULT_CLOSE_REASON, matchWsRule } = require("./ws-config");
 const { wsWirePayload } = require("./ws-connections");
 
 const WS_PING_INTERVAL_MS = 30_000;
@@ -100,7 +100,7 @@ function serveWsConnection({ client, decision, wsConnections, logger, pingInterv
   const playScript = () => {
     playEntries(ws.script, "script", () => {
       if (ws.onEnd === "close") {
-        client.close(ws.closeCode ?? 1000, ws.closeReason ?? "");
+        client.close(ws.closeCode ?? WS_DEFAULT_CLOSE_CODE, ws.closeReason ?? WS_DEFAULT_CLOSE_REASON);
         return;
       }
       if (ws.onEnd === "loop") {

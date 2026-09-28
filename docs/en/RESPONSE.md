@@ -166,8 +166,11 @@ reconnecting means starting over.
 - **`presets`** — optional: the ready-made messages (macros) of the endpoint's console.
 
 During silences the engine sends a **heartbeat** comment every 15 seconds (invisible to
-clients). Connections are closed on hot reload and shutdown: the SSE client reconnects on its
-own and the script starts over. The **console** in the endpoint detail shows open connections
+clients). A hot reload closes the connections only when the endpoint's stream changes (script,
+`retryMs`, `onEnd`, type) or the endpoint is disabled or deleted: the SSE client reconnects on
+its own and the script starts over. Title, description, presets, inactive variants, other
+endpoints and a new selection with the same definition leave them open; shutdown closes them
+all. The **console** in the endpoint detail shows open connections
 and history, and allows manual direction (broadcast to every connection) — via API:
 `POST /mocks/:id/sse/push` and `GET /mocks/:id/sse/connections`. The [monitor](MONITOR.md)
 entry is written when the connection closes. An `sse` variant cannot be a step of a
@@ -215,8 +218,10 @@ upgrades that do not match a `ws` endpoint follow the usual passthrough (see
 - **`presets`** — optional: the ready-made messages (macros) of the console.
 
 During silences the engine sends a protocol **ping** every 30 seconds (permissive: a missing
-pong does not close). Connections are closed on hot reload and shutdown: the client reconnects
-and the script starts over. The **console** in the endpoint detail shows connections and the
+pong does not close). A hot reload closes the connections only when the endpoint's stream
+changes (script, rules, `onEnd`, `closeCode`, `closeReason`, type) or the endpoint is disabled or
+deleted: the client reconnects and the script starts over. Anything else leaves them open;
+shutdown closes them all. The **console** in the endpoint detail shows connections and the
 **bidirectional transcript** (▶ sent by script/rules/direction, ◀ received from clients), with
 one-click re-send — via API: `POST /mocks/:id/ws/push` and `GET /mocks/:id/ws/connections`.
 A `ws` variant cannot be a step of a [sequence](ENDPOINT.md).
