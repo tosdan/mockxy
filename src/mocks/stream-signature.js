@@ -1,16 +1,26 @@
+const { WS_DEFAULT_CLOSE_CODE, WS_DEFAULT_CLOSE_REASON } = require("./ws-config");
+
 // Identità dello stream servito da un endpoint (piano agent/API, §13 C3). La chiave delle
 // connessioni resta method/path; la firma deriva dalla definizione normalizzata realmente
 // installata e comprende solo ciò che governa copione, regole e chiusura: per SSE `retryMs`,
 // `script`, `onEnd`; per WS `script`, `rules`, `onEnd`, `closeCode`, `closeReason`. Restano fuori
-// filename, titolo, descrizione e preset della console. La normalizzazione rende già equivalenti
-// i default omessi ed espliciti, e i messaggi hanno un ordine di chiavi fisso: la serializzazione
-// della definizione basta a confrontarle.
+// filename, titolo, descrizione e preset della console. I default omessi ed espliciti sono
+// equivalenti: quasi tutti li applica già la normalizzazione, e la chiusura WS usa gli stessi
+// default del serving (1000, stringa vuota). I messaggi hanno un ordine di chiavi fisso: la
+// serializzazione della definizione basta a confrontarle.
 function streamSignatureOf(entry) {
   if (entry?.type === "sse") {
     return JSON.stringify(["sse", entry.retryMs ?? null, entry.script, entry.onEnd]);
   }
   if (entry?.type === "ws") {
-    return JSON.stringify(["ws", entry.script, entry.rules, entry.onEnd, entry.closeCode ?? null, entry.closeReason ?? null]);
+    return JSON.stringify([
+      "ws",
+      entry.script,
+      entry.rules,
+      entry.onEnd,
+      entry.closeCode ?? WS_DEFAULT_CLOSE_CODE,
+      entry.closeReason ?? WS_DEFAULT_CLOSE_REASON,
+    ]);
   }
   return null;
 }

@@ -117,6 +117,22 @@ describe("stream preservati ai reload", () => {
       expect(closed.ws()).toBe(false);
     });
 
+    test.each([
+      ["closeCode", { closeCode: 1000 }],
+      ["closeReason", { closeReason: "" }],
+      ["closeCode e closeReason", { closeCode: 1000, closeReason: "" }],
+    ])("la chiusura WS con %s esplicitati ai default del serving è la stessa", async (_label, explicit) => {
+      const closing = { type: "ws", title: "Canale", onEnd: "close", script: [{ afterMs: 60000, data: "fine" }], rules: [] };
+      await writeStream("canale", "/canale", [closing]);
+      await createRuntime();
+      const closed = openFakeConnections();
+
+      await writeStream("canale", "/canale", [{ ...closing, ...explicit }]);
+      await runtime.reloadRuntime("watcher");
+
+      expect(closed.ws()).toBe(false);
+    });
+
     test("una nuova selezione che non si carica lascia la vecchia rotta e le sue connessioni", async () => {
       await createRuntime();
       const closed = openFakeConnections();
@@ -220,6 +236,7 @@ describe("stream preservati ai reload", () => {
 
     expect(streamSignatureOf({ ...base, title: "Altro", presets: [{ label: "x", data: 1 }], selectedResponseFile: "009.response.json" })).toBe(signature);
     expect(streamSignatureOf({ ...base, closeCode: 4000 })).not.toBe(signature);
+    expect(streamSignatureOf({ ...base, closeCode: null, closeReason: "" })).toBe(signature);
     expect(streamSignatureOf({ ...base, closeReason: "fine" })).not.toBe(signature);
     expect(streamSignatureOf({ ...base, script: [{ afterMs: 1, data: "a" }] })).not.toBe(signature);
     expect(streamSignatureOf({ ...base, type: "mock" })).toBeNull();

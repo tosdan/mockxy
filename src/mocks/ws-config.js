@@ -226,7 +226,14 @@ function matchWsRule(rules, text) {
   return null;
 }
 
+// Chiusura programmata di default (onEnd close senza closeCode/closeReason): li usano il serving
+// e la firma dello stream, che deve considerare equivalenti i default omessi ed espliciti.
+const WS_DEFAULT_CLOSE_CODE = 1000;
+const WS_DEFAULT_CLOSE_REASON = "";
+
 module.exports = {
+  WS_DEFAULT_CLOSE_CODE,
+  WS_DEFAULT_CLOSE_REASON,
   normalizeWsConfig,
   validateWsMessage,
   matchWsRule,
