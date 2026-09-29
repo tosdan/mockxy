@@ -722,6 +722,49 @@ export interface RuntimeRevisions {
   config: number;
 }
 
+/** Le nove chiavi della configurazione modificabili a runtime (§13 C8), nell'ordine del server. */
+export const RUNTIME_CONFIG_KEYS = [
+  'backendUrl',
+  'proxyFallbackEnabled',
+  'corsEnabled',
+  'delayAllRequests',
+  'caseInsensitiveFilters',
+  'adaptProxyCookies',
+  'rewriteProxyRedirects',
+  'globalDelayMs',
+  'requestTimeoutMs',
+] as const;
+export type RuntimeConfigKey = (typeof RUNTIME_CONFIG_KEYS)[number];
+
+export interface RuntimeConfigValues {
+  /** `null`: nessun backend. */
+  backendUrl: string | null;
+  proxyFallbackEnabled: boolean;
+  corsEnabled: boolean;
+  delayAllRequests: boolean;
+  caseInsensitiveFilters: boolean;
+  adaptProxyCookies: boolean;
+  rewriteProxyRedirects: boolean;
+  globalDelayMs: number;
+  requestTimeoutMs: number;
+}
+
+/** GET /config: valori di avvio, effettivi e override effimeri (mai salvati). */
+export interface RuntimeConfigState {
+  runtimeId: string;
+  startup: RuntimeConfigValues;
+  effective: RuntimeConfigValues;
+  /** Solo le chiavi impostate via PATCH /config, anche se uguali al valore di avvio. */
+  overrides: Partial<RuntimeConfigValues>;
+  persisted: false;
+}
+
+/** PATCH /config: `unset` riporta al valore di avvio, `set.backendUrl: null` disattiva il backend. */
+export interface RuntimeConfigPatch {
+  set?: Partial<RuntimeConfigValues>;
+  unset?: RuntimeConfigKey[];
+}
+
 /** Identità del runtime e del workspace che serve, con le revisioni delle risorse (GET /info). */
 export interface RuntimeInfo {
   version: string;

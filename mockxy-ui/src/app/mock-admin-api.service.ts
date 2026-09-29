@@ -56,6 +56,8 @@ import {
   WsPushResult,
   WsStateResponse,
   ServerState,
+  RuntimeConfigPatch,
+  RuntimeConfigState,
   RuntimeInfo,
   RuntimeStatusReport,
   SharedStateListResponse,
@@ -482,6 +484,16 @@ export class MockAdminApiService {
    */
   getRuntimeInfo(): Observable<RuntimeInfo> {
     return this.http.get<RuntimeInfo>(`${this.baseUrl}/info`);
+  }
+
+  /** Configurazione di avvio, effettiva e override effimeri del runtime. */
+  getRuntimeConfig(): Observable<RuntimeConfigState> {
+    return this.http.get<RuntimeConfigState>(`${this.baseUrl}/config`);
+  }
+
+  /** Imposta o toglie override effimeri; la risposta è quella di GET /config. */
+  patchRuntimeConfig(patch: RuntimeConfigPatch): Observable<RuntimeConfigState> {
+    return this.http.patch<RuntimeConfigState>(`${this.baseUrl}/config`, patch);
   }
 
   /** Esito dell'ultimo caricamento del workspace, con gli errori del registro installato. */

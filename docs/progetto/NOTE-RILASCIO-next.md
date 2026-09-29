@@ -247,6 +247,12 @@ esistenti restano compatibili: nessuna migrazione richiesta.
   mostrate prima di un riavvio del motore non creano mock da richieste del nuovo runtime; se la
   risposta si perde, l'esito è dichiarato sconosciuto e la creazione non si ripete da sola. Il
   riepilogo dello Storico conta anche le varianti aggiunte e le voci non disponibili.
+- **Configurazione runtime:** «Configurazione» nella barra di stato, nel browser e nel desktop,
+  mostra per ogni chiave modificabile a runtime il valore in uso, se è un override temporaneo (per
+  esempio di un agente) e il valore di avvio, e riporta una chiave o tutte al valore di avvio. Nel
+  desktop le impostazioni del workspace si dichiarano impostazioni di avvio: accanto a un campo con
+  un override indicano il valore in uso, e prima di un salvataggio che riavvia il motore avvisano
+  che gli override si perdono tutti. Nessun override viene salvato né riapplicato dopo il riavvio.
 - **Bozze protette dalle modifiche concorrenti:** la descrizione, il form di una variante e il
   dialog di una sequenza salvano sulla risorsa aperta, con la revisione letta all'apertura. Se
   intanto un agente o un altro client attiva un'altra variante, la bozza resta sulla sua. Se la

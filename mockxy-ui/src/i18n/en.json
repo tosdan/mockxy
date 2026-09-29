@@ -225,7 +225,27 @@
     "viewRelease": "View release",
     "ignoreVersion": "Ignore this version"
   },
+  "runtimeConfig": {
+    "label": "Configuration",
+    "overridesOne": "1 override active",
+    "overrides": "{{count}} overrides active",
+    "title": "Runtime configuration",
+    "hint": "Values the engine uses right now. Overrides set through the API, for example by an agent, are temporary: they are not saved and a restart of the engine drops them.",
+    "startupValue": "At startup: {{value}}",
+    "overrideBadge": "override",
+    "resetOne": "Back to the startup value: {{label}}",
+    "resetAll": "Back to the startup values",
+    "resetFailed": "Could not restore",
+    "unavailable": "Configuration not available: the engine does not answer.",
+    "on": "on",
+    "off": "off",
+    "noBackend": "no backend"
+  },
   "workspaceSettings": {
+    "startupNote": "Startup settings: saved for this workspace and used every time the engine starts. The values in use right now, with any temporary overrides, are under «Configuration» in the status bar.",
+    "inUseOverride": "In use now: {{value}} (temporary override, not saved)",
+    "restartDropsOverridesOne": "Saving restarts the engine: the active temporary override is dropped, even if it concerns a field you did not change, and it is not applied again.",
+    "restartDropsOverrides": "Saving restarts the engine: the {{count}} active temporary overrides are dropped, including those of fields you did not change, and they are not applied again.",
     "portRequired": "Enter a port.",
     "portInteger": "The port must be an integer.",
     "portRange": "Use a port between 1024 and 65535.",

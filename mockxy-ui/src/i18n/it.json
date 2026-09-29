@@ -225,7 +225,27 @@
     "viewRelease": "Vedi release",
     "ignoreVersion": "Ignora questa versione"
   },
+  "runtimeConfig": {
+    "label": "Configurazione",
+    "overridesOne": "1 override attivo",
+    "overrides": "{{count}} override attivi",
+    "title": "Configurazione runtime",
+    "hint": "Valori in uso ora nel motore. Gli override impostati via API, per esempio da un agente, sono temporanei: non vengono salvati e un riavvio del motore li elimina.",
+    "startupValue": "All'avvio: {{value}}",
+    "overrideBadge": "override",
+    "resetOne": "Torna al valore di avvio: {{label}}",
+    "resetAll": "Torna ai valori di avvio",
+    "resetFailed": "Ripristino non riuscito",
+    "unavailable": "Configurazione non disponibile: il motore non risponde.",
+    "on": "attivo",
+    "off": "disattivo",
+    "noBackend": "nessun backend"
+  },
   "workspaceSettings": {
+    "startupNote": "Impostazioni di avvio: salvate per questo workspace e usate a ogni avvio del motore. I valori in uso ora, con gli eventuali override temporanei, sono in «Configurazione» nella barra di stato.",
+    "inUseOverride": "In uso ora: {{value}} (override temporaneo, non salvato)",
+    "restartDropsOverridesOne": "Salvando, il motore riparte: l'override temporaneo attivo viene eliminato, anche se riguarda un campo che non hai cambiato, e non viene riapplicato.",
+    "restartDropsOverrides": "Salvando, il motore riparte: i {{count}} override temporanei attivi vengono eliminati, anche quelli dei campi che non hai cambiato, e non vengono riapplicati.",
     "portRequired": "Inserisci una porta.",
     "portInteger": "La porta deve essere un numero intero.",
     "portRange": "Usa una porta tra 1024 e 65535.",
