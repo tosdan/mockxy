@@ -231,16 +231,12 @@ export class MocksNextResponseForm {
   /** Highlight della dropzone file mentre un file è trascinato sopra. */
   protected readonly draggingFile = signal(false);
 
-  /** Nome del file della response file-backed corrente (per la UI di upload in modifica). */
-  private readonly currentFileLabel = computed(() => {
-    const d = this.store.selected();
-    if (d?.payloadType !== 'file') return '';
-    return d.fileInfo?.name || d.bodyFile || d.file || '';
-  });
-
-  /** Nome file da mostrare nella dropzone: in creazione il file in bozza, in modifica quello già caricato. */
+  /**
+   * Nome file da mostrare nella dropzone: in creazione il file in bozza, in modifica quello già
+   * caricato sulla variante della bozza (che può non essere più la selezionata).
+   */
   protected readonly fileLabel = computed(() =>
-    this.creating() ? (this.draft().file()?.name ?? '') : this.currentFileLabel(),
+    this.creating() ? (this.draft().file()?.name ?? '') : this.draft().currentFileName(),
   );
 
   /** Traduce la chiave i18n dell'etichetta di un preset/bundle (per l'uso come parametro). */

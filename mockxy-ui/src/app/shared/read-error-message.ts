@@ -1,3 +1,5 @@
+import type { RevisionConflict } from '../mock-admin-api.types';
+
 /**
  * Estrae il messaggio del server da un errore HTTP/runtime, o `undefined` se assente
  * (il chiamante fornisce il fallback tradotto, es. translate('common.operationFailed')).
@@ -23,6 +25,23 @@ export function isReadInconsistentError(error: unknown): boolean {
     isObject(error['error']['details']) &&
     error['error']['details']['code'] === 'READ_INCONSISTENT'
   );
+}
+
+/**
+ * Dettagli di un `409 REVISION_CONFLICT` (§13 C4): la risorsa della bozza è cambiata dopo la
+ * lettura. Da non confondere con `READ_INCONSISTENT`, che riguarda una lettura.
+ */
+export function readRevisionConflict(error: unknown): RevisionConflict | undefined {
+  if (!isObject(error) || !isObject(error['error']) || !isObject(error['error']['details'])) {
+    return undefined;
+  }
+  const details = error['error']['details'];
+  return details['code'] === 'REVISION_CONFLICT' ? (details as unknown as RevisionConflict) : undefined;
+}
+
+/** Un 404 su un salvataggio: la risorsa della bozza non esiste più. */
+export function isNotFoundError(error: unknown): boolean {
+  return isObject(error) && error['status'] === 404;
 }
 
 /**

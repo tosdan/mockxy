@@ -597,6 +597,22 @@
     "lastRequest": "ultima richiesta {{ago}} fa",
     "stepDone": "già servito"
   },
+  "draftConflict": {
+    "title": "La versione è cambiata mentre la modificavi",
+    "hint": "Il tuo testo è ancora qui. Confronta la versione attuale, ricaricala al posto della bozza oppure salva la tua versione dopo averla vista.",
+    "compare": "Confronta",
+    "reload": "Ricarica",
+    "saveMine": "Salva la mia versione",
+    "reloadConfirm": "La bozza modificata verrà sostituita dalla versione attuale.",
+    "replace": "Sostituisci",
+    "keep": "Tieni la bozza",
+    "currentVersion": "Versione attuale",
+    "descriptionLabel": "descrizione",
+    "reloadUnsupported": "La versione attuale non si modifica in questo form: il tipo della variante è cambiato. La bozza resta com'è.",
+    "reloaded": "Bozza ricaricata dalla versione attuale.",
+    "missingTitle": "Questa risorsa non esiste più",
+    "missingHint": "È stata eliminata o rinominata dopo l'apertura della bozza. Il testo resta qui da copiare; il salvataggio è disabilitato."
+  },
   "openapiImport": {
     "title": "Importa OpenAPI",
     "dropHint": "Trascina qui un documento OpenAPI, o clicca per sceglierlo",

@@ -71,6 +71,15 @@ To serve a **binary file** (images, PDFs, archives) you upload the file directly
 variant — up to 12 MB via the UI — with the content-type remembered; the payload is served
 streaming as documented in the [responses page](RESPONSE.md).
 
+The description, the variant form and the sequence dialog save to the resource they opened: if
+an agent or another client activates a different variant in the meantime, your edit stays on the
+original one. If the resource itself has changed, saving does not overwrite it: your draft is kept
+and a panel lets you **compare** it with the current version, **reload** the current version in
+place of your draft (with a confirmation if you edited it) or **save your version** after
+reviewing it. If the resource was deleted, the text stays there to copy and saving is disabled.
+Status, delay and template changed inline, activation and selection are immediate actions: the
+last one wins.
+
 The view remembers the last selected endpoint and collapsed collections in `localStorage`:
 when returning to the catalog, even after a restart, it is restored as left. Values that no
 longer exist are ignored, and the monitor's “go to mock” command always takes precedence.

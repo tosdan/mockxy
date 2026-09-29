@@ -73,6 +73,15 @@ Per servire un **file binario** (immagini, PDF, archivi) si carica il file diret
 variante — fino a 12 MB via interfaccia — con content-type ricordato; il payload viene servito
 in streaming come documentato nella [pagina sulle risposte](RESPONSE.md).
 
+Descrizione, form della variante e dialog della sequenza salvano sulla risorsa aperta: se nel
+frattempo un agente o un altro client attiva un'altra variante, la modifica resta su quella di
+partenza. Se la risorsa stessa è cambiata, il salvataggio non la sovrascrive: la bozza resta com'è
+e un pannello permette di **confrontarla** con la versione attuale, di **ricaricare** quest'ultima
+al posto della bozza (con conferma se modificata) o di **salvare la propria versione** dopo averla
+vista. Se la risorsa è stata eliminata, il testo resta da copiare e il salvataggio è disabilitato.
+Status, ritardo e template cambiati in linea, attivazione e selezione sono azioni immediate:
+vince l'ultima.
+
 La vista ricorda in `localStorage` l'ultimo endpoint selezionato e le collezioni compresse:
 tornando al catalogo, anche dopo un riavvio, lo si ritrova come lasciato. I valori non più
 validi vengono ignorati e il comando «vai al mock» dal monitor ha sempre la precedenza.

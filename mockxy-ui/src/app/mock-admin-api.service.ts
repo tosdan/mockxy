@@ -25,6 +25,8 @@ import {
   MockDetail,
   MockDetailAfterMutation,
   ResponseCreatedResult,
+  ResponseUpdatedResult,
+  ResponseVariantRead,
   MockListResponse,
   MockSummary,
   OpenapiImportPreview,
@@ -241,13 +243,23 @@ export class MockAdminApiService {
     return this.createResponse(id, sequence);
   }
 
-  /** Aggiorna la variante sequence selezionata per filename. */
+  /** Aggiorna una variante sequence per filename; `expectedRevision` è la precondizione della bozza. */
   updateSequence(
     id: string,
     responseFileName: string,
-    sequence: ResponseSequenceUpdateRequest,
-  ): Observable<MockDetailAfterMutation> {
+    sequence: ResponseSequenceUpdateRequest & { expectedRevision?: string },
+  ): Observable<ResponseUpdatedResult> {
     return this.updateResponse(id, responseFileName, sequence);
+  }
+
+  /**
+   * Una variante per filename, attiva o no, con la sua revisione. Come per il dettaglio, una
+   * lettura incompleta (`READ_INCONSISTENT`) si ripete una sola volta.
+   */
+  getResponse(id: string, responseFileName: string): Observable<ResponseVariantRead> {
+    return this.http
+      .get<ResponseVariantRead>(`${this.baseUrl}/mocks/${encodeURIComponent(id)}/responses/${encodeURIComponent(responseFileName)}`)
+      .pipe(retry({ count: 1, delay: (error) => (isReadInconsistentError(error) ? of(true) : throwError(() => error)) }));
   }
 
   /** Legge il cursore live della variante sequence selezionata. */
@@ -290,21 +302,27 @@ export class MockAdminApiService {
     return this.http.post<ResponseCreatedResult>(`${this.baseUrl}/mocks/${encodeURIComponent(id)}/responses`, request);
   }
 
-  /** Aggiorna solo la response indicata per l'endpoint selezionato. */
-  updateResponse(id: string, responseFileName: string, request: ResponseUpdateRequest): Observable<MockDetailAfterMutation> {
-    return this.http.put<MockDetailAfterMutation>(
+  /** Aggiorna solo la response indicata; `expectedRevision` nel payload è la precondizione della bozza. */
+  updateResponse(id: string, responseFileName: string, request: ResponseUpdateRequest): Observable<ResponseUpdatedResult> {
+    return this.http.put<ResponseUpdatedResult>(
       `${this.baseUrl}/mocks/${encodeURIComponent(id)}/responses/${encodeURIComponent(responseFileName)}`,
       request,
     );
   }
 
-  /** Carica un file (bytes grezzi) e rende la response file-backed; il MIME reale viaggia in query. */
-  uploadResponseFile(id: string, responseFileName: string, file: File): Observable<MockDetailAfterMutation> {
-    return this.http.put<MockDetailAfterMutation>(
+  /**
+   * Carica un file (bytes grezzi) e rende la response file-backed; il MIME reale viaggia in query e
+   * la precondizione della bozza nell'header dedicato, mai dentro il file.
+   */
+  uploadResponseFile(id: string, responseFileName: string, file: File, expectedRevision?: string): Observable<ResponseUpdatedResult> {
+    return this.http.put<ResponseUpdatedResult>(
       `${this.baseUrl}/mocks/${encodeURIComponent(id)}/responses/${encodeURIComponent(responseFileName)}/file`,
       file,
       {
-        headers: { 'Content-Type': 'application/octet-stream' },
+        headers: {
+          'Content-Type': 'application/octet-stream',
+          ...(expectedRevision ? { 'X-Mockxy-Expected-Revision': expectedRevision } : {}),
+        },
         params: { filename: file.name, contentType: file.type || 'application/octet-stream' },
       },
     );

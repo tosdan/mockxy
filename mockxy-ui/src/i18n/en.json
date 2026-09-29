@@ -597,6 +597,22 @@
     "lastRequest": "last request {{ago}} ago",
     "stepDone": "already served"
   },
+  "draftConflict": {
+    "title": "This version changed while you were editing it",
+    "hint": "Your text is still here. Compare the current version, reload it in place of your draft, or save your version after reviewing it.",
+    "compare": "Compare",
+    "reload": "Reload",
+    "saveMine": "Save my version",
+    "reloadConfirm": "Your edited draft will be replaced by the current version.",
+    "replace": "Replace",
+    "keep": "Keep draft",
+    "currentVersion": "Current version",
+    "descriptionLabel": "description",
+    "reloadUnsupported": "The current version can't be edited in this form: the variant type changed. Your draft is unchanged.",
+    "reloaded": "Draft reloaded from the current version.",
+    "missingTitle": "This resource no longer exists",
+    "missingHint": "It was deleted or renamed after the draft was opened. The text stays here for you to copy; saving is disabled."
+  },
   "openapiImport": {
     "title": "Import OpenAPI",
     "dropHint": "Drag an OpenAPI document here, or click to choose one",
