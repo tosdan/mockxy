@@ -1,6 +1,6 @@
 import { computed, inject, Injectable, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { EMPTY, Observable, catchError, concatMap, finalize, from, map, of, switchMap, toArray } from 'rxjs';
+import { EMPTY, Observable, catchError, concatMap, defer, filter, finalize, from, map, of, switchMap, throwError, toArray, type MonoTypeOperatorFunction } from 'rxjs';
 import { TranslocoService } from '@jsverse/transloco';
 import { MockAdminApiService } from '../../mock-admin-api.service';
 import { isNotFoundError, isReadInconsistentError, readRevisionConflict } from '../../shared/read-error-message';
@@ -378,9 +378,46 @@ export class MocksStore {
   /** Il runtime serve un altro workspace: si mostra il suo catalogo, il dettaglio aperto resta del precedente. */
   private onWorkspaceChanged(): void {
     this.workspaceEpoch += 1;
+    // Le mutazioni in volo appartengono al runtime precedente: i loro esiti non toccheranno più la
+    // GUI (vedi `sameWorkspace`), e i loro indicatori non bloccano la nuova istanza.
+    this.savingId.set(undefined);
+    this.erasingCollectionId.set(undefined);
+    this.creating.set(false);
     this.staleWorkspace.set(this.selected() != null);
     this.selectedGone.set(false);
     this.syncRefresh();
+  }
+
+  /**
+   * Lega gli esiti di una mutazione al workspace in cui è partita (piano agent/API, §13 C4): se nel
+   * frattempo il runtime serve un altro workspace, risultato ed errore si scartano, quindi niente
+   * dettaglio o catalogo installati, niente riletture concatenate né callback. La mutazione sul
+   * server non si annulla. Va dopo la mutazione, perché la rilettura concatenata non parta, e in
+   * coda, perché non si applichi una rilettura già in volo.
+   */
+  private sameWorkspace<T>(): MonoTypeOperatorFunction<T> {
+    return (source) =>
+      defer(() => {
+        const epoch = this.workspaceEpoch;
+        const current = () => epoch === this.workspaceEpoch;
+        return source.pipe(
+          filter(current),
+          catchError((error: unknown) => (current() ? throwError(() => error) : EMPTY)),
+        );
+      });
+  }
+
+  /** Come `finalize`, ma solo nello stesso workspace: gli indicatori della nuova istanza non si toccano. */
+  private settle<T>(done: () => void): MonoTypeOperatorFunction<T> {
+    return (source) =>
+      defer(() => {
+        const epoch = this.workspaceEpoch;
+        return source.pipe(
+          finalize(() => {
+            if (epoch === this.workspaceEpoch) done();
+          }),
+        );
+      });
   }
 
   /** Si apre una risorsa della nuova istanza: le bozze del workspace precedente decadono. */
@@ -408,8 +445,10 @@ export class MocksStore {
     this.api
       .updateEndpoint(id, { enabled })
       .pipe(
+        this.sameWorkspace(),
         switchMap((updated) => this.api.listMocks().pipe(map((res) => ({ updated, res })))),
-        finalize(() => this.savingId.set(undefined)),
+        this.sameWorkspace(),
+        this.settle(() => this.savingId.set(undefined)),
       )
       .subscribe({
         next: ({ updated, res }) => {
@@ -570,8 +609,10 @@ export class MocksStore {
     this.api
       .deleteMock(id)
       .pipe(
+        this.sameWorkspace(),
         switchMap(() => this.api.listMocks()),
-        finalize(() => this.savingId.set(undefined)),
+        this.sameWorkspace(),
+        this.settle(() => this.savingId.set(undefined)),
       )
       .subscribe({
         next: (res) => {
@@ -597,7 +638,7 @@ export class MocksStore {
     this.error.set(undefined);
     this.api
       .createCollection({ label: trimmed, parentId })
-      .pipe(switchMap(() => this.api.listMocks()))
+      .pipe(this.sameWorkspace(), switchMap(() => this.api.listMocks()), this.sameWorkspace())
       .subscribe({
         next: (res) => {
           this.applyCatalogResponse(res);
@@ -623,8 +664,10 @@ export class MocksStore {
     this.api
       .assignDefinitionCollection(itemId, { collectionId: normalized, targetIndex })
       .pipe(
+        this.sameWorkspace(),
         switchMap((detail) => this.api.listMocks().pipe(map((res) => ({ detail, res })))),
-        finalize(() => this.savingId.set(undefined)),
+        this.sameWorkspace(),
+        this.settle(() => this.savingId.set(undefined)),
       )
       .subscribe({
         next: ({ detail, res }) => {
@@ -646,7 +689,7 @@ export class MocksStore {
     this.error.set(undefined);
     this.api
       .deleteCollection(id)
-      .pipe(switchMap(() => this.api.listMocks()))
+      .pipe(this.sameWorkspace(), switchMap(() => this.api.listMocks()), this.sameWorkspace())
       .subscribe({
         next: (res) => {
           this.applyCatalogResponse(res);
@@ -666,8 +709,10 @@ export class MocksStore {
     this.api
       .eraseCollection(id)
       .pipe(
+        this.sameWorkspace(),
         switchMap(() => this.api.listMocks()),
-        finalize(() => this.erasingCollectionId.set(undefined)),
+        this.sameWorkspace(),
+        this.settle(() => this.erasingCollectionId.set(undefined)),
       )
       .subscribe({
         next: (res) => {
@@ -685,7 +730,7 @@ export class MocksStore {
   /** Abilita/disabilita in blocco tutti gli endpoint di una collection (e sotto-collection). */
   setCollectionEnabled(id: string, enabled: boolean): void {
     this.error.set(undefined);
-    this.api.updateCollectionEnabled(id, { enabled }).subscribe({
+    this.api.updateCollectionEnabled(id, { enabled }).pipe(this.sameWorkspace()).subscribe({
       next: (res) => {
         this.applyCatalogResponse(res);
         const sel = this.selected();
@@ -710,7 +755,7 @@ export class MocksStore {
       return;
     }
     this.error.set(undefined);
-    this.api.setEndpointsEnabled({ ids: [...ids], enabled }).subscribe({
+    this.api.setEndpointsEnabled({ ids: [...ids], enabled }).pipe(this.sameWorkspace()).subscribe({
       next: (res) => {
         this.applyCatalogResponse(res);
         // Il dettaglio aperto potrebbe essere uno di quelli toccati: allinea il suo interruttore.
@@ -740,7 +785,9 @@ export class MocksStore {
       .pipe(
         concatMap((id) => this.api.assignDefinitionCollection(id, { collectionId })),
         toArray(),
+        this.sameWorkspace(),
         switchMap(() => this.api.listMocks()),
+        this.sameWorkspace(),
       )
       .subscribe({
         next: (res) => {
@@ -765,7 +812,8 @@ export class MocksStore {
       .pipe(
         concatMap((id) => this.api.deleteDefinition(id)),
         toArray(),
-        finalize(() => this.loadCatalog()),
+        this.sameWorkspace(),
+        this.settle(() => this.loadCatalog()),
       )
       .subscribe({
         next: () => {
@@ -785,7 +833,7 @@ export class MocksStore {
     this.error.set(undefined);
     this.api
       .reorderCollections({ collectionIds: orderedSiblingIds, parentId })
-      .pipe(switchMap(() => this.api.listMocks()))
+      .pipe(this.sameWorkspace(), switchMap(() => this.api.listMocks()), this.sameWorkspace())
       .subscribe({
         next: (res) => {
           this.applyCatalogResponse(res);
@@ -806,7 +854,7 @@ export class MocksStore {
     this.error.set(undefined);
     this.api
       .reparentCollection(id, { parentId: parentId ?? null, targetIndex })
-      .pipe(switchMap(() => this.api.listMocks()))
+      .pipe(this.sameWorkspace(), switchMap(() => this.api.listMocks()), this.sameWorkspace())
       .subscribe({
         next: (res) => {
           this.applyCatalogResponse(res);
@@ -845,7 +893,7 @@ export class MocksStore {
     this.error.set(undefined);
     this.api
       .reorderCollectionChildren(parentKey, { childRefs })
-      .pipe(switchMap(() => this.api.listMocks()))
+      .pipe(this.sameWorkspace(), switchMap(() => this.api.listMocks()), this.sameWorkspace())
       .subscribe({
         next: (res) => {
           this.applyCatalogResponse(res);
@@ -888,8 +936,10 @@ export class MocksStore {
     this.creating.set(true);
     this.error.set(undefined);
     op.pipe(
+      this.sameWorkspace(),
       switchMap((detail) => this.api.listMocks().pipe(map((res) => ({ detail, res })))),
-      finalize(() => this.creating.set(false)),
+      this.sameWorkspace(),
+      this.settle(() => this.creating.set(false)),
     ).subscribe({
       next: ({ detail, res }) => {
         this.applyCatalogResponse(res);
@@ -1001,8 +1051,10 @@ export class MocksStore {
     this.savingId.set(savingId);
     this.error.set(undefined);
     op.pipe(
+      this.sameWorkspace(),
       switchMap((detail) => this.api.listMocks().pipe(map((res) => ({ detail, res })))),
-      finalize(() => this.savingId.set(undefined)),
+      this.sameWorkspace(),
+      this.settle(() => this.savingId.set(undefined)),
     ).subscribe({
       next: ({ detail, res }) => {
         this.applyMutationDetail(detail);

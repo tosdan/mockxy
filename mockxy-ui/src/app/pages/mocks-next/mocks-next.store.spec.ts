@@ -597,6 +597,111 @@ describe('MocksStore', () => {
       expect(api.getMock).not.toHaveBeenCalled();
     });
 
+    // Codex, #32 terzo giro: gli esiti di una mutazione partita nel workspace precedente non
+    // toccano più la GUI, neanche dopo che l'utente ha aperto l'omonimo della nuova istanza.
+    it('il successo tardivo di un salvataggio del workspace precedente non sovrascrive l’omonimo aperto dopo', () => {
+      const store = create();
+      store.selected.set(detail('e1'));
+      const pending = new Subject<MockDetailAfterMutation>();
+      api.updateResponse.mockReturnValueOnce(pending);
+      const onSuccess = vi.fn();
+      store.saveResponse({ type: 'mock', title: '', status: 201, headers: {}, delayMs: 0, body: {} }, onSuccess);
+
+      api.listMocks.mockReturnValue(of(list3));
+      sync.runtime(true);
+      expect(store.savingId()).toBeUndefined();
+      const fromB = detail('e1', { status: 404 });
+      api.getMock.mockReturnValueOnce(of(fromB));
+      store.selectMock('e1');
+      expect(store.staleWorkspace()).toBe(false);
+      api.listMocks.mockClear();
+
+      pending.next(detail('e1', { status: 201 }));
+      pending.complete();
+
+      expect(store.selected()).toBe(fromB);
+      expect(api.listMocks).not.toHaveBeenCalled();
+      expect(onSuccess).not.toHaveBeenCalled();
+    });
+
+    it('una rilettura concatenata già in volo al cambio di workspace non si applica', () => {
+      const store = create();
+      const opened = detail('e1');
+      store.selected.set(opened);
+      const chained = new Subject<ReturnType<typeof listResponse>>();
+      api.updateResponse.mockReturnValueOnce(of(detail('e1', { status: 201 })));
+      api.listMocks.mockReturnValueOnce(chained).mockReturnValue(of(list3));
+      const onSuccess = vi.fn();
+      store.saveResponse({ type: 'mock', title: '', status: 201, headers: {}, delayMs: 0, body: {} }, onSuccess);
+
+      sync.runtime(true);
+      chained.next(listResponse([summary('e1')]));
+      chained.complete();
+
+      expect(store.selected()).toBe(opened);
+      expect(store.mocks()).toHaveLength(3);
+      expect(onSuccess).not.toHaveBeenCalled();
+    });
+
+    it('un errore tardivo del workspace precedente non arriva né alla bozza né alla pagina', () => {
+      const store = create();
+      store.selected.set(detail('e1'));
+      const pending = new Subject<MockDetailAfterMutation>();
+      api.updateResponse.mockReturnValueOnce(pending);
+      const onConflict = vi.fn();
+      store.saveResponse(
+        { type: 'mock', title: '', status: 201, headers: {}, delayMs: 0, body: {} },
+        undefined,
+        { target: { endpointId: 'e1', responseFile: '001.response.json', baseRevision: `rev-v1:${'a'.repeat(64)}` }, onConflict },
+      );
+
+      api.listMocks.mockReturnValue(of(list3));
+      sync.runtime(true);
+      pending.error({ status: 409, error: { message: 'changed', details: { code: 'REVISION_CONFLICT' } } });
+
+      expect(onConflict).not.toHaveBeenCalled();
+      expect(store.error()).toBeUndefined();
+    });
+
+    it('la conclusione tardiva di una mutazione del precedente non sblocca quella in corso nella nuova istanza', () => {
+      const store = create();
+      store.selected.set(detail('e1'));
+      const old = new Subject<MockDetailAfterMutation>();
+      api.updateResponse.mockReturnValueOnce(old);
+      store.saveResponse({ type: 'mock', title: '', status: 201, headers: {}, delayMs: 0, body: {} });
+
+      api.listMocks.mockReturnValue(of(list3));
+      sync.runtime(true);
+      api.getMock.mockReturnValueOnce(of(detail('e1')));
+      store.selectMock('e1');
+      api.updateResponse.mockReturnValueOnce(new Subject<MockDetailAfterMutation>());
+      store.saveResponse({ type: 'mock', title: '', status: 202, headers: {}, delayMs: 0, body: {} });
+      expect(store.savingId()).toBe('e1');
+
+      old.next(detail('e1', { status: 201 }));
+      old.complete();
+      expect(store.savingId()).toBe('e1');
+    });
+
+    it('anche una creazione partita nel workspace precedente non apre niente e non chiama il dialog', () => {
+      const store = create();
+      const opened = detail('e1');
+      store.selected.set(opened);
+      const pending = new Subject<MockDetailAfterMutation>();
+      api.createMock.mockReturnValueOnce(pending);
+      const onDone = vi.fn();
+      store.createMockDef({ method: 'GET', path: '/nuovo' } as never, {}, onDone);
+
+      api.listMocks.mockReturnValue(of(list3));
+      sync.runtime(true);
+      expect(store.creating()).toBe(false);
+      pending.next(detail('nuovo'));
+      pending.complete();
+
+      expect(store.selected()).toBe(opened);
+      expect(onDone).not.toHaveBeenCalled();
+    });
+
     it('un nuovo runtime sullo stesso workspace rilegge come un focus', () => {
       const store = create();
       store.selected.set(detail('e1'));
