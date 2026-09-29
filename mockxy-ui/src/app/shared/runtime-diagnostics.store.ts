@@ -3,13 +3,15 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { finalize } from 'rxjs';
 import { MockAdminApiService } from '../mock-admin-api.service';
 import type { RuntimeStatusReport } from '../mock-admin-api.types';
+import { ReadRetry } from './read-retry';
 import { RuntimeSyncStore, affects } from './runtime-sync.store';
 
 /**
  * Esito dell'ultimo caricamento del workspace (GET /runtime/status) per la status bar: errori dei
  * file nel registro installato, con quello che il runtime serve al loro posto, e il fallimento
  * globale. Si rilegge quando cambia la revisione `diagnostics` di GET /info, al focus e a ogni nuovo
- * runtime: la diagnostica cambia anche quando il runtime continua a servire la vecchia rotta.
+ * runtime: la diagnostica cambia anche quando il runtime continua a servire la vecchia rotta. Una
+ * lettura fallita si ritenta da sola (vedi ReadRetry).
  */
 @Injectable({ providedIn: 'root' })
 export class RuntimeDiagnosticsStore {
@@ -24,6 +26,7 @@ export class RuntimeDiagnosticsStore {
 
   private loading = false;
   private reloadQueued = false;
+  private readonly retry = new ReadRetry(() => this.load());
 
   constructor() {
     inject(RuntimeSyncStore)
@@ -36,6 +39,7 @@ export class RuntimeDiagnosticsStore {
 
   /** Rilegge l'esito; una richiesta alla volta, e una sola in coda se ne serve un'altra. */
   load(): void {
+    this.retry.cancel();
     if (this.loading) {
       this.reloadQueued = true;
       return;
@@ -53,9 +57,13 @@ export class RuntimeDiagnosticsStore {
         }),
       )
       .subscribe({
-        next: (report) => this._report.set(report),
-        // Motore irraggiungibile: lo dice lo stato di collegamento; l'ultimo esito resta visibile.
-        error: () => undefined,
+        next: (report) => {
+          this.retry.succeeded();
+          this._report.set(report);
+        },
+        // L'ultimo esito resta visibile e si ritenta con attese crescenti; un motore
+        // irraggiungibile lo dice anche lo stato di collegamento.
+        error: () => this.retry.failed(),
       });
   }
 }

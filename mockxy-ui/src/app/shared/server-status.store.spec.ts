@@ -1,17 +1,20 @@
 import { TestBed } from '@angular/core/testing';
-import { Subject, of, type Observable } from 'rxjs';
+import { Subject, of, throwError, type Observable } from 'rxjs';
 import type { Mock } from 'vitest';
 import { MockAdminApiService } from '../mock-admin-api.service';
 import type { ServerState } from '../mock-admin-api.types';
 import { ToastService } from '../ui/ui-toast/ui-toast';
 import { fakeRuntimeSync } from '../testing/runtime-sync-testing';
 import { translocoTesting } from '../testing/transloco-testing';
+import { READ_RETRY_MAX_MS, READ_RETRY_MIN_MS } from './read-retry';
 import { ServerStatusStore } from './server-status.store';
 
 describe('ServerStatusStore — sincronizzazione', () => {
   let getServerState: Mock<() => Observable<ServerState>>;
   let updateServerState: Mock<(patch: Partial<ServerState>) => Observable<ServerState>>;
   let sync: ReturnType<typeof fakeRuntimeSync>;
+  // Lo stato sul server: le letture lo restituiscono, le modifiche lo cambiano.
+  let server: ServerState;
 
   function create() {
     sync = fakeRuntimeSync();
@@ -27,8 +30,12 @@ describe('ServerStatusStore — sincronizzazione', () => {
   }
 
   beforeEach(() => {
-    getServerState = vi.fn(() => of({ serverEnabled: true, proxyAll: false }));
-    updateServerState = vi.fn((patch) => of({ serverEnabled: true, proxyAll: false, ...patch }));
+    server = { serverEnabled: true, proxyAll: false };
+    getServerState = vi.fn(() => of({ ...server }));
+    updateServerState = vi.fn((patch) => {
+      server = { ...server, ...patch };
+      return of({ ...server });
+    });
   });
 
   it('dopo un riavvio del motore Proxy All torna quello vero senza ricaricare la pagina', () => {
@@ -67,7 +74,7 @@ describe('ServerStatusStore — sincronizzazione', () => {
     expect(store.proxyAll()).toBe(true);
   });
 
-  it('con una modifica in volo non rilegge', () => {
+  it('con una modifica in volo non rilegge subito: la rilettura saltata parte quando la modifica termina', () => {
     const store = create();
     const pending = new Subject<ServerState>();
     updateServerState.mockReturnValueOnce(pending);
@@ -77,11 +84,12 @@ describe('ServerStatusStore — sincronizzazione', () => {
     sync.revisions('server');
     expect(getServerState).not.toHaveBeenCalled();
 
+    // Intanto un agente ha spento il server.
+    server = { serverEnabled: false, proxyAll: true };
     pending.next({ serverEnabled: true, proxyAll: true });
     pending.complete();
-    sync.revisions('server');
     expect(getServerState).toHaveBeenCalledTimes(1);
-    expect(store.proxyAll()).toBe(false);
+    expect(store.serverEnabled()).toBe(false);
   });
 
   it('due riletture sovrapposte: vince la più recente anche se la prima arriva dopo', () => {
@@ -107,5 +115,63 @@ describe('ServerStatusStore — sincronizzazione', () => {
 
     initial.next({ serverEnabled: true, proxyAll: false });
     expect(store.proxyAll()).toBe(true);
+  });
+
+  describe('lettura fallita', () => {
+    beforeEach(() => vi.useFakeTimers());
+    afterEach(() => vi.useRealTimers());
+
+    it('si ritenta da sola: Proxy All cambiato da un agente arriva anche se la prima rilettura fallisce', () => {
+      const store = create();
+      getServerState.mockReturnValueOnce(throwError(() => ({ status: 503 })));
+      getServerState.mockReturnValue(of({ serverEnabled: true, proxyAll: true }));
+
+      sync.revisions('server');
+      expect(store.proxyAll()).toBe(false);
+      vi.advanceTimersByTime(READ_RETRY_MIN_MS);
+      expect(store.proxyAll()).toBe(true);
+    });
+
+    it('anche il caricamento iniziale fallito si ritenta, dopo l’avviso', () => {
+      getServerState.mockReturnValueOnce(throwError(() => ({ status: 503 })));
+      getServerState.mockReturnValue(of({ serverEnabled: false, proxyAll: false }));
+      const store = create();
+      expect(store.serverEnabled()).toBe(true);
+
+      vi.advanceTimersByTime(READ_RETRY_MIN_MS);
+      expect(store.serverEnabled()).toBe(false);
+    });
+
+    it('una lettura fallita superata da una modifica dell’utente non si ritenta: si rilegge a modifica conclusa', () => {
+      const store = create();
+      const read = new Subject<ServerState>();
+      getServerState.mockReturnValueOnce(read);
+      sync.revisions('server');
+      store.setProxyAll(true);
+
+      read.error({ status: 503 });
+      expect(getServerState).toHaveBeenCalledTimes(3);
+      vi.advanceTimersByTime(READ_RETRY_MAX_MS);
+
+      expect(getServerState).toHaveBeenCalledTimes(3);
+      expect(store.proxyAll()).toBe(true);
+    });
+
+    it('un tentativo che scatta durante una modifica poi fallita riprende quando la modifica termina', () => {
+      const store = create();
+      // Un agente ha spento il server, ma la rilettura fallisce.
+      server = { serverEnabled: false, proxyAll: false };
+      getServerState.mockReturnValueOnce(throwError(() => ({ status: 503 })));
+      sync.revisions('server');
+
+      const pending = new Subject<ServerState>();
+      updateServerState.mockReturnValueOnce(pending);
+      store.setProxyAll(true);
+      vi.advanceTimersByTime(READ_RETRY_MIN_MS);
+      pending.error({ status: 500, error: { message: 'boom' } });
+
+      expect(store.serverEnabled()).toBe(false);
+      expect(store.proxyAll()).toBe(false);
+    });
   });
 });

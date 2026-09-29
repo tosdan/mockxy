@@ -6,6 +6,7 @@ import { MockAdminApiService } from '../mock-admin-api.service';
 import { ToastService } from '../ui/ui-toast/ui-toast';
 import type { ServerState } from '../mock-admin-api.types';
 import { readErrorMessage } from './read-error-message';
+import { ReadRetry } from './read-retry';
 import { RuntimeSyncStore, affects } from './runtime-sync.store';
 
 /**
@@ -13,6 +14,8 @@ import { RuntimeSyncStore, affects } from './runtime-sync.store';
  * Root-scoped: alimenta la barra globale visibile in tutte le view. Estratto da MocksStore, dove
  * prima viveva insieme al catalogo.
  */
+type ReadStatus = 'current' | 'superseded' | 'changed';
+
 @Injectable({ providedIn: 'root' })
 export class ServerStatusStore {
   private readonly api = inject(MockAdminApiService);
@@ -31,6 +34,10 @@ export class ServerStatusStore {
   // Cresce a ogni lettura: si applica solo la più recente, così una risposta superata da un'altra
   // lettura (caricamento iniziale o rilettura) non ripristina un valore vecchio.
   private readSeq = 0;
+  // Una lettura fallita e ancora valida si ripete con una rilettura silenziosa (vedi ReadRetry).
+  private readonly retry = new ReadRetry(() => this.refresh());
+  // Una rilettura saltata o superata da una modifica in volo: si rifà quando la modifica termina.
+  private rereadAfterChange = false;
 
   constructor() {
     // Stato cambiato da un agente o da un'altra finestra, o motore ripartito: dopo una
@@ -45,44 +52,78 @@ export class ServerStatusStore {
 
   /**
    * Rilettura silenziosa per la sincronizzazione: niente indicatore di caricamento né toast (lo
-   * stato di collegamento sta nella status bar). Scartata se nel frattempo l'utente ha cambiato
-   * qualcosa, se una sua modifica è ancora in volo o se è partita una lettura più recente.
+   * stato di collegamento sta nella status bar). Con una modifica dell'utente in volo non parte, ma
+   * riparte quando la modifica termina, riuscita o no.
    */
   refresh(): void {
+    this.retry.cancel();
     if (this.pendingPatches > 0) {
+      this.rereadAfterChange = true;
       return;
     }
-    const current = this.readTicket();
+    const read = this.readTicket();
     this.api.getServerState().subscribe({
-      next: (state) => {
-        if (current()) this.applyState(state);
-      },
-      error: () => undefined,
+      next: (state) =>
+        this.settleRead(read, () => {
+          this.retry.succeeded();
+          this.applyState(state);
+        }),
+      error: () => this.settleRead(read, () => this.retry.failed()),
     });
   }
 
   /** Carica lo stato runtime del server (server on/off + proxy all) dall'API. */
   load(): void {
+    this.retry.cancel();
     this._loading.set(true);
-    const current = this.readTicket();
+    const read = this.readTicket();
     this.api
       .getServerState()
       .pipe(finalize(() => this._loading.set(false)))
       .subscribe({
-        next: (state) => {
-          if (current()) this.applyState(state);
-        },
-        error: (e) => {
-          if (current()) this.toast.show({ title: this.transloco.translate('common.error'), description: readErrorMessage(e) ?? this.transloco.translate('common.operationFailed'), tone: 'error' });
-        },
+        next: (state) =>
+          this.settleRead(read, () => {
+            this.retry.succeeded();
+            this.applyState(state);
+          }),
+        error: (e) =>
+          this.settleRead(read, () => {
+            this.toast.show({ title: this.transloco.translate('common.error'), description: readErrorMessage(e) ?? this.transloco.translate('common.operationFailed'), tone: 'error' });
+            this.retry.failed();
+          }),
       });
   }
 
-  /** Una lettura resta valida se nessun'altra è partita dopo e l'utente non ha cambiato niente. */
-  private readTicket(): () => boolean {
+  /** Stato di una lettura al suo esito: ancora valida, superata da una più recente o da una modifica dell'utente. */
+  private readTicket(): () => ReadStatus {
     const seq = ++this.readSeq;
     const epoch = this.changeEpoch;
-    return () => seq === this.readSeq && epoch === this.changeEpoch && this.pendingPatches === 0;
+    return () => {
+      if (seq !== this.readSeq) return 'superseded';
+      return epoch !== this.changeEpoch || this.pendingPatches > 0 ? 'changed' : 'current';
+    };
+  }
+
+  /**
+   * Applica l'esito di una lettura ancora valida. Una superata da una lettura più recente lascia
+   * decidere quella; una superata da una modifica dell'utente non sovrascrive la modifica, ma si
+   * rifà quando la modifica è conclusa: il bisogno di rileggere non si perde.
+   */
+  private settleRead(read: () => ReadStatus, outcome: () => void): void {
+    const status = read();
+    if (status === 'current') {
+      outcome();
+    } else if (status === 'changed') {
+      this.rereadAfterSettled();
+    }
+  }
+
+  private rereadAfterSettled(): void {
+    if (this.pendingPatches > 0) {
+      this.rereadAfterChange = true;
+    } else {
+      this.refresh();
+    }
   }
 
   private applyState(state: ServerState): void {
@@ -107,7 +148,7 @@ export class ServerStatusStore {
     if (patch.proxyAll !== undefined) this._proxyAll.set(patch.proxyAll);
     this.changeEpoch += 1;
     this.pendingPatches += 1;
-    this.api.updateServerState(patch).pipe(finalize(() => (this.pendingPatches -= 1))).subscribe({
+    this.api.updateServerState(patch).pipe(finalize(() => this.patchSettled())).subscribe({
       next: (state) => {
         this._serverEnabled.set(state.serverEnabled);
         this._proxyAll.set(state.proxyAll);
@@ -118,5 +159,14 @@ export class ServerStatusStore {
         this.toast.show({ title: this.transloco.translate('common.error'), description: readErrorMessage(e) ?? this.transloco.translate('common.operationFailed'), tone: 'error' });
       },
     });
+  }
+
+  /** Ultima modifica conclusa, riuscita o no: riparte la rilettura che aveva dovuto aspettare. */
+  private patchSettled(): void {
+    this.pendingPatches -= 1;
+    if (this.pendingPatches === 0 && this.rereadAfterChange) {
+      this.rereadAfterChange = false;
+      this.refresh();
+    }
   }
 }

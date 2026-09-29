@@ -1,6 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { Subject, of, throwError } from 'rxjs';
 import { MonitorDumpStore } from './monitor-dump.store';
+import { READ_RETRY_MAX_MS, READ_RETRY_MIN_MS } from './read-retry';
 import { MockAdminApiService } from '../mock-admin-api.service';
 import { ToastService } from '../ui/ui-toast/ui-toast';
 import type { MonitorDumpState } from '../mock-admin-api.types';
@@ -19,11 +20,17 @@ describe('MonitorDumpStore', () => {
   };
   let toastStub: { show: ReturnType<typeof vi.fn>; dismiss: ReturnType<typeof vi.fn> };
   let sync: ReturnType<typeof fakeRuntimeSync>;
+  // Lo stato sul server: le letture lo restituiscono, le azioni lo cambiano.
+  let dump: MonitorDumpState;
 
   beforeEach(() => {
+    dump = dumpState({ enabled: false });
     apiStub = {
-      getMonitorDumpState: vi.fn(() => of(dumpState({ enabled: false }))),
-      setMonitorDumpState: vi.fn((req: { enabled?: boolean }) => of(dumpState({ enabled: req.enabled ?? false }))),
+      getMonitorDumpState: vi.fn(() => of({ ...dump })),
+      setMonitorDumpState: vi.fn((req: { enabled?: boolean }) => {
+        dump = { ...dump, enabled: req.enabled ?? dump.enabled };
+        return of({ ...dump });
+      }),
       flushMonitorDump: vi.fn(() => of({ flushed: 0 })),
     };
     toastStub = { show: vi.fn(), dismiss: vi.fn() };
@@ -115,6 +122,62 @@ describe('MonitorDumpStore', () => {
       apiStub.getMonitorDumpState.mockReturnValue(throwError(() => new Error('down')));
       sync.resync();
       expect(store.available()).toBe(true);
+    });
+  });
+
+  describe('lettura fallita', () => {
+    beforeEach(() => vi.useFakeTimers());
+    afterEach(() => vi.useRealTimers());
+
+    it('una rilettura fallita si ritenta da sola: il dump acceso da un agente compare', () => {
+      const store = create();
+      apiStub.getMonitorDumpState.mockReturnValueOnce(throwError(() => ({ status: 503 })));
+      apiStub.getMonitorDumpState.mockReturnValue(of(dumpState({ enabled: true })));
+
+      sync.revisions('dump');
+      expect(store.enabled()).toBe(false);
+      vi.advanceTimersByTime(READ_RETRY_MIN_MS);
+      expect(store.enabled()).toBe(true);
+    });
+
+    it('un caricamento iniziale fallito nasconde il controllo finché un tentativo non trova il dump', () => {
+      apiStub.getMonitorDumpState.mockReturnValueOnce(throwError(() => ({ status: 503 })));
+      const store = create();
+      expect(store.available()).toBe(false);
+
+      vi.advanceTimersByTime(READ_RETRY_MIN_MS);
+      expect(store.available()).toBe(true);
+    });
+
+    it('una lettura fallita superata da un’azione dell’utente non si ritenta: si rilegge ad azione conclusa', () => {
+      const store = create();
+      const read = new Subject<MonitorDumpState>();
+      apiStub.getMonitorDumpState.mockReturnValueOnce(read);
+      sync.revisions('dump');
+      store.setEnabled(true);
+
+      read.error({ status: 503 });
+      expect(apiStub.getMonitorDumpState).toHaveBeenCalledTimes(3);
+      vi.advanceTimersByTime(READ_RETRY_MAX_MS);
+
+      expect(apiStub.getMonitorDumpState).toHaveBeenCalledTimes(3);
+      expect(store.enabled()).toBe(true);
+    });
+
+    it('un tentativo che scatta durante un’azione poi fallita riprende quando l’azione termina', () => {
+      const store = create();
+      // Un agente ha acceso il dump, ma la rilettura fallisce.
+      dump = dumpState({ enabled: true });
+      apiStub.getMonitorDumpState.mockReturnValueOnce(throwError(() => ({ status: 503 })));
+      sync.revisions('dump');
+
+      const flushing = new Subject<{ flushed: number }>();
+      apiStub.flushMonitorDump.mockReturnValueOnce(flushing);
+      store.flush();
+      vi.advanceTimersByTime(READ_RETRY_MIN_MS);
+      flushing.error({ status: 500, error: { message: 'boom' } });
+
+      expect(store.enabled()).toBe(true);
     });
   });
 });

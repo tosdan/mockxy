@@ -1,4 +1,4 @@
-import { DestroyRef, Injectable, computed, inject, signal } from '@angular/core';
+import { Injectable, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { TranslocoService } from '@jsverse/transloco';
 import { finalize } from 'rxjs';
@@ -6,11 +6,8 @@ import { MockAdminApiService } from '../mock-admin-api.service';
 import { RUNTIME_CONFIG_KEYS, type RuntimeConfigKey, type RuntimeConfigState } from '../mock-admin-api.types';
 import { ToastService } from '../ui/ui-toast/ui-toast';
 import { readErrorMessage } from './read-error-message';
+import { ReadRetry } from './read-retry';
 import { RuntimeSyncStore, affects } from './runtime-sync.store';
-
-/** Attese fra i tentativi di una lettura fallita: crescono fino al massimo e ripartono al successo. */
-export const CONFIG_RETRY_MIN_MS = 1000;
-export const CONFIG_RETRY_MAX_MS = 30000;
 
 /**
  * Configurazione del runtime (GET /config, piano agent/API §13 C8): valori di avvio, valori in uso
@@ -41,11 +38,9 @@ export class RuntimeConfigStore {
   private reloadQueued = false;
   /** Cresce a ogni modifica riuscita: una lettura partita prima non sovrascrive lo stato nuovo. */
   private generation = 0;
-  private retryTimer?: ReturnType<typeof setTimeout>;
-  private retryDelay = CONFIG_RETRY_MIN_MS;
+  private readonly retry = new ReadRetry(() => this.load());
 
   constructor() {
-    inject(DestroyRef).onDestroy(() => this.clearRetry());
     inject(RuntimeSyncStore)
       .events$.pipe(takeUntilDestroyed())
       .subscribe((event) => {
@@ -56,7 +51,7 @@ export class RuntimeConfigStore {
 
   /** Rilegge la configurazione; una richiesta alla volta, e una sola in coda se ne serve un'altra. */
   load(): void {
-    this.clearRetry();
+    this.retry.cancel();
     if (this.loading) {
       this.reloadQueued = true;
       return;
@@ -76,12 +71,12 @@ export class RuntimeConfigStore {
       )
       .subscribe({
         next: (state) => {
-          this.retryDelay = CONFIG_RETRY_MIN_MS;
+          this.retry.succeeded();
           if (generation === this.generation) this._state.set(state);
         },
         // L'ultima lettura resta visibile e si ritenta con attese crescenti; un motore
         // irraggiungibile lo dice anche lo stato di collegamento.
-        error: () => this.scheduleRetry(),
+        error: () => this.retry.failed(),
       });
   }
 
@@ -107,22 +102,5 @@ export class RuntimeConfigStore {
             tone: 'error',
           }),
       });
-  }
-
-  private scheduleRetry(): void {
-    this.clearRetry();
-    const delay = this.retryDelay;
-    this.retryDelay = Math.min(delay * 2, CONFIG_RETRY_MAX_MS);
-    this.retryTimer = setTimeout(() => {
-      this.retryTimer = undefined;
-      this.load();
-    }, delay);
-  }
-
-  private clearRetry(): void {
-    if (this.retryTimer !== undefined) {
-      clearTimeout(this.retryTimer);
-      this.retryTimer = undefined;
-    }
   }
 }
