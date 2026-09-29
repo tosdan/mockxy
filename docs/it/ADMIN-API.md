@@ -159,7 +159,8 @@ client e polling, eseguire il reset, poi avviare lo scenario.
 
 | Metodo e percorso | Cosa fa |
 |---|---|
-| `GET /monitoring/requests` | le voci in RAM, dalla più recente |
+| `GET /monitoring/requests` | senza query: tutte le voci in RAM, complete, dalla più recente (`{ items }`, come prima). Con `view=page`: una [pagina a cursore](#leggere-il-monitor-a-pagine), in ordine crescente, con filtri e perdita dichiarata |
+| `GET /monitoring/requests/:id?runtimeId=…` | una voce completa per ID, nel runtime indicato: `{ runtimeId, item }`; `409 RUNTIME_CHANGED` se il motore è ripartito, `404 REQUEST_NOT_AVAILABLE` se la voce è stata espulsa, cancellata o non esiste |
 | `DELETE /monitoring/requests` | svuota la vista live (gli archivi non sono toccati) |
 | `GET /monitoring/requests/stream` | flusso live degli eventi (SSE) |
 | `GET /monitoring/dump` | stato della scrittura su disco |
@@ -169,6 +170,47 @@ client e polling, eseguire il reset, poi avviare lo scenario.
 | `GET /monitoring/dumps/read` | lettura paginata a cursore (`?fileIndex&lineIndex&limit`) |
 | `POST /monitoring/dumps/create-mocks` | crea mock in blocco da un file o da una selezione di voci; come l'import, riporta `items` (con la `key` della voce) e `runtime`, e risponde agli stessi errori di batch |
 | `DELETE /monitoring/dumps/:file` | elimina un file di dump |
+
+### Leggere il Monitor a pagine
+
+Con `view=page` il Monitor si interroga come serve a un agente o a un test: «cosa è passato da
+quando ho guardato l'ultima volta». Il Monitor resta un buffer in memoria delle ultime voci, non un
+archivio: per la cattura durevole c'è il dump.
+
+| Parametro | Significato |
+|---|---|
+| `limit` | voci per pagina, da 1 a 250; predefinito 50 |
+| `fields` | `summary` (predefinito: identità, esito, `matchedRoutePath`, `sequenceStep`, `sharedStateError`; niente body né header) oppure `full` (la voce completa, con gli indicatori di troncamento) |
+| `method`, `path`, `status`, `source` | filtri in AND, per uguaglianza esatta; il metodo non distingue maiuscole, `path` è il percorso senza query |
+| `since` | l'ID esclusivo da cui ripartire (`cursor.since` della pagina precedente), oppure `latest` per partire da adesso; assente per leggere il buffer disponibile |
+| `runtimeId`, `generation` | quelli del cursore: obbligatori con un `since` numerico, vietati altrimenti |
+
+La risposta è `{ items, cursor, hasMore, gap, gapReason, available }`. Gli ID sono stringhe
+decimali crescenti nel runtime; `generation` cresce a ogni svuotamento, anche di un buffer già
+vuoto, e lo svuotamento non riutilizza gli ID. Ogni pagina restituisce fino a `limit`
+corrispondenze dopo il cursore: se ne restano altre `hasMore` è `true` e `cursor.since` è l'ultimo
+ID restituito, altrimenti `cursor.since` è l'ultimo ID assegnato (`available.highWatermark`),
+anche senza corrispondenze. Il traffico arrivato nel frattempo finisce nella pagina successiva,
+senza perdite né duplicati. Per leggere in modo incrementale si rimandano `since`, `runtimeId` e
+`generation` del cursore con gli stessi filtri; cambiare filtri richiede una lettura nuova (senza
+`since` o con `since=latest`), mentre `limit` e `fields` possono cambiare fra una pagina e l'altra.
+
+Se il motore è ripartito (`runtime_changed`), il Monitor è stato svuotato (`cleared`) o le voci
+dopo il cursore sono già state espulse (`evicted`), la risposta è comunque `200` con `gap: true`,
+il motivo, e la pagina riparte dal primo elemento disponibile. **Con `gap: true` una lista vuota
+non significa «nessuna richiesta»**: l'intervallo perso poteva contenerne. Un `since` oltre
+l'ultimo ID assegnato nello stesso runtime è `400 CURSOR_AHEAD`.
+
+Qualunque parametro richiede `view=page`, e un parametro sconosciuto è un `400` con
+`details.code: "INVALID_QUERY"` e il nome in `details.parameter`: prima questi parametri venivano
+ignorati, e un filtro scritto male sembrava un Monitor vuoto.
+
+```bash
+# da adesso in poi: il cursore da cui ripartire dopo l'azione
+curl -s "http://localhost:3000/_admin/api/monitoring/requests?view=page&since=latest"
+# le GET su /api/orders arrivate dopo quel cursore
+curl -s "http://localhost:3000/_admin/api/monitoring/requests?view=page&method=GET&path=/api/orders&since=41&runtimeId=…&generation=1"
+```
 
 ## Stato del server
 

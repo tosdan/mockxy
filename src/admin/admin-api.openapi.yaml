@@ -1380,25 +1380,113 @@ paths:
     get:
       tags: [Monitoring]
       operationId: listMonitorEntries
-      summary: The live request feed
+      summary: The live request feed, whole or page by page
       description: |
-        The in-memory history of served requests, **most recent first**, capped to the last few
-        hundred entries. Requests to `/_admin/api` are never recorded, and automatic CORS
-        preflights are filtered out as browser plumbing. Sensitive headers (`authorization`,
-        `cookie`, `set-cookie`, …) are masked as `***`; bodies are captured up to ~156 KB and
-        flagged as truncated beyond that.
+        The in-memory history of served requests, capped to the last few hundred entries.
+        Requests to `/_admin/api` are never recorded, and automatic CORS preflights are filtered
+        out as browser plumbing. Sensitive headers (`authorization`, `cookie`, `set-cookie`, …)
+        are masked as `***`; bodies are captured up to ~156 KB and flagged as truncated beyond
+        that. The monitor is not an archive: for durable capture use the dump.
+
+        **Without a query string** the answer is `{ items }`: every entry, full, **most recent
+        first** — unchanged from earlier versions.
+
+        **With `view=page`** the answer is a page in **ascending** id order, with filters and a
+        cursor. Ids are decimal strings, increasing within a runtime; `generation` starts at 1 and
+        grows at every clear, even of an empty feed, and a clear never reuses ids. Each page reads
+        one snapshot with `highWatermark` H (the last id assigned, `"0"` before the first request).
+        It returns up to `limit` matches after the cursor; if more matches remain in the snapshot,
+        `hasMore` is `true` and `cursor.since` is the last id returned, otherwise `hasMore` is
+        `false` and `cursor.since` is H, also with no match. Traffic after H belongs to the next
+        page, it is not lost. Keep the same filters while reading incrementally; changing them
+        needs a fresh read (no `since`, or `since=latest`), because the cursor may already be past
+        entries the old filter excluded. `limit` and `fields` may change between pages.
+
+        Without `since` the page starts at the oldest entry still available, with `gap: false`:
+        the past already evicted is not claimed as covered. `since=latest` returns no items and a
+        cursor at H: read what happens from now on. With a numeric `since`, a cursor of another
+        runtime (`runtime_changed`), of another generation (`cleared`) or already evicted
+        (`evicted`: `since` below `oldestId - 1`) answers `200` with `gap: true`, the reason, and
+        the page from the oldest entry still available — also when the feed is empty. **Never
+        conclude "no requests" from empty `items` when `gap` is `true`**: the lost range may have
+        held matches. In the same runtime and generation a `since` above H is
+        `400 CURSOR_AHEAD`.
+
+        Any query parameter requires `view=page`, and an unknown parameter is a `400` with
+        `details.code: INVALID_QUERY` and the offending `details.parameter`: earlier versions
+        ignored them silently.
+      parameters:
+        - name: view
+          in: query
+          description: "`page` selects the paged mode; required by every other parameter."
+          schema: { type: string, enum: [page] }
+        - name: limit
+          in: query
+          description: Page size.
+          schema: { type: integer, minimum: 1, maximum: 250, default: 50 }
+        - name: fields
+          in: query
+          description: "`summary` (no bodies, no headers) or `full` (the complete entry, truncation flags included)."
+          schema: { type: string, enum: [summary, full], default: summary }
+        - name: method
+          in: query
+          description: Exact method, case-insensitive (normalized to uppercase).
+          schema: { type: string }
+        - name: path
+          in: query
+          description: Exact request path, without query string; must start with `/`.
+          schema: { type: string, pattern: "^/[^?]*$" }
+        - name: status
+          in: query
+          description: Exact response status.
+          schema: { type: integer, minimum: 100, maximum: 599 }
+        - name: source
+          in: query
+          description: Exact `source` of the entry (e.g. `mock`, `handler`, `proxy`).
+          schema: { type: string, minLength: 1 }
+        - name: since
+          in: query
+          description: Exclusive decimal id from the previous `cursor.since`, or `latest` to start from now. Absent to read the available feed.
+          schema: { type: string, pattern: "^(0|[1-9][0-9]*|latest)$" }
+        - name: runtimeId
+          in: query
+          description: "`cursor.runtimeId`: required with a numeric `since`, forbidden otherwise."
+          schema: { type: string }
+        - name: generation
+          in: query
+          description: "`cursor.generation`: required with a numeric `since`, forbidden otherwise."
+          schema: { type: integer, minimum: 1 }
       responses:
         "200":
-          description: The entries
+          description: "`{ items }` without a query; a `MonitorPage` with `view=page`."
           content:
             application/json:
               schema:
-                type: object
-                required: [items]
-                properties:
-                  items:
-                    type: array
-                    items: { $ref: "#/components/schemas/MonitorEntry" }
+                oneOf:
+                  - type: object
+                    required: [items]
+                    properties:
+                      items:
+                        type: array
+                        items: { $ref: "#/components/schemas/MonitorEntry" }
+                  - { $ref: "#/components/schemas/MonitorPage" }
+              examples:
+                page:
+                  summary: Filter matching ids 12, 14 and 15 of a feed holding 11–15, since 10, limit 2
+                  value:
+                    items:
+                      - { id: "12", timestamp: "2026-09-29T10:00:01.000Z", method: GET, path: /match, originalUrl: /match, status: 200, latencyMs: 3, source: mock, matchedRoutePath: /match, sequenceStep: null, sharedStateError: null }
+                      - { id: "14", timestamp: "2026-09-29T10:00:03.000Z", method: GET, path: /match, originalUrl: /match, status: 200, latencyMs: 2, source: mock, matchedRoutePath: /match, sequenceStep: null, sharedStateError: null }
+                    cursor: { runtimeId: 7d9f1c4e-2b0a-4c7e-9f3a-5e8d2c1b4a60, generation: 1, since: "14" }
+                    hasMore: true
+                    gap: false
+                    gapReason: null
+                    available: { oldestId: "11", newestId: "15", highWatermark: "15" }
+        "400":
+          description: "`INVALID_QUERY` (with `details.parameter`) or `CURSOR_AHEAD` (with `details.since` and `details.highWatermark`)."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
     delete:
       tags: [Monitoring]
       operationId: clearMonitorEntries
@@ -1435,6 +1523,52 @@ paths:
                 clear:
                   summary: The feed was emptied
                   value: { type: clear }
+
+  /monitoring/requests/{id}:
+    get:
+      tags: [Monitoring]
+      operationId: getMonitorEntry
+      summary: One entry by id, complete
+      description: |
+        The full entry, bodies and truncation flags included, for an id read from a page. Ids
+        restart at every start of the engine, so the call names the runtime the id belongs to.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Decimal entry id.
+          schema: { type: string, pattern: "^(0|[1-9][0-9]*)$" }
+        - name: runtimeId
+          in: query
+          required: true
+          description: The `cursor.runtimeId` the id came with.
+          schema: { type: string }
+      responses:
+        "200":
+          description: The entry
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [runtimeId, item]
+                properties:
+                  runtimeId: { type: string }
+                  item: { $ref: "#/components/schemas/MonitorEntry" }
+        "400":
+          description: "`INVALID_QUERY`: missing `runtimeId`, malformed id or unknown parameter."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: "`REQUEST_NOT_AVAILABLE`: evicted, cleared or never recorded."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: "`RUNTIME_CHANGED`: the engine restarted; `details.runtimeId` is the current one."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
 
   /monitoring/dump:
     get:
@@ -2170,6 +2304,61 @@ components:
         error: Bad Request
         message: config.status must be an integer HTTP status code.
 
+    MonitorEntrySummary:
+      type: object
+      description: A monitor entry without bodies and headers.
+      required: [id, timestamp, method, path, originalUrl, status, latencyMs, source, matchedRoutePath, sequenceStep, sharedStateError]
+      properties:
+        id: { type: string }
+        timestamp: { type: string, format: date-time }
+        method: { type: string }
+        path: { type: string }
+        originalUrl: { type: string }
+        status: { type: integer }
+        latencyMs: { type: number }
+        source: { type: string }
+        matchedRoutePath: { type: [string, "null"] }
+        sequenceStep:
+          description: The sequence step served, as in the full entry; `null` for other endpoints.
+          type: [object, "null"]
+        sharedStateError:
+          description: Shared-state diagnostics, in the same shape as the full entry; `null` when absent.
+          type: [object, "null"]
+    MonitorPage:
+      type: object
+      required: [items, cursor, hasMore, gap, gapReason, available]
+      properties:
+        items:
+          type: array
+          description: Ascending by id; `MonitorEntrySummary` with `fields=summary`, `MonitorEntry` with `fields=full`.
+          items:
+            oneOf:
+              - { $ref: "#/components/schemas/MonitorEntrySummary" }
+              - { $ref: "#/components/schemas/MonitorEntry" }
+        cursor:
+          type: object
+          description: Send `since`, `runtimeId` and `generation` back to read the next page.
+          required: [runtimeId, generation, since]
+          properties:
+            runtimeId: { type: string }
+            generation: { type: integer, minimum: 1 }
+            since: { type: string, pattern: "^(0|[1-9][0-9]*)$" }
+        hasMore: { type: boolean }
+        gap:
+          type: boolean
+          description: Something between the cursor and this page was lost; empty `items` does not mean "no requests".
+        gapReason:
+          type: [string, "null"]
+          enum: [runtime_changed, cleared, evicted, null]
+        available:
+          type: object
+          required: [oldestId, newestId, highWatermark]
+          properties:
+            oldestId: { type: [string, "null"] }
+            newestId: { type: [string, "null"] }
+            highWatermark:
+              type: string
+              description: The last id assigned in this runtime, `"0"` before the first request.
     RuntimeInfo:
       type: object
       required: [version, runtimeId, startedAt, workspace, listener, watcher, revisions]

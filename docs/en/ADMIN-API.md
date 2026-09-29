@@ -156,7 +156,8 @@ then start the scenario.
 
 | Method and path | What it does |
 |---|---|
-| `GET /monitoring/requests` | the in-RAM entries, most recent first |
+| `GET /monitoring/requests` | without a query: every in-RAM entry, complete, most recent first (`{ items }`, as before). With `view=page`: a [cursor page](#reading-the-monitor-page-by-page), in ascending order, with filters and declared loss |
+| `GET /monitoring/requests/:id?runtimeId=…` | one complete entry by id, in the given runtime: `{ runtimeId, item }`; `409 RUNTIME_CHANGED` if the engine restarted, `404 REQUEST_NOT_AVAILABLE` if the entry was evicted, cleared or never existed |
 | `DELETE /monitoring/requests` | clears the live view (the archives are untouched) |
 | `GET /monitoring/requests/stream` | live event stream (SSE) |
 | `GET /monitoring/dump` | state of the disk writing |
@@ -166,6 +167,46 @@ then start the scenario.
 | `GET /monitoring/dumps/read` | cursor-paginated reading (`?fileIndex&lineIndex&limit`) |
 | `POST /monitoring/dumps/create-mocks` | creates mocks in bulk from a file or from a selection of entries; like the import, it reports `items` (with each entry's `key`) and `runtime`, and answers the same batch errors |
 | `DELETE /monitoring/dumps/:file` | deletes a dump file |
+
+### Reading the monitor page by page
+
+With `view=page` the monitor answers the question an agent or a test asks: "what went through
+since I last looked". The monitor stays an in-memory buffer of the latest entries, not an archive:
+the dump is there for durable capture.
+
+| Parameter | Meaning |
+|---|---|
+| `limit` | entries per page, from 1 to 250; default 50 |
+| `fields` | `summary` (default: identity, outcome, `matchedRoutePath`, `sequenceStep`, `sharedStateError`; no bodies, no headers) or `full` (the complete entry, truncation flags included) |
+| `method`, `path`, `status`, `source` | filters combined with AND, exact match; the method is case-insensitive, `path` is the path without query string |
+| `since` | the exclusive id to resume from (`cursor.since` of the previous page), or `latest` to start from now; absent to read the available buffer |
+| `runtimeId`, `generation` | those of the cursor: required with a numeric `since`, forbidden otherwise |
+
+The answer is `{ items, cursor, hasMore, gap, gapReason, available }`. Ids are decimal strings,
+increasing within a runtime; `generation` grows at every clear, even of an already empty buffer,
+and a clear never reuses ids. Each page returns up to `limit` matches after the cursor: if more
+remain, `hasMore` is `true` and `cursor.since` is the last id returned; otherwise `cursor.since`
+is the last id assigned (`available.highWatermark`), also with no match. Traffic arriving
+meanwhile lands in the next page, with no loss and no duplicate. To read incrementally, send back
+the cursor's `since`, `runtimeId` and `generation` with the same filters; changing filters needs a
+fresh read (no `since`, or `since=latest`), while `limit` and `fields` may change between pages.
+
+If the engine restarted (`runtime_changed`), the monitor was cleared (`cleared`) or the entries
+after the cursor were already evicted (`evicted`), the answer is still `200` with `gap: true`, the
+reason, and the page starting at the first entry available. **With `gap: true` an empty list does
+not mean "no requests"**: the lost range may have held some. A `since` beyond the last id assigned
+in the same runtime is `400 CURSOR_AHEAD`.
+
+Any parameter requires `view=page`, and an unknown parameter is a `400` with
+`details.code: "INVALID_QUERY"` and its name in `details.parameter`: earlier versions ignored
+these parameters, and a misspelled filter looked like an empty monitor.
+
+```bash
+# from now on: the cursor to resume from after the action
+curl -s "http://localhost:3000/_admin/api/monitoring/requests?view=page&since=latest"
+# the GETs on /api/orders that arrived after that cursor
+curl -s "http://localhost:3000/_admin/api/monitoring/requests?view=page&method=GET&path=/api/orders&since=41&runtimeId=…&generation=1"
+```
 
 ## Server state
 

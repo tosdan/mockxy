@@ -160,6 +160,24 @@ esistenti restano compatibili: nessuna migrazione richiesta.
 - **Per i client:** la precondizione è facoltativa, e senza di essa nulla cambia; chi la usa deve
   gestire il `409` rileggendo e confrontando, non ripetendo alla cieca.
 
+#### Monitor interrogabile a pagine
+
+- **Prima:** `GET /monitoring/requests` restituiva sempre tutte le voci in memoria, complete e
+  dalla più recente, e ignorava in silenzio qualunque parametro in query. Non c'era modo di
+  leggere solo il traffico successivo a un certo momento, né di sapere se nel frattempo il motore
+  era ripartito, il Monitor era stato svuotato o le voci più vecchie erano state espulse.
+- **Ora:** senza query la rotta risponde come prima (`{ items }`) e lo stream SSE non cambia. Con
+  `view=page` restituisce una pagina in ordine crescente con filtri (`method`, `path`, `status`,
+  `source`), `limit` (predefinito 50, massimo 250), `fields=summary` senza body né header oppure
+  `full`, e un cursore `{ runtimeId, generation, since }` da rimandare per leggere solo il seguito;
+  `since=latest` parte da adesso. Riavvio, svuotamento ed espulsione tornano come `gap: true` con
+  il motivo in `gapReason`, invece di una lista vuota che sembrerebbe «nessuna richiesta».
+  `GET /monitoring/requests/:id?runtimeId=…` legge una voce completa per ID.
+- **Compatibilità:** un parametro in query senza `view=page`, o un parametro sconosciuto, prima
+  ignorato, ora risponde `400` con `details.code: "INVALID_QUERY"` e il nome del parametro.
+- **Per i client:** chi chiama la rotta senza query non deve cambiare nulla. Chi passava parametri
+  che venivano ignorati deve toglierli o passare a `view=page`.
+
 ### Interfaccia
 
 - **Descrizione e abilitazione:** salvare la descrizione invia solo la descrizione, e il toggle
