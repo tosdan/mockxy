@@ -4,6 +4,7 @@ import type { Mock } from 'vitest';
 import { MockAdminApiService } from '../mock-admin-api.service';
 import type { RuntimeStatusReport } from '../mock-admin-api.types';
 import { fakeRuntimeSync } from '../testing/runtime-sync-testing';
+import { READ_RETRY_MAX_MS, READ_RETRY_MIN_MS } from './read-retry';
 import { RuntimeDiagnosticsStore } from './runtime-diagnostics.store';
 
 function report(overrides: Partial<RuntimeStatusReport> = {}): RuntimeStatusReport {
@@ -77,5 +78,30 @@ describe('RuntimeDiagnosticsStore', () => {
     getRuntimeStatus.mockReturnValueOnce(throwError(() => new Error('down')));
     sync.resync();
     expect(store.errors()).toEqual([]);
+  });
+
+  // La revisione nuova è già stata vista: senza un nuovo tentativo il polling non chiederebbe più
+  // di rileggere, e la status bar resterebbe indietro.
+  it('una lettura fallita si ritenta da sola, con attese crescenti, finché riesce', () => {
+    vi.useFakeTimers();
+    try {
+      const store = create();
+      getRuntimeStatus.mockReturnValueOnce(throwError(() => ({ status: 503 })));
+      getRuntimeStatus.mockReturnValueOnce(throwError(() => ({ status: 503 })));
+      getRuntimeStatus.mockReturnValue(of(report({ errors: [RETAINED] })));
+
+      sync.revisions('diagnostics');
+      vi.advanceTimersByTime(READ_RETRY_MIN_MS);
+      expect(getRuntimeStatus).toHaveBeenCalledTimes(3);
+      expect(store.hasProblems()).toBe(false);
+      vi.advanceTimersByTime(2 * READ_RETRY_MIN_MS);
+      expect(getRuntimeStatus).toHaveBeenCalledTimes(4);
+      expect(store.errors()).toEqual([RETAINED]);
+
+      vi.advanceTimersByTime(READ_RETRY_MAX_MS);
+      expect(getRuntimeStatus).toHaveBeenCalledTimes(4);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

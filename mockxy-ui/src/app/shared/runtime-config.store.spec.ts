@@ -7,7 +7,8 @@ import { fakeRuntimeSync } from '../testing/runtime-sync-testing';
 import { runtimeConfigState } from '../testing/runtime-config-testing';
 import { translocoTesting } from '../testing/transloco-testing';
 import { ToastService } from '../ui/ui-toast/ui-toast';
-import { CONFIG_RETRY_MAX_MS, CONFIG_RETRY_MIN_MS, RuntimeConfigStore } from './runtime-config.store';
+import { READ_RETRY_MAX_MS, READ_RETRY_MIN_MS } from './read-retry';
+import { RuntimeConfigStore } from './runtime-config.store';
 
 // Configurazione del runtime per la GUI (piano agent/API, §13 C8).
 describe('RuntimeConfigStore', () => {
@@ -122,15 +123,15 @@ describe('RuntimeConfigStore', () => {
       // La revisione nuova è già stata vista: il polling non chiederebbe più di rileggere.
       sync.revisions('config');
       expect(getRuntimeConfig).toHaveBeenCalledTimes(2);
-      vi.advanceTimersByTime(CONFIG_RETRY_MIN_MS);
+      vi.advanceTimersByTime(READ_RETRY_MIN_MS);
       expect(getRuntimeConfig).toHaveBeenCalledTimes(3);
-      vi.advanceTimersByTime(CONFIG_RETRY_MIN_MS);
+      vi.advanceTimersByTime(READ_RETRY_MIN_MS);
       expect(getRuntimeConfig).toHaveBeenCalledTimes(3);
-      vi.advanceTimersByTime(CONFIG_RETRY_MIN_MS);
+      vi.advanceTimersByTime(READ_RETRY_MIN_MS);
       expect(getRuntimeConfig).toHaveBeenCalledTimes(4);
       expect(store.overrideKeys()).toEqual(['corsEnabled']);
 
-      vi.advanceTimersByTime(CONFIG_RETRY_MAX_MS);
+      vi.advanceTimersByTime(READ_RETRY_MAX_MS);
       expect(getRuntimeConfig).toHaveBeenCalledTimes(4);
     } finally {
       vi.useRealTimers();

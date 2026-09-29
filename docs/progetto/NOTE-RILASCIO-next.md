@@ -268,7 +268,9 @@ esistenti restano compatibili: nessuna migrazione richiesta.
   quando il collegamento torna. La status bar segnala «Non aggiornato» quando il motore non
   risponde, e mostra gli errori dell'ultimo caricamento con quello che il runtime serve al loro
   posto. Una bozza aperta non cambia: se la sua risorsa cambia sul server lo segnala; se sparisce,
-  o se il motore ora serve un altro workspace, il salvataggio resta disabilitato.
+  o se il motore ora serve un altro workspace, il salvataggio resta disabilitato. Una rilettura
+  fallita di stato del server, dump, diagnostica o configurazione si ritenta da sola, con attese
+  crescenti fino a 30 secondi, invece di lasciare la GUI indietro.
 
 ### Documentazione e collaudo
 

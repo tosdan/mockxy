@@ -6,6 +6,7 @@ import { MockAdminApiService } from '../mock-admin-api.service';
 import { ToastService } from '../ui/ui-toast/ui-toast';
 import type { MonitorDumpState } from '../mock-admin-api.types';
 import { readErrorMessage } from './read-error-message';
+import { ReadRetry } from './read-retry';
 import { RuntimeSyncStore, affects } from './runtime-sync.store';
 
 /**
@@ -32,6 +33,8 @@ export class MonitorDumpStore {
   private changeEpoch = 0;
   // Cresce a ogni lettura: si applica solo la più recente.
   private readSeq = 0;
+  // Una lettura fallita e ancora valida si ripete con una rilettura silenziosa (vedi ReadRetry).
+  private readonly retry = new ReadRetry(() => this.refresh());
 
   constructor() {
     inject(RuntimeSyncStore)
@@ -48,28 +51,38 @@ export class MonitorDumpStore {
    * nel frattempo vince.
    */
   refresh(): void {
+    this.retry.cancel();
     if (this._busy()) {
       return;
     }
     const current = this.readTicket();
     this.api.getMonitorDumpState().subscribe({
-      next: (state) => {
-        if (current()) this._state.set(state);
+      next: (state) => this.applyRead(current, state),
+      // Si ritenta solo una lettura ancora valida: se è stata superata da un'altra lettura o da
+      // un'azione dell'utente, vale quella.
+      error: () => {
+        if (current()) this.retry.failed();
       },
-      error: () => undefined,
     });
   }
 
   load(): void {
+    this.retry.cancel();
     const current = this.readTicket();
     this.api.getMonitorDumpState().subscribe({
-      next: (state) => {
-        if (current()) this._state.set(state);
-      },
+      next: (state) => this.applyRead(current, state),
       error: () => {
-        if (current()) this._state.set(null); // dump non disponibile: niente controllo nella barra
+        if (!current()) return;
+        this._state.set(null); // dump non disponibile: niente controllo nella barra, finché un tentativo non lo trova
+        this.retry.failed();
       },
     });
+  }
+
+  private applyRead(current: () => boolean, state: MonitorDumpState): void {
+    if (!current()) return;
+    this.retry.succeeded();
+    this._state.set(state);
   }
 
   /** Una lettura resta valida se nessun'altra è partita dopo e l'utente non ha agito nel frattempo. */

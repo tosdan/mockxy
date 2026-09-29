@@ -6,6 +6,7 @@ import { MockAdminApiService } from '../mock-admin-api.service';
 import { ToastService } from '../ui/ui-toast/ui-toast';
 import type { ServerState } from '../mock-admin-api.types';
 import { readErrorMessage } from './read-error-message';
+import { ReadRetry } from './read-retry';
 import { RuntimeSyncStore, affects } from './runtime-sync.store';
 
 /**
@@ -31,6 +32,8 @@ export class ServerStatusStore {
   // Cresce a ogni lettura: si applica solo la più recente, così una risposta superata da un'altra
   // lettura (caricamento iniziale o rilettura) non ripristina un valore vecchio.
   private readSeq = 0;
+  // Una lettura fallita e ancora valida si ripete con una rilettura silenziosa (vedi ReadRetry).
+  private readonly retry = new ReadRetry(() => this.refresh());
 
   constructor() {
     // Stato cambiato da un agente o da un'altra finestra, o motore ripartito: dopo una
@@ -49,33 +52,43 @@ export class ServerStatusStore {
    * qualcosa, se una sua modifica è ancora in volo o se è partita una lettura più recente.
    */
   refresh(): void {
+    this.retry.cancel();
     if (this.pendingPatches > 0) {
       return;
     }
     const current = this.readTicket();
     this.api.getServerState().subscribe({
-      next: (state) => {
-        if (current()) this.applyState(state);
+      next: (state) => this.applyRead(current, state),
+      // Si ritenta solo una lettura ancora valida: se è stata superata da un'altra lettura o da
+      // una modifica dell'utente, vale quella.
+      error: () => {
+        if (current()) this.retry.failed();
       },
-      error: () => undefined,
     });
   }
 
   /** Carica lo stato runtime del server (server on/off + proxy all) dall'API. */
   load(): void {
+    this.retry.cancel();
     this._loading.set(true);
     const current = this.readTicket();
     this.api
       .getServerState()
       .pipe(finalize(() => this._loading.set(false)))
       .subscribe({
-        next: (state) => {
-          if (current()) this.applyState(state);
-        },
+        next: (state) => this.applyRead(current, state),
         error: (e) => {
-          if (current()) this.toast.show({ title: this.transloco.translate('common.error'), description: readErrorMessage(e) ?? this.transloco.translate('common.operationFailed'), tone: 'error' });
+          if (!current()) return;
+          this.toast.show({ title: this.transloco.translate('common.error'), description: readErrorMessage(e) ?? this.transloco.translate('common.operationFailed'), tone: 'error' });
+          this.retry.failed();
         },
       });
+  }
+
+  private applyRead(current: () => boolean, state: ServerState): void {
+    if (!current()) return;
+    this.retry.succeeded();
+    this.applyState(state);
   }
 
   /** Una lettura resta valida se nessun'altra è partita dopo e l'utente non ha cambiato niente. */

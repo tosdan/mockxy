@@ -1,11 +1,12 @@
 import { TestBed } from '@angular/core/testing';
-import { Subject, of, type Observable } from 'rxjs';
+import { Subject, of, throwError, type Observable } from 'rxjs';
 import type { Mock } from 'vitest';
 import { MockAdminApiService } from '../mock-admin-api.service';
 import type { ServerState } from '../mock-admin-api.types';
 import { ToastService } from '../ui/ui-toast/ui-toast';
 import { fakeRuntimeSync } from '../testing/runtime-sync-testing';
 import { translocoTesting } from '../testing/transloco-testing';
+import { READ_RETRY_MAX_MS, READ_RETRY_MIN_MS } from './read-retry';
 import { ServerStatusStore } from './server-status.store';
 
 describe('ServerStatusStore — sincronizzazione', () => {
@@ -107,5 +108,45 @@ describe('ServerStatusStore — sincronizzazione', () => {
 
     initial.next({ serverEnabled: true, proxyAll: false });
     expect(store.proxyAll()).toBe(true);
+  });
+
+  describe('lettura fallita', () => {
+    beforeEach(() => vi.useFakeTimers());
+    afterEach(() => vi.useRealTimers());
+
+    it('si ritenta da sola: Proxy All cambiato da un agente arriva anche se la prima rilettura fallisce', () => {
+      const store = create();
+      getServerState.mockReturnValueOnce(throwError(() => ({ status: 503 })));
+      getServerState.mockReturnValue(of({ serverEnabled: true, proxyAll: true }));
+
+      sync.revisions('server');
+      expect(store.proxyAll()).toBe(false);
+      vi.advanceTimersByTime(READ_RETRY_MIN_MS);
+      expect(store.proxyAll()).toBe(true);
+    });
+
+    it('anche il caricamento iniziale fallito si ritenta, dopo l’avviso', () => {
+      getServerState.mockReturnValueOnce(throwError(() => ({ status: 503 })));
+      getServerState.mockReturnValue(of({ serverEnabled: false, proxyAll: false }));
+      const store = create();
+      expect(store.serverEnabled()).toBe(true);
+
+      vi.advanceTimersByTime(READ_RETRY_MIN_MS);
+      expect(store.serverEnabled()).toBe(false);
+    });
+
+    it('non si ritenta una lettura superata da una modifica dell’utente: vale la modifica', () => {
+      const store = create();
+      const read = new Subject<ServerState>();
+      getServerState.mockReturnValueOnce(read);
+      sync.revisions('server');
+      store.setProxyAll(true);
+
+      read.error({ status: 503 });
+      vi.advanceTimersByTime(READ_RETRY_MAX_MS);
+
+      expect(getServerState).toHaveBeenCalledTimes(2);
+      expect(store.proxyAll()).toBe(true);
+    });
   });
 });
