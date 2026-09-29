@@ -639,7 +639,18 @@ export interface DumpReadPage {
 }
 
 /** Criterio di selezione per la creazione massiva: tutto un file o un insieme di chiavi. */
-export type DumpSelection = { file: string } | { keys: string[] };
+/**
+ * Opzioni della creazione di mock dal traffico (piano agent/API, §13 C7): cosa fare con un
+ * endpoint che esiste già, se selezionare le varianti aggiunte e se servire i nuovi endpoint.
+ */
+export interface CaptureBatchOptions {
+  onConflict: 'skip' | 'add-variant';
+  selectAddedVariants?: boolean;
+  newEndpointEnabled: boolean;
+}
+
+/** Selezione dello Storico; le opzioni hanno i default storici, ma un flusso esplicito le manda. */
+export type DumpSelection = ({ file: string } | { keys: string[] }) & Partial<CaptureBatchOptions>;
 
 /**
  * Esito di un elemento di un batch (import OpenAPI, creazione dallo storico). `writeOutcome` dice
@@ -662,12 +673,43 @@ export interface BatchRuntime {
   errors: { filePath: string; message: string }[];
 }
 
+/** Avviso di un elemento: bozza non fedele, o selezione superata da un elemento successivo. */
+export interface CaptureWarning {
+  code: 'INCOMPLETE_CAPTURE' | 'SUPERSEDED';
+  reason?: 'truncated' | 'binary';
+  by?: string;
+}
+
+/** Esito di una cattura trasformata in mock (Monitor e Storico). */
+export interface CaptureItemOutcome extends Omit<BatchItemOutcome, 'method' | 'path' | 'writeOutcome'> {
+  method: string | null;
+  path: string | null;
+  writeOutcome: 'created' | 'variant_added' | 'skipped' | 'failed';
+  captureOutcome: 'complete' | 'incomplete' | 'unavailable';
+  warnings: CaptureWarning[];
+  candidates?: string[];
+}
+
+export interface MonitorCreateMocksRequest extends CaptureBatchOptions {
+  /** Il runtime delle catture: gli ID ripartono a ogni avvio. */
+  runtimeId: string;
+  ids: string[];
+}
+
+export interface MonitorCreateMocksResult {
+  runtimeId: string;
+  counts: { created: number; addedVariants: number; skipped: number; unavailable: number; failed: number; incomplete: number };
+  items: (CaptureItemOutcome & { requestId: string })[];
+  runtime: BatchRuntime;
+}
+
 export interface DumpCreateMocksResult {
   created: number;
   createdEmpty: number;
   skippedExisting: number;
   failed: number;
-  items: (BatchItemOutcome & { key: string | null })[];
+  addedVariants: number;
+  items: (CaptureItemOutcome & { key: string | null })[];
   runtime: BatchRuntime;
 }
 
@@ -764,11 +806,12 @@ export interface OpenapiImportResult {
  * scritti ma non serviti dal runtime, `withWarnings` serviti ma con un avviso (es. collection
  * non assegnata).
  */
-export function summarizeBatchAttention(items: readonly BatchItemOutcome[] | undefined): {
+export function summarizeBatchAttention(items: readonly (Pick<BatchItemOutcome, 'runtimeOutcome' | 'error'> & { writeOutcome: string })[] | undefined): {
   notServed: number;
   withWarnings: number;
 } {
-  const created = (items ?? []).filter((item) => item.writeOutcome === 'created');
+  // Endpoint creati e varianti aggiunte: entrambi possono restare non serviti.
+  const created = (items ?? []).filter((item) => item.writeOutcome === 'created' || item.writeOutcome === 'variant_added');
   return {
     notServed: created.filter((item) => item.runtimeOutcome === 'not_applied').length,
     withWarnings: created.filter((item) => item.runtimeOutcome !== 'not_applied' && item.error != null).length,
@@ -777,6 +820,8 @@ export function summarizeBatchAttention(items: readonly BatchItemOutcome[] | und
 
 export interface RequestMonitorSnapshotEvent {
   type: 'snapshot';
+  /** Il runtime delle voci (motori dopo S7); gli ID ripartono a ogni avvio. */
+  runtimeId?: string | null;
   items: RequestMonitorEntry[];
 }
 

@@ -315,6 +315,20 @@ function countCaptureOutcomes(items) {
   return counts;
 }
 
+// Batch del Monitor: la risposta porta il runtime delle voci e i conteggi, e un risultato parziale
+// in details.result (BATCH_RUNTIME_FAILED, ROLLBACK_FAILED) ha la stessa forma della 201.
+async function createMocksFromMonitor({ runtimeId, ...params }) {
+  const withCounts = (result) => ({ runtimeId, counts: countCaptureOutcomes(result.items), ...result });
+  try {
+    return withCounts(await createMocksFromCaptures({ ...params, source: "monitor" }));
+  } catch (error) {
+    if (error?.details?.result != null) {
+      error.details.result = withCounts(error.details.result);
+    }
+    throw error;
+  }
+}
+
 module.exports = {
   EXCLUDED_RESPONSE_HEADERS,
   INCOMPLETE_DESCRIPTION,
@@ -323,5 +337,6 @@ module.exports = {
   captureResponseHeaders,
   countCaptureOutcomes,
   createMocksFromCaptures,
+  createMocksFromMonitor,
   parseBatchOptions,
 };

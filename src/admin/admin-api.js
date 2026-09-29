@@ -40,7 +40,7 @@ const {
   updateAdminCollectionEnabled,
 } = require("./collection-operations");
 const { createMocksFromDump } = require("./dump-to-mock");
-const { countCaptureOutcomes, createMocksFromCaptures, parseBatchOptions } = require("./capture-to-mock");
+const { createMocksFromMonitor, parseBatchOptions } = require("./capture-to-mock");
 const { importAdminOpenapi } = require("./openapi-admin-import");
 const { createAdminError } = require("./admin-errors");
 const {
@@ -321,8 +321,11 @@ function createAdminApiRouter({ config, runtimeIdentity, runtimeStatus, catalogR
     res.setHeader('Connection', 'keep-alive');
     res.flushHeaders?.();
 
+    // Lo snapshot dichiara il runtime delle sue voci: gli ID ripartono a ogni avvio, e un client
+    // che crea mock da queste catture (§13 C7) deve mandare quel runtime, non quello di adesso.
     sendSseEvent(res, {
       type: 'snapshot',
+      runtimeId: runtimeIdentity?.runtimeId ?? null,
       items: requestMonitor?.listEntries() || [],
     });
 
@@ -372,16 +375,16 @@ function createAdminApiRouter({ config, runtimeIdentity, runtimeStatus, catalogR
       const entry = requestMonitor?.getEntry(id);
       return { ref: { requestId: id }, entry: entry == null ? null : structuredClone(entry) };
     });
-    const result = await createMocksFromCaptures({
+    const result = await createMocksFromMonitor({
+      runtimeId,
       mocksDir: config.mocksDir,
       captures,
       options,
-      source: 'monitor',
       reloadRuntime,
       scenarioStates,
       rejectionLabel: 'Mock creation from the monitor',
     });
-    sendJson(res, 201, { runtimeId, counts: countCaptureOutcomes(result.items), ...result });
+    sendJson(res, 201, result);
   }));
 
   // Una voce per ID, completa. Dichiarata dopo /stream: il percorso statico non deve finire nella

@@ -1,11 +1,14 @@
 const fs = require("fs");
 const path = require("path");
+const yaml = require("js-yaml");
+const Ajv2020 = require("ajv/dist/2020");
 const { createAdminError } = require("../src/admin/admin-errors");
 const { createAdminMock } = require("../src/admin/endpoint-operations");
 const { assignAdminCollection } = require("../src/admin/collection-operations");
 const { readDumpEntriesByKeys } = require("../src/monitoring/monitor-dump-reader");
 const { importAdminOpenapi } = require("../src/admin/openapi-admin-import");
 const { createMocksFromDump } = require("../src/admin/dump-to-mock");
+const { createMocksFromMonitor } = require("../src/admin/capture-to-mock");
 const { createTempDir, removeDir } = require("./helpers");
 
 jest.mock("../src/admin/endpoint-operations", () => {
@@ -145,6 +148,71 @@ describe("batch admin: interruzione ed errori dopo la scrittura", () => {
     ]);
     expect(createAdminMock).toHaveBeenCalledTimes(2);
     expect(reloadRuntime).toHaveBeenCalledTimes(1);
+  });
+
+  // Il risultato parziale del Monitor in details.result ha la forma della sua risposta 201.
+  const SPEC = yaml.safeLoad(fs.readFileSync(path.join(__dirname, "..", "src", "admin", "admin-api.openapi.yaml"), "utf8"));
+  const validateMonitorResult = new Ajv2020({ strict: false, validateFormats: false }).compile({
+    ...SPEC.paths["/monitoring/requests/create-mocks"].post.responses["201"].content["application/json"].schema,
+    components: SPEC.components,
+  });
+  const monitorCapture = (id, routePath) => ({
+    ref: { requestId: id },
+    entry: {
+      id,
+      timestamp: "2026-09-29T10:11:12.000Z",
+      method: "GET",
+      path: routePath,
+      status: 200,
+      responseHeaders: { "content-type": "application/json" },
+      responseBody: "{}",
+    },
+  });
+  const createFromMonitor = (captures) => createMocksFromMonitor({
+    runtimeId: "rt-1",
+    mocksDir,
+    captures,
+    options: { onConflict: "skip", selectAddedVariants: false, newEndpointEnabled: true },
+    reloadRuntime,
+    rejectionLabel: "Mock creation from the monitor",
+  });
+
+  test("dal Monitor, un reload finale fallito riporta runtime e conteggi nel risultato parziale", async () => {
+    reloadRuntime.mockResolvedValue({ applied: false, loadErrors: [], fatalError: new Error("scansione fallita") });
+
+    const failure = await createFromMonitor([monitorCapture("1", "/one"), monitorCapture("2", "/two")]).catch((error) => error);
+
+    expect(failure).toMatchObject({
+      status: 500,
+      details: {
+        code: "BATCH_RUNTIME_FAILED",
+        // runtime.status `failed` è propria di BatchFailed: la 201 ammette solo applied o degraded.
+        result: { runtimeId: "rt-1", counts: { created: 2, failed: 0 }, runtime: { status: "failed" } },
+      },
+    });
+    expect(failure.details.result.items.map((item) => [item.requestId, item.writeOutcome, item.runtimeOutcome])).toEqual([
+      ["1", "created", "not_applied"],
+      ["2", "created", "not_applied"],
+    ]);
+  });
+
+  test("dal Monitor, un ripristino fallito ferma il batch e il risultato parziale ha i conteggi", async () => {
+    createAdminMock
+      .mockImplementationOnce(actualCreateAdminMock)
+      .mockImplementationOnce(failWithUnrestoredWrite);
+
+    const failure = await createFromMonitor([monitorCapture("1", "/one"), monitorCapture("2", "/two"), monitorCapture("3", "/three")])
+      .catch((error) => error);
+
+    expect(failure).toMatchObject({
+      status: 500,
+      details: { code: "ROLLBACK_FAILED", result: { runtimeId: "rt-1", counts: { created: 1, failed: 1 } } },
+    });
+    expect(failure.details.result.items.map((item) => [item.requestId, item.writeOutcome])).toEqual([
+      ["1", "created"],
+      ["2", "failed"],
+    ]);
+    expect(validateMonitorResult(failure.details.result) ? [] : validateMonitorResult.errors).toEqual([]);
   });
 
   test("un'assegnazione di collection fallita resta nell'esito dell'elemento e il batch si conclude", async () => {

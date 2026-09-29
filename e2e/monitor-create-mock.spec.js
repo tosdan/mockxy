@@ -1,5 +1,5 @@
 const { test, expect } = require("@playwright/test");
-const { gotoMonitor, clearMonitor, resetWorkspace, E2E_BACKEND } = require("./helpers");
+const { gotoMonitor, clearMonitor, mockIdByPath, resetWorkspace, E2E_BACKEND } = require("./helpers");
 
 // E16 — scenario "cattura → mock" dal Monitor: una richiesta non mockata viene catturata, la si
 // seleziona nel monitor e la si converte in un mock, che compare nel catalogo. È uno dei due usi
@@ -36,5 +36,38 @@ test.describe("E16 · monitor → crea mock", () => {
     const catalog = page.locator("mocks-next-catalog");
     await expect(catalog.getByText("/api/catturato-e2e", { exact: true })).toBeVisible();
     await expect(page.locator("app-status-bar").getByText(/9\s+endpoint/)).toBeVisible();
+  });
+
+  // Piano agent/API, §13 C7: la creazione la fa il server, e l'attivazione va dichiarata.
+  test("senza «Attiva subito» il nuovo endpoint nasce disattivato", async ({ page, request }) => {
+    await request.get(`${E2E_BACKEND}/api/preparato-e2e`);
+    await gotoMonitor(page);
+    const monitor = page.locator("app-monitor-next");
+    await monitor.getByText("/api/preparato-e2e").first().click();
+
+    await monitor.getByRole("checkbox", { name: "Attiva subito" }).click();
+    await monitor.getByRole("button", { name: "Crea mock da questa" }).click();
+
+    await expect(page.locator("ui-toaster").getByText("Mock creato senza attivarlo")).toBeVisible();
+    const id = await mockIdByPath(request, "/api/preparato-e2e");
+    const detail = await (await request.get(`${E2E_BACKEND}/_admin/api/mocks/${id}`)).json();
+    expect(detail.disabled).toBe(true);
+  });
+
+  test("su un endpoint esistente la cattura si aggiunge come variante senza cambiare quella servita", async ({ page, request }) => {
+    const id = await mockIdByPath(request, "/api/health");
+    const before = await (await request.get(`${E2E_BACKEND}/_admin/api/mocks/${id}`)).json();
+    await request.get(`${E2E_BACKEND}/api/health`);
+
+    await gotoMonitor(page);
+    const monitor = page.locator("app-monitor-next");
+    await monitor.getByText("/api/health").first().click();
+    await monitor.getByRole("button", { name: "Crea mock da questa" }).click();
+    await page.getByRole("button", { name: "Aggiungi senza attivare" }).click();
+
+    await expect(page.locator("ui-toaster").getByText("Variante aggiunta senza attivarla")).toBeVisible();
+    const after = await (await request.get(`${E2E_BACKEND}/_admin/api/mocks/${id}`)).json();
+    expect(after.responses).toHaveLength(before.responses.length + 1);
+    expect(after.selectedResponseFile).toBe(before.selectedResponseFile);
   });
 });

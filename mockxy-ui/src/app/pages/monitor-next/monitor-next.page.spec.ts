@@ -6,6 +6,7 @@ import { of, throwError } from 'rxjs';
 import { MonitorNextPage } from './monitor-next.page';
 import { translocoTesting } from '../../testing/transloco-testing';
 import { MockAdminApiService } from '../../mock-admin-api.service';
+import { MonitorStreamStore } from '../../shared/monitor-stream.store';
 import { UiDialog } from '../../ui/ui-dialog/ui-dialog';
 import type { RequestMonitorEntry } from '../../mock-admin-api.types';
 
@@ -28,8 +29,30 @@ const ENTRIES: RequestMonitorEntry[] = [
   entry({ id: '3', method: 'GET', originalUrl: '/api/payments', status: 502, source: 'backend', latencyMs: 31 }),
 ];
 
+// Esito di un elemento di create-mocks, come lo restituisce il server (§13 C7).
+function captureItem(partial: Record<string, unknown> = {}) {
+  return {
+    requestId: '2',
+    method: 'GET',
+    path: '/api/users/42',
+    id: 'nuovo',
+    responseFile: '001.response.json',
+    writeOutcome: 'created',
+    runtimeOutcome: 'applied',
+    captureOutcome: 'complete',
+    warnings: [],
+    error: null,
+    ...partial,
+  };
+}
+function createResult(items: Record<string, unknown>[], counts: Record<string, number> = {}) {
+  return { runtimeId: 'rt-1', counts: { created: 1, addedVariants: 0, skipped: 0, unavailable: 0, failed: 0, incomplete: 0, ...counts }, items, runtime: { status: 'applied', errors: [] } };
+}
+
 const apiStub = {
-  streamRequestMonitoring: () => of({ type: 'snapshot', items: ENTRIES }),
+  // Lo snapshot dichiara il runtime delle voci: la creazione lo rimanda al server.
+  streamRequestMonitoring: () => of({ type: 'snapshot', runtimeId: 'rt-1', items: ENTRIES }),
+  createMocksFromMonitor: vi.fn((_request: Record<string, unknown>) => of(createResult([captureItem()]))),
   clearRequestMonitoring: () => of(undefined),
   listRequestMonitoring: () => of({ items: ENTRIES }),
   createMock: vi.fn((_request: { config: Record<string, unknown>; body: unknown; description?: string }) => of({})),
@@ -152,36 +175,6 @@ describe('MonitorNextPage', () => {
     expect(curl).toContain('--data \'{"a":1}\'');
   });
 
-  it('crea un mock dalla request/response catturata', () => {
-    apiStub.createMock.mockClear();
-    const { c } = create();
-    c.createMockFromEntry(ENTRIES[0]);
-    expect(apiStub.createMock).toHaveBeenCalledTimes(1);
-    const arg = apiStub.createMock.mock.calls[0][0];
-    expect(arg.config).toEqual(expect.objectContaining({ method: 'POST', path: '/api/orders', status: 201, bodyFile: '001.response.json' }));
-    expect(arg.body).toEqual({});
-  });
-
-  it('createMockFromEntry riporta il content-type della response e scarta gli header calcolati', () => {
-    apiStub.createMock.mockClear();
-    const { c } = create();
-    c.createMockFromEntry(entry({ id: 'h', method: 'GET', status: 200, source: 'backend', originalUrl: '/api/x', responseHeaders: { 'content-type': 'application/xml', 'content-length': '123' }, responseBody: '<a/>' }));
-    expect(apiStub.createMock).toHaveBeenCalledTimes(1);
-    expect(apiStub.createMock.mock.calls[0][0].config['headers']).toEqual({ 'content-type': 'application/xml' });
-  });
-
-  it('createMockFromEntry crea uno skeleton (body vuoto + descrizione) per body troncati o binari', () => {
-    apiStub.createMock.mockClear();
-    const { c } = create();
-    c.createMockFromEntry(entry({ id: 't', method: 'GET', status: 200, source: 'backend', responseBody: '{"a":1}', responseBodyTruncated: true }));
-    c.createMockFromEntry(entry({ id: 'b', method: 'GET', status: 200, source: 'backend', responseBody: '[binary payload: 999 bytes]' }));
-    expect(apiStub.createMock).toHaveBeenCalledTimes(2);
-    for (const [req] of apiStub.createMock.mock.calls) {
-      expect(req.body).toEqual({});
-      expect(req.description).toContain('[da completare]');
-    }
-  });
-
   it('"Vai al mock" naviga al catalogo con metodo e route', () => {
     const router = TestBed.inject(Router);
     const navSpy = vi.spyOn(router, 'navigate').mockResolvedValue(true);
@@ -219,104 +212,136 @@ describe('MonitorNextPage', () => {
     expect(c.coveringMock()).toBeNull();
   });
 
-  it('il toast di creazione offre l\'azione "apri il mock creato" che naviga al catalogo', () => {
-    apiStub.createMock.mockClear();
-    apiStub.createMock.mockReturnValue(of({ id: 'nuovo', method: 'GET', path: '/api/users/42', disabled: false }) as never);
-    const router = TestBed.inject(Router);
-    const navSpy = vi.spyOn(router, 'navigate').mockResolvedValue(true);
+  // Piano agent/API, §13 C7: la pagina non trasforma più le catture, lo fa il server.
+  describe('creazione di mock dal traffico', () => {
+    beforeEach(() => {
+      apiStub.createMocksFromMonitor.mockReset();
+      apiStub.createMocksFromMonitor.mockReturnValue(of(createResult([captureItem()])));
+      dialogStub.open.mockClear();
+    });
 
-    const { c } = create();
-    c.createMockFromEntry(ENTRIES[1]);
+    it('chiede al server di creare il mock dalla cattura, col runtime delle voci mostrate', () => {
+      const { c } = create();
+      c.createMockFromEntry(ENTRIES[1]);
+      expect(apiStub.createMocksFromMonitor).toHaveBeenCalledWith({
+        runtimeId: 'rt-1',
+        ids: ['2'],
+        onConflict: 'skip',
+        selectAddedVariants: false,
+        newEndpointEnabled: true,
+      });
+      expect(c.toast.toasts().at(-1)).toMatchObject({ title: 'Mock creato', tone: 'success' });
+    });
 
-    const toast = c.toast.toasts().at(-1);
-    expect(toast.action).toBeDefined();
-    toast.action.run();
-    expect(navSpy).toHaveBeenCalledWith(['/mocks'], { queryParams: { m: 'GET', p: '/api/users/42' } });
-  });
+    it('senza «Attiva subito» il nuovo endpoint nasce disattivato e lo si dichiara', () => {
+      const { c } = create();
+      c.activateNewMocks.set(false);
+      c.createMockFromEntry(ENTRIES[1]);
+      expect(apiStub.createMocksFromMonitor.mock.calls[0][0]).toMatchObject({ newEndpointEnabled: false });
+      expect(c.toast.toasts().at(-1)).toMatchObject({ title: 'Mock creato senza attivarlo' });
+    });
 
-  it('su 409 con existingMockId apre il dialog di conferma invece del toast di errore', () => {
-    apiStub.createMock.mockClear();
-    dialogStub.open.mockClear();
-    apiStub.createMock.mockReturnValue(
-      throwError(() => ({ status: 409, error: { details: { existingMockId: 'endpoint-esistente' } } })) as never,
-    );
+    it('una cattura incompleta si dichiara come bozza da completare', () => {
+      apiStub.createMocksFromMonitor.mockReturnValue(of(createResult([captureItem({ captureOutcome: 'incomplete', warnings: [{ code: 'INCOMPLETE_CAPTURE', reason: 'binary' }] })], { incomplete: 1 })));
+      const { c } = create();
+      c.createMockFromEntry(ENTRIES[1]);
+      expect(c.toast.toasts().at(-1)).toMatchObject({ title: 'Mock creato (skeleton)', tone: 'warning' });
+    });
 
-    const { c } = create();
-    c.createMockFromEntry(ENTRIES[1]);
+    it('il toast di creazione apre il mock creato, con metodo e rotta dell\'esito', () => {
+      apiStub.createMocksFromMonitor.mockReturnValue(of(createResult([captureItem({ path: '/api/users/:id' })])));
+      const router = TestBed.inject(Router);
+      const navSpy = vi.spyOn(router, 'navigate').mockResolvedValue(true);
+      const { c } = create();
+      c.createMockFromEntry(ENTRIES[1]);
+      c.toast.toasts().at(-1).action.run();
+      expect(navSpy).toHaveBeenCalledWith(['/mocks'], { queryParams: { m: 'GET', p: '/api/users/:id' } });
+    });
 
-    expect(dialogStub.open).toHaveBeenCalledTimes(1);
-    expect(c.mockExistsPrompt()).toMatchObject({ existingMockId: 'endpoint-esistente' });
-  });
+    it('con l\'endpoint già esistente apre il dialog invece di un errore', () => {
+      apiStub.createMocksFromMonitor.mockReturnValue(of(createResult([captureItem({ id: 'endpoint-esistente', responseFile: null, writeOutcome: 'skipped', runtimeOutcome: 'not_applicable' })], { created: 0, skipped: 1 })));
+      const { c } = create();
+      c.createMockFromEntry(ENTRIES[1]);
+      expect(dialogStub.open).toHaveBeenCalledTimes(1);
+      expect(c.mockExistsPrompt()).toMatchObject({ existingMockId: 'endpoint-esistente', method: 'GET', path: '/api/users/42' });
+    });
 
-  it('la conferma aggiunge la response catturata come variante dell\'endpoint esistente', () => {
-    apiStub.createMock.mockClear();
-    apiStub.createResponse.mockClear();
-    apiStub.createMock.mockReturnValue(
-      throwError(() => ({ status: 409, error: { details: { existingMockId: 'endpoint-esistente' } } })) as never,
-    );
-    apiStub.createResponse.mockReturnValue(of({ id: 'endpoint-esistente', method: 'GET', path: '/api/users/42' }) as never);
-    const router = TestBed.inject(Router);
-    const navSpy = vi.spyOn(router, 'navigate').mockResolvedValue(true);
+    it('la conferma aggiunge la cattura come variante selezionata; «Aggiungi senza attivare» no', () => {
+      const skipped = createResult([captureItem({ id: 'endpoint-esistente', responseFile: null, writeOutcome: 'skipped' })], { created: 0, skipped: 1 });
+      const added = createResult([captureItem({ id: 'endpoint-esistente', responseFile: '002.response.json', writeOutcome: 'variant_added' })], { created: 0, addedVariants: 1 });
+      const router = TestBed.inject(Router);
+      const navSpy = vi.spyOn(router, 'navigate').mockResolvedValue(true);
+      const { c } = create();
 
-    const { c } = create();
-    c.createMockFromEntry(entry({ id: 'k', method: 'GET', status: 200, source: 'backend', originalUrl: '/api/users/42', responseHeaders: { 'content-type': 'application/json' }, responseBody: '{"v":2}' }));
-    c.confirmAddResponseToExisting();
+      apiStub.createMocksFromMonitor.mockReturnValueOnce(of(skipped)).mockReturnValueOnce(of(added));
+      c.createMockFromEntry(ENTRIES[1]);
+      c.confirmAddResponseToExisting();
+      expect(apiStub.createMocksFromMonitor.mock.calls[1][0]).toMatchObject({ ids: ['2'], onConflict: 'add-variant', selectAddedVariants: true });
+      expect(c.mockExistsPrompt()).toBeNull();
+      c.toast.toasts().at(-1).action.run();
+      expect(navSpy).toHaveBeenCalledWith(['/mocks'], { queryParams: { m: 'GET', p: '/api/users/42' } });
 
-    expect(apiStub.createResponse).toHaveBeenCalledTimes(1);
-    const [idArg, payloadArg] = apiStub.createResponse.mock.calls[0];
-    expect(idArg).toBe('endpoint-esistente');
-    expect(payloadArg).toMatchObject({ type: 'mock', status: 200, body: { v: 2 } });
-    expect(payloadArg['title']).toContain('dal monitor');
-    expect(c.mockExistsPrompt()).toBeNull();
+      apiStub.createMocksFromMonitor.mockReturnValueOnce(of(skipped)).mockReturnValueOnce(of(added));
+      c.createMockFromEntry(ENTRIES[1]);
+      c.confirmAddResponseToExisting(false);
+      expect(apiStub.createMocksFromMonitor.mock.calls[3][0]).toMatchObject({ onConflict: 'add-variant', selectAddedVariants: false });
+      expect(c.toast.toasts().at(-1)).toMatchObject({ title: 'Variante aggiunta senza attivarla' });
+    });
 
-    // Il toast di esito offre la navigazione al mock.
-    const toast = c.toast.toasts().at(-1);
-    toast.action.run();
-    expect(navSpy).toHaveBeenCalledWith(['/mocks'], { queryParams: { m: 'GET', p: '/api/users/42' } });
-  });
+    it('l\'annullo chiude il dialog senza aggiungere varianti', () => {
+      apiStub.createMocksFromMonitor.mockReturnValue(of(createResult([captureItem({ id: 'endpoint-esistente', writeOutcome: 'skipped' })], { created: 0, skipped: 1 })));
+      const { c } = create();
+      c.createMockFromEntry(ENTRIES[1]);
+      c.cancelAddResponseToExisting();
+      expect(apiStub.createMocksFromMonitor).toHaveBeenCalledTimes(1);
+      expect(c.mockExistsPrompt()).toBeNull();
+    });
 
-  it('«Aggiungi senza attivare» conserva la response catturata senza cambiare quella servita', () => {
-    apiStub.createMock.mockClear();
-    apiStub.createResponse.mockClear();
-    apiStub.createMock.mockReturnValue(
-      throwError(() => ({ status: 409, error: { details: { existingMockId: 'endpoint-esistente' } } })) as never,
-    );
-    apiStub.createResponse.mockReturnValue(of({ id: 'endpoint-esistente', method: 'GET', path: '/api/users/42' }) as never);
+    it('una cattura non più disponibile lo dice', () => {
+      apiStub.createMocksFromMonitor.mockReturnValue(of(createResult([captureItem({ method: null, path: null, id: null, responseFile: null, writeOutcome: 'skipped', captureOutcome: 'unavailable' })], { created: 0, unavailable: 1 })));
+      const { c } = create();
+      c.createMockFromEntry(ENTRIES[1]);
+      expect(dialogStub.open).not.toHaveBeenCalled();
+      expect(c.toast.toasts().at(-1)).toMatchObject({ title: 'Cattura non più disponibile', tone: 'error' });
+    });
 
-    const { c } = create();
-    c.createMockFromEntry(entry({ id: 'k', method: 'GET', status: 200, source: 'backend', originalUrl: '/api/users/42', responseHeaders: { 'content-type': 'application/json' }, responseBody: '{"v":2}' }));
-    c.confirmAddResponseToExisting(false);
+    it('motore ripartito, risposta persa ed errori: un solo tentativo, nessuna ripetizione cieca', () => {
+      const { c } = create();
+      apiStub.createMocksFromMonitor.mockReturnValueOnce(throwError(() => ({ status: 409, error: { details: { code: 'RUNTIME_CHANGED', runtimeId: 'rt-2' } } })));
+      c.createMockFromEntry(ENTRIES[1]);
+      expect(c.toast.toasts().at(-1)).toMatchObject({ title: 'Il motore è ripartito' });
 
-    const [, payloadArg] = apiStub.createResponse.mock.calls[0];
-    expect(payloadArg).toMatchObject({ type: 'mock', body: { v: 2 }, select: false });
-    expect(c.toast.toasts().at(-1)).toMatchObject({ title: 'Variante aggiunta senza attivarla' });
-  });
+      apiStub.createMocksFromMonitor.mockReturnValueOnce(throwError(() => ({ status: 0 })));
+      c.createMockFromEntry(ENTRIES[1]);
+      expect(c.toast.toasts().at(-1)).toMatchObject({ title: 'Esito sconosciuto' });
 
-  it('l\'annullo chiude il dialog senza aggiungere varianti', () => {
-    apiStub.createMock.mockClear();
-    apiStub.createResponse.mockClear();
-    apiStub.createMock.mockReturnValue(
-      throwError(() => ({ status: 409, error: { details: { existingMockId: 'endpoint-esistente' } } })) as never,
-    );
+      apiStub.createMocksFromMonitor.mockReturnValueOnce(throwError(() => ({ status: 500, error: { message: 'boom' } })));
+      c.createMockFromEntry(ENTRIES[1]);
+      expect(c.toast.toasts().at(-1)).toMatchObject({ tone: 'error', description: 'boom' });
+      expect(apiStub.createMocksFromMonitor).toHaveBeenCalledTimes(3);
+      expect(dialogStub.open).not.toHaveBeenCalled();
+    });
 
-    const { c } = create();
-    c.createMockFromEntry(ENTRIES[1]);
-    c.cancelAddResponseToExisting();
+    it('un batch fallito dopo la scrittura riporta quanto è stato scritto, varianti comprese', () => {
+      const skipped = createResult([captureItem({ id: 'endpoint-esistente', responseFile: null, writeOutcome: 'skipped' })], { created: 0, skipped: 1 });
+      const partial = createResult([captureItem({ id: 'endpoint-esistente', responseFile: '002.response.json', writeOutcome: 'variant_added', runtimeOutcome: 'not_applied' })], { created: 0, addedVariants: 1 });
+      const { c } = create();
+      apiStub.createMocksFromMonitor
+        .mockReturnValueOnce(of(skipped))
+        .mockReturnValueOnce(throwError(() => ({ status: 500, error: { message: 'reload fallito', details: { code: 'BATCH_RUNTIME_FAILED', result: partial } } })));
+      c.createMockFromEntry(ENTRIES[1]);
+      c.confirmAddResponseToExisting();
+      expect(c.toast.toasts().at(-1)).toMatchObject({ tone: 'error', description: 'reload fallito Scritto finora: 0 create, 1 varianti aggiunte.' });
+    });
 
-    expect(apiStub.createResponse).not.toHaveBeenCalled();
-    expect(c.mockExistsPrompt()).toBeNull();
-  });
-
-  it('un errore di creazione senza existingMockId mostra il toast di errore', () => {
-    apiStub.createMock.mockClear();
-    dialogStub.open.mockClear();
-    apiStub.createMock.mockReturnValue(throwError(() => ({ status: 500, error: { message: 'boom' } })) as never);
-
-    const { c } = create();
-    c.createMockFromEntry(ENTRIES[1]);
-
-    expect(dialogStub.open).not.toHaveBeenCalled();
-    expect(c.toast.toasts().at(-1).tone).toBe('error');
+    it('senza il runtime delle voci non crea niente', () => {
+      const stream = TestBed.inject(MonitorStreamStore) as unknown as { runtimeId: () => string | null };
+      const { c } = create();
+      vi.spyOn(stream, 'runtimeId').mockReturnValue(null);
+      c.createMockFromEntry(ENTRIES[1]);
+      expect(apiStub.createMocksFromMonitor).not.toHaveBeenCalled();
+      expect(c.toast.toasts().at(-1)).toMatchObject({ title: 'Monitor non ancora collegato' });
+    });
   });
 
   it("la voce 'Backend vero' filtra tutto ciò che non è uscito da mock/handler", () => {
@@ -325,15 +350,18 @@ describe('MonitorNextPage', () => {
     expect(c.filtered().map((e: RequestMonitorEntry) => e.id)).toEqual(['2', '3']); // id1 = mock
   });
 
-  it('crea mock massivo dalle entry selezionate ed esce dalla selezione', () => {
-    apiStub.createMock.mockClear();
+  it('crea mock massivi con una sola richiesta, nell\'ordine di cattura, ed esce dalla selezione', () => {
+    apiStub.createMocksFromMonitor.mockReset();
+    apiStub.createMocksFromMonitor.mockReturnValue(of(createResult([captureItem({ requestId: '2' }), captureItem({ requestId: '3', writeOutcome: 'skipped' })], { created: 1, skipped: 1 })));
     const { c } = create();
     c.enterSelection();
-    c.toggleSelection('2');
     c.toggleSelection('3');
+    c.toggleSelection('2');
     expect(c.selectedCount()).toBe(2);
     c.createMocksFromSelected();
-    expect(apiStub.createMock).toHaveBeenCalledTimes(2);
+    expect(apiStub.createMocksFromMonitor).toHaveBeenCalledTimes(1);
+    expect(apiStub.createMocksFromMonitor.mock.calls[0][0]).toMatchObject({ ids: ['2', '3'], onConflict: 'skip', newEndpointEnabled: true });
+    expect(c.toast.toasts().at(-1).description).toBe('1 create, 1 già esistenti');
     expect(c.selectionMode()).toBe(false);
   });
 });

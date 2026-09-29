@@ -42,6 +42,8 @@ import {
   DumpReadPage,
   DumpSelection,
   DumpCreateMocksResult,
+  MonitorCreateMocksRequest,
+  MonitorCreateMocksResult,
   ResponseUpdateRequest,
   SelectResponseRequest,
   ResponseSequenceCreateRequest,
@@ -421,6 +423,14 @@ export class MockAdminApiService {
   }
 
   /** Creazione massiva di mock dal dump (criterio: tutto un file oppure un insieme di chiavi). */
+  /**
+   * Crea mock da voci del Monitor, sul server e con le regole condivise con lo Storico (§13 C7).
+   * Un batch non è idempotente: senza risposta non si ripete, si ricontrolla il catalogo.
+   */
+  createMocksFromMonitor(request: MonitorCreateMocksRequest): Observable<MonitorCreateMocksResult> {
+    return this.http.post<MonitorCreateMocksResult>(`${this.baseUrl}/monitoring/requests/create-mocks`, request);
+  }
+
   createMocksFromDump(selection: DumpSelection): Observable<DumpCreateMocksResult> {
     return this.http.post<DumpCreateMocksResult>(`${this.baseUrl}/monitoring/dumps/create-mocks`, selection);
   }

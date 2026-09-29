@@ -168,7 +168,7 @@ then start the scenario.
 | `GET /monitoring/requests/:id?runtimeId=…` | one complete entry by id, in the given runtime: `{ runtimeId, item }`; `409 RUNTIME_CHANGED` if the engine restarted, `404 REQUEST_NOT_AVAILABLE` if the entry was evicted, cleared or never existed |
 | `POST /monitoring/requests/create-mocks` | creates mocks from monitor entries, in the order given — body `{ runtimeId, ids, onConflict, selectAddedVariants?, newEndpointEnabled }`; [rules and outcomes](#creating-mocks-from-traffic) |
 | `DELETE /monitoring/requests` | clears the live view (the archives are untouched) |
-| `GET /monitoring/requests/stream` | live event stream (SSE) |
+| `GET /monitoring/requests/stream` | live event stream (SSE); the first event, `snapshot`, carries the current entries and the `runtimeId` their IDs belong to |
 | `GET /monitoring/dump` | state of the disk writing |
 | `PATCH /monitoring/dump` | turns it on/off and adjusts cadence/threshold at runtime — body `{ enabled?, intervalMs?, threshold? }` |
 | `POST /monitoring/dump/flush` | manual flush; body `{}`; answers with the number of entries written |

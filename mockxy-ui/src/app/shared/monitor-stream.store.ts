@@ -34,6 +34,12 @@ export class MonitorStreamStore {
   readonly loading = this._loading.asReadonly();
   private readonly _clearing = signal(false);
   readonly clearing = this._clearing.asReadonly();
+  private readonly _runtimeId = signal<string | null>(null);
+  /**
+   * Runtime a cui appartengono le voci mostrate, dichiarato dallo snapshot: gli ID ripartono a ogni
+   * avvio, e chi crea mock da queste catture deve mandare questo, non il runtime di adesso.
+   */
+  readonly runtimeId = this._runtimeId.asReadonly();
   /** Lo stream si è chiuso per un errore, non per una pausa: si riapre appena il motore risponde. */
   private interrupted = false;
   private retryTimer?: ReturnType<typeof setTimeout>;
@@ -46,6 +52,9 @@ export class MonitorStreamStore {
     inject(RuntimeSyncStore)
       .events$.pipe(takeUntilDestroyed())
       .subscribe((event) => {
+        if (event.kind === 'runtime') {
+          this.forgetRuntime();
+        }
         if (event.kind === 'runtime' && (this._streaming() || this.interrupted)) {
           this.clearRetry();
           this.close();
@@ -128,11 +137,17 @@ export class MonitorStreamStore {
     this._loading.set(false);
   }
 
+  /** Nuovo runtime: le voci mostrate non appartengono più a quello corrente finché non arriva il nuovo snapshot. */
+  private forgetRuntime(): void {
+    this._runtimeId.set(null);
+  }
+
   private applyStreamEvent(event: RequestMonitorStreamEvent): void {
     this._loading.set(false);
     this.interrupted = false;
     this.retryDelay = STREAM_RETRY_MS;
     if (event.type === 'snapshot') {
+      this._runtimeId.set(event.runtimeId ?? null);
       this._entries.set(event.items);
       return;
     }

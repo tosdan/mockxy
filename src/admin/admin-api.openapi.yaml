@@ -3794,10 +3794,14 @@ components:
       oneOf:
         - type: object
           title: snapshot
-          description: Sent once, right after the stream opens.
+          description: |
+            Sent once, right after the stream opens. `runtimeId` is the runtime the entries belong
+            to: ids restart at every start, so send it with them (e.g. to
+            `POST /monitoring/requests/create-mocks`). A new runtime means a new connection.
           required: [type, items]
           properties:
             type: { type: string, const: snapshot }
+            runtimeId: { type: [string, "null"] }
             items:
               type: array
               items: { $ref: "#/components/schemas/MonitorEntry" }
