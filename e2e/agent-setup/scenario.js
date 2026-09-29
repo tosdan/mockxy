@@ -8,9 +8,12 @@ const JSON_HEADERS = { "content-type": "application/json" };
 const ORDERS = { method: "GET", path: "/agent-test/orders", target: "001.response.json", alternative: "002.response.json" };
 const PROGRESS = { method: "GET", path: "/agent-test/progress", pending: "001.response.json", done: "002.response.json", sequence: "003.response.json" };
 
-const ORDERS_TARGET = { type: "mock", title: "Ordini", status: 200, headers: JSON_HEADERS, delayMs: 0, body: { orders: [{ id: "o-1" }] } };
-const PROGRESS_PENDING = { type: "mock", title: "In corso", status: 202, headers: JSON_HEADERS, delayMs: 0, body: { state: "pending" } };
-const PROGRESS_DONE = { type: "mock", title: "Completato", status: 200, headers: JSON_HEADERS, delayMs: 0, body: { state: "done" } };
+// Contenuti dichiarati per intero: un aggiornamento conserva i campi omessi (un ritardo o il
+// templating lasciati da una prova precedente resterebbero).
+const MOCK_DEFAULTS = { type: "mock", headers: JSON_HEADERS, delayMs: 0, templated: false };
+const ORDERS_TARGET = { ...MOCK_DEFAULTS, title: "Ordini", status: 200, body: { orders: [{ id: "o-1" }] } };
+const PROGRESS_PENDING = { ...MOCK_DEFAULTS, title: "In corso", status: 202, body: { state: "pending" } };
+const PROGRESS_DONE = { ...MOCK_DEFAULTS, title: "Completato", status: 200, body: { state: "done" } };
 // Primo step servito una volta, l'ultimo senza criterio; onEnd "stay"; nessun reset per inattività.
 const PROGRESS_SEQUENCE = {
   type: "sequence",

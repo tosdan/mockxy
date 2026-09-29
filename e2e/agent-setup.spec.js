@@ -54,6 +54,14 @@ test.describe("E22 · setup ripetibile via API", () => {
     const admin = await connect();
     const orders = await admin.findEndpoint(ORDERS.method, ORDERS.path);
     await admin.select(orders.id, ORDERS.alternative);
+    // Una prova precedente ha lasciato sul target un ritardo lungo e il templating acceso: un
+    // aggiornamento conserva i campi omessi, quindi il setup deve dichiararli.
+    const leftover = await fetch(`${AGENT_BACKEND}/_admin/api/mocks/${orders.id}/responses/${ORDERS.target}`, {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ type: "mock", delayMs: 30000, templated: true }),
+    });
+    expect(leftover.status).toBe(200);
     // La sequence si consuma prima del setup, mai fra il reset e la prova.
     await fetch(`${AGENT_BACKEND}${PROGRESS.path}`);
     await fetch(`${AGENT_BACKEND}${PROGRESS.path}`);
@@ -141,6 +149,43 @@ test.describe("E22 · diagnostica del setup", () => {
     const step = await admin.readVariant(progress.id, PROGRESS.pending);
     expect(step).toMatchObject({ selected: false, active: true });
     await expect(admin.prepareVariant(progress.id, PROGRESS.pending, { title: "Senza dichiararlo" })).rejects.toMatchObject({ code: "ACTIVE_VARIANT" });
+  });
+
+  // Codex, #34: la scadenza vale per tutta l'attesa, anche con una risposta lenta o durante una
+  // paginazione che non finisce.
+  test("la scadenza del traffico interrompe una risposta lenta e una paginazione senza fine", async () => {
+    let slowCalls = 0;
+    const server = http.createServer((req, res) => {
+      const url = new URL(req.url, "http://stub");
+      const since = Number(url.searchParams.get("since"));
+      const page = (runtimeId) => JSON.stringify({
+        items: [],
+        cursor: { runtimeId, generation: 1, since: String(since + 1) },
+        hasMore: true,
+        gap: false,
+        gapReason: null,
+        available: { oldestId: null, newestId: null, highWatermark: String(since + 1) },
+      });
+      if (url.searchParams.get("runtimeId") === "slow") {
+        slowCalls += 1;
+        setTimeout(() => res.writeHead(200, { "content-type": "application/json" }).end(page("slow")), 2000);
+        return;
+      }
+      res.writeHead(200, { "content-type": "application/json" }).end(page("paged"));
+    });
+    await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+    try {
+      const admin = new MockxyAdmin(`http://127.0.0.1:${server.address().port}`);
+      for (const runtimeId of ["slow", "paged"]) {
+        const started = Date.now();
+        await expect(admin.readTraffic({ runtimeId, generation: 1, since: "0" }, {}, { timeoutMs: 100 })).rejects.toMatchObject({ code: "TRAFFIC_TIMEOUT" });
+        expect(Date.now() - started).toBeLessThan(1000);
+      }
+      expect(slowCalls).toBe(1);
+    } finally {
+      server.closeAllConnections();
+      await new Promise((resolve) => server.close(resolve));
+    }
   });
 
   test("un gap del Monitor ferma la verifica invece di concludere «nessuna richiesta»", async () => {

@@ -36,11 +36,12 @@ class MockxyAdmin {
     this.runtimeId = null;
   }
 
-  async request(method, path, body) {
+  async request(method, path, body, { signal } = {}) {
     const response = await fetch(`${this.baseUrl}/_admin/api${path}`, {
       method,
       headers: body === undefined ? {} : { "content-type": "application/json" },
       body: body === undefined ? undefined : JSON.stringify(body),
+      signal,
     });
     const text = await response.text();
     let data = null;
@@ -66,8 +67,8 @@ class MockxyAdmin {
     throw new SetupError("NOT_APPLIED", `${what}: ${res.status}${code ? ` ${code}` : ""} — ${res.data?.message ?? res.data}`, res.data?.details);
   }
 
-  async read(path, what) {
-    const res = await this.request("GET", path);
+  async read(path, what, options) {
+    const res = await this.request("GET", path, undefined, options);
     if (!res.ok) {
       throw new SetupError("READ_FAILED", `${what}: ${res.status} — ${res.data?.message ?? res.data}`, res.data?.details);
     }
@@ -192,14 +193,21 @@ class MockxyAdmin {
    * Il traffico successivo al cursore, con gli stessi filtri, fino a quando `until(items)` è vero
    * o scade `timeoutMs`. Continua dall'ultimo cursore letto, quindi non rilegge né salta voci. Un
    * gap (riavvio, clear, espulsione) ferma la verifica: una lista vuota non vorrebbe dire nulla.
+   * La scadenza vale per tutta l'attesa: si controlla prima di ogni pagina e interrompe la
+   * richiesta in corso, anche durante una paginazione lunga o una risposta lenta.
    */
   async readTraffic(cursor, filters = {}, { until = () => true, timeoutMs = 5000, intervalMs = 100 } = {}) {
     const deadline = Date.now() + timeoutMs;
     const items = [];
+    const timedOut = () => new SetupError("TRAFFIC_TIMEOUT", `The expected traffic did not show up within ${timeoutMs} ms after the cursor; seen: ${items.map((item) => `${item.method} ${item.path} ${item.status}`).join(", ") || "nothing"}.`);
     let current = cursor;
     for (;;) {
       let hasMore = true;
       while (hasMore) {
+        const remaining = deadline - Date.now();
+        if (remaining <= 0) {
+          throw timedOut();
+        }
         const query = new URLSearchParams({
           view: "page",
           limit: "250",
@@ -208,7 +216,17 @@ class MockxyAdmin {
           runtimeId: current.runtimeId,
           generation: String(current.generation),
         });
-        const page = await this.read(`/monitoring/requests?${query}`, "Reading the monitor");
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), remaining);
+        let page;
+        try {
+          page = await this.read(`/monitoring/requests?${query}`, "Reading the monitor", { signal: controller.signal });
+        } catch (error) {
+          if (controller.signal.aborted) throw timedOut();
+          throw error;
+        } finally {
+          clearTimeout(timer);
+        }
         if (page.gap) {
           throw new SetupError("MONITOR_GAP", `Monitor traffic was lost since the cursor (${page.gapReason}): the check cannot conclude.`, { gapReason: page.gapReason, available: page.available });
         }
@@ -219,10 +237,11 @@ class MockxyAdmin {
       if (until(items)) {
         return items;
       }
-      if (Date.now() >= deadline) {
-        throw new SetupError("TRAFFIC_TIMEOUT", `The expected traffic did not show up within ${timeoutMs} ms after the cursor; seen: ${items.map((item) => `${item.method} ${item.path} ${item.status}`).join(", ") || "nothing"}.`);
+      const remaining = deadline - Date.now();
+      if (remaining <= 0) {
+        throw timedOut();
       }
-      await new Promise((resolve) => setTimeout(resolve, intervalMs));
+      await new Promise((resolve) => setTimeout(resolve, Math.min(intervalMs, remaining)));
     }
   }
 }
