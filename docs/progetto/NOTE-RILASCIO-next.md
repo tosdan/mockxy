@@ -1,10 +1,13 @@
 # Note di rilascio
 
-## Prossima versione
+## v1.4.0
 
-Documento provvisorio: il numero di versione verrà assegnato durante il rilascio, secondo la
-politica di versionamento del §1 di [PROCEDURA-RILASCIO.md](PROCEDURA-RILASCIO.md). I workspace
-esistenti restano compatibili: nessuna migrazione richiesta.
+Note dettagliate della release 1.4.0. I workspace esistenti restano compatibili:
+nessuna migrazione richiesta. La politica di versionamento è descritta nel §1 di
+[PROCEDURA-RILASCIO.md](PROCEDURA-RILASCIO.md).
+
+Le [note per la pubblicazione, in italiano e inglese](NOTE-RILASCIO-v1.4.0.md)
+riassumono le novità e rimandano a questo documento per i dettagli del contratto API.
 
 ### Cambiamenti dell'admin API
 
@@ -137,7 +140,7 @@ esistenti restano compatibili: nessuna migrazione richiesta.
   per filename conviene leggerne `active`: modificare uno step della sequence in uso cambia lo
   scenario in corso.
 
-### Stream SSE/WS preservati alle ricariche
+#### Stream SSE/WS preservati alle ricariche
 
 - **Prima:** ogni ricarica a caldo chiudeva tutte le connessioni SSE e WebSocket aperte, anche per
   una descrizione cambiata, una variante inattiva o un altro endpoint.
