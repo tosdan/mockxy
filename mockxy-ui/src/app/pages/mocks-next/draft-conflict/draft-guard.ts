@@ -28,6 +28,8 @@ export interface DraftConflictView {
   readonly confirmingReload: Signal<boolean>;
   readonly reloadUnsupported: Signal<boolean>;
   readonly reloaded: Signal<boolean>;
+  readonly remoteChanged: Signal<boolean>;
+  readonly blocked: Signal<boolean>;
   compare(): void;
   reload(): void;
   confirmReload(): void;
@@ -73,12 +75,17 @@ export class DraftGuard<T> implements DraftConflictView {
   readonly reloadUnsupported = signal(false);
   /** Ricarica riuscita: la bozza ora è la versione corrente (esito mostrato fino al salvataggio). */
   readonly reloaded = signal(false);
+  /** Una rilettura ha visto sul server una revisione diversa dalla base: salvare così darebbe 409. */
+  readonly remoteChanged = signal(false);
+  /** Il runtime serve un altro workspace: la bozza appartiene al precedente e non si salva. */
+  readonly blocked = signal(false);
 
-  readonly canSave = computed(() => this.target() !== null && !this.missing());
+  readonly canSave = computed(() => this.target() !== null && !this.missing() && !this.blocked());
 
   // Una risposta relativa a una bozza chiusa o riaperta non tocca quella attuale.
   private generation = 0;
   private pending?: Subscription;
+  private rechecking?: Subscription;
 
   constructor(private readonly options: DraftGuardOptions<T>) {}
 
@@ -100,7 +107,7 @@ export class DraftGuard<T> implements DraftConflictView {
    */
   saveWith(onSaved: () => void, revision?: string): GuardedSave | null {
     const target = this.target();
-    if (!target || this.missing()) {
+    if (!target || !this.canSave()) {
       return null;
     }
     const generation = this.generation;
@@ -127,6 +134,54 @@ export class DraftGuard<T> implements DraftConflictView {
         onSaved();
       },
     };
+  }
+
+  /**
+   * Esito di una rilettura di sincronizzazione del bersaglio: testo, bersaglio e base non cambiano.
+   * Segnala se il server ha una revisione diversa dalla base e, se la versione corrente è già
+   * mostrata accanto alla bozza, la aggiorna insieme alla sua revisione.
+   */
+  observe(version: RemoteVersion<T>): void {
+    const target = this.target();
+    if (!target?.baseRevision) {
+      return;
+    }
+    this.remoteChanged.set(version.revision !== target.baseRevision);
+    const shown = this.remote();
+    if (shown && shown.revision !== version.revision) {
+      this.remote.set(version);
+    }
+  }
+
+  /** La sincronizzazione non trova più il bersaglio: il testo resta, il salvataggio no. */
+  markMissing(): void {
+    if (this.target()) this.missing.set(true);
+  }
+
+  /** Il runtime serve un altro workspace: il salvataggio resta disabilitato. */
+  block(): void {
+    if (this.target()) this.blocked.set(true);
+  }
+
+  /**
+   * Rilegge il bersaglio per la sincronizzazione, quando nessun'altra lettura lo copre (variante
+   * della bozza diversa dalla selezionata). Una rilettura in volo, anche di confronto o ricarica,
+   * basta: non se ne sovrappone un'altra.
+   */
+  recheck(): void {
+    const target = this.target();
+    if (!target || (this.rechecking && !this.rechecking.closed) || this.loading()) {
+      return;
+    }
+    const generation = this.generation;
+    this.rechecking = this.options.load(target).subscribe({
+      next: (version) => {
+        if (generation === this.generation) this.observe(version);
+      },
+      error: (error) => {
+        if (generation === this.generation && isNotFoundError(error)) this.missing.set(true);
+      },
+    });
   }
 
   /** "Confronta": carica la versione corrente accanto alla bozza, senza sostituirla. */
@@ -159,6 +214,7 @@ export class DraftGuard<T> implements DraftConflictView {
       this.target.update((target) => target && { ...target, baseRevision: version.revision });
       this.conflict.set(null);
       this.remote.set(null);
+      this.remoteChanged.set(false);
       this.reloaded.set(true);
     });
   }
@@ -195,7 +251,11 @@ export class DraftGuard<T> implements DraftConflictView {
     this.generation += 1;
     this.pending?.unsubscribe();
     this.pending = undefined;
+    this.rechecking?.unsubscribe();
+    this.rechecking = undefined;
     this.conflict.set(null);
+    this.remoteChanged.set(false);
+    this.blocked.set(false);
     this.missing.set(false);
     this.remote.set(null);
     this.loading.set(false);

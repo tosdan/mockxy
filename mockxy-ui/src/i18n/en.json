@@ -116,7 +116,17 @@
     "loadErrors": "{{count}} definitions not loaded",
     "loadErrorsTitle": "Definitions not loaded",
     "loadErrorsHint": "These files are in the workspace but the engine discarded them: their endpoints do not appear in the catalog.",
-    "commands": "Commands"
+    "commands": "Commands",
+    "stale": "Not up to date",
+    "staleTip": "The engine is not responding: what you see may be out of date. Retrying every 2 seconds.",
+    "runtimeErrorsOne": "Runtime: 1 error",
+    "runtimeErrors": "Runtime: {{count}} errors",
+    "runtimeFailed": "Runtime: load failed",
+    "runtimeTitle": "Runtime load",
+    "runtimeHint": "Outcome of the last workspace load. A file with errors may still be served in its previous version.",
+    "runtimeFatal": "Load failed",
+    "servingRetained": "previous version still served",
+    "servingMissing": "not served"
   },
   "runtimeStatus": {
     "title": "Runtime",
@@ -469,7 +479,9 @@
     "unreadableTitle": "Change applied, detail not readable",
     "unreadableHint": "The change is saved on disk. Its description cannot be shown until the workspace file below is readable again.",
     "unreadableRetry": "Read again",
-    "variantInvalid": "unreadable"
+    "variantInvalid": "unreadable",
+    "endpointGone": "This endpoint no longer exists in the workspace. The detail stays as it was, but it no longer updates and changes can't be saved.",
+    "staleWorkspace": "The engine now serves another workspace: this detail belongs to the previous one. Open an endpoint to continue."
   },
   "createDialog": {
     "title": "New {{type}}",
@@ -611,7 +623,11 @@
     "reloadUnsupported": "The current version can't be edited in this form: the variant type changed. Your draft is unchanged.",
     "reloaded": "Draft reloaded from the current version.",
     "missingTitle": "This resource no longer exists",
-    "missingHint": "It was deleted or renamed after the draft was opened. The text stays here for you to copy; saving is disabled."
+    "missingHint": "It was deleted or renamed after the draft was opened. The text stays here for you to copy; saving is disabled.",
+    "remoteTitle": "The version on the server has changed",
+    "remoteHint": "Another change arrived after this draft was opened. Your text is unchanged: compare the current version or reload it; saving as is would be rejected.",
+    "blockedTitle": "The engine now serves another workspace",
+    "blockedHint": "This draft belongs to the previous workspace and can't be saved here. The text stays here to copy; open an endpoint to continue."
   },
   "openapiImport": {
     "title": "Import OpenAPI",

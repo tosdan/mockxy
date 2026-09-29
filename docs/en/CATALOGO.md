@@ -71,9 +71,16 @@ To serve a **binary file** (images, PDFs, archives) you upload the file directly
 variant — up to 12 MB via the UI — with the content-type remembered; the payload is served
 streaming as documented in the [responses page](RESPONSE.md).
 
+The catalog and the open endpoint update on their own when an agent, another window or a change
+to the files modifies them: while visible, the UI polls the engine every 2 seconds and reloads
+everything when you return to the window. If the engine does not respond, the bar at the bottom
+shows «Not up to date»; it also lists the errors of the last load, with what the runtime serves in
+their place (for example the previous version of a broken handler).
+
 The description, the variant form and the sequence dialog save to the resource they opened: if
 an agent or another client activates a different variant in the meantime, your edit stays on the
-original one. If the resource itself has changed, saving does not overwrite it: your draft is kept
+original one. Automatic updates never touch an open draft: if its resource changes, a notice tells
+you before you save. If the resource has changed, saving does not overwrite it: your draft is kept
 and a panel lets you **compare** it with the current version, **reload** the current version in
 place of your draft (with a confirmation if you edited it) or **save your version** after
 reviewing it. If the resource was deleted, the text stays there to copy and saving is disabled.

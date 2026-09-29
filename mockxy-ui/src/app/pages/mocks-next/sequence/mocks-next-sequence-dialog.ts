@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, DestroyRef, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, computed, effect, inject, signal, untracked } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { map } from 'rxjs';
 import { DIALOG_DATA, DialogRef } from '@angular/cdk/dialog';
@@ -25,7 +25,7 @@ import { MockAdminApiService } from '../../../mock-admin-api.service';
 import { MocksStore } from '../mocks-next.store';
 import { DraftGuard } from '../draft-conflict/draft-guard';
 import { MocksNextDraftConflict } from '../draft-conflict/draft-conflict-panel';
-import { variantVersion } from '../draft-conflict/variant-version';
+import { observeVariantDraft, recheckVariantDraft, variantVersion } from '../draft-conflict/variant-version';
 import type {
   MockDetail,
   ResponseSequenceCreateRequest,
@@ -246,6 +246,22 @@ export class MocksNextSequenceDialog {
     if (this.isEdit) {
       const detail = this.data.detail;
       this.guard.open({ endpointId: detail.id, responseFile: detail.selectedResponseFile ?? null, baseRevision: detail.responseRevision });
+      // Sincronizzazione (piano agent/API, §13 C4): il dettaglio riletto dallo store aggiorna ciò
+      // che la bozza sa del server, senza toccarne testo, bersaglio o base.
+      effect(() => {
+        const synced = { detail: this.store.selected(), gone: this.store.selectedGone(), staleWorkspace: this.store.staleWorkspace() };
+        untracked(() => observeVariantDraft(this.guard, synced));
+      });
+      effect(() => {
+        this.store.syncTick();
+        untracked(() =>
+          recheckVariantDraft(this.guard, {
+            detail: this.store.selected(),
+            gone: this.store.selectedGone(),
+            staleWorkspace: this.store.staleWorkspace(),
+          }),
+        );
+      });
       this.refreshState();
       const pollTimer = setInterval(() => this.refreshState(), STATE_POLL_MS);
       this.destroyRef.onDestroy(() => clearInterval(pollTimer));

@@ -1,10 +1,12 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { finalize } from 'rxjs';
 import { TranslocoService } from '@jsverse/transloco';
 import { MockAdminApiService } from '../mock-admin-api.service';
 import { ToastService } from '../ui/ui-toast/ui-toast';
 import type { MonitorDumpState } from '../mock-admin-api.types';
 import { readErrorMessage } from './read-error-message';
+import { RuntimeSyncStore, affects } from './runtime-sync.store';
 
 /**
  * Dump su disco dello storico monitor (NDJSON append-only), pilotato dalla barra globale. Root-scoped:
@@ -26,8 +28,35 @@ export class MonitorDumpStore {
   readonly enabled = computed(() => this._state()?.enabled ?? false);
   readonly pendingCount = computed(() => this._state()?.pendingCount ?? 0);
 
+  // Cresce a ogni azione dell'utente: una rilettura partita prima non la sovrascrive.
+  private changeEpoch = 0;
+
   constructor() {
+    inject(RuntimeSyncStore)
+      .events$.pipe(takeUntilDestroyed())
+      .subscribe((event) => {
+        if (affects(event, 'dump')) this.refresh();
+      });
     this.load();
+  }
+
+  /**
+   * Rilettura silenziosa per la sincronizzazione: un errore transitorio non nasconde il controllo
+   * (lo stato di collegamento sta nella status bar), e un'azione dell'utente in corso o arrivata
+   * nel frattempo vince.
+   */
+  refresh(): void {
+    if (this._busy()) {
+      return;
+    }
+    const epoch = this.changeEpoch;
+    this.api.getMonitorDumpState().subscribe({
+      next: (state) => {
+        if (epoch !== this.changeEpoch || this._busy()) return;
+        this._state.set(state);
+      },
+      error: () => undefined,
+    });
   }
 
   load(): void {
@@ -39,6 +68,7 @@ export class MonitorDumpStore {
 
   /** Attiva/disattiva la scrittura su disco dello storico. */
   setEnabled(enabled: boolean): void {
+    this.changeEpoch += 1;
     this._busy.set(true);
     this.api
       .setMonitorDumpState({ enabled })
@@ -58,6 +88,7 @@ export class MonitorDumpStore {
 
   /** Scrive subito su disco le request in coda. */
   flush(): void {
+    this.changeEpoch += 1;
     this._busy.set(true);
     this.api
       .flushMonitorDump()

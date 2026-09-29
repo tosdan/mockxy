@@ -116,7 +116,17 @@
     "loadErrors": "{{count}} definizioni non caricate",
     "loadErrorsTitle": "Definizioni non caricate",
     "loadErrorsHint": "Questi file stanno nel workspace ma il motore li ha scartati: i loro endpoint non compaiono nel catalogo.",
-    "commands": "Comandi"
+    "commands": "Comandi",
+    "stale": "Non aggiornato",
+    "staleTip": "Il motore non risponde: i dati mostrati possono non essere aggiornati. Nuovo tentativo ogni 2 secondi.",
+    "runtimeErrorsOne": "Runtime: 1 errore",
+    "runtimeErrors": "Runtime: {{count}} errori",
+    "runtimeFailed": "Runtime: caricamento fallito",
+    "runtimeTitle": "Caricamento del runtime",
+    "runtimeHint": "Esito dell'ultimo caricamento del workspace. Un file con errori può essere ancora servito nella versione precedente.",
+    "runtimeFatal": "Caricamento fallito",
+    "servingRetained": "servita la versione precedente",
+    "servingMissing": "non servito"
   },
   "runtimeStatus": {
     "title": "Runtime",
@@ -469,7 +479,9 @@
     "unreadableTitle": "Modifica applicata, dettaglio non leggibile",
     "unreadableHint": "La modifica è salvata su disco. La sua descrizione non è mostrabile finché il file del workspace qui sotto non torna leggibile.",
     "unreadableRetry": "Rileggi",
-    "variantInvalid": "non leggibile"
+    "variantInvalid": "non leggibile",
+    "endpointGone": "Questo endpoint non esiste più nel workspace. Il dettaglio resta com'era, ma non si aggiorna e le modifiche non si salvano.",
+    "staleWorkspace": "Il motore ora serve un altro workspace: questo dettaglio appartiene al precedente. Apri un endpoint per continuare."
   },
   "createDialog": {
     "title": "Nuovo {{type}}",
@@ -611,7 +623,11 @@
     "reloadUnsupported": "La versione attuale non si modifica in questo form: il tipo della variante è cambiato. La bozza resta com'è.",
     "reloaded": "Bozza ricaricata dalla versione attuale.",
     "missingTitle": "Questa risorsa non esiste più",
-    "missingHint": "È stata eliminata o rinominata dopo l'apertura della bozza. Il testo resta qui da copiare; il salvataggio è disabilitato."
+    "missingHint": "È stata eliminata o rinominata dopo l'apertura della bozza. Il testo resta qui da copiare; il salvataggio è disabilitato.",
+    "remoteTitle": "La versione sul server è cambiata",
+    "remoteHint": "Un'altra modifica è arrivata dopo l'apertura della bozza. Il tuo testo resta com'è: confronta la versione attuale o ricaricala; salvando così la modifica verrebbe rifiutata.",
+    "blockedTitle": "Il motore serve un altro workspace",
+    "blockedHint": "Questa bozza appartiene al workspace precedente e non si può salvare qui. Il testo resta da copiare; apri un endpoint per continuare."
   },
   "openapiImport": {
     "title": "Importa OpenAPI",

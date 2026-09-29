@@ -1,9 +1,11 @@
 import { computed, inject, Injectable, signal } from '@angular/core';
-import { Observable, concatMap, finalize, from, map, switchMap, toArray } from 'rxjs';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { Observable, catchError, concatMap, finalize, from, map, of, switchMap, toArray } from 'rxjs';
 import { TranslocoService } from '@jsverse/transloco';
 import { MockAdminApiService } from '../../mock-admin-api.service';
 import { isNotFoundError, isReadInconsistentError, readRevisionConflict } from '../../shared/read-error-message';
 import { ViewStateService } from '../../shared/view-state.service';
+import { RuntimeSyncStore, affects, type RuntimeSyncEvent } from '../../shared/runtime-sync.store';
 import {
   CollectionSummary,
   CreateResponseRequest,
@@ -89,6 +91,14 @@ export class MocksStore {
   private readonly api = inject(MockAdminApiService);
   private readonly transloco = inject(TranslocoService);
   private readonly viewState = inject(ViewStateService);
+  private syncing = false;
+  private syncQueued = false;
+
+  constructor() {
+    inject(RuntimeSyncStore)
+      .events$.pipe(takeUntilDestroyed())
+      .subscribe((event) => this.onSyncEvent(event));
+  }
 
   readonly mocks = signal<readonly MockSummary[]>([]);
   readonly collections = signal<readonly CollectionSummary[]>([]);
@@ -97,6 +107,18 @@ export class MocksStore {
   /** Definizioni presenti su disco ma scartate dal caricamento (es. formato legacy): il catalogo le segnala invece di farle sparire in silenzio. */
   readonly loadErrors = signal<readonly MockLoadError[]>([]);
   readonly selected = signal<MockDetail | undefined>(undefined);
+  /** La sincronizzazione non trova più l'endpoint aperto: il dettaglio resta, le bozze non si salvano. */
+  readonly selectedGone = signal(false);
+  /**
+   * Il runtime ora serve un altro workspace: il dettaglio aperto appartiene al precedente e non si
+   * aggiorna né si salva, neanche se la nuova istanza ha un endpoint con lo stesso id. Finisce
+   * quando l'utente apre un endpoint della nuova istanza.
+   */
+  readonly staleWorkspace = signal(false);
+  /** Cresce quando si apre una risorsa della nuova istanza: le bozze del workspace precedente decadono. */
+  readonly workspaceGeneration = signal(0);
+  /** Cresce a ogni rilettura di sincronizzazione applicata: le bozze su varianti non selezionate si ricontrollano. */
+  readonly syncTick = signal(0);
   /**
    * Motivo per cui il dettaglio dell'endpoint selezionato non è leggibile dopo una mutazione
    * RIUSCITA. Non è un errore dell'operazione: la modifica è su disco, è la sua descrizione a
@@ -208,7 +230,8 @@ export class MocksStore {
   reload(): void {
     this.loading.set(true);
     this.error.set(undefined);
-    const selId = this.selected()?.id;
+    // Col workspace cambiato il dettaglio aperto è del precedente: si riparte da una selezione nuova.
+    const selId = this.staleWorkspace() ? undefined : this.selected()?.id;
     this.api
       .listMocks()
       .pipe(finalize(() => this.loading.set(false)))
@@ -225,6 +248,7 @@ export class MocksStore {
             });
           } else {
             this.selected.set(undefined);
+            this.leaveStaleWorkspace();
             if (res.items.length > 0) this.selectMock(res.items[0].id);
           }
         },
@@ -232,9 +256,12 @@ export class MocksStore {
       });
   }
 
-  /** Carica il dettaglio di un endpoint e lo rende selezionato. */
+  /**
+   * Carica il dettaglio di un endpoint e lo rende selezionato. Dopo un cambio di workspace anche lo
+   * stesso id si rilegge: è una risorsa della nuova istanza, e aprirla chiude lo stato stantio.
+   */
   selectMock(id: string): void {
-    if (this.selected()?.id === id) {
+    if (this.selected()?.id === id && !this.staleWorkspace()) {
       return;
     }
     this.detailLoading.set(true);
@@ -243,9 +270,108 @@ export class MocksStore {
       .getMock(id)
       .pipe(finalize(() => this.detailLoading.set(false)))
       .subscribe({
-        next: (detail) => this.setSelected(detail),
+        next: (detail) => {
+          this.leaveStaleWorkspace();
+          this.setSelected(detail);
+        },
         error: (e) => this.error.set(this.detailReadErrorMessage(e)),
       });
+  }
+
+  private onSyncEvent(event: RuntimeSyncEvent): void {
+    if (event.kind === 'runtime' && event.workspaceChanged) {
+      this.onWorkspaceChanged();
+      return;
+    }
+    if (affects(event, 'catalog')) {
+      this.syncRefresh();
+    }
+  }
+
+  /**
+   * Rilettura di sincronizzazione (piano agent/API, §7 S4): catalogo e dettaglio aperto, senza
+   * indicatori di caricamento né toast. Una alla volta; se ne serve un'altra nel frattempo, una sola
+   * segue. Il risultato si scarta se, mentre era in volo, lo stato è cambiato per un'altra strada
+   * (mutazione, selezione, ricarica) o una mutazione è in corso: una rilettura in ritardo non
+   * sovrascrive una risposta più recente. Le bozze non si toccano: il dettaglio cambia, i loro
+   * bersagli e le loro basi no.
+   */
+  syncRefresh(): void {
+    if (this.syncing) {
+      this.syncQueued = true;
+      return;
+    }
+    if (this.mutationInFlight()) {
+      return;
+    }
+    this.syncing = true;
+    const before = { mocks: this.mocks(), collections: this.collections(), childOrder: this.childOrder(), selected: this.selected() };
+    // Col workspace cambiato il dettaglio aperto non si rilegge: lo stesso id nella nuova istanza è
+    // un'altra risorsa.
+    const selectedId = this.staleWorkspace() ? undefined : before.selected?.id;
+    this.api
+      .listMocks()
+      .pipe(
+        switchMap((res) =>
+          selectedId != null && res.items.some((item) => item.id === selectedId)
+            ? this.api.getMock(selectedId).pipe(
+                map((detail): MockDetail | null => detail),
+                // Dettaglio non leggibile adesso: resta quello mostrato, senza un toast a ogni giro.
+                catchError(() => of(null)),
+                map((detail) => ({ res, detail })),
+              )
+            : of({ res, detail: null }),
+        ),
+        finalize(() => {
+          this.syncing = false;
+          if (this.syncQueued) {
+            this.syncQueued = false;
+            this.syncRefresh();
+          }
+        }),
+      )
+      .subscribe({
+        next: ({ res, detail }) => {
+          const unchanged =
+            this.mocks() === before.mocks &&
+            this.collections() === before.collections &&
+            this.childOrder() === before.childOrder &&
+            this.selected() === before.selected;
+          if (!unchanged || this.mutationInFlight()) {
+            return;
+          }
+          this.applyCatalogResponse(res);
+          if (selectedId != null) {
+            this.selectedGone.set(!res.items.some((item) => item.id === selectedId));
+            if (detail) {
+              this.selected.set(detail);
+              this.detailUnavailable.set(undefined);
+            }
+          }
+          this.syncTick.update((tick) => tick + 1);
+        },
+        // Motore irraggiungibile: lo dice lo stato di collegamento nella status bar.
+        error: () => undefined,
+      });
+  }
+
+  /** Il runtime serve un altro workspace: si mostra il suo catalogo, il dettaglio aperto resta del precedente. */
+  private onWorkspaceChanged(): void {
+    this.staleWorkspace.set(this.selected() != null);
+    this.selectedGone.set(false);
+    this.syncRefresh();
+  }
+
+  /** Si apre una risorsa della nuova istanza: le bozze del workspace precedente decadono. */
+  private leaveStaleWorkspace(): void {
+    if (this.staleWorkspace()) {
+      this.staleWorkspace.set(false);
+      this.workspaceGeneration.update((generation) => generation + 1);
+    }
+  }
+
+  private mutationInFlight(): boolean {
+    return this.savingId() != null || this.erasingCollectionId() != null || this.creating();
   }
 
   /**
@@ -815,6 +941,7 @@ export class MocksStore {
 
   private setSelected(detail: MockDetail): void {
     this.selected.set(detail);
+    this.selectedGone.set(false);
     // Un dettaglio letto per intero chiude qualunque segnalazione di illeggibilità precedente,
     // da qualunque strada arrivi (ricarica, cambio di endpoint, mutazione successiva riuscita).
     this.detailUnavailable.set(undefined);

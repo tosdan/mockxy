@@ -145,4 +145,55 @@ describe('DraftGuard', () => {
     guard.saveWith(onSaved)!.onSuccess();
     expect(onSaved).toHaveBeenCalledTimes(1);
   });
+
+  describe('sincronizzazione', () => {
+    it('una rilettura con un’altra revisione lo segnala senza toccare bersaglio e base', () => {
+      guard.observe(version('corrente', REV_B));
+      expect(guard.remoteChanged()).toBe(true);
+      expect(guard.target()).toEqual(TARGET);
+      expect(apply).not.toHaveBeenCalled();
+
+      // A → B → A: tornato al contenuto della base, niente da segnalare.
+      guard.observe(version('come prima', REV_A));
+      expect(guard.remoteChanged()).toBe(false);
+    });
+
+    it('la versione già mostrata accanto alla bozza si aggiorna insieme alla sua revisione', () => {
+      guard.saveWith(noop)!.draft.onConflict!(CONFLICT);
+      guard.compare();
+      const rev = `rev-v1:${'c'.repeat(64)}`;
+      guard.observe(version('ancora più nuova', rev));
+      expect(guard.remote()?.revision).toBe(rev);
+      expect(guard.remote()?.data).toBe('ancora più nuova');
+    });
+
+    it('recheck rilegge il bersaglio: revisione diversa segnalata, 404 disabilita il salvataggio', () => {
+      guard.recheck();
+      expect(load).toHaveBeenCalledWith(TARGET);
+      expect(guard.remoteChanged()).toBe(true);
+
+      load.mockReturnValueOnce(throwError(() => ({ status: 404 })));
+      guard.recheck();
+      expect(guard.missing()).toBe(true);
+      expect(guard.canSave()).toBe(false);
+    });
+
+    it('recheck non si sovrappone a una lettura in volo', () => {
+      const pending = new Subject<RemoteVersion<string>>();
+      load.mockReturnValueOnce(pending);
+      guard.recheck();
+      guard.recheck();
+      expect(load).toHaveBeenCalledTimes(1);
+    });
+
+    it('con il workspace cambiato la bozza non si salva, e riaprendola si riparte puliti', () => {
+      guard.block();
+      expect(guard.canSave()).toBe(false);
+      expect(guard.saveWith(noop)).toBeNull();
+
+      guard.open(TARGET);
+      expect(guard.blocked()).toBe(false);
+      expect(guard.remoteChanged()).toBe(false);
+    });
+  });
 });

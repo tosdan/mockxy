@@ -1,10 +1,12 @@
 import { Injectable, inject, signal } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { Subscription, finalize } from 'rxjs';
 import { TranslocoService } from '@jsverse/transloco';
 import { MockAdminApiService } from '../mock-admin-api.service';
 import { ToastService } from '../ui/ui-toast/ui-toast';
 import type { RequestMonitorEntry, RequestMonitorStreamEvent } from '../mock-admin-api.types';
 import { readErrorMessage } from './read-error-message';
+import { RuntimeSyncStore } from './runtime-sync.store';
 
 /**
  * Cattura live del traffico intercettato (stream SSE + storico in RAM), estratta dalla pagina Monitor
@@ -28,8 +30,22 @@ export class MonitorStreamStore {
   readonly loading = this._loading.asReadonly();
   private readonly _clearing = signal(false);
   readonly clearing = this._clearing.asReadonly();
+  /** Lo stream si è chiuso per un errore, non per una pausa: si riapre appena il motore risponde. */
+  private interrupted = false;
 
   constructor() {
+    // Un nuovo runtime ha uno storico nuovo: si riapre lo stream, la cui istantanea sostituisce
+    // l'elenco. Dopo un'interruzione lo si riapre quando il collegamento torna.
+    inject(RuntimeSyncStore)
+      .events$.pipe(takeUntilDestroyed())
+      .subscribe((event) => {
+        if (event.kind === 'runtime' && (this._streaming() || this.interrupted)) {
+          this.close();
+          this.resume();
+        } else if (event.kind === 'resync' && this.interrupted) {
+          this.resume();
+        }
+      });
     this.resume();
   }
 
@@ -59,14 +75,23 @@ export class MonitorStreamStore {
       error: (e: unknown) => {
         this._loading.set(false);
         this._streaming.set(false);
-        this.toast.show({ title: this.transloco.translate('stores.monitorUnreachable'), description: readErrorMessage(e) ?? this.transloco.translate('common.operationFailed'), tone: 'error' });
+        // Un solo avviso per interruzione: i tentativi di riapertura non ne aggiungono altri.
+        if (!this.interrupted) {
+          this.toast.show({ title: this.transloco.translate('stores.monitorUnreachable'), description: readErrorMessage(e) ?? this.transloco.translate('common.operationFailed'), tone: 'error' });
+        }
+        this.interrupted = true;
       },
     });
     this._streaming.set(true);
   }
 
-  /** Chiude la connessione live lasciando intatto lo storico ricevuto. */
+  /** Pausa voluta: chiude la connessione live lasciando intatto lo storico ricevuto. */
   private pause(): void {
+    this.interrupted = false;
+    this.close();
+  }
+
+  private close(): void {
     this.streamSub?.unsubscribe();
     this.streamSub = undefined;
     this._streaming.set(false);
@@ -75,6 +100,7 @@ export class MonitorStreamStore {
 
   private applyStreamEvent(event: RequestMonitorStreamEvent): void {
     this._loading.set(false);
+    this.interrupted = false;
     if (event.type === 'snapshot') {
       this._entries.set(event.items);
       return;

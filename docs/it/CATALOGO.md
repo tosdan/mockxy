@@ -73,12 +73,19 @@ Per servire un **file binario** (immagini, PDF, archivi) si carica il file diret
 variante — fino a 12 MB via interfaccia — con content-type ricordato; il payload viene servito
 in streaming come documentato nella [pagina sulle risposte](RESPONSE.md).
 
+Catalogo ed endpoint aperto si aggiornano da soli quando un agente, un'altra finestra o una
+modifica ai file li cambiano: mentre è visibile, l'interfaccia interroga il motore ogni 2 secondi
+e rilegge tutto quando si torna sulla finestra. Se il motore non risponde, la barra in fondo
+segnala «Non aggiornato»; lì compaiono anche gli errori dell'ultimo caricamento, con quello che il
+runtime serve al loro posto (per esempio la versione precedente di un handler rotto).
+
 Descrizione, form della variante e dialog della sequenza salvano sulla risorsa aperta: se nel
 frattempo un agente o un altro client attiva un'altra variante, la modifica resta su quella di
-partenza. Se la risorsa stessa è cambiata, il salvataggio non la sovrascrive: la bozza resta com'è
-e un pannello permette di **confrontarla** con la versione attuale, di **ricaricare** quest'ultima
-al posto della bozza (con conferma se modificata) o di **salvare la propria versione** dopo averla
-vista. Se la risorsa è stata eliminata, il testo resta da copiare e il salvataggio è disabilitato.
+partenza. Gli aggiornamenti automatici non toccano una bozza aperta: se la sua risorsa cambia, un
+avviso lo segnala prima del salvataggio. Se la risorsa è cambiata, il salvataggio non la
+sovrascrive: la bozza resta com'è e un pannello permette di **confrontarla** con la versione
+attuale, di **ricaricare** quest'ultima al posto della bozza (con conferma se modificata) o di
+**salvare la propria versione** dopo averla vista. Se la risorsa è stata eliminata, il testo resta da copiare e il salvataggio è disabilitato.
 Status, ritardo e template cambiati in linea, attivazione e selezione sono azioni immediate:
 vince l'ultima.
 

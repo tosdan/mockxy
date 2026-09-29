@@ -1,9 +1,10 @@
 import { TestBed } from '@angular/core/testing';
-import { of, throwError, type Observable } from 'rxjs';
+import { Subject, of, throwError, type Observable } from 'rxjs';
 import { MocksStore } from './mocks-next.store';
 import { MockAdminApiService } from '../../mock-admin-api.service';
 import { ViewStateService } from '../../shared/view-state.service';
 import { translocoTesting } from '../../testing/transloco-testing';
+import { fakeRuntimeSync } from '../../testing/runtime-sync-testing';
 import {
   UNSORTED_COLLECTION_ID,
   type CollectionSummary,
@@ -110,14 +111,17 @@ function makeViewStateStub() {
 describe('MocksStore', () => {
   let api: ReturnType<typeof makeApiStub>;
   let viewState: ReturnType<typeof makeViewStateStub>;
+  let sync: ReturnType<typeof fakeRuntimeSync>;
 
   beforeEach(() => {
     api = makeApiStub();
     viewState = makeViewStateStub();
+    sync = fakeRuntimeSync();
     TestBed.configureTestingModule({
       imports: [translocoTesting()],
       providers: [
         MocksStore,
+        sync.provider,
         { provide: MockAdminApiService, useValue: api },
         { provide: ViewStateService, useValue: viewState },
       ],
@@ -383,6 +387,118 @@ describe('MocksStore', () => {
       expect(store.mocks().find((m) => m.id === 'e1')?.disabled).toBe(false); // revert
       expect(store.error()).toBe('scrittura fallita');
       expect(store.savingId()).toBeUndefined();
+    });
+  });
+
+  // Piano agent/API, §7 S4: le riletture di sincronizzazione aggiornano catalogo e dettaglio senza
+  // indicatori né toast, e non sovrascrivono mai una risposta più recente.
+  describe('sincronizzazione col runtime', () => {
+    const list3 = listResponse([summary('e1'), summary('e2'), summary('e3')]);
+
+    it('un cambio del catalogo rilegge elenco e dettaglio aperto, senza indicatori né errori', () => {
+      const store = create();
+      store.selected.set(detail('e1'));
+      api.listMocks.mockReturnValue(of(list3));
+      api.getMock.mockReturnValue(of(detail('e1', { status: 418 })));
+
+      sync.revisions('catalog');
+
+      expect(store.mocks()).toHaveLength(3);
+      expect(store.selected()?.status).toBe(418);
+      expect(store.loading()).toBe(false);
+      expect(store.detailLoading()).toBe(false);
+      expect(store.error()).toBeUndefined();
+      expect(store.syncTick()).toBe(1);
+    });
+
+    it('revisioni che non riguardano il catalogo non rileggono; il focus rilegge anche a revisioni invariate', () => {
+      const store = create();
+      store.selected.set(detail('e1'));
+      sync.revisions('server', 'dump');
+      expect(api.listMocks).not.toHaveBeenCalled();
+
+      sync.resync();
+      expect(api.listMocks).toHaveBeenCalledTimes(1);
+      expect(api.getMock).toHaveBeenCalledWith('e1');
+    });
+
+    it('una rilettura in ritardo non sovrascrive la risposta più recente di una mutazione', () => {
+      const store = create();
+      store.selected.set(detail('e1'));
+      const late = new Subject<ReturnType<typeof listResponse>>();
+      api.listMocks.mockReturnValueOnce(late).mockReturnValue(of(list3));
+      sync.revisions('catalog');
+
+      api.updateResponse.mockReturnValueOnce(of(detail('e1', { status: 201 })));
+      store.saveResponse({ type: 'mock', title: '', status: 201, headers: {}, delayMs: 0, body: {} });
+      late.next(listResponse([summary('e1')]));
+      late.complete();
+
+      expect(store.selected()?.status).toBe(201);
+      expect(store.mocks()).toHaveLength(3);
+    });
+
+    it('con una mutazione in corso non rilegge', () => {
+      const store = create();
+      store.selected.set(detail('e1'));
+      store.savingId.set('e1');
+      sync.revisions('catalog');
+      expect(api.listMocks).not.toHaveBeenCalled();
+    });
+
+    it('una rilettura alla volta, e una sola in coda', () => {
+      const store = create();
+      const slow = new Subject<ReturnType<typeof listResponse>>();
+      api.listMocks.mockReturnValueOnce(slow).mockReturnValue(of(list3));
+      sync.revisions('catalog');
+      sync.revisions('catalog');
+      sync.resync();
+      expect(api.listMocks).toHaveBeenCalledTimes(1);
+
+      slow.next(list3);
+      slow.complete();
+      expect(api.listMocks).toHaveBeenCalledTimes(2);
+      expect(store.syncTick()).toBe(2);
+    });
+
+    it('l’endpoint aperto sparito resta visibile e segnalato', () => {
+      const store = create();
+      store.selected.set(detail('e1'));
+      api.listMocks.mockReturnValue(of(listResponse([summary('e2')])));
+
+      sync.revisions('catalog');
+
+      expect(store.selectedGone()).toBe(true);
+      expect(store.selected()?.id).toBe('e1');
+      expect(api.getMock).not.toHaveBeenCalled();
+    });
+
+    it('col workspace cambiato il dettaglio aperto non passa all’omonimo; aprire un endpoint chiude lo stato stantio', () => {
+      const store = create();
+      store.selected.set(detail('e1'));
+      api.listMocks.mockReturnValue(of(list3));
+
+      sync.runtime(true);
+
+      expect(store.staleWorkspace()).toBe(true);
+      expect(store.mocks()).toHaveLength(3);
+      expect(api.getMock).not.toHaveBeenCalled();
+      sync.resync();
+      expect(api.getMock).not.toHaveBeenCalled();
+
+      // Stesso id, ma della nuova istanza: si rilegge e le bozze del precedente decadono.
+      store.selectMock('e1');
+      expect(api.getMock).toHaveBeenCalledWith('e1');
+      expect(store.staleWorkspace()).toBe(false);
+      expect(store.workspaceGeneration()).toBe(1);
+    });
+
+    it('un nuovo runtime sullo stesso workspace rilegge come un focus', () => {
+      const store = create();
+      store.selected.set(detail('e1'));
+      sync.runtime(false);
+      expect(api.getMock).toHaveBeenCalledWith('e1');
+      expect(store.staleWorkspace()).toBe(false);
     });
   });
 

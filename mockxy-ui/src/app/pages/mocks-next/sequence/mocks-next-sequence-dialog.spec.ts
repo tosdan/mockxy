@@ -85,6 +85,10 @@ describe('MocksNextSequenceDialog', () => {
     createSequence: ReturnType<typeof vi.fn>;
     updateSequence: ReturnType<typeof vi.fn>;
     detailReadErrorMessage: ReturnType<typeof vi.fn>;
+    selected: ReturnType<typeof signal<MockDetail | undefined>>;
+    selectedGone: ReturnType<typeof signal<boolean>>;
+    staleWorkspace: ReturnType<typeof signal<boolean>>;
+    syncTick: ReturnType<typeof signal<number>>;
   };
   let api: {
     getSequenceState: ReturnType<typeof vi.fn>;
@@ -101,6 +105,11 @@ describe('MocksNextSequenceDialog', () => {
       createSequence: vi.fn(),
       updateSequence: vi.fn(),
       detailReadErrorMessage: vi.fn(() => 'lettura fallita'),
+      // Il dialog si apre sul dettaglio appena riletto dallo store: stessa versione.
+      selected: signal<MockDetail | undefined>(detail),
+      selectedGone: signal(false),
+      staleWorkspace: signal(false),
+      syncTick: signal(0),
     };
     const initialState = detail.sequenceState ?? {
       stepIndex: 0,
@@ -373,6 +382,20 @@ describe('MocksNextSequenceDialog', () => {
         expect.any(Function),
         expect.objectContaining({ target: expect.objectContaining({ baseRevision: REV_B }) }),
       );
+    });
+
+    it('una rilettura che trova la sequence cambiata sul server lo segnala, la bozza resta', () => {
+      const { fixture, c } = create(editDetail(), 'edit');
+      c.title.set('Mia');
+      store.selected.set(editDetail({
+        responseRevision: REV_B,
+        response: { type: 'sequence', title: 'Dell’agent', steps: CURRENT.response['steps'], onEnd: 'loop', resetAfterMs: null },
+      }));
+      fixture.detectChanges();
+
+      expect(c.guard.remoteChanged()).toBe(true);
+      expect((fixture.nativeElement as HTMLElement).textContent).toContain('La versione sul server è cambiata');
+      expect(c.title()).toBe('Mia');
     });
 
     it('con la variante sparita il salvataggio resta disabilitato', () => {

@@ -51,6 +51,10 @@ describe('MocksNextDetail', () => {
     uploadResponseFile: ReturnType<typeof vi.fn>;
     saveDescription: ReturnType<typeof vi.fn>;
     detailReadErrorMessage: ReturnType<typeof vi.fn>;
+    selectedGone: ReturnType<typeof signal<boolean>>;
+    staleWorkspace: ReturnType<typeof signal<boolean>>;
+    workspaceGeneration: ReturnType<typeof signal<number>>;
+    syncTick: ReturnType<typeof signal<number>>;
   };
   let api: { getMock: ReturnType<typeof vi.fn>; getResponse: ReturnType<typeof vi.fn> };
 
@@ -69,6 +73,10 @@ describe('MocksNextDetail', () => {
       uploadResponseFile: vi.fn(),
       saveDescription: vi.fn(),
       detailReadErrorMessage: vi.fn(() => 'lettura fallita'),
+      selectedGone: signal(false),
+      staleWorkspace: signal(false),
+      workspaceGeneration: signal(0),
+      syncTick: signal(0),
     };
     api = { getMock: vi.fn(), getResponse: vi.fn() };
     TestBed.configureTestingModule({
@@ -440,6 +448,98 @@ describe('MocksNextDetail', () => {
         undefined,
         expect.objectContaining({ target: { endpointId: 'e1', responseFile: '001.response.json', baseRevision: REV_A } }),
       );
+    });
+
+    // Piano agent/API, §7 S4 e §13 C4: una rilettura di sincronizzazione aggiorna ciò che la bozza
+    // sa del server, mai il suo testo, il bersaglio o la base.
+    describe('sincronizzazione', () => {
+      const RESPONSE = { type: 'mock', title: 'Ok', status: 200, headers: {}, body: { ok: true }, delayMs: 0 };
+
+      function openVariantDraft() {
+        const fixture = create();
+        store.selected.set(editableDetail({ response: RESPONSE }));
+        fixture.detectChanges();
+        const c = fixture.componentInstance as unknown as Detail;
+        c.startEditResponse();
+        c.draft.body.set('{"mine":true}');
+        fixture.detectChanges();
+        return { fixture, c };
+      }
+
+      it('una variante cambiata sul server si segnala senza spostare il focus né toccare testo e base', () => {
+        const { fixture, c } = openVariantDraft();
+        const typing = (fixture.nativeElement as HTMLElement).querySelector('mocks-next-response-form input') as HTMLInputElement;
+        typing.focus();
+
+        store.selected.set(editableDetail({ response: { ...RESPONSE, status: 503 }, responseRevision: REV_B }));
+        fixture.detectChanges();
+
+        const host = fixture.nativeElement as HTMLElement;
+        expect(host.querySelector('mocks-next-draft-conflict section')?.textContent).toContain('La versione sul server è cambiata');
+        expect(host.querySelector('mocks-next-draft-conflict [aria-live]')?.textContent).toContain('La versione sul server è cambiata');
+        expect(document.activeElement).toBe(typing);
+        expect(c.draft.body()).toBe('{"mine":true}');
+
+        c.saveEditResponse();
+        expect(lastDraft(store.saveResponse).target.baseRevision).toBe(REV_A);
+      });
+
+      it('la descrizione cambiata sul server si segnala e il testo resta', () => {
+        const fixture = create();
+        store.selected.set(editableDetail());
+        fixture.detectChanges();
+        const c = fixture.componentInstance as unknown as Detail;
+        c.startEditDescription();
+        c.draftDescription.set('mia');
+
+        store.selected.set(editableDetail({ descriptionRevision: REV_B, endpoint: { ...editableDetail().endpoint!, description: 'dell’agent' } }));
+        fixture.detectChanges();
+
+        expect((fixture.nativeElement as HTMLElement).querySelector('mocks-next-draft-conflict section')?.textContent).toContain('La versione sul server è cambiata');
+        expect(c.draftDescription()).toBe('mia');
+      });
+
+      it('l’endpoint sparito: il dettaglio lo segnala, la bozza resta e non si salva', () => {
+        const { fixture, c } = openVariantDraft();
+        store.selectedGone.set(true);
+        fixture.detectChanges();
+
+        const text = (fixture.nativeElement as HTMLElement).textContent ?? '';
+        expect(text).toContain('Questo endpoint non esiste più nel workspace');
+        expect(text).toContain('Questa risorsa non esiste più');
+        expect(button(fixture, 'Salva').disabled).toBe(true);
+        expect(c.draft.body()).toBe('{"mine":true}');
+      });
+
+      it('col workspace cambiato la bozza non si salva; aprire una risorsa della nuova istanza la chiude', () => {
+        const { fixture, c } = openVariantDraft();
+        store.staleWorkspace.set(true);
+        fixture.detectChanges();
+
+        expect((fixture.nativeElement as HTMLElement).textContent).toContain('Il motore serve un altro workspace');
+        expect(button(fixture, 'Salva').disabled).toBe(true);
+        expect(c.draft.body()).toBe('{"mine":true}');
+
+        // Stesso id, nuova istanza: la bozza del workspace precedente decade.
+        store.staleWorkspace.set(false);
+        store.workspaceGeneration.set(1);
+        fixture.detectChanges();
+        expect(c.editingResponse()).toBe(false);
+      });
+
+      it('una bozza su una variante non più selezionata si ricontrolla per filename a ogni rilettura', () => {
+        const { fixture } = openVariantDraft();
+        store.selected.set(editableDetail({ response: RESPONSE, selectedResponseFile: '002.response.json', responseRevision: REV_B }));
+        fixture.detectChanges();
+        expect(api.getResponse).not.toHaveBeenCalled();
+
+        api.getResponse.mockReturnValue(of(CURRENT));
+        store.syncTick.set(1);
+        fixture.detectChanges();
+
+        expect(api.getResponse).toHaveBeenCalledWith('e1', '001.response.json');
+        expect((fixture.nativeElement as HTMLElement).querySelector('mocks-next-draft-conflict section')?.textContent).toContain('La versione sul server è cambiata');
+      });
     });
 
     it('un salvataggio tardivo non chiude la bozza riaperta nel frattempo', () => {

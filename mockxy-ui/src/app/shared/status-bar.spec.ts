@@ -4,14 +4,26 @@ import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { StatusBar } from './status-bar';
 import { WorkspaceSummaryStore } from './workspace-summary.store';
 import { translocoTesting } from '../testing/transloco-testing';
+import { fakeRuntimeSync } from '../testing/runtime-sync-testing';
+import { MockAdminApiService } from '../mock-admin-api.service';
+import type { RuntimeStatusReport } from '../mock-admin-api.types';
+import { of } from 'rxjs';
 
 describe('StatusBar', () => {
   let summary: WorkspaceSummaryStore;
+  let sync: ReturnType<typeof fakeRuntimeSync>;
+  let runtimeReport: RuntimeStatusReport;
 
   beforeEach(async () => {
+    sync = fakeRuntimeSync();
+    runtimeReport = { runtimeId: 'r1', lastAttempt: null, lastAppliedAttemptId: 1, errors: [], fatalError: null };
     await TestBed.configureTestingModule({
       imports: [StatusBar, translocoTesting()],
-      providers: [provideNoopAnimations()],
+      providers: [
+        provideNoopAnimations(),
+        sync.provider,
+        { provide: MockAdminApiService, useValue: { getRuntimeStatus: () => of(runtimeReport) } },
+      ],
     }).compileComponents();
     summary = TestBed.inject(WorkspaceSummaryStore);
   });
@@ -73,5 +85,50 @@ describe('StatusBar', () => {
     expect(panel).not.toBeNull();
     expect(panel.textContent).toContain('api/rotta/GET.endpoint.json');
     expect(panel.textContent).toContain('status must be a number.');
+  });
+
+  describe('collegamento e runtime', () => {
+    it('col motore che non risponde dice che i dati possono non essere aggiornati', () => {
+      const fixture = create();
+      expect(text(fixture)).not.toContain('Non aggiornato');
+
+      sync.connected.set(false);
+      fixture.detectChanges();
+      expect(text(fixture)).toContain('Non aggiornato');
+      expect(fixture.nativeElement.querySelector('[role="status"]').textContent).toContain('Il motore non risponde');
+
+      sync.connected.set(true);
+      fixture.detectChanges();
+      expect(text(fixture)).not.toContain('Non aggiornato');
+    });
+
+    it('mostra gli errori del runtime e cosa serve al loro posto, anche con la vecchia rotta attiva', () => {
+      runtimeReport = {
+        ...runtimeReport,
+        errors: [{ endpointId: 'e1', filePath: 'users/GET.endpoint.json', message: "Unexpected token '{'", serving: 'retained' }],
+      };
+      const fixture = create();
+      const trigger = Array.from(fixture.nativeElement.querySelectorAll('button') as NodeListOf<HTMLButtonElement>).find((b) =>
+        b.textContent?.includes('Runtime: 1 errore'),
+      );
+      expect(trigger).toBeTruthy();
+
+      trigger!.click();
+      fixture.detectChanges();
+      const panel = document.querySelector('[role="dialog"]');
+      expect(panel?.textContent).toContain('users/GET.endpoint.json');
+      expect(panel?.textContent).toContain('servita la versione precedente');
+    });
+
+    it('un caricamento fallito nel suo insieme prevale sul conteggio', () => {
+      runtimeReport = { ...runtimeReport, fatalError: { message: 'mocks folder unreadable' } };
+      const fixture = create();
+      expect(text(fixture)).toContain('Runtime: caricamento fallito');
+    });
+
+    it('senza problemi del runtime non mostra niente', () => {
+      const fixture = create();
+      expect(text(fixture)).not.toContain('Runtime');
+    });
   });
 });
