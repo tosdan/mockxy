@@ -407,6 +407,24 @@ export class MocksStore {
       });
   }
 
+  /**
+   * Richieste in sequenza di un'azione di massa, legate al workspace in cui è partita: ognuna
+   * ricontrolla il workspace subito prima di partire e, se è cambiato, il batch si interrompe e le
+   * richieste non ancora inviate non partono (non devono colpire la nuova istanza). Quelle già
+   * eseguite restano sul server. L'interruzione arriva come errore, che `sameWorkspace` scarta.
+   */
+  private batchInWorkspace<T, R>(items: readonly T[], request: (item: T) => Observable<R>): Observable<R[]> {
+    return defer(() => {
+      const epoch = this.workspaceEpoch;
+      return from(items).pipe(
+        concatMap((item) =>
+          defer(() => (epoch === this.workspaceEpoch ? request(item) : throwError(() => new Error('Workspace changed during the batch.')))),
+        ),
+        toArray(),
+      );
+    });
+  }
+
   /** Come `finalize`, ma solo nello stesso workspace: gli indicatori della nuova istanza non si toccano. */
   private settle<T>(done: () => void): MonoTypeOperatorFunction<T> {
     return (source) =>
@@ -781,10 +799,8 @@ export class MocksStore {
       return;
     }
     this.error.set(undefined);
-    from(ids)
+    this.batchInWorkspace(ids, (id) => this.api.assignDefinitionCollection(id, { collectionId }))
       .pipe(
-        concatMap((id) => this.api.assignDefinitionCollection(id, { collectionId })),
-        toArray(),
         this.sameWorkspace(),
         switchMap(() => this.api.listMocks()),
         this.sameWorkspace(),
@@ -808,10 +824,8 @@ export class MocksStore {
     }
     this.error.set(undefined);
     const selectedId = this.selected()?.id;
-    from(ids)
+    this.batchInWorkspace(ids, (id) => this.api.deleteDefinition(id))
       .pipe(
-        concatMap((id) => this.api.deleteDefinition(id)),
-        toArray(),
         this.sameWorkspace(),
         this.settle(() => this.loadCatalog()),
       )

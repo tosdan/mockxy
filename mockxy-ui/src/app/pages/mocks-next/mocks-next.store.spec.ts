@@ -81,6 +81,7 @@ function makeApiStub() {
       deleteResponse: vi.fn((id: string): Observable<MockDetailAfterMutation> => of(detail(id))),
       uploadResponseFile: vi.fn((id: string): Observable<MockDetailAfterMutation> => of(detail(id))),
       deleteMock: vi.fn(() => of(undefined)),
+      deleteDefinition: vi.fn((): Observable<void> => of(undefined)),
       createCollection: vi.fn(() => of(coll('nuova'))),
       assignDefinitionCollection: vi.fn((id: string): Observable<MockDetailAfterMutation> => of(detail(id))),
       deleteCollection: vi.fn(() => of(undefined)),
@@ -700,6 +701,56 @@ describe('MocksStore', () => {
 
       expect(store.selected()).toBe(opened);
       expect(onDone).not.toHaveBeenCalled();
+    });
+
+    // Codex, #32 quarto giro (P1): le richieste ancora da inviare di un'azione di massa non
+    // partono dopo un cambio di workspace, perché colpirebbero la nuova istanza.
+    it('una cancellazione di massa si interrompe al cambio di workspace: le successive non partono', () => {
+      const store = create();
+      store.selected.set(detail('e3'));
+      const first = new Subject<void>();
+      api.deleteDefinition.mockReturnValueOnce(first);
+      const onSuccess = vi.fn();
+      store.removeEndpoints(['e1', 'e2'], onSuccess);
+      expect(api.deleteDefinition).toHaveBeenCalledWith('e1');
+
+      api.listMocks.mockReturnValue(of(list3));
+      sync.runtime(true);
+      api.listMocks.mockClear();
+      first.next();
+      first.complete();
+
+      expect(api.deleteDefinition).toHaveBeenCalledTimes(1);
+      expect(onSuccess).not.toHaveBeenCalled();
+      expect(api.listMocks).not.toHaveBeenCalled();
+      expect(store.error()).toBeUndefined();
+    });
+
+    it('uno spostamento di massa si interrompe al cambio di workspace: i successivi non partono', () => {
+      const store = create();
+      store.selected.set(detail('e3'));
+      const first = new Subject<MockDetailAfterMutation>();
+      api.assignDefinitionCollection.mockReturnValueOnce(first);
+      const onSuccess = vi.fn();
+      store.assignCollectionToMany(['e1', 'e2'], 'c1', onSuccess);
+      expect(api.assignDefinitionCollection).toHaveBeenCalledTimes(1);
+
+      api.listMocks.mockReturnValue(of(list3));
+      sync.runtime(true);
+      first.next(detail('e1'));
+      first.complete();
+
+      expect(api.assignDefinitionCollection).toHaveBeenCalledTimes(1);
+      expect(onSuccess).not.toHaveBeenCalled();
+      expect(store.error()).toBeUndefined();
+    });
+
+    it('nello stesso workspace le azioni di massa proseguono fino in fondo', () => {
+      const store = create();
+      const onSuccess = vi.fn();
+      store.removeEndpoints(['e1', 'e2'], onSuccess);
+      expect(api.deleteDefinition).toHaveBeenCalledTimes(2);
+      expect(onSuccess).toHaveBeenCalledTimes(1);
     });
 
     it('un nuovo runtime sullo stesso workspace rilegge come un focus', () => {
