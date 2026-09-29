@@ -261,6 +261,12 @@ La risposta `201` riporta per ogni elemento `writeOutcome` (`created`, `variant_
 identificare con certezza gli elementi creati, senza ripetere alla cieca. La conversione non
 cancella né le catture né i file di dump.
 
+Se più elementi dello stesso batch selezionano una variante sullo stesso endpoint (endpoint creati
+compresi), il runtime serve l'ultima: le precedenti hanno `runtimeOutcome: "not_applicable"` e
+l'avviso `SUPERSEDED`, con `by` la variante che le ha sostituite. Un batch fallito dopo la
+scrittura (`BATCH_RUNTIME_FAILED`, `ROLLBACK_FAILED`) riporta in `details.result` il risultato con
+la forma della `201`, conteggi compresi.
+
 ## Stato del server
 
 | Metodo e percorso | Cosa fa |

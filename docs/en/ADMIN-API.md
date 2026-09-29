@@ -256,6 +256,12 @@ The `201` answer reports per item `writeOutcome` (`created`, `variant_added`, `s
 unless you can tell with certainty which items were created, rather than retrying blindly. The
 conversion deletes neither captures nor dump files.
 
+When several items of the same batch select a variant on the same endpoint (created endpoints
+included), the runtime serves the last one: the earlier ones have `runtimeOutcome:
+"not_applicable"` and the warning `SUPERSEDED`, with `by` naming the variant that replaced them. A
+batch that fails after writing (`BATCH_RUNTIME_FAILED`, `ROLLBACK_FAILED`) reports in
+`details.result` the result in the shape of the `201`, counts included.
+
 ## Server state
 
 | Method and path | What it does |
