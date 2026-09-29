@@ -508,7 +508,8 @@ export class MocksNextDetail {
       this.pendingUpload = null;
       return true;
     },
-    isDirty: () => this.responseSnapshot() !== this.responseSeed,
+    // Anche un file scelto e rimasto in conflitto è una modifica locale: la ricarica lo scarterebbe.
+    isDirty: () => this.pendingUpload != null || this.responseSnapshot() !== this.responseSeed,
     errorMessage: (error) => this.store.detailReadErrorMessage(error),
   });
   /** Payload della bozza variante appena seminata: la ricarica chiede conferma se è cambiato. */
@@ -748,9 +749,9 @@ export class MocksNextDetail {
   /** Salva la descrizione sul bersaglio della bozza; `revision` è quella di "Salva la mia versione". */
   protected saveDescription(revision?: string): void {
     if (this.busy()) return;
-    const save = this.descriptionGuard.saveWith(revision);
+    const save = this.descriptionGuard.saveWith(() => this.cancelEditDescription(), revision);
     if (!save) return;
-    this.store.saveDescription(this.draftDescription().trim(), () => this.cancelEditDescription(), save);
+    this.store.saveDescription(this.draftDescription().trim(), save.onSuccess, save.draft);
   }
 
   // --- modifica response (C1) ---
@@ -792,9 +793,9 @@ export class MocksNextDetail {
   /** Salva la bozza variante sul suo bersaglio; `revision` è quella di "Salva la mia versione". */
   private saveResponseDraft(revision?: string): void {
     const payload = this.draft.buildUpdatePayload();
-    const save = this.responseGuard.saveWith(revision);
+    const save = this.responseGuard.saveWith(() => this.closeResponseForm(), revision);
     if (!payload || !save) return;
-    this.store.saveResponse(payload, () => this.closeResponseForm(), save);
+    this.store.saveResponse(payload, save.onSuccess, save.draft);
   }
 
   /** "Salva la mia versione": ripete l'azione in conflitto (upload o salvataggio) contro la revisione mostrata. */
@@ -859,9 +860,9 @@ export class MocksNextDetail {
 
   private sendUpload(revision?: string): void {
     const file = this.pendingUpload;
-    const save = this.responseGuard.saveWith(revision);
+    const save = this.responseGuard.saveWith(() => this.closeResponseForm(), revision);
     if (!file || !save) return;
-    this.store.uploadResponseFile(file, () => this.closeResponseForm(), undefined, save);
+    this.store.uploadResponseFile(file, save.onSuccess, undefined, save.draft);
   }
 
   // --- crea response (C2): apre il form su una BOZZA del tipo scelto (anche diverso dall'attuale).

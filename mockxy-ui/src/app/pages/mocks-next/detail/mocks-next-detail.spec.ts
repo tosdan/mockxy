@@ -285,7 +285,9 @@ describe('MocksNextDetail', () => {
       saveEditResponse(): void;
       uploadResponseFile(file: File): void;
       startEditDescription(): void;
+      cancelEditDescription(): void;
       saveDescription(): void;
+      editingDescription(): boolean;
       draftDescription: { (): string; set(v: string): void };
       draft: { body: { (): string; set(v: string): void }; status(): number | null };
       editingResponse(): boolean;
@@ -438,6 +440,52 @@ describe('MocksNextDetail', () => {
         undefined,
         expect.objectContaining({ target: { endpointId: 'e1', responseFile: '001.response.json', baseRevision: REV_A } }),
       );
+    });
+
+    it('un salvataggio tardivo non chiude la bozza riaperta nel frattempo', () => {
+      const fixture = create();
+      store.selected.set(editableDetail());
+      fixture.detectChanges();
+      const c = fixture.componentInstance as unknown as Detail;
+
+      // Descrizione: salva, annulla e riapri mentre la richiesta è in corso.
+      c.startEditDescription();
+      c.draftDescription.set('prima');
+      c.saveDescription();
+      const descriptionSaved = store.saveDescription.mock.calls[0][1] as () => void;
+      c.cancelEditDescription();
+      c.startEditDescription();
+      c.draftDescription.set('seconda, non salvata');
+      descriptionSaved();
+      expect(c.editingDescription()).toBe(true);
+      expect(c.draftDescription()).toBe('seconda, non salvata');
+
+      // Variante: aprire la descrizione chiude il form, che poi si riapre dal menu.
+      c.startEditResponse();
+      c.saveEditResponse();
+      const responseSaved = store.saveResponse.mock.calls[0][1] as () => void;
+      c.startEditDescription();
+      c.startEditResponse();
+      c.draft.body.set('{"nuova":true}');
+      responseSaved();
+      expect(c.editingResponse()).toBe(true);
+      expect(c.draft.body()).toBe('{"nuova":true}');
+    });
+
+    it('un file in conflitto conta come modifica: «Ricarica» chiede conferma prima di scartarlo', () => {
+      const fixture = create();
+      store.selected.set(editableDetail({ payloadType: 'file', fileInfo: { name: 'logo.png' } } as never));
+      fixture.detectChanges();
+      const c = fixture.componentInstance as unknown as Detail;
+      c.startEditResponse();
+      store.uploadResponseFile.mockImplementationOnce((_file: File, _ok: unknown, _target: unknown, draft: DraftSave) => draft.onConflict!(CONFLICT));
+      c.uploadResponseFile(new File(['x'], 'nuovo.png'));
+
+      button(fixture, 'Ricarica').click();
+      fixture.detectChanges();
+
+      expect(api.getResponse).not.toHaveBeenCalled();
+      expect(button(fixture, 'Sostituisci')).toBeTruthy();
     });
 
     it('la descrizione salva con la sua revisione e al conflitto confronta la versione corrente', () => {

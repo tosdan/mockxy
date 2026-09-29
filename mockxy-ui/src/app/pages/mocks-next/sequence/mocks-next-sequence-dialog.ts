@@ -425,9 +425,9 @@ export class MocksNextSequenceDialog {
       this.dialogRef.close('saved');
     };
     if (this.isEdit) {
-      const draft = this.guard.saveWith(revision);
-      if (!draft) return;
-      this.store.updateSequence(sequence, onSuccess, draft);
+      const save = this.guard.saveWith(onSuccess, revision);
+      if (!save) return;
+      this.store.updateSequence(sequence, save.onSuccess, save.draft);
     } else {
       this.store.createSequence(prepared ? { ...sequence, select: false } : sequence, onSuccess);
     }

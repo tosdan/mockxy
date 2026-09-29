@@ -34,6 +34,12 @@ export interface DraftConflictView {
   cancelReload(): void;
 }
 
+/** Salvataggio di una bozza: le opzioni per lo store e l'esito positivo legato alla stessa bozza. */
+export interface GuardedSave {
+  draft: DraftSave;
+  onSuccess: () => void;
+}
+
 export interface DraftGuardOptions<T> {
   /** Legge la versione corrente del bersaglio. */
   load: (target: DraftTarget) => Observable<RemoteVersion<T>>;
@@ -87,18 +93,19 @@ export class DraftGuard<T> implements DraftConflictView {
   }
 
   /**
-   * Opzioni di un salvataggio sul bersaglio fissato. `revision` sostituisce la base per questo solo
-   * salvataggio ("Salva la mia versione"); la base cambia davvero solo con una ricarica. Null se non
-   * c'è un bersaglio salvabile.
+   * Salvataggio sul bersaglio fissato. `revision` sostituisce la base per questo solo salvataggio
+   * ("Salva la mia versione"); la base cambia davvero solo con una ricarica. Esito, conflitto e
+   * risorsa sparita valgono solo per la bozza che ha salvato: se intanto è stata chiusa o riaperta,
+   * una risposta tardiva non la tocca. Null se non c'è un bersaglio salvabile.
    */
-  saveWith(revision?: string): DraftSave | null {
+  saveWith(onSaved: () => void, revision?: string): GuardedSave | null {
     const target = this.target();
     if (!target || this.missing()) {
       return null;
     }
     const generation = this.generation;
     this.reloaded.set(false);
-    return {
+    const draft: DraftSave = {
       target: revision ? { ...target, baseRevision: revision } : target,
       onConflict: (conflict) => {
         if (generation !== this.generation) return;
@@ -111,6 +118,13 @@ export class DraftGuard<T> implements DraftConflictView {
       onMissing: () => {
         if (generation !== this.generation) return;
         this.missing.set(true);
+      },
+    };
+    return {
+      draft,
+      onSuccess: () => {
+        if (generation !== this.generation) return;
+        onSaved();
       },
     };
   }
