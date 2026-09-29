@@ -10,6 +10,7 @@ const DEFAULT_PAGE_LIMIT = 50;
 const MAX_PAGE_LIMIT = 250;
 const PAGE_PARAMETERS = new Set(["view", "limit", "fields", "method", "path", "status", "source", "since", "runtimeId", "generation"]);
 const DECIMAL = /^(0|[1-9][0-9]*)$/;
+const HTTP_TOKEN = /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/;
 
 // Il sommario non porta body né header: identità, esito e diagnostica essenziale della voce.
 const SUMMARY_FIELDS = ["id", "timestamp", "method", "path", "originalUrl", "status", "latencyMs", "source"];
@@ -71,8 +72,10 @@ function parseMonitorPageQuery(query) {
   const filters = {};
   const method = single(query, "method");
   if (method !== undefined) {
-    if (!/^[A-Za-z]+$/.test(method)) {
-      throw invalidQuery("method", "method must be an HTTP method name.");
+    // Un token HTTP (RFC 9110): il Monitor registra qualunque metodo accettato dal server, anche
+    // M-SEARCH o PROPFIND, non soltanto quelli che un mock può dichiarare.
+    if (!HTTP_TOKEN.test(method)) {
+      throw invalidQuery("method", "method must be an HTTP method token.");
     }
     filters.method = method.toUpperCase();
   }

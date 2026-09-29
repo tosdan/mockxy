@@ -1461,15 +1461,7 @@ paths:
           description: "`{ items }` without a query; a `MonitorPage` with `view=page`."
           content:
             application/json:
-              schema:
-                oneOf:
-                  - type: object
-                    required: [items]
-                    properties:
-                      items:
-                        type: array
-                        items: { $ref: "#/components/schemas/MonitorEntry" }
-                  - { $ref: "#/components/schemas/MonitorPage" }
+              schema: { $ref: "#/components/schemas/MonitorRequestsResponse" }
               examples:
                 page:
                   summary: Filter matching ids 12, 14 and 15 of a feed holding 11–15, since 10, limit 2
@@ -1548,12 +1540,7 @@ paths:
           description: The entry
           content:
             application/json:
-              schema:
-                type: object
-                required: [runtimeId, item]
-                properties:
-                  runtimeId: { type: string }
-                  item: { $ref: "#/components/schemas/MonitorEntry" }
+              schema: { $ref: "#/components/schemas/MonitorEntryRead" }
         "400":
           description: "`INVALID_QUERY`: missing `runtimeId`, malformed id or unknown parameter."
           content:
@@ -2306,8 +2293,9 @@ components:
 
     MonitorEntrySummary:
       type: object
-      description: A monitor entry without bodies and headers.
+      description: A monitor entry without bodies and headers — exactly these fields.
       required: [id, timestamp, method, path, originalUrl, status, latencyMs, source, matchedRoutePath, sequenceStep, sharedStateError]
+      additionalProperties: false
       properties:
         id: { type: string }
         timestamp: { type: string, format: date-time }
@@ -2324,6 +2312,26 @@ components:
         sharedStateError:
           description: Shared-state diagnostics, in the same shape as the full entry; `null` when absent.
           type: [object, "null"]
+    MonitorRequestsResponse:
+      description: |
+        The two shapes of `GET /monitoring/requests`, told apart by their fields: without a query
+        only `items`; with `view=page` a `MonitorPage`.
+      oneOf:
+        - type: object
+          required: [items]
+          additionalProperties: false
+          properties:
+            items:
+              type: array
+              description: Every entry, complete, most recent first.
+              items: { $ref: "#/components/schemas/MonitorEntry" }
+        - { $ref: "#/components/schemas/MonitorPage" }
+    MonitorEntryRead:
+      type: object
+      required: [runtimeId, item]
+      properties:
+        runtimeId: { type: string }
+        item: { $ref: "#/components/schemas/MonitorEntry" }
     MonitorPage:
       type: object
       required: [items, cursor, hasMore, gap, gapReason, available]
@@ -2332,7 +2340,7 @@ components:
           type: array
           description: Ascending by id; `MonitorEntrySummary` with `fields=summary`, `MonitorEntry` with `fields=full`.
           items:
-            oneOf:
+            anyOf:
               - { $ref: "#/components/schemas/MonitorEntrySummary" }
               - { $ref: "#/components/schemas/MonitorEntry" }
         cursor:
@@ -3535,7 +3543,9 @@ components:
       properties:
         id: { type: string, description: Sequential id within the process lifetime. }
         timestamp: { type: string, format: date-time, description: When the request started. }
-        method: { $ref: "#/components/schemas/HttpMethod" }
+        method:
+          type: string
+          description: The request method as received — any method the HTTP server accepts (e.g. `M-SEARCH`), not only those a mock can declare.
         path: { type: string, description: Request path, without query string. }
         originalUrl: { type: string, description: Path with query string. }
         status: { type: integer }

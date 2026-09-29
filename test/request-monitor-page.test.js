@@ -171,6 +171,11 @@ describe("Monitor interrogabile — validazione della query", () => {
     expect(parseMonitorPageQuery({})).toBeNull();
   });
 
+  test("il metodo è un token HTTP qualunque, normalizzato in maiuscolo", () => {
+    expect(parseMonitorPageQuery({ view: "page", method: "m-search" }).filters.method).toBe("M-SEARCH");
+    expect(parseMonitorPageQuery({ view: "page", method: "PropFind" }).filters.method).toBe("PROPFIND");
+  });
+
   test.each([
     [{ limit: "10" }, "view"],
     [{ view: "list" }, "view"],
@@ -180,6 +185,7 @@ describe("Monitor interrogabile — validazione della query", () => {
     [{ view: "page", limit: "1.5" }, "limit"],
     [{ view: "page", fields: "all" }, "fields"],
     [{ view: "page", method: "" }, "method"],
+    [{ view: "page", method: "M SEARCH" }, "method"],
     [{ view: "page", path: "items" }, "path"],
     [{ view: "page", path: "/items?x=1" }, "path"],
     [{ view: "page", status: "99" }, "status"],

@@ -2,8 +2,12 @@ const fs = require("fs");
 const http = require("http");
 const path = require("path");
 const request = require("supertest");
+const yaml = require("js-yaml");
+const Ajv2020 = require("ajv/dist/2020");
 const { createServerRuntime } = require("../src/server");
 const { createNoopLogger, createTempDir, removeDir, writeMock } = require("./helpers");
+
+const SPEC = yaml.safeLoad(fs.readFileSync(path.join(__dirname, "..", "src", "admin", "admin-api.openapi.yaml"), "utf8"));
 
 // Monitor interrogabile via admin API (piano agent/API, §8 S5 e §13 C5), col runtime reale.
 describe("GET /monitoring/requests — modalità page e voce per ID", () => {
@@ -140,6 +144,55 @@ describe("GET /monitoring/requests — modalità page e voce per ID", () => {
     const gone = await request(app).get(`/_admin/api/monitoring/requests/1?runtimeId=${runtimeId}`);
     expect(gone.status).toBe(404);
     expect(gone.body.details).toMatchObject({ code: "REQUEST_NOT_AVAILABLE" });
+  });
+
+  // Codex, #33: le risposte reali devono rispettare lo schema dichiarato, non solo il documento
+  // OpenAPI essere valido. Le due forme della lista si distinguono dai campi.
+  describe("risposte conformi alla spec", () => {
+    let validateList;
+    let validateEntry;
+
+    beforeAll(() => {
+      const ajv = new Ajv2020({ strict: false, validateFormats: false });
+      ajv.addSchema({ $id: "admin-openapi", components: SPEC.components });
+      validateList = ajv.compile({ $ref: "admin-openapi#/components/schemas/MonitorRequestsResponse" });
+      validateEntry = ajv.compile({ $ref: "admin-openapi#/components/schemas/MonitorEntryRead" });
+    });
+
+    function expectValid(validate, body) {
+      const valid = validate(body);
+      expect(validate.errors ?? []).toEqual([]);
+      expect(valid).toBe(true);
+    }
+
+    test("vista storica, sommario, since=latest, pagina vuota, full e voce per ID", async () => {
+      const app = await startRuntime();
+      await request(app).get("/items");
+      await request(app).get("/missing");
+      await request(app)["m-search"]("/discovery");
+      const runtimeId = await runtimeIdOf(app);
+
+      for (const query of ["", "?view=page", "?view=page&since=latest", "?view=page&path=/nessuna", "?view=page&fields=full", "?view=page&method=M-SEARCH"]) {
+        const res = await monitor(app, query);
+        expect(res.status).toBe(200);
+        expectValid(validateList, res.body);
+      }
+      for (const id of ["1", "3"]) {
+        const res = await request(app).get(`/_admin/api/monitoring/requests/${id}?runtimeId=${runtimeId}`);
+        expect(res.status).toBe(200);
+        expectValid(validateEntry, res.body);
+      }
+    });
+  });
+
+  test("il filtro method accetta qualunque metodo registrato, come M-SEARCH", async () => {
+    const app = await startRuntime();
+    await request(app).get("/items");
+    await request(app)["m-search"]("/discovery");
+
+    const res = await monitor(app, "?view=page&method=m-search");
+    expect(res.status).toBe(200);
+    expect(res.body.items.map((item) => [item.id, item.method, item.path])).toEqual([["2", "M-SEARCH", "/discovery"]]);
   });
 
   test("/stream resta lo stream SSE, non una voce per ID", async () => {
