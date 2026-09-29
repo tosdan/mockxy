@@ -279,11 +279,29 @@ class RequestMonitorStore {
     this.entries = [];
     this.subscribers = new Set();
     this.nextId = 1;
+    // Cresce a ogni clear, anche a buffer vuoto (§13 C5): un cursore della generazione precedente
+    // riconosce la cancellazione. Il clear non riutilizza gli ID.
+    this.generation = 1;
   }
 
   // Returns the newest entries first so the UI can render recent traffic immediately.
   listEntries() {
     return [...this.entries];
+  }
+
+  // Istantanea coerente per una pagina: voci in ordine crescente di ID (contigui), generazione e
+  // ultimo ID assegnato (0 prima della prima richiesta).
+  snapshot() {
+    return {
+      entries: [...this.entries].reverse(),
+      generation: this.generation,
+      highWatermark: this.nextId - 1,
+    };
+  }
+
+  // Una voce ancora nel buffer, per ID decimale; undefined se espulsa, cancellata o mai registrata.
+  getEntry(id) {
+    return this.entries.find((entry) => entry.id === String(id));
   }
 
   // Stores a new entry, enforces the retention cap and broadcasts it to active SSE clients.
@@ -306,6 +324,7 @@ class RequestMonitorStore {
   // Removes every stored entry and informs connected clients so their view can reset immediately.
   clear() {
     this.entries = [];
+    this.generation += 1;
     this.broadcast({ type: "clear" });
   }
 

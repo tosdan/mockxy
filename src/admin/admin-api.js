@@ -63,6 +63,13 @@ const {
   isSafeDumpFileName,
   deleteDumpFile,
 } = require("../monitoring/monitor-dump-reader");
+const { parseMonitorPageQuery, readMonitorEntry, readMonitorPage } = require("../monitoring/request-monitor-page");
+
+// Monitor assente (motore incorporato senza cattura): pagine vuote, nessuna voce per ID.
+const EMPTY_MONITOR = {
+  snapshot: () => ({ entries: [], generation: 1, highWatermark: 0 }),
+  getEntry: () => undefined,
+};
 
 const PARSED_JSON_BODY_BYTES = Symbol("parsedJsonBodyBytes");
 
@@ -291,9 +298,15 @@ function createAdminApiRouter({ config, runtimeIdentity, runtimeStatus, catalogR
     sendJson(res, 200, status);
   });
 
-  router.get('/monitoring/requests', (_req, res) => {
-    const items = requestMonitor?.listEntries() || [];
-    sendJson(res, 200, { items });
+  // Senza query: la vista storica {items}, più recente prima. Con view=page: pagine crescenti con
+  // cursore, filtri e gap (§13 C5); ogni altro parametro, o un parametro senza view=page, è un 400.
+  router.get('/monitoring/requests', (req, res) => {
+    const page = parseMonitorPageQuery(req.query);
+    if (page == null) {
+      sendJson(res, 200, { items: requestMonitor?.listEntries() || [] });
+      return;
+    }
+    sendJson(res, 200, readMonitorPage(requestMonitor ?? EMPTY_MONITOR, runtimeIdentity?.runtimeId ?? null, page));
   });
 
   router.delete('/monitoring/requests', mutation((_req, res) => {
@@ -324,6 +337,12 @@ function createAdminApiRouter({ config, runtimeIdentity, runtimeStatus, catalogR
       clearInterval(keepAliveTimer);
       unsubscribe?.();
     });
+  });
+
+  // Una voce per ID, completa. Dichiarata dopo /stream: il percorso statico non deve finire nella
+  // rotta parametrica.
+  router.get('/monitoring/requests/:id', (req, res) => {
+    sendJson(res, 200, readMonitorEntry(requestMonitor ?? EMPTY_MONITOR, runtimeIdentity?.runtimeId ?? null, req.params.id, req.query));
   });
 
   // --- Dump su disco del monitor: cattura durevole del traffico per lo storico ---
