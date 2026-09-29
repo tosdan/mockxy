@@ -1,0 +1,16 @@
+{
+  "type": "mock",
+  "title": "Ordini",
+  "status": 200,
+  "headers": {
+    "content-type": "application/json"
+  },
+  "delayMs": 0,
+  "body": {
+    "orders": [
+      {
+        "id": "o-1"
+      }
+    ]
+  }
+}

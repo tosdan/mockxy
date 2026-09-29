@@ -5,6 +5,14 @@ un'operazione della UI che non passi da qui. La conseguenza utile è che **tutto
 l'interfaccia è automatizzabile** — script di setup che popolano un workspace, suite e2e che
 resettano lo stato tra i test, pipeline che importano una specifica aggiornata.
 
+**Il contratto evolve con l'app.** L'admin API segue le versioni di Mockxy, e una minor può
+cambiarne il contratto: le [note di rilascio](../progetto/NOTE-RILASCIO-next.md) dicono cosa
+cambia per i client. Chi usa le capacità più recenti (revisioni, varianti inattive, Monitor a
+pagine) legge prima la versione da `GET /info` e il contratto da `GET /openapi.yaml`. Se il
+runtime non espone queste rotte, o non dichiara quelle che servono, il client si ferma prima di
+qualunque modifica e indica l'aggiornamento necessario: una capacità non si scopre provando a
+scrivere.
+
 ## Quando risponde e come si protegge
 
 - Attiva con `ADMIN_API_ENABLED` (default: attiva in sviluppo, spenta in produzione). Da
@@ -265,6 +273,50 @@ previsti, riferimenti `sharedState.open("nome", ...)` letterali e warning; la co
 o nascosti in helper non sono rilevabili, mentre commenti/stringhe possono produrre un warning
 prudenziale: l'anteprima informa, non abilita né blocca il commit. La copia non riscrive nome o
 `seedKey`, perché condividere la risorsa può essere intenzionale.
+
+## Preparare uno scenario via API
+
+Un test o un agente che deve provare una funzione prepara lo scenario in modo **esplicito**,
+qualunque stato abbia lasciato la sessione precedente: non esiste un «annulla», e non serve.
+
+1. **Verificare l'istanza:** `GET /info` (il `workspace` giusto), `GET /openapi.yaml` (le rotte
+   che si useranno) e `GET /config` (la configurazione di avvio da cui dipende il test, che per
+   ora non si cambia via API: la prepara l'ambiente). Se qualcosa non torna, fermarsi.
+2. **Preparare i contenuti:** risolvere endpoint e varianti dal catalogo per metodo, percorso e
+   filename, mai per titolo né dalla selezione corrente. Leggere ogni variante
+   (`GET /mocks/:id/responses/:file`) e salvarla con la `revision` letta come `expectedRevision`;
+   creare con `select: false`. Controllare `active`: una variante non selezionata può essere uno
+   step della sequence selezionata. Se l'esito di una creazione è incerto, rileggere prima di
+   ritentare.
+3. **Attivare:** dopo la preparazione riuscita, `PATCH /server` con `serverEnabled: true` e
+   `proxyAll: false`, selezione delle varianti previste, abilitazione degli endpoint.
+4. **Azzerare:** per una sequence, selezionarla e chiamare `POST /mocks/:id/sequence/reset`
+   anche se era già selezionata; per lo stato condiviso, i reset delle sole risorse interessate.
+5. **Nessuna attesa a tempo:** una mutazione riuscita è già servita. Le letture di controllo via
+   admin API non consumano step della sequence.
+6. **Verificare il traffico:** prendere un cursore `since=latest` del Monitor prima dell'azione,
+   poi leggere le voci successive ([Monitor a pagine](#leggere-il-monitor-a-pagine)); con
+   `gap: true` la verifica non può concludere.
+
+Il repository ne contiene un esempio completo, eseguito con la suite Playwright:
+[`e2e/agent-setup.spec.js`](../../e2e/agent-setup.spec.js), con l'helper
+[`e2e/agent-setup/mockxy-admin.js`](../../e2e/agent-setup/mockxy-admin.js) e il workspace di
+fixture `workspace-agent-test/`. Lo stesso setup riporta allo stesso risultato partendo da una
+variante diversa selezionata e dalla sequence già consumata, da endpoint disabilitati con Proxy
+All attivo, e ripetuto più volte senza ripristino. L'helper si ferma con un messaggio diagnostico
+su workspace sbagliato, contratto non verificabile, configurazione diversa, precondizione fallita,
+modifica non applicata o traffico perso nel Monitor.
+
+Limiti da conoscere:
+
+- **Modifiche fuori dall'API:** un editor, il watcher o un altro processo non passano dalla coda
+  delle mutazioni. Una mutazione alla volta e le precondizioni valgono per le chiamate API; una
+  scrittura esterna fatta dopo il controllo resta fuori.
+- **Memoria del runtime:** cursori delle sequence, memoria degli handler, stato condiviso e
+  Monitor vivono in memoria e ripartono a ogni avvio. Il reset di una sequence azzera anche la
+  memoria handler di quell'endpoint, ma richiede la sequence selezionata: non è un reset di
+  qualunque handler. Un handler con memoria locale che nessun reset azzera va provato su un
+  runtime di test nuovo, oppure con un reset specifico documentato nel workspace.
 
 ## La descrizione leggibile dalle macchine
 

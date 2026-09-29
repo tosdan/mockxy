@@ -5,6 +5,14 @@ operation that doesn't go through here. The useful consequence is that **everyth
 does can be automated** — setup scripts that populate a workspace, e2e suites that reset the
 state between tests, pipelines that import an updated spec.
 
+**The contract evolves with the app.** The admin API follows Mockxy's versions, and a minor
+release may change its contract: the [release notes](../progetto/NOTE-RILASCIO-next.md) say what
+changes for clients. A client using the most recent capabilities (revisions, inactive variants,
+the paged monitor) first reads the version from `GET /info` and the contract from
+`GET /openapi.yaml`. If the runtime does not expose these routes, or does not declare the ones
+it needs, the client stops before any change and names the update required: a capability is
+never discovered by trying a write.
+
 ## When it answers and how it protects itself
 
 - Enabled with `ADMIN_API_ENABLED` (default: on in development, off in production). When off,
@@ -261,6 +269,51 @@ dry run creates no directories, writes no files and does not reload the runtime.
 or names hidden in helpers cannot be detected, while comments or strings can cause a
 conservative warning: preview informs but neither enables nor blocks commit. Copy does not
 rewrite the name or `seedKey`, because sharing the resource may be intentional.
+
+## Preparing a scenario through the API
+
+A test or an agent that has to try out a feature prepares the scenario **explicitly**, whatever
+state the previous session left: there is no "undo", and none is needed.
+
+1. **Check the instance:** `GET /info` (the right `workspace`), `GET /openapi.yaml` (the routes
+   you will use) and `GET /config` (the startup configuration the test depends on, which cannot
+   be changed through the API yet: the environment prepares it). If anything does not match,
+   stop.
+2. **Prepare the content:** resolve endpoints and variants from the catalog by method, path and
+   file name, never by title or from the current selection. Read each variant
+   (`GET /mocks/:id/responses/:file`) and save it with the `revision` you read as
+   `expectedRevision`; create with `select: false`. Check `active`: a variant that is not
+   selected may be a step of the selected sequence. If the outcome of a create is uncertain, read
+   again before retrying.
+3. **Activate:** once preparing succeeded, `PATCH /server` with `serverEnabled: true` and
+   `proxyAll: false`, select the intended variants, enable the endpoints.
+4. **Reset:** for a sequence, select it and call `POST /mocks/:id/sequence/reset` even if it was
+   already selected; for shared state, reset only the resources involved.
+5. **No timed waits:** a successful mutation is already served. Checking reads through the admin
+   API do not consume sequence steps.
+6. **Check the traffic:** take a `since=latest` monitor cursor before the action, then read the
+   entries after it ([paged monitor](#reading-the-monitor-page-by-page)); with `gap: true` the
+   check cannot conclude.
+
+The repository holds a complete example, run with the Playwright suite:
+[`e2e/agent-setup.spec.js`](../../e2e/agent-setup.spec.js), with the helper
+[`e2e/agent-setup/mockxy-admin.js`](../../e2e/agent-setup/mockxy-admin.js) and the fixture
+workspace `workspace-agent-test/`. The same setup reaches the same result starting from another
+selected variant with the sequence already consumed, from disabled endpoints with Proxy All on,
+and repeated several times without any restore. The helper stops with a diagnostic message on a
+wrong workspace, an unverifiable contract, a different configuration, a failed precondition, a
+change not applied or monitor traffic lost.
+
+Limits to know:
+
+- **Changes outside the API:** an editor, the watcher or another process do not go through the
+  mutation queue. One mutation at a time and the preconditions hold for API calls; an external
+  write made after the check stays outside.
+- **Runtime memory:** sequence cursors, handler memory, shared state and the monitor live in
+  memory and start over at every start. Resetting a sequence also clears that endpoint's handler
+  memory, but needs the sequence selected: it is not a reset of any handler. A handler whose
+  local memory no reset clears is tested on a fresh test runtime, or with a specific reset
+  documented in the workspace.
 
 ## The machine-readable description
 

@@ -35,3 +35,6 @@ electron/store-identity.json
 # Stato di autenticazione salvato dai browser/test
 playwright/.auth/
 .auth/
+
+# Run dir del backend del collaudo C6 (e2e/start-agent-backend.js)
+workspace-agent-test/.run/

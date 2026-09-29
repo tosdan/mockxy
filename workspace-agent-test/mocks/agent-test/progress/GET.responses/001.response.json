@@ -1,0 +1,12 @@
+{
+  "type": "mock",
+  "title": "In corso",
+  "status": 202,
+  "headers": {
+    "content-type": "application/json"
+  },
+  "delayMs": 0,
+  "body": {
+    "state": "pending"
+  }
+}
