@@ -214,6 +214,14 @@ esistenti restano compatibili: nessuna migrazione richiesta.
   posto. Una bozza aperta non cambia: se la sua risorsa cambia sul server lo segnala; se sparisce,
   o se il motore ora serve un altro workspace, il salvataggio resta disabilitato.
 
+### Documentazione e collaudo
+
+- **Preparare uno scenario via API:** la guida all'admin API descrive il setup esplicito di uno
+  scenario da qualunque stato (verifica dell'istanza e del contratto, preparazione con revisione,
+  attivazione, reset, controllo del traffico dal Monitor) e dichiara che il contratto evolve con
+  l'app. Un esempio Playwright eseguito con la suite (`e2e/agent-setup.spec.js`) lo applica a un
+  workspace di fixture e dà lo stesso risultato da stati di partenza diversi, senza ripristino.
+
 ---
 
 ## v1.3.2 (pubblicata)

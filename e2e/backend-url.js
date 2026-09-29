@@ -4,4 +4,8 @@
 const E2E_PORT = 3101;
 const E2E_BACKEND = `http://localhost:${E2E_PORT}`;
 
-module.exports = { E2E_PORT, E2E_BACKEND };
+// Backend separato del collaudo del setup via API (C6), sul workspace di fixture isolato.
+const AGENT_PORT = 3102;
+const AGENT_BACKEND = `http://localhost:${AGENT_PORT}`;
+
+module.exports = { E2E_PORT, E2E_BACKEND, AGENT_PORT, AGENT_BACKEND };

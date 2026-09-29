@@ -1,0 +1,12 @@
+{
+  "type": "mock",
+  "title": "Servizio non disponibile",
+  "status": 503,
+  "headers": {
+    "content-type": "application/json"
+  },
+  "delayMs": 0,
+  "body": {
+    "error": "unavailable"
+  }
+}

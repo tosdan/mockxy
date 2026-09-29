@@ -1,5 +1,5 @@
 const { defineConfig, devices } = require("@playwright/test");
-const { E2E_PORT, E2E_BACKEND } = require("./e2e/backend-url");
+const { E2E_PORT, E2E_BACKEND, AGENT_PORT, AGENT_BACKEND } = require("./e2e/backend-url");
 
 // Config e2e: UN SOLO processo — il backend Node (:3101) serve sia l'API sia la UI compilata sotto
 // /_admin/ui (UI_DIST_DIR), come l'app desktop. Niente `ng serve`, niente proxy.
@@ -28,7 +28,7 @@ module.exports = defineConfig({
   projects: [
     { name: "chromium", use: { ...devices["Desktop Chrome"] } },
   ],
-  webServer: {
+  webServer: [{
     command: "node e2e/start-backend.js",
     url: `${E2E_BACKEND}/_admin/api/mocks`,
     env: {
@@ -44,5 +44,27 @@ module.exports = defineConfig({
     },
     reuseExistingServer: !process.env.CI,
     timeout: 30000,
-  },
+  }, {
+    // Collaudo del setup via API (piano agent/API, C6): workspace di fixture isolato e
+    // configurazione dichiarata qui, perché modificarla via API arriva solo con S8 — nessun
+    // backend reale, nessun fallback proxy, nessun ritardo. L'helper la verifica via /config.
+    command: "node e2e/start-agent-backend.js",
+    url: `${AGENT_BACKEND}/_admin/api/info`,
+    env: {
+      PORT: String(AGENT_PORT),
+      HOST: "127.0.0.1",
+      MOCKS_DIR: "workspace-agent-test/.run/mocks",
+      MONITOR_DUMP_DIR: "workspace-agent-test/.run/dump",
+      FILES_DIR: "workspace-agent-test/.run/files",
+      ADMIN_API_ENABLED: "true",
+      NODE_ENV: "development",
+      DEV_WATCH: "true",
+      BACKEND_URL: "",
+      PROXY_FALLBACK_ENABLED: "false",
+      MOCKXY_DELAY: "0",
+      MOCKXY_DELAY_ALL: "false",
+    },
+    reuseExistingServer: !process.env.CI,
+    timeout: 30000,
+  }],
 });
