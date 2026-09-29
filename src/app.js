@@ -27,6 +27,7 @@ const { ServerStateStore } = require("./server-state");
 const { setNoCacheHeaders } = require("./utils/cache");
 const { isSharedStateError } = require("./mocks/shared-state");
 const { createRuntimeIdentity } = require("./runtime-identity");
+const { RuntimeConfigStore } = require("./runtime-config");
 
 const MAX_HANDLER_REQUEST_BODY_BYTES = 2 * 1024 * 1024;
 
@@ -968,6 +969,8 @@ function respondWithCorsPreflight(req, res) {
 function createApp({
   registry,
   config,
+  // Configurazione con gli override effimeri (§13 C8); senza, quella di avvio.
+  runtimeConfig = new RuntimeConfigStore(config),
   logger,
   proxyHandler = forwardToBackend,
   proxyMiddlewareRegistry,
@@ -996,7 +999,7 @@ function createApp({
   const dataFileReader = createDataFileReader(config?.filesDir);
 
   if (config?.adminApiEnabled !== false) {
-    app.use("/_admin/api", createAdminHostGuard(config), createAdminApiRouter({ config, runtimeIdentity, runtimeStatus, catalogRevision, watcherStatus, listener, registry, proxyMiddlewareRegistry, reloadRuntime, requestMonitor, serverState, monitorDump, sequenceStates, handlerStates, sharedStates, sseConnections, wsConnections }));
+    app.use("/_admin/api", createAdminHostGuard(config), createAdminApiRouter({ config, runtimeConfig, runtimeIdentity, runtimeStatus, catalogRevision, watcherStatus, listener, registry, proxyMiddlewareRegistry, reloadRuntime, requestMonitor, serverState, monitorDump, sequenceStates, handlerStates, sharedStates, sseConnections, wsConnections }));
   } else {
     app.use("/_admin/api", sendAdminApiDisabled);
   }
@@ -1091,6 +1094,10 @@ function createApp({
   });
 
   app.use(async (req, res) => {
+    // Una sola configurazione per tutto il ciclo della richiesta, fotografata all'ingresso, prima
+    // di ritardi, matching e proxy (§13 C8): una richiesta partita col backend A lo usa anche se
+    // durante il ritardo si configura B. Le connessioni aperte non migrano.
+    const config = runtimeConfig.current();
     const corsEnabled = config.corsEnabled === true;
 
     // L'hook su writeHead copre OGNI ramo che segue (mock, handler, miss, 501 e proxy): con

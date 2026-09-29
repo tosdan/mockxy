@@ -57,13 +57,16 @@ function bridgeSockets(clientSocket, upstreamSocket) {
   upstreamSocket.pipe(clientSocket);
 }
 
-function createUpgradeHandler({ config, serverState, logger }) {
+function createUpgradeHandler({ runtimeConfig, serverState, logger }) {
   // I socket passati in upgrade si staccano dal tracking del server: server.close/
   // closeAllConnections non li chiude, quindi lo shutdown resterebbe appeso su un tunnel
   // attivo. Li teniamo qui per poterli distruggere esplicitamente allo spegnimento.
   const activeClientSockets = new Set();
 
   const handler = (req, socket, head) => {
+    // Configurazione fotografata all'ingresso (§13 C8): un tunnel aperto resta sul backend con cui
+    // è nato, anche se poi se ne configura un altro.
+    const config = runtimeConfig.current();
     activeClientSockets.add(socket);
     socket.on("close", () => activeClientSockets.delete(socket));
     // Un client che sparisce a metà handshake non deve far crashare il processo.

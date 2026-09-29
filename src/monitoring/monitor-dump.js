@@ -100,14 +100,16 @@ class MonitorDumpWriter {
       enabled: this.enabled,
       intervalMs: this.intervalMs,
       threshold: this.threshold,
+      maxFileBytes: this.maxFileBytes,
       maxTotalBytes: this.maxTotalBytes,
       currentFile: this.enabled ? this.currentFileName : null,
       pendingCount: this.pending.length,
     };
   }
 
-  // Aggiorna intervallo/soglia a caldo; se in esecuzione riarma il timer senza ruotare il file.
-  setConfig({ intervalMs, threshold } = {}) {
+  // Aggiorna intervallo/soglia a caldo; se in esecuzione riarma il timer senza ruotare il file. I
+  // limiti valgono dalla prossima scrittura, rotazione o potatura: nessun file si cancella qui.
+  setConfig({ intervalMs, threshold, maxFileBytes, maxTotalBytes } = {}) {
     if (typeof intervalMs === "number" && intervalMs > 0) {
       this.intervalMs = intervalMs;
       if (this.enabled && this.timer) {
@@ -122,6 +124,12 @@ class MonitorDumpWriter {
     }
     if (Number.isInteger(threshold) && threshold > 0) {
       this.threshold = threshold;
+    }
+    if (Number.isSafeInteger(maxFileBytes) && maxFileBytes > 0) {
+      this.maxFileBytes = maxFileBytes;
+    }
+    if (Number.isSafeInteger(maxTotalBytes) && maxTotalBytes >= 0) {
+      this.maxTotalBytes = maxTotalBytes;
     }
   }
 

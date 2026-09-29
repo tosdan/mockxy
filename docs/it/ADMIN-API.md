@@ -172,8 +172,8 @@ client e polling, eseguire il reset, poi avviare lo scenario.
 | `POST /monitoring/requests/create-mocks` | crea mock da voci del Monitor, nell'ordine dato — body `{ runtimeId, ids, onConflict, selectAddedVariants?, newEndpointEnabled }`; [regole ed esiti](#creare-mock-dal-traffico) |
 | `DELETE /monitoring/requests` | svuota la vista live (gli archivi non sono toccati) |
 | `GET /monitoring/requests/stream` | flusso live degli eventi (SSE); il primo, `snapshot`, porta le voci presenti e il `runtimeId` a cui appartengono i loro ID |
-| `GET /monitoring/dump` | stato della scrittura su disco |
-| `PATCH /monitoring/dump` | accende/spegne e regola cadenza/soglia a runtime — body `{ enabled?, intervalMs?, threshold? }` |
+| `GET /monitoring/dump` | stato della scrittura su disco, con i limiti `maxFileBytes` e `maxTotalBytes` |
+| `PATCH /monitoring/dump` | accende/spegne e regola a runtime cadenza, soglia e limiti — body `{ enabled?, intervalMs?, threshold?, maxFileBytes?, maxTotalBytes? }`, validato per intero prima di applicare qualunque campo. `maxFileBytes` è un intero positivo (la dimensione a cui il file ruota), `maxTotalBytes` un intero non negativo (il tetto della cartella; `0` disattiva la potatura). I limiti valgono dalla prossima scrittura, rotazione o potatura, senza cancellare file nella chiamata; un riavvio torna ai valori di avvio |
 | `POST /monitoring/dump/flush` | flush manuale; body `{}`; risponde con il numero di voci scritte |
 | `GET /monitoring/dumps` | elenco dei file di dump |
 | `GET /monitoring/dumps/read` | lettura paginata a cursore (`?fileIndex&lineIndex&limit`) |
@@ -279,9 +279,34 @@ la forma della `201`, conteggi compresi.
 | Metodo e percorso | Cosa fa |
 |---|---|
 | `GET /info` | chi risponde e su cosa: `version`, `runtimeId` e `startedAt` (nuovi a ogni avvio), `workspace` (`id`, `root`, `mocksDir`, `filesDir` canonici; `root` solo dall'app desktop), `listener` realmente in ascolto, `watcher` (`state` fra `disabled`, `starting`, `ready`, `error`) e `revisions` (`catalog`, `server`, `dump`, `diagnostics`, `config`). Le revisioni partono da 1 e crescono quando la risorsa cambia: servono a sapere cosa rileggere, non sono precondizioni di scrittura. Non scansiona il workspace |
-| `GET /config` | configurazione effettiva in sola lettura: `{ runtimeId, startup, effective, overrides, persisted }`, con le sole nove chiavi modificabili a runtime nelle prossime versioni (`backendUrl` è `null` senza backend). Nessun'altra variabile d'ambiente. Per ora `effective` coincide con `startup` e `overrides` è `{}`; `runtimeId` cambia a ogni avvio |
+| `GET /config` | configurazione di avvio, effettiva e override: `{ runtimeId, startup, effective, overrides, persisted }`, con le sole nove chiavi modificabili a runtime (`backendUrl` è `null` senza backend). Nessun'altra variabile d'ambiente; `persisted` è sempre `false` e `runtimeId` cambia a ogni avvio |
+| `PATCH /config` | override effimeri delle nove chiavi — body `{ set?, unset? }`; [regole](#configurazione-effimera) |
 | `GET /runtime/status` | esito dell'ultimo caricamento del workspace, `200` anche se degradato o fallito: `lastAttempt` (`id`, istanti, `reasons` fra `startup`, `admin`, `watcher`, `status` `applied`, `degraded` o `failed`), `lastAppliedAttemptId`, `errors` per file (`endpointId`, `filePath`, `message`, `serving`: `retained` se resta servita la versione precedente, `missing` se nulla la serve) e `fatalError`. Solo l'ultimo tentativo, senza storico |
 | `GET /openapi.yaml` | il [contratto](#la-descrizione-leggibile-dalle-macchine) della versione in esecuzione, come `application/yaml` |
+
+### Configurazione effimera
+
+`PATCH /config` cambia le nove chiavi del runtime fino al prossimo riavvio del motore: niente
+viene scritto su disco, e un riavvio le riporta ai valori di avvio.
+
+- **`set`** imposta override: `backendUrl` (URL assoluto http/https, oppure `null` per
+  disattivare il backend), i booleani `proxyFallbackEnabled`, `corsEnabled`, `delayAllRequests`,
+  `caseInsensitiveFilters`, `adaptProxyCookies`, `rewriteProxyRedirects` (senza conversioni da
+  stringhe), `globalDelayMs` (intero 0–2147483647) e `requestTimeoutMs` (intero 1–2147483647). Un
+  override resta esplicito anche se coincide con il valore di avvio.
+- **`unset`** toglie override: la chiave torna al valore di avvio. `unset: ["backendUrl"]`
+  ripristina il backend di avvio, mentre `set: { backendUrl: null }` lo disattiva. Togliere un
+  override che non c'è riesce senza cambiare niente.
+- Serve almeno una chiave, e nessuna può ripetersi in `unset` né stare in entrambi. Host, porta,
+  cartelle, admin API e watcher non si cambiano qui: una chiave fuori dalle nove è un `400` con
+  `details.key`.
+
+Il corpo si valida per intero prima di applicare qualunque cosa: un `400 MUTATION_REJECTED` non
+cambia valori, override né la revisione `config` di `GET /info`. La risposta `200` è quella di
+`GET /config`. Ogni richiesta servita fotografa la configurazione all'ingresso, prima di ritardi,
+matching e proxy, e la tiene fino alla fine: una richiesta in attesa del ritardo quando cambia il
+backend va su quello vecchio, la successiva sul nuovo. Le connessioni aperte (WebSocket inoltrate,
+stream) non vengono spostate né chiuse. I limiti del dump restano su `PATCH /monitoring/dump`.
 
 ## Esempi
 
@@ -296,6 +321,13 @@ curl -s -X PATCH http://localhost:3000/_admin/api/server \
 # anteprima di un import OpenAPI senza creare nulla
 curl -s -X POST "http://localhost:3000/_admin/api/mocks/import/openapi?dryRun=true" \
   -H "content-type: application/yaml" --data-binary @openapi.yaml
+
+# per questa esecuzione: un altro backend, lento; poi di nuovo i valori di avvio
+curl -s -X PATCH http://localhost:3000/_admin/api/config \
+  -H "content-type: application/json" \
+  -d '{"set": {"backendUrl": "http://localhost:8081", "globalDelayMs": 1500, "delayAllRequests": true}}'
+curl -s -X PATCH http://localhost:3000/_admin/api/config \
+  -H "content-type: application/json" -d '{"unset": ["backendUrl", "globalDelayMs", "delayAllRequests"]}'
 
 # accendi la scrittura su disco dello storico e forza un flush
 curl -s -X PATCH http://localhost:3000/_admin/api/monitoring/dump \
@@ -327,8 +359,9 @@ Un test o un agente che deve provare una funzione prepara lo scenario in modo **
 qualunque stato abbia lasciato la sessione precedente: non esiste un «annulla», e non serve.
 
 1. **Verificare l'istanza:** `GET /info` (il `workspace` giusto), `GET /openapi.yaml` (le rotte
-   che si useranno) e `GET /config` (la configurazione di avvio da cui dipende il test, che per
-   ora non si cambia via API: la prepara l'ambiente). Se qualcosa non torna, fermarsi.
+   che si useranno) e `GET /config` (la configurazione effettiva da cui dipende il test; un
+   valore diverso si imposta con [`PATCH /config`](#configurazione-effimera), che vale fino al
+   riavvio, oppure lo prepara l'ambiente). Se qualcosa non torna, fermarsi.
 2. **Preparare i contenuti:** risolvere endpoint e varianti dal catalogo per metodo, percorso e
    filename, mai per titolo né dalla selezione corrente. Leggere ogni variante
    (`GET /mocks/:id/responses/:file`) e salvarla con la `revision` letta come `expectedRevision`;
