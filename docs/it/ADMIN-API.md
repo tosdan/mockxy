@@ -169,6 +169,7 @@ client e polling, eseguire il reset, poi avviare lo scenario.
 |---|---|
 | `GET /monitoring/requests` | senza query: tutte le voci in RAM, complete, dalla più recente (`{ items }`, come prima). Con `view=page`: una [pagina a cursore](#leggere-il-monitor-a-pagine), in ordine crescente, con filtri e perdita dichiarata |
 | `GET /monitoring/requests/:id?runtimeId=…` | una voce completa per ID, nel runtime indicato: `{ runtimeId, item }`; `409 RUNTIME_CHANGED` se il motore è ripartito, `404 REQUEST_NOT_AVAILABLE` se la voce è stata espulsa, cancellata o non esiste |
+| `POST /monitoring/requests/create-mocks` | crea mock da voci del Monitor, nell'ordine dato — body `{ runtimeId, ids, onConflict, selectAddedVariants?, newEndpointEnabled }`; [regole ed esiti](#creare-mock-dal-traffico) |
 | `DELETE /monitoring/requests` | svuota la vista live (gli archivi non sono toccati) |
 | `GET /monitoring/requests/stream` | flusso live degli eventi (SSE) |
 | `GET /monitoring/dump` | stato della scrittura su disco |
@@ -176,7 +177,7 @@ client e polling, eseguire il reset, poi avviare lo scenario.
 | `POST /monitoring/dump/flush` | flush manuale; body `{}`; risponde con il numero di voci scritte |
 | `GET /monitoring/dumps` | elenco dei file di dump |
 | `GET /monitoring/dumps/read` | lettura paginata a cursore (`?fileIndex&lineIndex&limit`) |
-| `POST /monitoring/dumps/create-mocks` | crea mock in blocco da un file o da una selezione di voci; come l'import, riporta `items` (con la `key` della voce) e `runtime`, e risponde agli stessi errori di batch |
+| `POST /monitoring/dumps/create-mocks` | crea mock in blocco da un file o da una selezione di voci (`file` o `keys`), con le stesse [regole ed esiti](#creare-mock-dal-traffico) del Monitor; le opzioni sono facoltative, con i default storici `onConflict: "skip"`, `selectAddedVariants: false`, `newEndpointEnabled: true`. Conserva i conteggi (`created`, `createdEmpty`, `skippedExisting`, `failed`) e aggiunge `addedVariants`; `items` riporta la `key` della voce |
 | `DELETE /monitoring/dumps/:file` | elimina un file di dump |
 
 ### Leggere il Monitor a pagine
@@ -219,6 +220,46 @@ curl -s "http://localhost:3000/_admin/api/monitoring/requests?view=page&since=la
 # le GET su /api/orders arrivate dopo quel cursore
 curl -s "http://localhost:3000/_admin/api/monitoring/requests?view=page&method=GET&path=/api/orders&since=41&runtimeId=…&generation=1"
 ```
+
+### Creare mock dal traffico
+
+Monitor e Storico trasformano una risposta catturata in un mock con le stesse regole:
+
+- **Rotta e metodo:** la rotta che l'ha servita (`matchedRoutePath`, se presente e diversa da
+  `n/d`), altrimenti il path richiesto; metodo in maiuscolo. Nessuna rotta parametrica dedotta.
+- **Status e ritardo:** lo status catturato; `delayMs` 0.
+- **Body:** vuoto → `{}`; JSON valido → il valore; altro testo → la stringa. Un body troncato o un
+  segnaposto `[binary payload: …]`/`[compressed payload: …]` diventa `{}` e la bozza è
+  **incompleta**: un endpoint nuovo ha la descrizione `[da completare] …`, una variante aggiunta
+  il titolo che inizia con `[da completare]`, e l'elemento l'avviso `INCOMPLETE_CAPTURE` con
+  `reason` `truncated` o `binary`. Non è una riproduzione fedele e non viene presentata come tale.
+- **Header:** quelli della risposta catturata, senza `content-length`, `content-encoding`,
+  `transfer-encoding`, `connection`, `keep-alive`, `date`, valori vuoti e valori mascherati `***`
+  (un valore mascherato non viene mai ripristinato); i valori multipli si uniscono con `, `.
+- **Conflitto:** sull'identità della destinazione, metodo e rotta esatti, rispetto al catalogo e
+  agli elementi già elaborati nello stesso batch. `onConflict: "skip"` la lascia com'è;
+  `"add-variant"` aggiunge una variante (titolo con la provenienza e l'ora UTC della cattura, per
+  esempio `monitor · 10:11:12`), conserva l'abilitazione dell'endpoint e la seleziona solo con
+  `selectAddedVariants: true`. Più destinazioni equivalenti sono un errore dell'elemento, con
+  `candidates`, mai una scelta arbitraria; anche un file endpoint nella cartella derivata dalla
+  rotta che non dichiara quell'identità fa fallire l'elemento. Un endpoint nuovo nasce con la
+  variante selezionata, abilitato solo con `newEndpointEnabled: true`.
+
+Con il Monitor `runtimeId` è obbligatorio e deve essere quello corrente, perché gli ID ripartono a
+ogni avvio: altrimenti `409 RUNTIME_CHANGED` prima di scrivere. Anche `onConflict` e
+`newEndpointEnabled` sono obbligatori: una cattura non attiva mai niente in modo implicito. Le voci
+si copiano all'inizio del turno nella coda delle mutazioni, quindi un'espulsione successiva non
+invalida una cattura già presa; un ID non più disponibile è un elemento saltato con
+`captureOutcome: "unavailable"`, e gli altri proseguono. Per preparare senza toccare ciò che è
+servito si mandano `newEndpointEnabled: false` e `selectAddedVariants: false`, e si controllano gli
+elementi incompleti prima di attivarli.
+
+La risposta `201` riporta per ogni elemento `writeOutcome` (`created`, `variant_added`, `skipped`,
+`failed`), `runtimeOutcome`, `captureOutcome` (`complete`, `incomplete`, `unavailable`) e
+`warnings`, con `id` e `responseFile` scritti; dal Monitor anche `requestId` e `counts`. Un batch
+**non è idempotente**: se la risposta si perde, rileggere il catalogo e fermarsi se non si possono
+identificare con certezza gli elementi creati, senza ripetere alla cieca. La conversione non
+cancella né le catture né i file di dump.
 
 ## Stato del server
 

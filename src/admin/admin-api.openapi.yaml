@@ -1516,6 +1516,105 @@ paths:
                   summary: The feed was emptied
                   value: { type: clear }
 
+  /monitoring/requests/create-mocks:
+    post:
+      tags: [Monitoring]
+      operationId: createMocksFromMonitor
+      summary: Turn monitor captures into mocks
+      description: |
+        Creates mocks from entries of the live monitor, **in the order given**. `runtimeId` must be
+        the current runtime (ids restart at every start): otherwise `409 RUNTIME_CHANGED` before
+        writing anything. The entries are copied at the start of the batch's turn in the mutation
+        queue, so an eviction afterwards does not invalidate a capture already taken; an id that is
+        no longer available is a `skipped` item with `captureOutcome: unavailable`, and the others go
+        on. `onConflict` and `newEndpointEnabled` are required: capturing traffic never activates
+        anything implicitly. To prepare without affecting what is served, send
+        `newEndpointEnabled: false` and `selectAddedVariants: false`, and check the incomplete items
+        before activating them.
+
+        The transformation (shared by the monitor and the history):
+
+        - **Route and method:** the captured `matchedRoutePath` when present and not `n/d`, otherwise
+          the request path; the method in uppercase. No parametric route is inferred.
+        - **Status and delay:** the captured status; `delayMs` 0.
+        - **Body:** empty → `{}`; valid JSON → the parsed value; other text → the string. A truncated
+          body or a `[binary payload: …]`/`[compressed payload: …]` placeholder → `{}`, and the draft
+          is **incomplete**: a new endpoint gets the description `[da completare] …`, an added variant
+          the title prefix `[da completare]`, and the item the warning `INCOMPLETE_CAPTURE` with
+          `reason` `truncated` or `binary`. Enabling and selection follow the flags anyway.
+        - **Headers:** the captured response headers, without `content-length`, `content-encoding`,
+          `transfer-encoding`, `connection`, `keep-alive`, `date`, empty values and masked `***`
+          values (a masked value is never restored); array values are joined with `, `.
+        - **Conflict:** on the destination's identity, exact method and route path, against the
+          catalog and the items already processed in the same batch. `skip` leaves it; `add-variant`
+          adds a variant (titled with the source and the UTC capture time, e.g. `monitor · 10:11:12`)
+          and keeps the endpoint's enabled state, selecting it only with `selectAddedVariants`.
+          Several equivalent destinations are a per-item `failed` with `candidates`, never a guess;
+          an endpoint file in the derived folder that does not declare that identity is a `failed`
+          item too. A new endpoint gets the variant selected and is enabled only with
+          `newEndpointEnabled`.
+
+        One runtime reload at the end. A batch is **not idempotent**: after a lost response, read
+        the catalog and stop unless you can tell with certainty which items were created — do not
+        retry blindly. Captures and dump files are never deleted by the conversion.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [runtimeId, ids, onConflict, newEndpointEnabled]
+              properties:
+                runtimeId: { type: string, description: "`cursor.runtimeId` of the page the ids come from." }
+                ids:
+                  type: array
+                  minItems: 1
+                  maxItems: 250
+                  uniqueItems: true
+                  items: { type: string, pattern: "^(0|[1-9][0-9]*)$" }
+                onConflict: { type: string, enum: [skip, add-variant] }
+                selectAddedVariants: { type: boolean, default: false }
+                newEndpointEnabled: { type: boolean }
+            example: { runtimeId: 7d9f1c4e-2b0a-4c7e-9f3a-5e8d2c1b4a60, ids: ["41", "42"], onConflict: add-variant, selectAddedVariants: false, newEndpointEnabled: false }
+      responses:
+        "201":
+          description: One outcome per requested id, in order.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [runtimeId, counts, items, runtime]
+                properties:
+                  runtimeId: { type: string }
+                  counts:
+                    type: object
+                    required: [created, addedVariants, skipped, unavailable, failed, incomplete]
+                    properties:
+                      created: { type: integer, description: New endpoints. }
+                      addedVariants: { type: integer }
+                      skipped: { type: integer, description: "Conflicts left untouched with `onConflict: skip`." }
+                      unavailable: { type: integer, description: Captures no longer in the monitor. }
+                      failed: { type: integer }
+                      incomplete: { type: integer, description: Created endpoints and added variants built from an incomplete capture. }
+                  items:
+                    type: array
+                    items:
+                      allOf:
+                        - $ref: "#/components/schemas/CaptureItemOutcome"
+                        - type: object
+                          required: [requestId]
+                          properties:
+                            requestId: { type: string, description: The monitor entry id. }
+                  runtime: { $ref: "#/components/schemas/BatchRuntime" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "409":
+          description: "`RUNTIME_CHANGED`: the ids belong to another runtime; `details.runtimeId` is the current one. Nothing written."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "500": { $ref: "#/components/responses/BatchFailed" }
+
   /monitoring/requests/{id}:
     get:
       tags: [Monitoring]
@@ -1761,36 +1860,66 @@ paths:
       operationId: createMocksFromDump
       summary: Turn captured traffic into mock endpoints
       description: |
-        Bulk-creates mocks from archived entries, either a whole file or a selected set of
-        `dumpKey`s. Each entry becomes a mock on its matched route path, with the captured status
-        and the safe response headers (computed ones such as `content-length` and masked values
-        are dropped).
+        Bulk-creates mocks from archived entries, either a whole file (in file order) or a selected
+        set of `dumpKey`s (in the order given; a repeated key counts once, and a key that cannot be
+        read is a `skipped` item with `captureOutcome: unavailable`). It accepts the same options as
+        `POST /monitoring/requests/create-mocks`, optional here with the historical defaults
+        `onConflict: skip`, `selectAddedVariants: false` and `newEndpointEnabled: true`; a
+        preparation flow sends them explicitly. The counts keep their meaning and add
+        `addedVariants`.
 
-        Degrades per entry instead of failing the batch: an endpoint that already exists is
-        counted as skipped, and an entry whose body was binary or truncated produces a
-        **skeleton** — empty body, description marked as to be completed. One runtime reload at
-        the end: `items` and `runtime` tell which created endpoints are actually served.
+        The transformation (shared by the monitor and the history):
+
+        - **Route and method:** the captured `matchedRoutePath` when present and not `n/d`, otherwise
+          the request path; the method in uppercase. No parametric route is inferred.
+        - **Status and delay:** the captured status; `delayMs` 0.
+        - **Body:** empty → `{}`; valid JSON → the parsed value; other text → the string. A truncated
+          body or a `[binary payload: …]`/`[compressed payload: …]` placeholder → `{}`, and the draft
+          is **incomplete**: a new endpoint gets the description `[da completare] …`, an added variant
+          the title prefix `[da completare]`, and the item the warning `INCOMPLETE_CAPTURE` with
+          `reason` `truncated` or `binary`. Enabling and selection follow the flags anyway.
+        - **Headers:** the captured response headers, without `content-length`, `content-encoding`,
+          `transfer-encoding`, `connection`, `keep-alive`, `date`, empty values and masked `***`
+          values (a masked value is never restored); array values are joined with `, `.
+        - **Conflict:** on the destination's identity, exact method and route path, against the
+          catalog and the items already processed in the same batch. `skip` leaves it; `add-variant`
+          adds a variant (titled with the source and the UTC capture time, e.g. `monitor · 10:11:12`)
+          and keeps the endpoint's enabled state, selecting it only with `selectAddedVariants`.
+          Several equivalent destinations are a per-item `failed` with `candidates`, never a guess;
+          an endpoint file in the derived folder that does not declare that identity is a `failed`
+          item too. A new endpoint gets the variant selected and is enabled only with
+          `newEndpointEnabled`.
+
+        One runtime reload at the end. A batch is **not idempotent**: after a lost response, read
+        the catalog and stop unless you can tell with certainty which items were created — do not
+        retry blindly. Captures and dump files are never deleted by the conversion.
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              oneOf:
+              allOf:
+                - oneOf:
+                    - type: object
+                      title: Whole file
+                      required: [file]
+                      properties:
+                        file:
+                          type: string
+                          pattern: '^dump-[A-Za-z0-9._-]+\.ndjson$'
+                    - type: object
+                      title: Selected entries
+                      required: [keys]
+                      properties:
+                        keys:
+                          type: array
+                          items: { type: string }
+                          description: "`dumpKey` values (`<file>#<lineIndex>`)."
                 - type: object
-                  title: Whole file
-                  required: [file]
                   properties:
-                    file:
-                      type: string
-                      pattern: '^dump-[A-Za-z0-9._-]+\.ndjson$'
-                - type: object
-                  title: Selected entries
-                  required: [keys]
-                  properties:
-                    keys:
-                      type: array
-                      items: { type: string }
-                      description: "`dumpKey` values (`<file>#<lineIndex>`)."
+                    onConflict: { type: string, enum: [skip, add-variant], default: skip }
+                    selectAddedVariants: { type: boolean, default: false }
+                    newEndpointEnabled: { type: boolean, default: true }
             examples:
               wholeFile:
                 value: { file: dump-2026-08-03T09-12-44-321Z.ndjson }
@@ -1803,31 +1932,32 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [created, createdEmpty, skippedExisting, failed, items, runtime]
+                required: [created, createdEmpty, skippedExisting, failed, addedVariants, items, runtime]
                 properties:
                   created:
                     type: integer
-                    description: Mocks created with a usable captured body.
+                    description: Endpoints created with a usable captured body.
                   createdEmpty:
                     type: integer
-                    description: Skeletons created (body was binary or truncated).
+                    description: Endpoints created from an incomplete capture (body binary or truncated).
                   skippedExisting:
                     type: integer
-                    description: Endpoints that already existed.
+                    description: "Conflicts left untouched with `onConflict: skip`."
                   failed:
                     type: integer
+                  addedVariants:
+                    type: integer
+                    description: "Variants added to existing endpoints with `onConflict: add-variant`."
                   items:
                     type: array
-                    description: One outcome per archived entry, in the order they were read.
+                    description: One outcome per entry, in the order processed.
                     items:
                       allOf:
-                        - $ref: "#/components/schemas/BatchItemOutcome"
+                        - $ref: "#/components/schemas/CaptureItemOutcome"
                         - type: object
-                          required: [key, method, path]
+                          required: [key]
                           properties:
                             key: { type: [string, "null"], description: The entry's `dumpKey`. }
-                            method: { type: string }
-                            path: { type: string }
                   runtime: { $ref: "#/components/schemas/BatchRuntime" }
         "400": { $ref: "#/components/responses/BadRequest" }
         "500": { $ref: "#/components/responses/BatchFailed" }
@@ -3448,6 +3578,49 @@ components:
           description: |
             Why the item failed or is not served. On a created item of the OpenAPI import it can
             also report a collection that could not be assigned: the endpoint stays created.
+    CaptureItemOutcome:
+      type: object
+      description: Outcome of one capture turned into a mock.
+      required: [method, path, id, responseFile, writeOutcome, runtimeOutcome, captureOutcome, warnings, error]
+      properties:
+        method: { type: [string, "null"], description: Destination method; `null` when the capture is unavailable. }
+        path: { type: [string, "null"], description: Destination route path; `null` when the capture is unavailable. }
+        id:
+          type: [string, "null"]
+          description: The endpoint created, extended, skipped, or colliding in the derived folder.
+        responseFile:
+          type: [string, "null"]
+          description: The variant written (`001.response.json` for a new endpoint).
+        writeOutcome:
+          type: string
+          enum: [created, variant_added, skipped, failed]
+          description: |
+            `created`: a new endpoint. `variant_added`: a variant added to an existing one.
+            `skipped`: a conflict left untouched, or a capture no longer available. `failed`: see
+            `error`; a failed item restores its own files and the batch goes on, unless the restore
+            fails too (`500 ROLLBACK_FAILED`).
+        runtimeOutcome:
+          type: string
+          enum: [applied, not_applied, not_applicable]
+          description: |
+            Checked after the final reload only when the item must be served — a new enabled
+            endpoint, or a variant selected on an enabled endpoint. Otherwise `not_applicable`.
+        captureOutcome:
+          type: string
+          enum: [complete, incomplete, unavailable]
+        warnings:
+          type: array
+          items:
+            type: object
+            required: [code, reason]
+            properties:
+              code: { type: string, enum: [INCOMPLETE_CAPTURE] }
+              reason: { type: string, enum: [truncated, binary] }
+        candidates:
+          type: array
+          items: { type: string }
+          description: The equivalent destinations of an ambiguous conflict.
+        error: { type: [string, "null"] }
     OpenapiImportResult:
       type: object
       required: [created, skipped, failed, total, collections, prefix, items, runtime]
