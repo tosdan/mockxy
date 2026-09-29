@@ -10,7 +10,8 @@ livelli distinti che convivono:
    cambio, il motore del workspace **riparte**.
 3. **Preferenze globali dell'app** (app desktop) — `mockxy-prefs.json` nella directory dati utente
    di Electron (accanto all'eseguibile solo nella build Windows portabile).
-4. **Runtime operativo** — interruttori in memoria non persistiti (runtime-bar / admin API).
+4. **Runtime operativo** — interruttori e override della configurazione del motore, in memoria e non
+   persistiti (runtime-bar, barra di stato, admin API).
 5. **Per-mock** — proprietà del singolo endpoint/variante, nei file dei mock.
 6. **Docker / Compose** — variabili a livello di container e di orchestrazione.
 
@@ -70,6 +71,12 @@ dall'ingranaggio nella barra workspace). Il flusso è via IPC Electron
 Ogni campo è opzionale: se assente vale il default del motore. Al salvataggio il motore del workspace
 riparte e la finestra si ricarica.
 
+Sono **impostazioni di avvio**: il motore le usa quando parte. La dialog mostra e salva i valori
+salvati, mai quelli in uso; accanto a un campo con un override temporaneo (§4) indica il valore in
+uso. Un salvataggio che riavvia il motore (tutto tranne il solo titolo) elimina tutti gli override,
+anche quelli dei campi non modificati, e la dialog lo segnala prima: gli override non vengono
+copiati nelle impostazioni né riapplicati al nuovo runtime.
+
 Campi persistiti:
 
 - `port`, `backendUrl`, `host` — rete del workspace (`host`: `127.0.0.1` loopback vs `0.0.0.0` tutta la rete, a rischio dell'utente).
@@ -112,7 +119,16 @@ Interruttori "da banco di lavoro" nella runtime-bar; si azzerano al riavvio. App
 - `serverEnabled` — server ON/OFF (OFF = passthrough puro, nessun mock/monitor).
 - `proxyAll` — inoltra **tutte** le richieste al backend (nessun mock, ma monitor attivo).
 - Monitor: cattura live (pausa/avvia, solo runtime) e scrittura dump su disco ON/OFF (persistito lato
-  backend) + flush manuale.
+  backend) + flush manuale. Anche i limiti `maxFileBytes` e `maxTotalBytes` si cambiano qui, fino al
+  riavvio.
+- **Override della configurazione del motore** — `backendUrl`, `proxyFallbackEnabled`, `corsEnabled`,
+  `delayAllRequests`, `caseInsensitiveFilters`, `adaptProxyCookies`, `rewriteProxyRedirects`,
+  `globalDelayMs` e `requestTimeoutMs` si cambiano per l'esecuzione corrente con
+  `PATCH /_admin/api/config` (stato in `src/runtime-config.js`, regole in
+  [ADMIN-API](ADMIN-API.md#configurazione-effimera)), per esempio da un agente. Non toccano `.env`
+  né le impostazioni del workspace. «Configurazione» nella barra di stato, nel browser e nel
+  desktop, mostra per ogni chiave il valore in uso, se è un override e il valore di avvio, e
+  riporta una chiave o tutte al valore di avvio. Un riavvio del motore li elimina.
 
 > Attenzione a non confondere `proxyAll` (runtime, bypassa tutti i mock) e `serverEnabled` (runtime,
 > spegne il motore) con `proxyFallbackEnabled` (config di workspace, riguarda solo il comportamento sui

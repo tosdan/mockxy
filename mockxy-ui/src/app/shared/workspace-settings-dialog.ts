@@ -8,6 +8,9 @@ import { UiInput } from '../ui/ui-input/ui-input';
 import { UiSwitch } from '../ui/ui-switch/ui-switch';
 import { DesktopService, type WorkspaceInfo, type WorkspacePatch } from './desktop.service';
 import { ToastService } from '../ui/ui-toast/ui-toast';
+import type { RuntimeConfigKey } from '../mock-admin-api.types';
+import { RuntimeConfigStore } from './runtime-config.store';
+import { describeRuntimeConfigValue, type RuntimeConfigValueLabel } from './runtime-config-indicator';
 
 /** Validazione porta: intero in [1024, 65535]. Restituisce una chiave i18n (o null se valida). */
 function validatePort(value: string): string | null {
@@ -48,6 +51,11 @@ function validateInt(value: string, min: 0 | 1): string | null {
  * case-insensitive, proxy fallback, latenza simulata, timeout) e di **ritenzione dei dump del
  * monitor**. Al salvataggio le modifiche vengono applicate e la finestra si ricarica (il motore
  * riparte, gestito dal processo principale). La cartella è in sola lettura.
+ *
+ * Sono impostazioni di avvio (piano agent/API §13 C8): il dialog mostra e salva i valori salvati,
+ * mai quelli in uso. Accanto a un campo con un override temporaneo dice il valore in uso; se il
+ * salvataggio riavvia il motore, avvisa che gli override si perdono tutti. Non li copia nelle
+ * impostazioni e non li riapplica al nuovo runtime.
  */
 @Component({
   selector: 'app-workspace-settings-dialog',
@@ -66,6 +74,7 @@ function validateInt(value: string, min: 0 | 1): string | null {
       </div>
 
       <div class="flex max-h-[68vh] flex-col gap-4 overflow-y-auto px-5 py-4">
+        <p class="text-[12px] text-muted-foreground">{{ 'workspaceSettings.startupNote' | transloco }}</p>
         <div class="flex flex-col gap-1.5">
           <label class="text-[12px] font-bold uppercase tracking-[0.14em] text-foreground/80">{{ 'workspaceSettings.folder' | transloco }}</label>
           <p class="break-all font-mono text-[12px] text-muted-foreground">{{ data.root }}</p>
@@ -117,6 +126,9 @@ function validateInt(value: string, min: 0 | 1): string | null {
           <span class="text-[11.5px] text-destructive-soft">{{ backendUrlError()! | transloco }}</span>
           }
           <span class="text-[11.5px] text-muted-foreground">{{ 'workspaceSettings.backendUrlHint' | transloco }}</span>
+          @if (inUse('backendUrl'); as value) {
+          <span class="text-[11.5px] font-semibold text-[color:var(--status-3xx)]" data-override="backendUrl">{{ 'workspaceSettings.inUseOverride' | transloco: { value: value.key ? (value.key | transloco) : value.text } }}</span>
+          }
         </div>
 
         <div class="flex flex-col gap-1.5">
@@ -138,6 +150,9 @@ function validateInt(value: string, min: 0 | 1): string | null {
             <ui-switch [checked]="caseInsensitiveFilters()" (checkedChange)="caseInsensitiveFilters.set($event)" size="sm" [ariaLabel]="'workspaceSettings.caseInsensitiveFilters' | transloco" />
           </div>
           <span class="text-[11.5px] text-muted-foreground">{{ 'workspaceSettings.caseInsensitiveFiltersHint' | transloco }}</span>
+          @if (inUse('caseInsensitiveFilters'); as value) {
+          <span class="text-[11.5px] font-semibold text-[color:var(--status-3xx)]" data-override="caseInsensitiveFilters">{{ 'workspaceSettings.inUseOverride' | transloco: { value: value.key ? (value.key | transloco) : value.text } }}</span>
+          }
         </div>
 
         <div class="flex flex-col gap-1.5">
@@ -146,6 +161,9 @@ function validateInt(value: string, min: 0 | 1): string | null {
             <ui-switch [checked]="proxyFallbackEnabled()" (checkedChange)="proxyFallbackEnabled.set($event)" size="sm" [ariaLabel]="'workspaceSettings.proxyFallback' | transloco" />
           </div>
           <span class="text-[11.5px] text-muted-foreground">{{ 'workspaceSettings.proxyFallbackHint' | transloco }}</span>
+          @if (inUse('proxyFallbackEnabled'); as value) {
+          <span class="text-[11.5px] font-semibold text-[color:var(--status-3xx)]" data-override="proxyFallbackEnabled">{{ 'workspaceSettings.inUseOverride' | transloco: { value: value.key ? (value.key | transloco) : value.text } }}</span>
+          }
         </div>
 
         <div class="flex flex-col gap-1.5">
@@ -154,6 +172,9 @@ function validateInt(value: string, min: 0 | 1): string | null {
             <ui-switch [checked]="corsEnabled()" (checkedChange)="corsEnabled.set($event)" size="sm" [ariaLabel]="'workspaceSettings.cors' | transloco" />
           </div>
           <span class="text-[11.5px] text-muted-foreground">{{ 'workspaceSettings.corsHint' | transloco }}</span>
+          @if (inUse('corsEnabled'); as value) {
+          <span class="text-[11.5px] font-semibold text-[color:var(--status-3xx)]" data-override="corsEnabled">{{ 'workspaceSettings.inUseOverride' | transloco: { value: value.key ? (value.key | transloco) : value.text } }}</span>
+          }
         </div>
 
         <div class="flex flex-col gap-1.5">
@@ -162,6 +183,9 @@ function validateInt(value: string, min: 0 | 1): string | null {
             <ui-switch [checked]="adaptProxyCookies()" (checkedChange)="adaptProxyCookies.set($event)" size="sm" [ariaLabel]="'workspaceSettings.adaptCookies' | transloco" />
           </div>
           <span class="text-[11.5px] text-muted-foreground">{{ 'workspaceSettings.adaptCookiesHint' | transloco }}</span>
+          @if (inUse('adaptProxyCookies'); as value) {
+          <span class="text-[11.5px] font-semibold text-[color:var(--status-3xx)]" data-override="adaptProxyCookies">{{ 'workspaceSettings.inUseOverride' | transloco: { value: value.key ? (value.key | transloco) : value.text } }}</span>
+          }
         </div>
 
         <div class="flex flex-col gap-1.5">
@@ -170,6 +194,9 @@ function validateInt(value: string, min: 0 | 1): string | null {
             <ui-switch [checked]="rewriteProxyRedirects()" (checkedChange)="rewriteProxyRedirects.set($event)" size="sm" [ariaLabel]="'workspaceSettings.rewriteRedirects' | transloco" />
           </div>
           <span class="text-[11.5px] text-muted-foreground">{{ 'workspaceSettings.rewriteRedirectsHint' | transloco }}</span>
+          @if (inUse('rewriteProxyRedirects'); as value) {
+          <span class="text-[11.5px] font-semibold text-[color:var(--status-3xx)]" data-override="rewriteProxyRedirects">{{ 'workspaceSettings.inUseOverride' | transloco: { value: value.key ? (value.key | transloco) : value.text } }}</span>
+          }
         </div>
 
         <div class="flex flex-col gap-1.5">
@@ -187,6 +214,9 @@ function validateInt(value: string, min: 0 | 1): string | null {
           <span class="text-[11.5px] text-destructive-soft">{{ globalDelayError()! | transloco }}</span>
           }
           <span class="text-[11.5px] text-muted-foreground">{{ 'workspaceSettings.globalDelayHint' | transloco }}</span>
+          @if (inUse('globalDelayMs'); as value) {
+          <span class="text-[11.5px] font-semibold text-[color:var(--status-3xx)]" data-override="globalDelayMs">{{ 'workspaceSettings.inUseOverride' | transloco: { value: value.key ? (value.key | transloco) : value.text } }}</span>
+          }
         </div>
 
         <div class="flex flex-col gap-1.5">
@@ -195,6 +225,9 @@ function validateInt(value: string, min: 0 | 1): string | null {
             <ui-switch [checked]="delayAllRequests()" (checkedChange)="delayAllRequests.set($event)" size="sm" [ariaLabel]="'workspaceSettings.delayAll' | transloco" />
           </div>
           <span class="text-[11.5px] text-muted-foreground">{{ 'workspaceSettings.delayAllHint' | transloco }}</span>
+          @if (inUse('delayAllRequests'); as value) {
+          <span class="text-[11.5px] font-semibold text-[color:var(--status-3xx)]" data-override="delayAllRequests">{{ 'workspaceSettings.inUseOverride' | transloco: { value: value.key ? (value.key | transloco) : value.text } }}</span>
+          }
         </div>
 
         <div class="flex flex-col gap-1.5">
@@ -212,6 +245,9 @@ function validateInt(value: string, min: 0 | 1): string | null {
           <span class="text-[11.5px] text-destructive-soft">{{ requestTimeoutError()! | transloco }}</span>
           }
           <span class="text-[11.5px] text-muted-foreground">{{ 'workspaceSettings.requestTimeoutHint' | transloco }}</span>
+          @if (inUse('requestTimeoutMs'); as value) {
+          <span class="text-[11.5px] font-semibold text-[color:var(--status-3xx)]" data-override="requestTimeoutMs">{{ 'workspaceSettings.inUseOverride' | transloco: { value: value.key ? (value.key | transloco) : value.text } }}</span>
+          }
         </div>
 
         <div class="border-t border-border pt-2.5 text-[11px] font-bold uppercase tracking-[0.16em] text-muted-foreground">{{ 'workspaceSettings.monitorSection' | transloco }}</div>
@@ -285,6 +321,11 @@ function validateInt(value: string, min: 0 | 1): string | null {
         </div>
       </div>
 
+      @if (restartDropsOverrides()) {
+      <p class="border-t border-border px-5 pt-3 text-[12px] font-semibold text-[color:var(--status-4xx)]" role="status">
+        {{ (runtimeConfig.overrideCount() === 1 ? 'workspaceSettings.restartDropsOverridesOne' : 'workspaceSettings.restartDropsOverrides') | transloco: { count: runtimeConfig.overrideCount() } }}
+      </p>
+      }
       <div class="flex items-center justify-end gap-2 border-t border-border px-5 py-3">
         <button ui-button variant="outline" (click)="close()">{{ 'workspaceSettings.cancel' | transloco }}</button>
         <button ui-button (click)="save()" [disabled]="!canSave() || saving()"><ng-icon name="lucideCheck" size="0.9rem" /> {{ saving() ? ('workspaceSettings.saving' | transloco) : ('workspaceSettings.save' | transloco) }}</button>
@@ -298,6 +339,7 @@ export class WorkspaceSettingsDialog {
   private readonly desktop = inject(DesktopService);
   private readonly toast = inject(ToastService);
   private readonly transloco = inject(TranslocoService);
+  protected readonly runtimeConfig = inject(RuntimeConfigStore);
 
   protected readonly saving = signal(false);
   protected readonly saveError = signal<string | null>(null);
@@ -384,9 +426,9 @@ export class WorkspaceSettingsDialog {
       this.monitorDumpMaxFileError() === null &&
       this.monitorDumpMaxTotalError() === null,
   );
-  private readonly anyChanged = computed(
+  // Tutto tranne il titolo si applica riavviando il motore (vedi workspace:update).
+  private readonly engineSettingsChanged = computed(
     () =>
-      this.titleChanged() ||
       this.portChanged() ||
       this.backendUrlChanged() ||
       this.hostChanged() ||
@@ -403,9 +445,19 @@ export class WorkspaceSettingsDialog {
       this.monitorDumpMaxFileChanged() ||
       this.monitorDumpMaxTotalChanged(),
   );
+  private readonly anyChanged = computed(() => this.titleChanged() || this.engineSettingsChanged());
   protected readonly canSave = computed(
     () => this.numbersValid() && this.backendUrlError() === null && this.anyChanged(),
   );
+  /** Il salvataggio riavvia il motore e ci sono override temporanei: si perdono tutti. */
+  protected readonly restartDropsOverrides = computed(() => this.engineSettingsChanged() && this.runtimeConfig.overrideCount() > 0);
+
+  /** Il valore in uso di una chiave con un override temporaneo; null senza override. */
+  protected inUse(key: RuntimeConfigKey): RuntimeConfigValueLabel | null {
+    const state = this.runtimeConfig.state();
+    if (state == null || !this.runtimeConfig.overrideKeys().includes(key)) return null;
+    return describeRuntimeConfigValue(state.effective[key]);
+  }
 
   protected async save(): Promise<void> {
     if (!this.canSave() || this.saving()) return;

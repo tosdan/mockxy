@@ -8,6 +8,7 @@ import { UiTooltip } from '../ui/ui-tooltip/ui-tooltip';
 import { WorkspaceSummaryStore } from './workspace-summary.store';
 import { RuntimeSyncStore } from './runtime-sync.store';
 import { RuntimeDiagnosticsStore } from './runtime-diagnostics.store';
+import { RuntimeConfigIndicator } from './runtime-config-indicator';
 
 /**
  * Striscia di stato in fondo alla shell: quanti endpoint, collection e attivi ha il workspace, e
@@ -23,7 +24,7 @@ import { RuntimeDiagnosticsStore } from './runtime-diagnostics.store';
  */
 @Component({
   selector: 'app-status-bar',
-  imports: [CdkConnectedOverlay, CdkOverlayOrigin, NgIcon, TranslocoPipe, UiKbd, UiTooltip],
+  imports: [CdkConnectedOverlay, CdkOverlayOrigin, NgIcon, RuntimeConfigIndicator, TranslocoPipe, UiKbd, UiTooltip],
   providers: [provideIcons({ lucideServerCrash, lucideTriangleAlert, lucideUnplug, lucideX })],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -157,9 +158,12 @@ import { RuntimeDiagnosticsStore } from './runtime-diagnostics.store';
       </ng-template>
       }
 
-      <!-- Il suggerimento sta a destra e fuori dal blocco del riepilogo: la scorciatoia c'e' anche
-           quando il catalogo non e' ancora stato aperto. -->
-      <span class="ml-auto inline-flex items-center gap-1.5">
+      <!-- Configurazione runtime e suggerimento stanno a destra, fuori dal blocco del riepilogo: ci
+           sono anche quando il catalogo non e' ancora stato aperto. -->
+      <span class="ml-auto"></span>
+      <app-runtime-config-indicator />
+      <span class="h-3 w-px bg-border"></span>
+      <span class="inline-flex items-center gap-1.5">
         {{ 'statusBar.commands' | transloco }}
         <ui-kbd>{{ modifierKey }}</ui-kbd>
         <ui-kbd>K</ui-kbd>

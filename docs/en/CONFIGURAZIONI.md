@@ -10,7 +10,8 @@ levels that coexist:
    change, the workspace's engine **restarts**.
 3. **Global app preferences** (desktop app) — `mockxy-prefs.json` in Electron's user data directory
    (next to the executable only in the Windows portable build).
-4. **Operational runtime** — in-memory switches, not persisted (runtime-bar / admin API).
+4. **Operational runtime** — switches and overrides of the engine configuration, in memory and
+   not persisted (runtime-bar, status bar, admin API).
 5. **Per-mock** — properties of the single endpoint/variant, in the mock files.
 6. **Docker / Compose** — container-level and orchestration-level variables.
 
@@ -70,6 +71,12 @@ from the gear icon in the workspace bar). The flow goes through Electron IPC
 Every field is optional: if absent, the engine default applies. On save the workspace's engine
 restarts and the window reloads.
 
+These are **startup settings**: the engine uses them when it starts. The dialog shows and saves the
+saved values, never the ones in use; next to a field with a temporary override (§4) it tells the
+value in use. A save that restarts the engine (anything but the title alone) drops every override,
+including those of fields you did not change, and the dialog warns about it first: overrides are
+neither copied into the settings nor applied again to the new runtime.
+
 Persisted fields:
 
 - `port`, `backendUrl`, `host` — the workspace's networking (`host`: `127.0.0.1` loopback vs `0.0.0.0` whole network, at the user's own risk).
@@ -112,7 +119,16 @@ preferences. Not per-workspace.
 - `serverEnabled` — server ON/OFF (OFF = pure passthrough, no mocks/monitor).
 - `proxyAll` — forwards **all** requests to the backend (no mocks, but the monitor stays active).
 - Monitor: live capture (pause/start, runtime only) and dump writing to disk ON/OFF (persisted
-  backend-side) + manual flush.
+  backend-side) + manual flush. The `maxFileBytes` and `maxTotalBytes` limits change here too,
+  until the restart.
+- **Overrides of the engine configuration** — `backendUrl`, `proxyFallbackEnabled`, `corsEnabled`,
+  `delayAllRequests`, `caseInsensitiveFilters`, `adaptProxyCookies`, `rewriteProxyRedirects`,
+  `globalDelayMs` and `requestTimeoutMs` change for the current run with
+  `PATCH /_admin/api/config` (state in `src/runtime-config.js`, rules in
+  [ADMIN-API](ADMIN-API.md#ephemeral-configuration)), for example by an agent. They touch neither
+  `.env` nor the workspace settings. «Configuration» in the status bar, in the browser and on the
+  desktop, shows for every key the value in use, whether it is an override and the startup value,
+  and brings one key or all of them back to the startup value. A restart of the engine drops them.
 
 > Be careful not to confuse `proxyAll` (runtime, bypasses all mocks) and `serverEnabled` (runtime,
 > switches the engine off) with `proxyFallbackEnabled` (workspace config, which only concerns the

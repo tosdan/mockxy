@@ -7,6 +7,7 @@ import { translocoTesting } from '../testing/transloco-testing';
 import { fakeRuntimeSync } from '../testing/runtime-sync-testing';
 import { MockAdminApiService } from '../mock-admin-api.service';
 import type { RuntimeStatusReport } from '../mock-admin-api.types';
+import { runtimeConfigState } from '../testing/runtime-config-testing';
 import { of } from 'rxjs';
 
 describe('StatusBar', () => {
@@ -22,7 +23,7 @@ describe('StatusBar', () => {
       providers: [
         provideNoopAnimations(),
         sync.provider,
-        { provide: MockAdminApiService, useValue: { getRuntimeStatus: () => of(runtimeReport) } },
+        { provide: MockAdminApiService, useValue: { getRuntimeStatus: () => of(runtimeReport), getRuntimeConfig: () => of(runtimeConfigState({ corsEnabled: true })) } },
       ],
     }).compileComponents();
     summary = TestBed.inject(WorkspaceSummaryStore);
@@ -36,6 +37,10 @@ describe('StatusBar', () => {
 
   function text(fixture: ReturnType<typeof create>): string {
     return fixture.nativeElement.textContent.replace(/\s+/g, ' ').trim();
+  }
+
+  function buttonWith(fixture: ReturnType<typeof create>, label: string): HTMLButtonElement | undefined {
+    return Array.from(fixture.nativeElement.querySelectorAll('button') as NodeListOf<HTMLButtonElement>).find((b) => b.textContent?.includes(label));
   }
 
   it('senza riepilogo non inventa conteggi, ma annuncia comunque la scorciatoia', () => {
@@ -62,7 +67,7 @@ describe('StatusBar', () => {
     summary.set({ endpoints: 3, collections: 0, active: 3, loadErrors: [] });
     fixture.detectChanges();
 
-    expect(fixture.nativeElement.querySelector('button')).toBeNull();
+    expect(buttonWith(fixture, 'non caricat')).toBeUndefined();
   });
 
   it('apre in un pannello l elenco delle definizioni scartate, con file e motivo', () => {
@@ -75,7 +80,7 @@ describe('StatusBar', () => {
     });
     fixture.detectChanges();
 
-    const button = fixture.nativeElement.querySelector('button')!;
+    const button = buttonWith(fixture, 'definizione non caricata')!;
     expect(button.textContent).toContain('1 definizione non caricata');
 
     button.click();
@@ -85,6 +90,11 @@ describe('StatusBar', () => {
     expect(panel).not.toBeNull();
     expect(panel.textContent).toContain('api/rotta/GET.endpoint.json');
     expect(panel.textContent).toContain('status must be a number.');
+  });
+
+  it('mostra da ogni view la configurazione del runtime, con gli override attivi', () => {
+    const fixture = create();
+    expect(buttonWith(fixture, '1 override attivo')).toBeTruthy();
   });
 
   describe('collegamento e runtime', () => {
