@@ -548,6 +548,55 @@ describe('MocksStore', () => {
       expect(onLoaded).toHaveBeenCalled();
     });
 
+    it('la ricarica manuale con l’elenco in volo al cambio di workspace non applica né rilegge l’omonimo', () => {
+      const store = create();
+      const opened = detail('e1');
+      store.selected.set(opened);
+      const slow = new Subject<ReturnType<typeof listResponse>>();
+      api.listMocks.mockReturnValueOnce(slow).mockReturnValue(of(list3));
+      store.reload();
+
+      sync.runtime(true);
+      slow.next(listResponse([summary('e1')]));
+      slow.complete();
+
+      expect(store.mocks()).toHaveLength(3);
+      expect(api.getMock).not.toHaveBeenCalled();
+      expect(store.selected()).toBe(opened);
+      expect(store.staleWorkspace()).toBe(true);
+    });
+
+    it('la ricarica manuale col dettaglio in volo al cambio di workspace non lo installa', () => {
+      const store = create();
+      const opened = detail('e1');
+      store.selected.set(opened);
+      const pending = new Subject<MockDetail>();
+      api.listMocks.mockReturnValue(of(list3));
+      api.getMock.mockReturnValueOnce(pending);
+      store.reload();
+      expect(api.getMock).toHaveBeenCalledWith('e1');
+
+      sync.runtime(true);
+      pending.next(detail('e1', { status: 999 }));
+      pending.complete();
+
+      expect(store.selected()).toBe(opened);
+    });
+
+    it('il caricamento iniziale superato da un cambio di workspace non sovrascrive l’elenco nuovo', () => {
+      const store = create();
+      const slow = new Subject<ReturnType<typeof listResponse>>();
+      api.listMocks.mockReturnValueOnce(slow).mockReturnValue(of(list3));
+      store.loadCatalog();
+
+      sync.runtime(true);
+      slow.next(listResponse([summary('e1')]));
+      slow.complete();
+
+      expect(store.mocks()).toHaveLength(3);
+      expect(api.getMock).not.toHaveBeenCalled();
+    });
+
     it('un nuovo runtime sullo stesso workspace rilegge come un focus', () => {
       const store = create();
       store.selected.set(detail('e1'));

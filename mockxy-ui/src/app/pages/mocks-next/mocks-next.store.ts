@@ -211,11 +211,15 @@ export class MocksStore {
   loadCatalog(preselect?: { method: string; path: string }): void {
     this.loading.set(true);
     this.error.set(undefined);
+    const epoch = this.workspaceEpoch;
     this.api
       .listMocks()
       .pipe(finalize(() => this.loading.set(false)))
       .subscribe({
         next: (res) => {
+          // Partita prima di un cambio di workspace: l'elenco può essere del precedente, e quello
+          // della nuova istanza lo porta la rilettura seguita al cambio.
+          if (epoch !== this.workspaceEpoch) return;
           this.applyCatalogResponse(res);
           if (this.selected() === undefined && res.items.length > 0) {
             const rememberedId = this.viewState.read<string>(SELECTED_ENDPOINT_STATE_KEY);
@@ -235,16 +239,22 @@ export class MocksStore {
     this.error.set(undefined);
     // Col workspace cambiato il dettaglio aperto è del precedente: si riparte da una selezione nuova.
     const selId = this.staleWorkspace() ? undefined : this.selected()?.id;
+    const epoch = this.workspaceEpoch;
     this.api
       .listMocks()
       .pipe(finalize(() => this.loading.set(false)))
       .subscribe({
         next: (res) => {
+          // Come per la rilettura di sincronizzazione: un cambio di workspace intervenuto nel
+          // frattempo annulla sia l'elenco sia la lettura del dettaglio omonimo.
+          if (epoch !== this.workspaceEpoch) return;
           this.applyCatalogResponse(res);
           if (selId && res.items.some((i) => i.id === selId)) {
             // Il dettaglio aperto resta quello di prima; solo una lettura incompleta va segnalata.
             this.api.getMock(selId).subscribe({
-              next: (d) => this.setSelected(d),
+              next: (d) => {
+                if (epoch === this.workspaceEpoch) this.setSelected(d);
+              },
               error: (e) => {
                 if (isReadInconsistentError(e)) this.error.set(this.detailReadErrorMessage(e));
               },
