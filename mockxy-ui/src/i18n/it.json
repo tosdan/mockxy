@@ -45,7 +45,9 @@
     "resultFailed": "{{count}} falliti",
     "resultNotServed": "{{count}} non serviti dal runtime",
     "resultWarnings": "{{count}} con avvisi",
-    "partialResult": "Scritto finora: {{summary}}."
+    "partialResult": "Scritto finora: {{summary}}.",
+    "resultAddedVariants": "{{count}} varianti aggiunte",
+    "resultUnavailable": "{{count}} non più disponibili"
   },
   "dati": {
     "title": "Dati",
@@ -334,9 +336,31 @@
     "toastMockCreatedSkeletonDesc": "{{method}} {{path}} — body da completare (non catturato)",
     "batchCreated": "{{count}} create",
     "batchSkeleton": "di cui {{count}} skeleton da completare",
-    "batchFailed": "{{count}} non create (es. già esistenti)",
+    "batchFailed": "{{count}} non riuscite",
     "toastMocksCreated": "Mock creati",
-    "toastNoMocksCreated": "Nessun mock creato"
+    "toastNoMocksCreated": "Nessun mock creato",
+    "activateNew": "Attiva subito",
+    "activateNewTip": "Senza spunta i nuovi endpoint nascono disattivati: la risposta servita non cambia finché non li attivi.",
+    "toastMockPrepared": "Mock creato senza attivarlo",
+    "toastMockPreparedDesc": "{{method}} {{path}} — l'endpoint è disattivato: attivalo dal catalogo quando serve",
+    "toastMockPreparedSkeletonDesc": "{{method}} {{path}} — disattivato, con il body da completare prima di attivarlo",
+    "incompleteHint": "Il body non è stato catturato: completa la variante prima di attivarla.",
+    "toastCaptureUnavailable": "Cattura non più disponibile",
+    "toastCaptureUnavailableDesc": "La richiesta è uscita dal Monitor (svuotato o oltre le ultime 250 voci): catturala di nuovo.",
+    "toastRuntimeChanged": "Il motore è ripartito",
+    "toastRuntimeChangedDesc": "Le catture mostrate appartengono all'esecuzione precedente: il Monitor si sta riallineando, riprova sulle nuove voci.",
+    "toastOutcomeUnknown": "Esito sconosciuto",
+    "toastOutcomeUnknownDesc": "La risposta non è arrivata: controlla il catalogo prima di riprovare, la creazione potrebbe essere avvenuta.",
+    "toastMonitorNotReady": "Monitor non ancora collegato",
+    "toastMonitorNotReadyDesc": "Aspetta che il Monitor si colleghi al motore e riprova.",
+    "batchSkipped": "{{count}} già esistenti",
+    "batchUnavailable": "{{count}} non più disponibili",
+    "batchAddedVariants": "{{count}} varianti aggiunte",
+    "batchNotServed": "{{count}} non servite dal runtime",
+    "batchWarnings": "{{count}} con avvisi",
+    "toastNotServed": "Scritto, ma non servito",
+    "toastNotServedDesc": "{{method}} {{path}} è su disco, ma il runtime non lo serve.",
+    "partialResult": "Scritto finora: {{summary}}."
   },
   "mocks": {
     "resizeHint": "Trascina per ridimensionare · doppio click per reimpostare"

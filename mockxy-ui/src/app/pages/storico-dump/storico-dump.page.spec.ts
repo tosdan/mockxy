@@ -148,7 +148,7 @@ describe('StoricoDumpPage', () => {
       const { c } = create();
       c.selectAllLoaded();
       c.createFromSelected();
-      expect(api.createMocksFromDump).toHaveBeenCalledWith({ keys: ['f#0', 'f#1'] });
+      expect(api.createMocksFromDump).toHaveBeenCalledWith({ keys: ['f#0', 'f#1'], onConflict: 'skip', selectAddedVariants: false, newEndpointEnabled: true });
       expect(toast.show).toHaveBeenCalledWith(expect.objectContaining({ tone: 'success' }));
       expect(c.selectedCount()).toBe(0);
       expect(c.creating()).toBe(false);
@@ -214,10 +214,25 @@ describe('StoricoDumpPage', () => {
       );
     });
 
+    it('il riepilogo conta anche le varianti aggiunte e le catture non più disponibili', () => {
+      api.createMocksFromDump.mockReturnValueOnce(of({
+        created: 1, createdEmpty: 0, skippedExisting: 0, failed: 0, addedVariants: 2,
+        items: [
+          { key: 'f#0', method: 'GET', path: '/a', id: 'a', responseFile: '001.response.json', writeOutcome: 'created', runtimeOutcome: 'applied', captureOutcome: 'complete', warnings: [], error: null },
+          { key: 'f#9', method: null, path: null, id: null, responseFile: null, writeOutcome: 'skipped', runtimeOutcome: 'not_applicable', captureOutcome: 'unavailable', warnings: [], error: null },
+        ],
+        runtime: { status: 'applied', errors: [] },
+      }) as never);
+      const { c } = create();
+      c.selectAllLoaded();
+      c.createFromSelected();
+      expect(toast.show).toHaveBeenLastCalledWith(expect.objectContaining({ description: expect.stringContaining('2 varianti aggiunte, 1 non più disponibili') }));
+    });
+
     it('"tutto il file" manda il criterio per nome file', () => {
       const { c } = create();
       c.createFromFile(FILE1);
-      expect(api.createMocksFromDump).toHaveBeenCalledWith({ file: FILE1.name });
+      expect(api.createMocksFromDump).toHaveBeenCalledWith({ file: FILE1.name, onConflict: 'skip', selectAddedVariants: false, newEndpointEnabled: true });
     });
 
     it('su errore mostra il messaggio e sblocca il pulsante', () => {

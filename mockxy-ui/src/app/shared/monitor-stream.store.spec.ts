@@ -68,6 +68,18 @@ describe('MonitorStreamStore — sincronizzazione', () => {
     expect(store.entries()).toEqual([entry('3')]);
   });
 
+  it('lo snapshot dichiara il runtime delle voci; un nuovo runtime lo dimentica fino al suo snapshot', () => {
+    const store = create();
+    streams[0].next({ type: 'snapshot', runtimeId: 'rt-1', items: [entry('1')] });
+    expect(store.runtimeId()).toBe('rt-1');
+
+    sync.runtime();
+    // Le voci mostrate sono ancora quelle del runtime precedente: non si attribuiscono al nuovo.
+    expect(store.runtimeId()).toBeNull();
+    streams[1].next({ type: 'snapshot', runtimeId: 'rt-2', items: [] });
+    expect(store.runtimeId()).toBe('rt-2');
+  });
+
   it('in pausa voluta resta in pausa anche a un nuovo runtime', () => {
     const store = create();
     store.setStreaming(false);

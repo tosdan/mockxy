@@ -213,6 +213,9 @@ describe("GET /monitoring/requests — modalità page e voce per ID", () => {
       expect(statusCode).toBe(200);
       expect(contentType).toMatch(/^text\/event-stream/);
       expect(firstEvent).toContain('"type":"snapshot"');
+      // Lo snapshot dichiara il runtime delle sue voci (§13 C7): gli ID ripartono a ogni avvio.
+      const snapshot = JSON.parse(firstEvent.trim().replace(/^data: /, ""));
+      expect(snapshot.runtimeId).toBe(await runtimeIdOf(app));
     } finally {
       server.closeAllConnections?.();
       await new Promise((resolve) => server.close(resolve));

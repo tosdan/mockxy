@@ -168,7 +168,7 @@ then start the scenario.
 | `GET /monitoring/requests/:id?runtimeId=…` | one complete entry by id, in the given runtime: `{ runtimeId, item }`; `409 RUNTIME_CHANGED` if the engine restarted, `404 REQUEST_NOT_AVAILABLE` if the entry was evicted, cleared or never existed |
 | `POST /monitoring/requests/create-mocks` | creates mocks from monitor entries, in the order given — body `{ runtimeId, ids, onConflict, selectAddedVariants?, newEndpointEnabled }`; [rules and outcomes](#creating-mocks-from-traffic) |
 | `DELETE /monitoring/requests` | clears the live view (the archives are untouched) |
-| `GET /monitoring/requests/stream` | live event stream (SSE) |
+| `GET /monitoring/requests/stream` | live event stream (SSE); the first event, `snapshot`, carries the current entries and the `runtimeId` their IDs belong to |
 | `GET /monitoring/dump` | state of the disk writing |
 | `PATCH /monitoring/dump` | turns it on/off and adjusts cadence/threshold at runtime — body `{ enabled?, intervalMs?, threshold? }` |
 | `POST /monitoring/dump/flush` | manual flush; body `{}`; answers with the number of entries written |
@@ -255,6 +255,12 @@ The `201` answer reports per item `writeOutcome` (`created`, `variant_added`, `s
 `counts`. A batch is **not idempotent**: if the answer is lost, read the catalog again and stop
 unless you can tell with certainty which items were created, rather than retrying blindly. The
 conversion deletes neither captures nor dump files.
+
+When several items of the same batch select a variant on the same endpoint (created endpoints
+included), the runtime serves the last one: the earlier ones have `runtimeOutcome:
+"not_applicable"` and the warning `SUPERSEDED`, with `by` naming the variant that replaced them. A
+batch that fails after writing (`BATCH_RUNTIME_FAILED`, `ROLLBACK_FAILED`) reports in
+`details.result` the result in the shape of the `201`, counts included.
 
 ## Server state
 

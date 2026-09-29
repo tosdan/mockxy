@@ -327,8 +327,9 @@ export class StoricoDumpPage implements OnInit {
 
   private runCreate(selection: DumpSelection): void {
     this.creating.set(true);
+    // Opzioni sempre esplicite (§13 C7): gli endpoint esistenti restano come sono, i nuovi sono serviti.
     this.api
-      .createMocksFromDump(selection)
+      .createMocksFromDump({ ...selection, onConflict: 'skip', selectAddedVariants: false, newEndpointEnabled: true })
       .pipe(finalize(() => this.creating.set(false)))
       .subscribe({
         next: (result) => {
@@ -463,6 +464,9 @@ export class StoricoDumpPage implements OnInit {
     const parts = [this.transloco.translate('storico.resultCreated', { count: result.created })];
     if (result.createdEmpty > 0) parts.push(this.transloco.translate('storico.resultSkeleton', { count: result.createdEmpty }));
     if (result.skippedExisting > 0) parts.push(this.transloco.translate('storico.resultExisting', { count: result.skippedExisting }));
+    if (result.addedVariants > 0) parts.push(this.transloco.translate('storico.resultAddedVariants', { count: result.addedVariants }));
+    const unavailable = (result.items ?? []).filter((item) => item.captureOutcome === 'unavailable').length;
+    if (unavailable > 0) parts.push(this.transloco.translate('storico.resultUnavailable', { count: unavailable }));
     if (result.failed > 0) parts.push(this.transloco.translate('storico.resultFailed', { count: result.failed }));
     const { notServed, withWarnings } = summarizeBatchAttention(result.items);
     if (notServed > 0) parts.push(this.transloco.translate('storico.resultNotServed', { count: notServed }));

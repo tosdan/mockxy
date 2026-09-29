@@ -171,7 +171,7 @@ client e polling, eseguire il reset, poi avviare lo scenario.
 | `GET /monitoring/requests/:id?runtimeId=…` | una voce completa per ID, nel runtime indicato: `{ runtimeId, item }`; `409 RUNTIME_CHANGED` se il motore è ripartito, `404 REQUEST_NOT_AVAILABLE` se la voce è stata espulsa, cancellata o non esiste |
 | `POST /monitoring/requests/create-mocks` | crea mock da voci del Monitor, nell'ordine dato — body `{ runtimeId, ids, onConflict, selectAddedVariants?, newEndpointEnabled }`; [regole ed esiti](#creare-mock-dal-traffico) |
 | `DELETE /monitoring/requests` | svuota la vista live (gli archivi non sono toccati) |
-| `GET /monitoring/requests/stream` | flusso live degli eventi (SSE) |
+| `GET /monitoring/requests/stream` | flusso live degli eventi (SSE); il primo, `snapshot`, porta le voci presenti e il `runtimeId` a cui appartengono i loro ID |
 | `GET /monitoring/dump` | stato della scrittura su disco |
 | `PATCH /monitoring/dump` | accende/spegne e regola cadenza/soglia a runtime — body `{ enabled?, intervalMs?, threshold? }` |
 | `POST /monitoring/dump/flush` | flush manuale; body `{}`; risponde con il numero di voci scritte |
@@ -260,6 +260,12 @@ La risposta `201` riporta per ogni elemento `writeOutcome` (`created`, `variant_
 **non è idempotente**: se la risposta si perde, rileggere il catalogo e fermarsi se non si possono
 identificare con certezza gli elementi creati, senza ripetere alla cieca. La conversione non
 cancella né le catture né i file di dump.
+
+Se più elementi dello stesso batch selezionano una variante sullo stesso endpoint (endpoint creati
+compresi), il runtime serve l'ultima: le precedenti hanno `runtimeOutcome: "not_applicable"` e
+l'avviso `SUPERSEDED`, con `by` la variante che le ha sostituite. Un batch fallito dopo la
+scrittura (`BATCH_RUNTIME_FAILED`, `ROLLBACK_FAILED`) riporta in `details.result` il risultato con
+la forma della `201`, conteggi compresi.
 
 ## Stato del server
 

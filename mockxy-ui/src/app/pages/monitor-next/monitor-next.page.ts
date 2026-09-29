@@ -1,7 +1,7 @@
 import { DatePipe } from '@angular/common';
 import { ChangeDetectionStrategy, Component, TemplateRef, computed, effect, inject, signal, viewChild } from '@angular/core';
 import { Router } from '@angular/router';
-import { catchError, finalize, forkJoin, map, of } from 'rxjs';
+import { finalize, type Observable } from 'rxjs';
 import { NgIcon, provideIcons } from '@ng-icons/core';
 import {
   lucideActivity,
@@ -19,6 +19,7 @@ import {
 import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
 import { UiBadge } from '../../ui/ui-badge/ui-badge';
 import { UiButton } from '../../ui/ui-button/ui-button';
+import { UiCheckbox } from '../../ui/ui-checkbox/ui-checkbox';
 import { UiCode } from '../../ui/ui-code/ui-code';
 import { UiCollapsible } from '../../ui/ui-collapsible/ui-collapsible';
 import { UiSelect, type UiSelectOption } from '../../ui/ui-select/ui-select';
@@ -28,8 +29,8 @@ import { ToastService } from '../../ui/ui-toast/ui-toast';
 import { UiDialog } from '../../ui/ui-dialog/ui-dialog';
 import { MockAdminApiService } from '../../mock-admin-api.service';
 import { MonitorStreamStore } from '../../shared/monitor-stream.store';
-import type { MockCreateRequest, MockSummary, RequestMonitorEntry } from '../../mock-admin-api.types';
-import { isDetailUnavailable } from '../../mock-admin-api.types';
+import { summarizeBatchAttention, type CaptureBatchOptions, type CaptureItemOutcome, type MockSummary, type MonitorCreateMocksResult, type RequestMonitorEntry } from '../../mock-admin-api.types';
+import { readBatchPartialResult } from '../../shared/read-error-message';
 import { MOCK_METHODS } from '../../mock-admin-ui.constants';
 
 interface SourceMeta {
@@ -47,7 +48,7 @@ interface SourceMeta {
  */
 @Component({
   selector: 'app-monitor-next',
-  imports: [DatePipe, NgIcon, TranslocoPipe, UiBadge, UiButton, UiCode, UiCollapsible, UiSelect, UiTable, UiTooltip],
+  imports: [DatePipe, NgIcon, TranslocoPipe, UiBadge, UiButton, UiCheckbox, UiCode, UiCollapsible, UiSelect, UiTable, UiTooltip],
   providers: [
     provideIcons({
       lucideActivity, lucideArrowLeft, lucideCheck, lucideCopy, lucideDatabase, lucideDownload, lucideListTree,
@@ -84,6 +85,10 @@ interface SourceMeta {
         <div class="ml-auto flex items-center gap-2">
           @if (selectionMode()) {
           <span class="text-[12.5px] text-muted-foreground">{{ 'monitor.selectedCount' | transloco: { count: selectedCount() } }}</span>
+          <label class="flex items-center gap-2 text-[12px] text-muted-foreground" [uiTooltip]="'monitor.activateNewTip' | transloco">
+            <ui-checkbox [(checked)]="activateNewMocks" [ariaLabel]="'monitor.activateNew' | transloco" />
+            {{ 'monitor.activateNew' | transloco }}
+          </label>
           <button ui-button size="sm" [disabled]="selectedCount() === 0 || creatingMock()" (click)="createMocksFromSelected()"><ng-icon name="lucidePlus" size="0.9rem" /> {{ 'monitor.createMock' | transloco }}</button>
           <button ui-button variant="outline" size="sm" (click)="exitSelection()"><ng-icon name="lucideX" size="0.9rem" /> {{ 'monitor.cancel' | transloco }}</button>
           } @else {
@@ -247,6 +252,11 @@ interface SourceMeta {
                   @if (covering.disabled) { <ui-badge tone="neutral">{{ 'monitor.coveringMockDisabledBadge' | transloco }}</ui-badge> }
                 </button>
                 }
+                <!-- Senza spunta il nuovo endpoint nasce disattivato: la risposta servita non cambia. -->
+                <label class="flex items-center gap-2 text-[12px] text-muted-foreground" [uiTooltip]="'monitor.activateNewTip' | transloco">
+                  <ui-checkbox [(checked)]="activateNewMocks" [ariaLabel]="'monitor.activateNew' | transloco" />
+                  {{ 'monitor.activateNew' | transloco }}
+                </label>
                 <button ui-button size="sm" [disabled]="creatingMock()" (click)="createMockFromEntry(sel)"><ng-icon name="lucidePlus" size="0.85rem" /> {{ 'monitor.createMockFromThis' | transloco }}</button>
                 <button ui-button variant="outline" size="sm" (click)="copyCurl(sel)"><ng-icon name="lucideCopy" size="0.85rem" /> cURL</button>
               </span>
@@ -357,7 +367,7 @@ interface SourceMeta {
         <div class="px-5 py-4 text-[13.5px] leading-relaxed text-muted-foreground">
           <p>
             {{ 'monitor.mockExistsDesc' | transloco }}
-            <span class="font-mono text-foreground">{{ prompt.request.config.method }} {{ prompt.request.config.path }}</span>
+            <span class="font-mono text-foreground">{{ prompt.method }} {{ prompt.path }}</span>
           </p>
           <p class="mt-2">{{ 'monitor.mockExistsQuestion' | transloco }}</p>
         </div>
@@ -380,14 +390,17 @@ export class MonitorNextPage {
   private readonly dialog = inject(UiDialog);
 
   /**
-   * Conflitto di creazione in sospeso: il POST è fallito con 409 perché l'endpoint esiste già
-   * (l'id arriva nei details dell'errore) e il dialog chiede se aggiungere la response
+   * Conflitto di creazione in sospeso: il server ha saltato la cattura perché l'endpoint esiste già
+   * (id, metodo e rotta arrivano nell'esito) e il dialog chiede se aggiungere la response
    * catturata come nuova variante di quell'endpoint.
    */
   protected readonly mockExistsPrompt = signal<{
     readonly existingMockId: string;
-    readonly request: MockCreateRequest;
+    readonly method: string;
+    readonly path: string;
     readonly entry: RequestMonitorEntry;
+    /** Il runtime della cattura, confermato dal server: dopo un riavvio lo stesso ID è un'altra richiesta. */
+    readonly runtimeId: string;
   } | null>(null);
   private readonly mockExistsDialogTpl = viewChild.required<TemplateRef<unknown>>('mockExistsDialog');
   private mockExistsDialogRef: { close: (result?: unknown) => void } | null = null;
@@ -400,6 +413,11 @@ export class MonitorNextPage {
 
   protected readonly selectedId = signal<string | undefined>(undefined);
   protected readonly creatingMock = signal(false);
+  /**
+   * Creazione di endpoint nuovi dal traffico: attivi subito (default) o solo preparati, disattivati.
+   * Lo si dichiara sempre al server: una cattura non attiva mai niente in modo implicito.
+   */
+  protected readonly activateNewMocks = signal(true);
   /** Larghezza della lista (px), ridimensionabile col divisore e persistita in localStorage (min = catalogo). */
   protected readonly listWidth = signal(clampListWidth(readStoredListWidth()));
 
@@ -417,7 +435,15 @@ export class MonitorNextPage {
   protected readonly sourceFilter = signal('all');
   protected readonly statusClasses = signal<ReadonlySet<number>>(new Set());
   protected readonly selectionMode = signal(false);
-  protected readonly selectedIds = signal<ReadonlySet<string>>(new Set());
+  /**
+   * Le voci spuntate e il runtime a cui appartengono: dopo un riavvio gli stessi ID sono altre
+   * richieste, quindi una selezione di un altro runtime non vale più e non si mostra.
+   */
+  private readonly selection = signal<{ readonly runtimeId: string | null; readonly ids: ReadonlySet<string> }>({ runtimeId: null, ids: new Set() });
+  protected readonly selectedIds = computed<ReadonlySet<string>>(() => {
+    const { runtimeId, ids } = this.selection();
+    return runtimeId === this.stream.runtimeId() ? ids : new Set();
+  });
   protected readonly selectedCount = computed(() => this.selectedIds().size);
 
   protected readonly methodOptions: readonly UiSelectOption<string>[] = [
@@ -476,6 +502,11 @@ export class MonitorNextPage {
     const sel = this.selected();
     this.coveringMock.set(null);
     this.coveringMockEntryId = sel?.id;
+    this.lookupCoveringMock(sel);
+  });
+
+  /** Risolve il mock che oggi coprirebbe la entry (anche dopo averne creato uno da lì). */
+  private lookupCoveringMock(sel: RequestMonitorEntry | undefined): void {
     // Le entry servite da mock/handler hanno già il loro link diretto (goToDefinition).
     if (sel == null || sel.source === 'mock' || sel.source === 'handler') return;
 
@@ -488,7 +519,7 @@ export class MonitorNextPage {
         /* lookup best-effort: senza risposta, semplicemente niente scorciatoia */
       },
     });
-  });
+  }
 
   // --- statistiche su TUTTE le entry (non filtrate) ---
   protected readonly total = computed(() => this.entries().length);
@@ -582,91 +613,90 @@ export class MonitorNextPage {
   }
 
   /**
-   * Costruisce la richiesta createMock dalla coppia request/response catturata. Se il body non è
-   * ricostruibile fedelmente (binario/compresso/troncato) produce uno skeleton: body vuoto +
-   * descrizione "[da completare]…" (gemello del batch backend); status e header restano preservati.
+   * Crea mock dalle catture sul server (§13 C7), con le regole condivise con lo Storico: la pagina
+   * non trasforma più nulla da sé. Manda il runtime a cui appartengono le voci mostrate, dichiarato
+   * dallo snapshot dello stream; senza non si può creare niente di affidabile.
    */
-  private buildMockRequest(entry: RequestMonitorEntry): MockCreateRequest {
-    const path = entry.matchedRoutePath && entry.matchedRoutePath !== 'n/d' ? entry.matchedRoutePath : entry.path;
-    const skeleton = this.bodyIssue(entry) !== null;
-    const request: MockCreateRequest = {
-      config: { method: entry.method, path, status: entry.status, disabled: false, headers: this.safeResponseHeaders(entry.responseHeaders), bodyFile: '001.response.json', delayMs: 0 },
-      body: skeleton ? {} : parseJsonOrText(entry.responseBody),
-    };
-    if (skeleton) request.description = SKELETON_DESCRIPTION;
-    return request;
-  }
-
-  /** Header della response da copiare nel mock (es. content-type), saltando i mascherati/vuoti e quelli calcolati dal server. */
-  private safeResponseHeaders(headers: Record<string, string | string[]> | undefined): Record<string, string> {
-    const out: Record<string, string> = {};
-    for (const [name, value] of Object.entries(headers ?? {})) {
-      if (UNSAFE_MOCK_HEADERS.has(name.toLowerCase())) continue;
-      const flat = Array.isArray(value) ? value.join(', ') : String(value);
-      if (flat === '' || flat === '***') continue;
-      out[name] = flat;
+  private createFromCaptures(runtimeId: string | null, ids: string[], options: CaptureBatchOptions): Observable<MonitorCreateMocksResult> | null {
+    if (runtimeId == null) {
+      this.toast.show({ title: this.transloco.translate('monitor.toastMonitorNotReady'), description: this.transloco.translate('monitor.toastMonitorNotReadyDesc'), tone: 'error' });
+      return null;
     }
-    return out;
+    return this.api.createMocksFromMonitor({ runtimeId, ids, ...options });
   }
 
-  /** Motivo per cui la response catturata non è ricostruibile fedelmente in un mock, o null se è ok. */
-  private bodyIssue(entry: RequestMonitorEntry): string | null {
-    if (entry.responseBodyTruncated) return 'la response è troncata (oltre il limite di cattura)';
-    if (/^\[(binary|compressed) payload:/.test(entry.responseBody ?? '')) return 'la response è binaria o compressa';
-    return null;
-  }
-
-  /** Crea un singolo mock dal traffico catturato; se il body non è catturabile lo crea come skeleton da completare. */
+  /** Crea un singolo mock dal traffico catturato; se l'endpoint esiste già propone di aggiungere una variante. */
   protected createMockFromEntry(entry: RequestMonitorEntry): void {
-    const request = this.buildMockRequest(entry);
-    const skeleton = request.description != null;
+    // Le opzioni restano quelle mandate: la casella può cambiare mentre la richiesta è in corso.
+    const options: CaptureBatchOptions = { onConflict: 'skip', selectAddedVariants: false, newEndpointEnabled: this.activateNewMocks() };
+    const request = this.createFromCaptures(this.stream.runtimeId(), [entry.id], options);
+    if (request == null) return;
     this.creatingMock.set(true);
-    this.api
-      .createMock(request)
-      .pipe(finalize(() => this.creatingMock.set(false)))
-      .subscribe({
-        next: (created) => {
-          this.toast.show({
-            title: skeleton ? this.transloco.translate('monitor.toastMockCreatedSkeleton') : this.transloco.translate('monitor.toastMockCreated'),
-            description: skeleton
-              ? this.transloco.translate('monitor.toastMockCreatedSkeletonDesc', { method: entry.method, path: request.config.path })
-              : this.transloco.translate('monitor.toastMockCreatedDesc', { method: entry.method, path: request.config.path }),
-            tone: 'success',
-            // Scorciatoia al mock appena creato: stato effimero del flusso (l'id/rotta arrivano
-            // dalla risposta della POST), la entry del monitor non viene toccata.
-            // La scorciatoia usa metodo e path RICHIESTI, non quelli riletti dalla risposta:
-            // la creazione è riuscita comunque, anche quando il dettaglio non è componibile.
-            action: {
-              label: this.transloco.translate('monitor.toastOpenCreatedMock'),
-              run: () => this.router.navigate(['/mocks'], { queryParams: { m: entry.method, p: request.config.path } }),
-            },
-          });
-          // La entry selezionata ora è coperta: aggiorna subito la scorciatoia nel dettaglio.
-          // Senza dettaglio non c'è nulla di affidabile da mostrare lì: si lascia com'era.
-          if (this.coveringMockEntryId === entry.id && !isDetailUnavailable(created)) {
-            this.coveringMock.set(created);
-          }
-        },
-        error: (e: unknown) => {
+    request.pipe(finalize(() => this.creatingMock.set(false))).subscribe({
+      next: (result) => {
+        const item = result.items[0];
+        if (item == null || item.captureOutcome === 'unavailable') {
+          this.showCaptureUnavailable();
+        } else if (item.writeOutcome === 'created') {
+          this.showCreated(entry, item, options.newEndpointEnabled);
+        } else if (item.writeOutcome === 'skipped' && item.id != null) {
           // Endpoint già esistente: invece dell'errore, proponi di aggiungere la response
-          // catturata come nuova variante di quell'endpoint (l'id arriva nel 409).
-          const existingMockId = this.readExistingMockId(e);
-          if (existingMockId != null) {
-            this.mockExistsPrompt.set({ existingMockId, request, entry });
-            this.mockExistsDialogRef = this.dialog.open(this.mockExistsDialogTpl());
-            return;
-          }
-          this.toast.show({ title: this.transloco.translate('common.error'), description: this.readErrorMessage(e), tone: 'error' });
-        },
-      });
+          // catturata come nuova variante di quell'endpoint.
+          this.mockExistsPrompt.set({ existingMockId: item.id, method: item.method ?? entry.method, path: item.path ?? entry.path, entry, runtimeId: result.runtimeId });
+          this.mockExistsDialogRef = this.dialog.open(this.mockExistsDialogTpl());
+        } else {
+          this.toast.show({ title: this.transloco.translate('common.error'), description: item.error ?? this.transloco.translate('common.operationFailed'), tone: 'error' });
+        }
+      },
+      error: (e: unknown) => this.showCreateError(e),
+    });
   }
 
-  /** Id dell'endpoint esistente da un errore 409 di creazione, o null per ogni altro errore. */
-  private readExistingMockId(e: unknown): string | null {
-    if (typeof e !== 'object' || e == null) return null;
-    const status = (e as { status?: unknown }).status;
-    const details = (e as { error?: { details?: { existingMockId?: unknown } } }).error?.details;
-    return status === 409 && typeof details?.existingMockId === 'string' ? details.existingMockId : null;
+  private showCreated(entry: RequestMonitorEntry, item: CaptureItemOutcome, enabled: boolean): void {
+    const params = { method: item.method ?? entry.method, path: item.path ?? entry.path };
+    if (item.runtimeOutcome === 'not_applied') {
+      this.showNotServed(item, params);
+    } else {
+      this.showWritten(item, params, enabled);
+    }
+    // La entry selezionata ora è coperta: aggiorna la scorciatoia nel dettaglio.
+    if (this.coveringMockEntryId === entry.id) this.lookupCoveringMock(entry);
+  }
+
+  private showWritten(item: CaptureItemOutcome, params: { method: string; path: string }, enabled: boolean): void {
+    const incomplete = item.captureOutcome === 'incomplete';
+    const prepared = !enabled;
+    const title = prepared ? 'monitor.toastMockPrepared' : incomplete ? 'monitor.toastMockCreatedSkeleton' : 'monitor.toastMockCreated';
+    const description = prepared
+      ? (incomplete ? 'monitor.toastMockPreparedSkeletonDesc' : 'monitor.toastMockPreparedDesc')
+      : (incomplete ? 'monitor.toastMockCreatedSkeletonDesc' : 'monitor.toastMockCreatedDesc');
+    this.toast.show({
+      title: this.transloco.translate(title),
+      description: this.transloco.translate(description, params),
+      tone: incomplete ? 'warning' : 'success',
+      // Scorciatoia al mock appena creato: metodo e rotta dall'esito del server.
+      action: {
+        label: this.transloco.translate('monitor.toastOpenCreatedMock'),
+        run: () => this.router.navigate(['/mocks'], { queryParams: { m: params.method, p: params.path } }),
+      },
+    });
+  }
+
+  /**
+   * Anche con 201 un elemento scritto può non essere servito (§13 C1): lo si dice, con il motivo,
+   * invece di presentarlo come un successo.
+   */
+  private showNotServed(item: CaptureItemOutcome, params: { method: string; path: string }): void {
+    const description = this.transloco.translate('monitor.toastNotServedDesc', params);
+    this.toast.show({
+      title: this.transloco.translate('monitor.toastNotServed'),
+      description: item.error ? `${description} ${item.error}` : description,
+      tone: 'warning',
+      action: {
+        label: this.transloco.translate('monitor.toastOpenMock'),
+        run: () => this.router.navigate(['/mocks'], { queryParams: { m: params.method, p: params.path } }),
+      },
+    });
   }
 
   /**
@@ -678,45 +708,76 @@ export class MonitorNextPage {
     this.closeMockExistsDialog();
     if (prompt == null) return;
 
-    const { existingMockId, request, entry } = prompt;
-    const skeleton = request.description != null;
-    // Titolo della variante: provenienza + orario di cattura (dal timestamp ISO della entry),
-    // così nella lista delle response si distingue a colpo d'occhio. Il prefisso "[da completare]"
-    // resta letterale: è il marcatore condiviso con SKELETON_DESCRIPTION (e col motore, vedi
-    // dump-to-mock.js) che la ricerca nel catalogo deve trovare in entrambe le lingue.
-    const title = `${skeleton ? '[da completare] ' : ''}${this.transloco.translate('monitor.capturedVariantTitle', {
-      time: entry.timestamp.slice(11, 19),
-    })}`;
+    const { entry, method, path, runtimeId } = prompt;
+    // Se l'endpoint sparisce mentre il dialog è aperto, il server lo ricrea: anche quello segue la
+    // scelta, e «Aggiungi senza attivare» non attiva niente.
+    const options: CaptureBatchOptions = { onConflict: 'add-variant', selectAddedVariants: activate, newEndpointEnabled: activate };
+    const request = this.createFromCaptures(runtimeId, [entry.id], options);
+    if (request == null) return;
     this.creatingMock.set(true);
-    this.api
-      .createResponse(existingMockId, {
-        type: 'mock',
-        title,
-        status: request.config.status,
-        headers: request.config.headers,
-        delayMs: 0,
-        body: request.body,
-        ...(activate ? {} : { select: false }),
-      })
-      .pipe(finalize(() => this.creatingMock.set(false)))
-      .subscribe({
-        // Metodo e path vengono dalla entry catturata, non dalla risposta: restano corretti
-        // anche quando la variante è stata aggiunta ma il dettaglio non è componibile.
-        next: () =>
-          this.toast.show({
-            title: this.transloco.translate(activate ? 'monitor.toastResponseAdded' : 'monitor.toastResponsePrepared'),
-            description: this.transloco.translate(activate ? 'monitor.toastResponseAddedDesc' : 'monitor.toastResponsePreparedDesc', {
-              method: entry.method,
-              path: request.config.path,
-            }),
-            tone: 'success',
-            action: {
-              label: this.transloco.translate('monitor.toastOpenMock'),
-              run: () => this.router.navigate(['/mocks'], { queryParams: { m: entry.method, p: request.config.path } }),
-            },
-          }),
-        error: (e: unknown) => this.toast.show({ title: this.transloco.translate('common.error'), description: this.readErrorMessage(e), tone: 'error' }),
-      });
+    request.pipe(finalize(() => this.creatingMock.set(false))).subscribe({
+      next: (result) => {
+        const item = result.items[0];
+        if (item == null || item.captureOutcome === 'unavailable') {
+          this.showCaptureUnavailable();
+          return;
+        }
+        if (item.writeOutcome === 'created') {
+          this.showCreated(entry, item, options.newEndpointEnabled);
+          return;
+        }
+        if (item.writeOutcome !== 'variant_added') {
+          this.toast.show({ title: this.transloco.translate('common.error'), description: item.error ?? this.transloco.translate('common.operationFailed'), tone: 'error' });
+          return;
+        }
+        if (item.runtimeOutcome === 'not_applied') {
+          this.showNotServed(item, { method, path });
+          return;
+        }
+        const incomplete = item.captureOutcome === 'incomplete';
+        const description = this.transloco.translate(activate ? 'monitor.toastResponseAddedDesc' : 'monitor.toastResponsePreparedDesc', { method, path });
+        this.toast.show({
+          title: this.transloco.translate(activate ? 'monitor.toastResponseAdded' : 'monitor.toastResponsePrepared'),
+          // Una bozza incompleta si dichiara prima di un'eventuale attivazione.
+          description: incomplete ? `${description} ${this.transloco.translate('monitor.incompleteHint')}` : description,
+          tone: incomplete ? 'warning' : 'success',
+          action: {
+            label: this.transloco.translate('monitor.toastOpenMock'),
+            run: () => this.router.navigate(['/mocks'], { queryParams: { m: method, p: path } }),
+          },
+        });
+      },
+      error: (e: unknown) => this.showCreateError(e),
+    });
+  }
+
+  private showCaptureUnavailable(): void {
+    this.toast.show({ title: this.transloco.translate('monitor.toastCaptureUnavailable'), description: this.transloco.translate('monitor.toastCaptureUnavailableDesc'), tone: 'error' });
+  }
+
+  /**
+   * Errori di un batch di creazione. Motore ripartito: le catture mostrate sono dell'esecuzione
+   * precedente. Nessuna risposta: l'esito è sconosciuto e non si ripete in automatico (un batch non è
+   * idempotente). Un batch fallito dopo aver scritto dice anche cosa è rimasto su disco.
+   */
+  private showCreateError(e: unknown): void {
+    const status = (e as { status?: unknown } | null)?.status;
+    const code = (e as { error?: { details?: { code?: unknown } } } | null)?.error?.details?.code;
+    if (code === 'RUNTIME_CHANGED') {
+      this.toast.show({ title: this.transloco.translate('monitor.toastRuntimeChanged'), description: this.transloco.translate('monitor.toastRuntimeChangedDesc'), tone: 'error' });
+      return;
+    }
+    if (status === 0) {
+      this.toast.show({ title: this.transloco.translate('monitor.toastOutcomeUnknown'), description: this.transloco.translate('monitor.toastOutcomeUnknownDesc'), tone: 'error' });
+      return;
+    }
+    const partial = readBatchPartialResult<MonitorCreateMocksResult>(e);
+    const message = this.readErrorMessage(e);
+    this.toast.show({
+      title: this.transloco.translate('common.error'),
+      description: partial ? `${message} ${this.transloco.translate('monitor.partialResult', { summary: this.summarizeBatch(partial) })}` : message,
+      tone: 'error',
+    });
   }
 
   protected cancelAddResponseToExisting(): void {
@@ -736,19 +797,20 @@ export class MonitorNextPage {
 
   // --- selezione multipla + crea mock massivo ---
   protected enterSelection(): void {
-    this.selectedIds.set(new Set());
+    this.selection.set({ runtimeId: null, ids: new Set() });
     this.selectionMode.set(true);
   }
 
   protected exitSelection(): void {
     this.selectionMode.set(false);
-    this.selectedIds.set(new Set());
+    this.selection.set({ runtimeId: null, ids: new Set() });
   }
 
+  /** Le voci spuntate appartengono al runtime delle voci mostrate; quelle di un altro si perdono. */
   protected toggleSelection(id: string): void {
     const next = new Set(this.selectedIds());
     next.has(id) ? next.delete(id) : next.add(id);
-    this.selectedIds.set(next);
+    this.selection.set({ runtimeId: this.stream.runtimeId(), ids: next });
   }
 
   /** In modalità selezione il click sulla riga la spunta; altrimenti apre il dettaglio. */
@@ -756,35 +818,47 @@ export class MonitorNextPage {
     this.selectionMode() ? this.toggleSelection(id) : this.selectEntry(id);
   }
 
-  /** Crea un mock per ogni entry selezionata (gli skeleton per i body non catturabili); riepilogo a fine batch. */
+  /**
+   * Crea mock dalle entry selezionate in una sola richiesta, nell'ordine di cattura; gli endpoint
+   * esistenti restano come sono. Riepilogo per esito a fine batch.
+   */
   protected createMocksFromSelected(): void {
-    const ids = this.selectedIds();
-    const selected = this.entries().filter((entry) => ids.has(entry.id));
-    if (selected.length === 0) return;
+    const ids = [...this.selectedIds()].sort((left, right) => Number(left) - Number(right));
+    if (ids.length === 0) return;
+    const options: CaptureBatchOptions = { onConflict: 'skip', selectAddedVariants: false, newEndpointEnabled: this.activateNewMocks() };
+    const request = this.createFromCaptures(this.selection().runtimeId, ids, options);
+    if (request == null) return;
     this.creatingMock.set(true);
-    const calls = selected.map((entry) => {
-      const skeleton = this.bodyIssue(entry) !== null;
-      return this.api.createMock(this.buildMockRequest(entry)).pipe(
-        map(() => ({ ok: true, skeleton })),
-        catchError(() => of({ ok: false, skeleton })),
-      );
-    });
-    forkJoin(calls)
-      .pipe(finalize(() => this.creatingMock.set(false)))
-      .subscribe((results) => {
-        const created = results.filter((r) => r.ok).length;
-        const createdSkeleton = results.filter((r) => r.ok && r.skeleton).length;
-        const failed = results.length - created;
-        const parts = [this.transloco.translate('monitor.batchCreated', { count: created })];
-        if (createdSkeleton > 0) parts.push(this.transloco.translate('monitor.batchSkeleton', { count: createdSkeleton }));
-        if (failed > 0) parts.push(this.transloco.translate('monitor.batchFailed', { count: failed }));
+    request.pipe(finalize(() => this.creatingMock.set(false))).subscribe({
+      next: (result) => {
+        const { created, incomplete } = result.counts;
+        const attention = summarizeBatchAttention(result.items);
+        const warning = incomplete > 0 || result.counts.failed > 0 || attention.notServed + attention.withWarnings > 0;
         this.toast.show({
           title: created > 0 ? this.transloco.translate('monitor.toastMocksCreated') : this.transloco.translate('monitor.toastNoMocksCreated'),
-          description: parts.join(', '),
-          tone: created > 0 ? 'success' : 'error',
+          description: this.summarizeBatch(result),
+          tone: created === 0 ? 'error' : warning ? 'warning' : 'success',
         });
         this.exitSelection();
-      });
+      },
+      error: (e: unknown) => this.showCreateError(e),
+    });
+  }
+
+  /** Riepilogo tradotto degli esiti di un batch del Monitor. */
+  private summarizeBatch(result: MonitorCreateMocksResult): string {
+    const { created, addedVariants, incomplete, skipped, unavailable, failed } = result.counts;
+    const parts = [this.transloco.translate('monitor.batchCreated', { count: created })];
+    if (addedVariants > 0) parts.push(this.transloco.translate('monitor.batchAddedVariants', { count: addedVariants }));
+    if (incomplete > 0) parts.push(this.transloco.translate('monitor.batchSkeleton', { count: incomplete }));
+    if (skipped > 0) parts.push(this.transloco.translate('monitor.batchSkipped', { count: skipped }));
+    if (unavailable > 0) parts.push(this.transloco.translate('monitor.batchUnavailable', { count: unavailable }));
+    if (failed > 0) parts.push(this.transloco.translate('monitor.batchFailed', { count: failed }));
+    // I conteggi dicono cosa è su disco; cosa il runtime non serve lo dicono gli esiti per elemento.
+    const { notServed, withWarnings } = summarizeBatchAttention(result.items);
+    if (notServed > 0) parts.push(this.transloco.translate('monitor.batchNotServed', { count: notServed }));
+    if (withWarnings > 0) parts.push(this.transloco.translate('monitor.batchWarnings', { count: withWarnings }));
+    return parts.join(', ');
   }
 
   /** Apre nel catalogo la definizione (mock/handler) che ha servito questa request. */
@@ -890,32 +964,6 @@ function isObject(value: unknown): value is Record<string, unknown> {
   return value != null && typeof value === 'object';
 }
 
-/** Prova a interpretare il corpo come JSON; se non lo è, lo lascia come testo (o oggetto vuoto se assente). */
-function parseJsonOrText(value: string | undefined): unknown {
-  if (!value) return {};
-  try {
-    return JSON.parse(value);
-  } catch {
-    return value;
-  }
-}
-
-/**
- * Descrizione con cui marchiamo gli skeleton (body non catturabile): gemella di DUMP_SKELETON_DESCRIPTION
- * in src/admin/dump-to-mock.js — tenerle allineate così la ricerca "[da completare]" nel catalogo trova sia gli
- * skeleton creati dal live ("Crea mock da questa") sia quelli del batch dello storico.
- */
-const SKELETON_DESCRIPTION = '[da completare] body non catturato (binario/oltre 156KB)';
-
-/** Header della response da NON copiare nel mock: calcolati dal server, hop-by-hop, o codifiche non più valide sul body catturato. */
-const UNSAFE_MOCK_HEADERS = new Set([
-  'content-length',
-  'content-encoding',
-  'transfer-encoding',
-  'connection',
-  'keep-alive',
-  'date',
-]);
 
 const LIST_WIDTH_KEY = 'mx-monitor-list-width';
 const DEFAULT_LIST_WIDTH = 440;

@@ -45,7 +45,9 @@
     "resultFailed": "{{count}} failed",
     "resultNotServed": "{{count}} not served by the runtime",
     "resultWarnings": "{{count}} with warnings",
-    "partialResult": "Written so far: {{summary}}."
+    "partialResult": "Written so far: {{summary}}.",
+    "resultAddedVariants": "{{count}} variants added",
+    "resultUnavailable": "{{count}} no longer available"
   },
   "dati": {
     "title": "Data",
@@ -334,9 +336,31 @@
     "toastMockCreatedSkeletonDesc": "{{method}} {{path}} — body to complete (not captured)",
     "batchCreated": "{{count}} created",
     "batchSkeleton": "including {{count}} skeleton to complete",
-    "batchFailed": "{{count}} not created (e.g. already existing)",
+    "batchFailed": "{{count}} failed",
     "toastMocksCreated": "Mocks created",
-    "toastNoMocksCreated": "No mocks created"
+    "toastNoMocksCreated": "No mocks created",
+    "activateNew": "Activate now",
+    "activateNewTip": "Unchecked, new endpoints are created disabled: what is served doesn't change until you enable them.",
+    "toastMockPrepared": "Mock created without activating it",
+    "toastMockPreparedDesc": "{{method}} {{path}} — the endpoint is disabled: enable it from the catalog when needed",
+    "toastMockPreparedSkeletonDesc": "{{method}} {{path}} — disabled, with a body to complete before enabling it",
+    "incompleteHint": "The body was not captured: complete the variant before activating it.",
+    "toastCaptureUnavailable": "Capture no longer available",
+    "toastCaptureUnavailableDesc": "The request left the monitor (cleared or beyond the last 250 entries): capture it again.",
+    "toastRuntimeChanged": "The engine restarted",
+    "toastRuntimeChangedDesc": "The captures shown belong to the previous run: the monitor is resyncing, try again on the new entries.",
+    "toastOutcomeUnknown": "Unknown outcome",
+    "toastOutcomeUnknownDesc": "No answer arrived: check the catalog before trying again, the creation may have happened.",
+    "toastMonitorNotReady": "Monitor not connected yet",
+    "toastMonitorNotReadyDesc": "Wait for the monitor to connect to the engine and try again.",
+    "batchSkipped": "{{count}} already existing",
+    "batchUnavailable": "{{count}} no longer available",
+    "batchAddedVariants": "{{count}} variants added",
+    "batchNotServed": "{{count}} not served by the runtime",
+    "batchWarnings": "{{count}} with warnings",
+    "toastNotServed": "Written, but not served",
+    "toastNotServedDesc": "{{method}} {{path}} is on disk, but the runtime does not serve it.",
+    "partialResult": "Written so far: {{summary}}."
   },
   "mocks": {
     "resizeHint": "Drag to resize · double-click to reset"
