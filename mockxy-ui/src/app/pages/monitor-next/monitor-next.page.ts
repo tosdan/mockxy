@@ -29,7 +29,7 @@ import { ToastService } from '../../ui/ui-toast/ui-toast';
 import { UiDialog } from '../../ui/ui-dialog/ui-dialog';
 import { MockAdminApiService } from '../../mock-admin-api.service';
 import { MonitorStreamStore } from '../../shared/monitor-stream.store';
-import type { CaptureItemOutcome, MockSummary, MonitorCreateMocksResult, RequestMonitorEntry } from '../../mock-admin-api.types';
+import { summarizeBatchAttention, type CaptureBatchOptions, type CaptureItemOutcome, type MockSummary, type MonitorCreateMocksResult, type RequestMonitorEntry } from '../../mock-admin-api.types';
 import { readBatchPartialResult } from '../../shared/read-error-message';
 import { MOCK_METHODS } from '../../mock-admin-ui.constants';
 
@@ -399,6 +399,8 @@ export class MonitorNextPage {
     readonly method: string;
     readonly path: string;
     readonly entry: RequestMonitorEntry;
+    /** Il runtime della cattura, confermato dal server: dopo un riavvio lo stesso ID è un'altra richiesta. */
+    readonly runtimeId: string;
   } | null>(null);
   private readonly mockExistsDialogTpl = viewChild.required<TemplateRef<unknown>>('mockExistsDialog');
   private mockExistsDialogRef: { close: (result?: unknown) => void } | null = null;
@@ -433,7 +435,15 @@ export class MonitorNextPage {
   protected readonly sourceFilter = signal('all');
   protected readonly statusClasses = signal<ReadonlySet<number>>(new Set());
   protected readonly selectionMode = signal(false);
-  protected readonly selectedIds = signal<ReadonlySet<string>>(new Set());
+  /**
+   * Le voci spuntate e il runtime a cui appartengono: dopo un riavvio gli stessi ID sono altre
+   * richieste, quindi una selezione di un altro runtime non vale più e non si mostra.
+   */
+  private readonly selection = signal<{ readonly runtimeId: string | null; readonly ids: ReadonlySet<string> }>({ runtimeId: null, ids: new Set() });
+  protected readonly selectedIds = computed<ReadonlySet<string>>(() => {
+    const { runtimeId, ids } = this.selection();
+    return runtimeId === this.stream.runtimeId() ? ids : new Set();
+  });
   protected readonly selectedCount = computed(() => this.selectedIds().size);
 
   protected readonly methodOptions: readonly UiSelectOption<string>[] = [
@@ -607,18 +617,19 @@ export class MonitorNextPage {
    * non trasforma più nulla da sé. Manda il runtime a cui appartengono le voci mostrate, dichiarato
    * dallo snapshot dello stream; senza non si può creare niente di affidabile.
    */
-  private createFromCaptures(ids: string[], onConflict: 'skip' | 'add-variant', selectAddedVariants: boolean): Observable<MonitorCreateMocksResult> | null {
-    const runtimeId = this.stream.runtimeId();
+  private createFromCaptures(runtimeId: string | null, ids: string[], options: CaptureBatchOptions): Observable<MonitorCreateMocksResult> | null {
     if (runtimeId == null) {
       this.toast.show({ title: this.transloco.translate('monitor.toastMonitorNotReady'), description: this.transloco.translate('monitor.toastMonitorNotReadyDesc'), tone: 'error' });
       return null;
     }
-    return this.api.createMocksFromMonitor({ runtimeId, ids, onConflict, selectAddedVariants, newEndpointEnabled: this.activateNewMocks() });
+    return this.api.createMocksFromMonitor({ runtimeId, ids, ...options });
   }
 
   /** Crea un singolo mock dal traffico catturato; se l'endpoint esiste già propone di aggiungere una variante. */
   protected createMockFromEntry(entry: RequestMonitorEntry): void {
-    const request = this.createFromCaptures([entry.id], 'skip', false);
+    // Le opzioni restano quelle mandate: la casella può cambiare mentre la richiesta è in corso.
+    const options: CaptureBatchOptions = { onConflict: 'skip', selectAddedVariants: false, newEndpointEnabled: this.activateNewMocks() };
+    const request = this.createFromCaptures(this.stream.runtimeId(), [entry.id], options);
     if (request == null) return;
     this.creatingMock.set(true);
     request.pipe(finalize(() => this.creatingMock.set(false))).subscribe({
@@ -627,11 +638,11 @@ export class MonitorNextPage {
         if (item == null || item.captureOutcome === 'unavailable') {
           this.showCaptureUnavailable();
         } else if (item.writeOutcome === 'created') {
-          this.showCreated(entry, item);
+          this.showCreated(entry, item, options.newEndpointEnabled);
         } else if (item.writeOutcome === 'skipped' && item.id != null) {
           // Endpoint già esistente: invece dell'errore, proponi di aggiungere la response
           // catturata come nuova variante di quell'endpoint.
-          this.mockExistsPrompt.set({ existingMockId: item.id, method: item.method ?? entry.method, path: item.path ?? entry.path, entry });
+          this.mockExistsPrompt.set({ existingMockId: item.id, method: item.method ?? entry.method, path: item.path ?? entry.path, entry, runtimeId: result.runtimeId });
           this.mockExistsDialogRef = this.dialog.open(this.mockExistsDialogTpl());
         } else {
           this.toast.show({ title: this.transloco.translate('common.error'), description: item.error ?? this.transloco.translate('common.operationFailed'), tone: 'error' });
@@ -641,10 +652,20 @@ export class MonitorNextPage {
     });
   }
 
-  private showCreated(entry: RequestMonitorEntry, item: CaptureItemOutcome): void {
-    const incomplete = item.captureOutcome === 'incomplete';
-    const prepared = !this.activateNewMocks();
+  private showCreated(entry: RequestMonitorEntry, item: CaptureItemOutcome, enabled: boolean): void {
     const params = { method: item.method ?? entry.method, path: item.path ?? entry.path };
+    if (item.runtimeOutcome === 'not_applied') {
+      this.showNotServed(item, params);
+    } else {
+      this.showWritten(item, params, enabled);
+    }
+    // La entry selezionata ora è coperta: aggiorna la scorciatoia nel dettaglio.
+    if (this.coveringMockEntryId === entry.id) this.lookupCoveringMock(entry);
+  }
+
+  private showWritten(item: CaptureItemOutcome, params: { method: string; path: string }, enabled: boolean): void {
+    const incomplete = item.captureOutcome === 'incomplete';
+    const prepared = !enabled;
     const title = prepared ? 'monitor.toastMockPrepared' : incomplete ? 'monitor.toastMockCreatedSkeleton' : 'monitor.toastMockCreated';
     const description = prepared
       ? (incomplete ? 'monitor.toastMockPreparedSkeletonDesc' : 'monitor.toastMockPreparedDesc')
@@ -659,8 +680,23 @@ export class MonitorNextPage {
         run: () => this.router.navigate(['/mocks'], { queryParams: { m: params.method, p: params.path } }),
       },
     });
-    // La entry selezionata ora è coperta: aggiorna la scorciatoia nel dettaglio.
-    if (this.coveringMockEntryId === entry.id) this.lookupCoveringMock(entry);
+  }
+
+  /**
+   * Anche con 201 un elemento scritto può non essere servito (§13 C1): lo si dice, con il motivo,
+   * invece di presentarlo come un successo.
+   */
+  private showNotServed(item: CaptureItemOutcome, params: { method: string; path: string }): void {
+    const description = this.transloco.translate('monitor.toastNotServedDesc', params);
+    this.toast.show({
+      title: this.transloco.translate('monitor.toastNotServed'),
+      description: item.error ? `${description} ${item.error}` : description,
+      tone: 'warning',
+      action: {
+        label: this.transloco.translate('monitor.toastOpenMock'),
+        run: () => this.router.navigate(['/mocks'], { queryParams: { m: params.method, p: params.path } }),
+      },
+    });
   }
 
   /**
@@ -672,8 +708,11 @@ export class MonitorNextPage {
     this.closeMockExistsDialog();
     if (prompt == null) return;
 
-    const { entry, method, path } = prompt;
-    const request = this.createFromCaptures([entry.id], 'add-variant', activate);
+    const { entry, method, path, runtimeId } = prompt;
+    // Se l'endpoint sparisce mentre il dialog è aperto, il server lo ricrea: anche quello segue la
+    // scelta, e «Aggiungi senza attivare» non attiva niente.
+    const options: CaptureBatchOptions = { onConflict: 'add-variant', selectAddedVariants: activate, newEndpointEnabled: activate };
+    const request = this.createFromCaptures(runtimeId, [entry.id], options);
     if (request == null) return;
     this.creatingMock.set(true);
     request.pipe(finalize(() => this.creatingMock.set(false))).subscribe({
@@ -683,8 +722,16 @@ export class MonitorNextPage {
           this.showCaptureUnavailable();
           return;
         }
+        if (item.writeOutcome === 'created') {
+          this.showCreated(entry, item, options.newEndpointEnabled);
+          return;
+        }
         if (item.writeOutcome !== 'variant_added') {
           this.toast.show({ title: this.transloco.translate('common.error'), description: item.error ?? this.transloco.translate('common.operationFailed'), tone: 'error' });
+          return;
+        }
+        if (item.runtimeOutcome === 'not_applied') {
+          this.showNotServed(item, { method, path });
           return;
         }
         const incomplete = item.captureOutcome === 'incomplete';
@@ -750,19 +797,20 @@ export class MonitorNextPage {
 
   // --- selezione multipla + crea mock massivo ---
   protected enterSelection(): void {
-    this.selectedIds.set(new Set());
+    this.selection.set({ runtimeId: null, ids: new Set() });
     this.selectionMode.set(true);
   }
 
   protected exitSelection(): void {
     this.selectionMode.set(false);
-    this.selectedIds.set(new Set());
+    this.selection.set({ runtimeId: null, ids: new Set() });
   }
 
+  /** Le voci spuntate appartengono al runtime delle voci mostrate; quelle di un altro si perdono. */
   protected toggleSelection(id: string): void {
     const next = new Set(this.selectedIds());
     next.has(id) ? next.delete(id) : next.add(id);
-    this.selectedIds.set(next);
+    this.selection.set({ runtimeId: this.stream.runtimeId(), ids: next });
   }
 
   /** In modalità selezione il click sulla riga la spunta; altrimenti apre il dettaglio. */
@@ -777,16 +825,19 @@ export class MonitorNextPage {
   protected createMocksFromSelected(): void {
     const ids = [...this.selectedIds()].sort((left, right) => Number(left) - Number(right));
     if (ids.length === 0) return;
-    const request = this.createFromCaptures(ids, 'skip', false);
+    const options: CaptureBatchOptions = { onConflict: 'skip', selectAddedVariants: false, newEndpointEnabled: this.activateNewMocks() };
+    const request = this.createFromCaptures(this.selection().runtimeId, ids, options);
     if (request == null) return;
     this.creatingMock.set(true);
     request.pipe(finalize(() => this.creatingMock.set(false))).subscribe({
       next: (result) => {
         const { created, incomplete } = result.counts;
+        const attention = summarizeBatchAttention(result.items);
+        const warning = incomplete > 0 || result.counts.failed > 0 || attention.notServed + attention.withWarnings > 0;
         this.toast.show({
           title: created > 0 ? this.transloco.translate('monitor.toastMocksCreated') : this.transloco.translate('monitor.toastNoMocksCreated'),
           description: this.summarizeBatch(result),
-          tone: created === 0 ? 'error' : incomplete > 0 || result.counts.failed > 0 ? 'warning' : 'success',
+          tone: created === 0 ? 'error' : warning ? 'warning' : 'success',
         });
         this.exitSelection();
       },
@@ -803,6 +854,10 @@ export class MonitorNextPage {
     if (skipped > 0) parts.push(this.transloco.translate('monitor.batchSkipped', { count: skipped }));
     if (unavailable > 0) parts.push(this.transloco.translate('monitor.batchUnavailable', { count: unavailable }));
     if (failed > 0) parts.push(this.transloco.translate('monitor.batchFailed', { count: failed }));
+    // I conteggi dicono cosa è su disco; cosa il runtime non serve lo dicono gli esiti per elemento.
+    const { notServed, withWarnings } = summarizeBatchAttention(result.items);
+    if (notServed > 0) parts.push(this.transloco.translate('monitor.batchNotServed', { count: notServed }));
+    if (withWarnings > 0) parts.push(this.transloco.translate('monitor.batchWarnings', { count: withWarnings }));
     return parts.join(', ');
   }
 

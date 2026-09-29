@@ -356,6 +356,10 @@
     "batchSkipped": "{{count}} già esistenti",
     "batchUnavailable": "{{count}} non più disponibili",
     "batchAddedVariants": "{{count}} varianti aggiunte",
+    "batchNotServed": "{{count}} non servite dal runtime",
+    "batchWarnings": "{{count}} con avvisi",
+    "toastNotServed": "Scritto, ma non servito",
+    "toastNotServedDesc": "{{method}} {{path}} è su disco, ma il runtime non lo serve.",
     "partialResult": "Scritto finora: {{summary}}."
   },
   "mocks": {

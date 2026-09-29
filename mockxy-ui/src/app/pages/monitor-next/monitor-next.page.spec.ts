@@ -2,7 +2,7 @@ import '@angular/compiler';
 import { TestBed } from '@angular/core/testing';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { provideRouter, Router } from '@angular/router';
-import { of, throwError } from 'rxjs';
+import { BehaviorSubject, Subject, of, throwError } from 'rxjs';
 import { MonitorNextPage } from './monitor-next.page';
 import { translocoTesting } from '../../testing/transloco-testing';
 import { MockAdminApiService } from '../../mock-admin-api.service';
@@ -331,7 +331,95 @@ describe('MonitorNextPage', () => {
         .mockReturnValueOnce(throwError(() => ({ status: 500, error: { message: 'reload fallito', details: { code: 'BATCH_RUNTIME_FAILED', result: partial } } })));
       c.createMockFromEntry(ENTRIES[1]);
       c.confirmAddResponseToExisting();
-      expect(c.toast.toasts().at(-1)).toMatchObject({ tone: 'error', description: 'reload fallito Scritto finora: 0 create, 1 varianti aggiunte.' });
+      expect(c.toast.toasts().at(-1)).toMatchObject({ tone: 'error', description: 'reload fallito Scritto finora: 0 create, 1 varianti aggiunte, 1 non servite dal runtime.' });
+    });
+
+    // Un runtime nuovo per lo store dello stream, come dopo un riavvio del motore: nuovo snapshot.
+    function restartableStream() {
+      const stream$ = new BehaviorSubject<unknown>({ type: 'snapshot', runtimeId: 'rt-1', items: ENTRIES });
+      vi.spyOn(apiStub, 'streamRequestMonitoring').mockReturnValueOnce(stream$ as never);
+      return { restart: () => stream$.next({ type: 'snapshot', runtimeId: 'rt-2', items: ENTRIES }) };
+    }
+
+    it('il dialog aperto prima di un riavvio rimanda la cattura col suo runtime, non con quello nuovo', () => {
+      const { restart } = restartableStream();
+      apiStub.createMocksFromMonitor.mockReturnValueOnce(of(createResult([captureItem({ id: 'endpoint-esistente', responseFile: null, writeOutcome: 'skipped' })], { created: 0, skipped: 1 })));
+      const { c } = create();
+      c.createMockFromEntry(ENTRIES[1]);
+      restart();
+      c.confirmAddResponseToExisting(false);
+      expect(apiStub.createMocksFromMonitor.mock.calls[1][0]).toMatchObject({ runtimeId: 'rt-1', ids: ['2'] });
+    });
+
+    it('una selezione fatta prima di un riavvio non vale per le voci del nuovo runtime', () => {
+      const { restart } = restartableStream();
+      const { c } = create();
+      c.enterSelection();
+      c.toggleSelection('2');
+      expect(c.selectedCount()).toBe(1);
+
+      restart();
+      expect(c.selectedCount()).toBe(0);
+      c.createMocksFromSelected();
+      expect(apiStub.createMocksFromMonitor).not.toHaveBeenCalled();
+
+      c.toggleSelection('3');
+      c.createMocksFromSelected();
+      expect(apiStub.createMocksFromMonitor.mock.calls[0][0]).toMatchObject({ runtimeId: 'rt-2', ids: ['3'] });
+    });
+
+    it('il messaggio segue l\'opzione mandata, non la casella cambiata durante la richiesta', () => {
+      const response$ = new Subject<unknown>();
+      apiStub.createMocksFromMonitor.mockReturnValueOnce(response$ as never);
+      const { c } = create();
+      c.createMockFromEntry(ENTRIES[1]);
+      c.activateNewMocks.set(false);
+      response$.next(createResult([captureItem()]));
+      expect(c.toast.toasts().at(-1)).toMatchObject({ title: 'Mock creato', tone: 'success' });
+    });
+
+    it('«Aggiungi senza attivare» non attiva niente, neanche un endpoint ricreato nel frattempo', () => {
+      const skipped = createResult([captureItem({ id: 'endpoint-esistente', responseFile: null, writeOutcome: 'skipped' })], { created: 0, skipped: 1 });
+      // L'endpoint è stato eliminato mentre il dialog era aperto: il server lo ricrea.
+      const recreated = createResult([captureItem({ id: 'endpoint-esistente', writeOutcome: 'created', runtimeOutcome: 'not_applicable' })]);
+      const { c } = create();
+      apiStub.createMocksFromMonitor.mockReturnValueOnce(of(skipped)).mockReturnValueOnce(of(recreated));
+      c.createMockFromEntry(ENTRIES[1]);
+      c.confirmAddResponseToExisting(false);
+      expect(apiStub.createMocksFromMonitor.mock.calls[1][0]).toMatchObject({ onConflict: 'add-variant', selectAddedVariants: false, newEndpointEnabled: false });
+      expect(c.toast.toasts().at(-1)).toMatchObject({ title: 'Mock creato senza attivarlo' });
+
+      apiStub.createMocksFromMonitor.mockReturnValueOnce(of(skipped)).mockReturnValueOnce(of(createResult([captureItem({ id: 'endpoint-esistente' })])));
+      c.createMockFromEntry(ENTRIES[1]);
+      c.confirmAddResponseToExisting();
+      expect(apiStub.createMocksFromMonitor.mock.calls[3][0]).toMatchObject({ selectAddedVariants: true, newEndpointEnabled: true });
+      expect(c.toast.toasts().at(-1)).toMatchObject({ title: 'Mock creato' });
+    });
+
+    it('scritto ma non servito dal runtime: avviso col motivo, mai un successo', () => {
+      const notServed = { runtimeOutcome: 'not_applied', error: 'Il runtime non ha caricato il file.' };
+      const { c } = create();
+      apiStub.createMocksFromMonitor.mockReturnValueOnce(of(createResult([captureItem(notServed)])));
+      c.createMockFromEntry(ENTRIES[1]);
+      expect(c.toast.toasts().at(-1)).toMatchObject({
+        title: 'Scritto, ma non servito',
+        tone: 'warning',
+        description: 'GET /api/users/42 è su disco, ma il runtime non lo serve. Il runtime non ha caricato il file.',
+      });
+
+      apiStub.createMocksFromMonitor
+        .mockReturnValueOnce(of(createResult([captureItem({ id: 'endpoint-esistente', responseFile: null, writeOutcome: 'skipped' })], { created: 0, skipped: 1 })))
+        .mockReturnValueOnce(of(createResult([captureItem({ id: 'endpoint-esistente', writeOutcome: 'variant_added', ...notServed })], { created: 0, addedVariants: 1 })));
+      c.createMockFromEntry(ENTRIES[1]);
+      c.confirmAddResponseToExisting();
+      expect(c.toast.toasts().at(-1)).toMatchObject({ title: 'Scritto, ma non servito', tone: 'warning' });
+
+      apiStub.createMocksFromMonitor.mockReturnValueOnce(of(createResult([captureItem(notServed), captureItem({ requestId: '3' })], { created: 2 })));
+      c.enterSelection();
+      c.toggleSelection('2');
+      c.toggleSelection('3');
+      c.createMocksFromSelected();
+      expect(c.toast.toasts().at(-1)).toMatchObject({ tone: 'warning', description: '2 create, 1 non servite dal runtime' });
     });
 
     it('senza il runtime delle voci non crea niente', () => {
