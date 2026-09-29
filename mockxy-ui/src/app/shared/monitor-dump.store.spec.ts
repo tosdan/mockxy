@@ -1,5 +1,5 @@
 import { TestBed } from '@angular/core/testing';
-import { of, throwError } from 'rxjs';
+import { Subject, of, throwError } from 'rxjs';
 import { MonitorDumpStore } from './monitor-dump.store';
 import { MockAdminApiService } from '../mock-admin-api.service';
 import { ToastService } from '../ui/ui-toast/ui-toast';
@@ -94,6 +94,20 @@ describe('MonitorDumpStore', () => {
       sync.revisions('dump');
       expect(store.enabled()).toBe(true);
       expect(toastStub.show).not.toHaveBeenCalled();
+    });
+
+    it('due riletture sovrapposte: vince la più recente anche se la prima arriva dopo', () => {
+      const store = create();
+      const first = new Subject<MonitorDumpState>();
+      const second = new Subject<MonitorDumpState>();
+      apiStub.getMonitorDumpState.mockReturnValueOnce(first).mockReturnValueOnce(second);
+      sync.revisions('dump');
+      sync.revisions('dump');
+
+      second.next(dumpState({ enabled: true }));
+      first.next(dumpState({ enabled: false }));
+
+      expect(store.enabled()).toBe(true);
     });
 
     it('un errore transitorio della rilettura non nasconde il controllo', () => {

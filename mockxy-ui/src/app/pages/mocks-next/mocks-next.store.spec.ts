@@ -493,6 +493,61 @@ describe('MocksStore', () => {
       expect(store.workspaceGeneration()).toBe(1);
     });
 
+    it('una rilettura con l’elenco in volo al cambio di workspace non rilegge né installa l’omonimo', () => {
+      const store = create();
+      store.selected.set(detail('e1'));
+      const slow = new Subject<ReturnType<typeof listResponse>>();
+      api.listMocks.mockReturnValueOnce(slow).mockReturnValue(of(list3));
+      sync.revisions('catalog');
+
+      sync.runtime(true);
+      slow.next(list3);
+      slow.complete();
+
+      expect(api.getMock).not.toHaveBeenCalled();
+      expect(store.selected()).toEqual(detail('e1'));
+      expect(store.staleWorkspace()).toBe(true);
+    });
+
+    it('una rilettura col dettaglio in volo al cambio di workspace non lo installa', () => {
+      const store = create();
+      const opened = detail('e1');
+      store.selected.set(opened);
+      const pending = new Subject<MockDetail>();
+      api.listMocks.mockReturnValue(of(list3));
+      api.getMock.mockReturnValueOnce(pending);
+      sync.revisions('catalog');
+      expect(api.getMock).toHaveBeenCalledWith('e1');
+
+      sync.runtime(true);
+      pending.next(detail('e1', { status: 999 }));
+      pending.complete();
+
+      expect(store.selected()).toBe(opened);
+    });
+
+    it('rileggere su richiesta col workspace cambiato apre la risorsa della nuova istanza; una lettura partita prima non la installa', () => {
+      const store = create();
+      store.selected.set(detail('e1'));
+      const before = new Subject<MockDetail>();
+      api.getMock.mockReturnValueOnce(before);
+      store.reloadSelectedDetail();
+      api.listMocks.mockReturnValue(of(list3));
+      sync.runtime(true);
+      before.next(detail('e1', { status: 999 }));
+      before.complete();
+      expect(store.selected()?.status).not.toBe(999);
+      expect(store.staleWorkspace()).toBe(true);
+
+      api.getMock.mockReturnValueOnce(of(detail('e1', { status: 201 })));
+      const onLoaded = vi.fn();
+      store.reloadSelectedDetail(onLoaded);
+      expect(store.selected()?.status).toBe(201);
+      expect(store.staleWorkspace()).toBe(false);
+      expect(store.workspaceGeneration()).toBe(1);
+      expect(onLoaded).toHaveBeenCalled();
+    });
+
     it('un nuovo runtime sullo stesso workspace rilegge come un focus', () => {
       const store = create();
       store.selected.set(detail('e1'));

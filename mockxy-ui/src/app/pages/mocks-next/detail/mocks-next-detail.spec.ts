@@ -527,6 +527,35 @@ describe('MocksNextDetail', () => {
         expect(c.editingResponse()).toBe(false);
       });
 
+      it('col workspace cambiato una bozza riaperta sul dettaglio rimasto resta non salvabile', () => {
+        const { fixture, c } = openVariantDraft();
+        store.staleWorkspace.set(true);
+        fixture.detectChanges();
+
+        c.startEditDescription();
+        c.startEditResponse();
+        fixture.detectChanges();
+        expect(button(fixture, 'Salva').disabled).toBe(true);
+        c.saveEditResponse();
+        expect(store.saveResponse).not.toHaveBeenCalled();
+
+        c.startEditDescription();
+        c.saveDescription();
+        expect(store.saveDescription).not.toHaveBeenCalled();
+      });
+
+      it('con l’endpoint sparito una bozza riaperta resta non salvabile', () => {
+        const { fixture, c } = openVariantDraft();
+        store.selectedGone.set(true);
+        fixture.detectChanges();
+
+        c.startEditDescription();
+        c.startEditResponse();
+        c.saveEditResponse();
+        expect(store.saveResponse).not.toHaveBeenCalled();
+        expect((fixture.nativeElement as HTMLElement).textContent).toContain('Questa risorsa non esiste più');
+      });
+
       it('una bozza su una variante non più selezionata si ricontrolla per filename a ogni rilettura', () => {
         const { fixture } = openVariantDraft();
         store.selected.set(editableDetail({ response: RESPONSE, selectedResponseFile: '002.response.json', responseRevision: REV_B }));

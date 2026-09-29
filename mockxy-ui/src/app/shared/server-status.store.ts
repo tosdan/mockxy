@@ -28,6 +28,9 @@ export class ServerStatusStore {
   // Cresce a ogni modifica dell'utente: una rilettura partita prima non la sovrascrive.
   private changeEpoch = 0;
   private pendingPatches = 0;
+  // Cresce a ogni lettura: si applica solo la più recente, così una risposta superata da un'altra
+  // lettura (caricamento iniziale o rilettura) non ripristina un valore vecchio.
+  private readSeq = 0;
 
   constructor() {
     // Stato cambiato da un agente o da un'altra finestra, o motore ripartito: dopo una
@@ -43,18 +46,16 @@ export class ServerStatusStore {
   /**
    * Rilettura silenziosa per la sincronizzazione: niente indicatore di caricamento né toast (lo
    * stato di collegamento sta nella status bar). Scartata se nel frattempo l'utente ha cambiato
-   * qualcosa, o se una sua modifica è ancora in volo.
+   * qualcosa, se una sua modifica è ancora in volo o se è partita una lettura più recente.
    */
   refresh(): void {
     if (this.pendingPatches > 0) {
       return;
     }
-    const epoch = this.changeEpoch;
+    const current = this.readTicket();
     this.api.getServerState().subscribe({
       next: (state) => {
-        if (epoch !== this.changeEpoch || this.pendingPatches > 0) return;
-        this._serverEnabled.set(state.serverEnabled);
-        this._proxyAll.set(state.proxyAll);
+        if (current()) this.applyState(state);
       },
       error: () => undefined,
     });
@@ -63,16 +64,30 @@ export class ServerStatusStore {
   /** Carica lo stato runtime del server (server on/off + proxy all) dall'API. */
   load(): void {
     this._loading.set(true);
+    const current = this.readTicket();
     this.api
       .getServerState()
       .pipe(finalize(() => this._loading.set(false)))
       .subscribe({
         next: (state) => {
-          this._serverEnabled.set(state.serverEnabled);
-          this._proxyAll.set(state.proxyAll);
+          if (current()) this.applyState(state);
         },
-        error: (e) => this.toast.show({ title: this.transloco.translate('common.error'), description: readErrorMessage(e) ?? this.transloco.translate('common.operationFailed'), tone: 'error' }),
+        error: (e) => {
+          if (current()) this.toast.show({ title: this.transloco.translate('common.error'), description: readErrorMessage(e) ?? this.transloco.translate('common.operationFailed'), tone: 'error' });
+        },
       });
+  }
+
+  /** Una lettura resta valida se nessun'altra è partita dopo e l'utente non ha cambiato niente. */
+  private readTicket(): () => boolean {
+    const seq = ++this.readSeq;
+    const epoch = this.changeEpoch;
+    return () => seq === this.readSeq && epoch === this.changeEpoch && this.pendingPatches === 0;
+  }
+
+  private applyState(state: ServerState): void {
+    this._serverEnabled.set(state.serverEnabled);
+    this._proxyAll.set(state.proxyAll);
   }
 
   /** Accende/spegne il server (off = passthrough puro: nessun mock, nessun monitor). */

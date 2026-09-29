@@ -5,7 +5,7 @@ import type { RequestMonitorEntry, RequestMonitorStreamEvent } from '../mock-adm
 import { ToastService } from '../ui/ui-toast/ui-toast';
 import { fakeRuntimeSync } from '../testing/runtime-sync-testing';
 import { translocoTesting } from '../testing/transloco-testing';
-import { MonitorStreamStore } from './monitor-stream.store';
+import { MonitorStreamStore, STREAM_RETRY_MS } from './monitor-stream.store';
 
 function entry(id: string): RequestMonitorEntry {
   return { id } as unknown as RequestMonitorEntry;
@@ -75,5 +75,45 @@ describe('MonitorStreamStore — sincronizzazione', () => {
     sync.resync();
     expect(streams).toHaveLength(1);
     expect(store.streaming()).toBe(false);
+  });
+
+  describe('interruzione del solo stream', () => {
+    afterEach(() => vi.useRealTimers());
+
+    it('si riapre da sé anche se GET /info risponde come prima, con attese crescenti', () => {
+      vi.useFakeTimers();
+      const store = create();
+      streams[0].error(new Error('stream caduto'));
+
+      vi.advanceTimersByTime(STREAM_RETRY_MS);
+      expect(streams).toHaveLength(2);
+
+      streams[1].error(new Error('ancora giù'));
+      vi.advanceTimersByTime(STREAM_RETRY_MS);
+      expect(streams).toHaveLength(2);
+      vi.advanceTimersByTime(STREAM_RETRY_MS);
+      expect(streams).toHaveLength(3);
+
+      streams[2].next({ type: 'snapshot', items: [entry('4')] });
+      expect(store.streaming()).toBe(true);
+      expect(store.entries()).toEqual([entry('4')]);
+      expect(toast.show).toHaveBeenCalledTimes(1);
+
+      // Riaperto, l'attesa riparte dal minimo.
+      streams[2].error(new Error('di nuovo'));
+      vi.advanceTimersByTime(STREAM_RETRY_MS);
+      expect(streams).toHaveLength(4);
+    });
+
+    it('una pausa voluta annulla il tentativo in attesa', () => {
+      vi.useFakeTimers();
+      const store = create();
+      streams[0].error(new Error('stream caduto'));
+      store.setStreaming(false);
+
+      vi.advanceTimersByTime(STREAM_RETRY_MS * 10);
+      expect(streams).toHaveLength(1);
+      expect(store.streaming()).toBe(false);
+    });
   });
 });

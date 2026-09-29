@@ -98,7 +98,7 @@ describe('MocksNextSequenceDialog', () => {
   let toast: { show: ReturnType<typeof vi.fn>; dismiss: ReturnType<typeof vi.fn> };
   let dialogRef: { close: ReturnType<typeof vi.fn> };
 
-  function create(detail: MockDetail, mode: SequenceDialogData['mode']) {
+  function create(detail: MockDetail, mode: SequenceDialogData['mode'], setup?: (s: typeof store) => void) {
     store = {
       savingId: signal<string | undefined>(undefined),
       error: signal<string | undefined>(undefined),
@@ -138,6 +138,7 @@ describe('MocksNextSequenceDialog', () => {
         { provide: DIALOG_DATA, useValue: { detail, mode } satisfies SequenceDialogData },
       ],
     });
+    setup?.(store);
     const fixture = TestBed.createComponent(MocksNextSequenceDialog);
     fixture.detectChanges();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -396,6 +397,13 @@ describe('MocksNextSequenceDialog', () => {
       expect(c.guard.remoteChanged()).toBe(true);
       expect((fixture.nativeElement as HTMLElement).textContent).toContain('La versione sul server è cambiata');
       expect(c.title()).toBe('Mia');
+    });
+
+    it('aperto col workspace cambiato non salva sul bersaglio del precedente', () => {
+      const { c } = create(editDetail(), 'edit', (s) => s.staleWorkspace.set(true));
+      c.title.set('Mia');
+      expect(c.guard.blocked()).toBe(true);
+      expect(c.canSave()).toBe(false);
     });
 
     it('con la variante sparita il salvataggio resta disabilitato', () => {

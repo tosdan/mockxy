@@ -83,4 +83,29 @@ describe('ServerStatusStore — sincronizzazione', () => {
     expect(getServerState).toHaveBeenCalledTimes(1);
     expect(store.proxyAll()).toBe(false);
   });
+
+  it('due riletture sovrapposte: vince la più recente anche se la prima arriva dopo', () => {
+    const store = create();
+    const first = new Subject<ServerState>();
+    const second = new Subject<ServerState>();
+    getServerState.mockReturnValueOnce(first).mockReturnValueOnce(second);
+    sync.revisions('server');
+    sync.revisions('server');
+
+    second.next({ serverEnabled: true, proxyAll: true });
+    first.next({ serverEnabled: true, proxyAll: false });
+
+    expect(store.proxyAll()).toBe(true);
+  });
+
+  it('il caricamento iniziale superato da una rilettura non ripristina il valore vecchio', () => {
+    const initial = new Subject<ServerState>();
+    getServerState.mockReturnValueOnce(initial);
+    const store = create();
+    getServerState.mockReturnValueOnce(of({ serverEnabled: true, proxyAll: true }));
+    sync.resync();
+
+    initial.next({ serverEnabled: true, proxyAll: false });
+    expect(store.proxyAll()).toBe(true);
+  });
 });

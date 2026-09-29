@@ -1,6 +1,6 @@
 import { computed, inject, Injectable, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { Observable, catchError, concatMap, finalize, from, map, of, switchMap, toArray } from 'rxjs';
+import { EMPTY, Observable, catchError, concatMap, finalize, from, map, of, switchMap, toArray } from 'rxjs';
 import { TranslocoService } from '@jsverse/transloco';
 import { MockAdminApiService } from '../../mock-admin-api.service';
 import { isNotFoundError, isReadInconsistentError, readRevisionConflict } from '../../shared/read-error-message';
@@ -93,6 +93,9 @@ export class MocksStore {
   private readonly viewState = inject(ViewStateService);
   private syncing = false;
   private syncQueued = false;
+  // Cresce a ogni cambio di workspace: una lettura partita prima non installa niente dopo, perché
+  // lo stesso id nella nuova istanza è un'altra risorsa.
+  private workspaceEpoch = 0;
 
   constructor() {
     inject(RuntimeSyncStore)
@@ -266,11 +269,13 @@ export class MocksStore {
     }
     this.detailLoading.set(true);
     this.error.set(undefined);
+    const epoch = this.workspaceEpoch;
     this.api
       .getMock(id)
       .pipe(finalize(() => this.detailLoading.set(false)))
       .subscribe({
         next: (detail) => {
+          if (epoch !== this.workspaceEpoch) return;
           this.leaveStaleWorkspace();
           this.setSelected(detail);
         },
@@ -305,6 +310,7 @@ export class MocksStore {
       return;
     }
     this.syncing = true;
+    const epoch = this.workspaceEpoch;
     const before = { mocks: this.mocks(), collections: this.collections(), childOrder: this.childOrder(), selected: this.selected() };
     // Col workspace cambiato il dettaglio aperto non si rilegge: lo stesso id nella nuova istanza è
     // un'altra risorsa.
@@ -313,7 +319,11 @@ export class MocksStore {
       .listMocks()
       .pipe(
         switchMap((res) =>
-          selectedId != null && res.items.some((item) => item.id === selectedId)
+          // Workspace cambiato mentre l'elenco era in volo: niente dettaglio, niente risultato. La
+          // rilettura in coda riparte dallo stato stantio.
+          epoch !== this.workspaceEpoch
+            ? EMPTY
+            : selectedId != null && res.items.some((item) => item.id === selectedId)
             ? this.api.getMock(selectedId).pipe(
                 map((detail): MockDetail | null => detail),
                 // Dettaglio non leggibile adesso: resta quello mostrato, senza un toast a ogni giro.
@@ -337,7 +347,7 @@ export class MocksStore {
             this.collections() === before.collections &&
             this.childOrder() === before.childOrder &&
             this.selected() === before.selected;
-          if (!unchanged || this.mutationInFlight()) {
+          if (!unchanged || epoch !== this.workspaceEpoch || this.mutationInFlight()) {
             return;
           }
           this.applyCatalogResponse(res);
@@ -357,6 +367,7 @@ export class MocksStore {
 
   /** Il runtime serve un altro workspace: si mostra il suo catalogo, il dettaglio aperto resta del precedente. */
   private onWorkspaceChanged(): void {
+    this.workspaceEpoch += 1;
     this.staleWorkspace.set(this.selected() != null);
     this.selectedGone.set(false);
     this.syncRefresh();
@@ -914,11 +925,16 @@ export class MocksStore {
     }
     this.detailLoading.set(true);
     this.error.set(undefined);
+    const epoch = this.workspaceEpoch;
     this.api
       .getMock(id)
       .pipe(finalize(() => this.detailLoading.set(false)))
       .subscribe({
         next: (detail) => {
+          if (epoch !== this.workspaceEpoch) return;
+          // Con il workspace cambiato, rileggere su richiesta è aprire la risorsa della nuova
+          // istanza: lo stato stantio finisce e le bozze del precedente decadono.
+          this.leaveStaleWorkspace();
           this.setSelected(detail);
           onLoaded?.(detail);
         },

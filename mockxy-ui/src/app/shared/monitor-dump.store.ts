@@ -30,6 +30,8 @@ export class MonitorDumpStore {
 
   // Cresce a ogni azione dell'utente: una rilettura partita prima non la sovrascrive.
   private changeEpoch = 0;
+  // Cresce a ogni lettura: si applica solo la più recente.
+  private readSeq = 0;
 
   constructor() {
     inject(RuntimeSyncStore)
@@ -49,21 +51,32 @@ export class MonitorDumpStore {
     if (this._busy()) {
       return;
     }
-    const epoch = this.changeEpoch;
+    const current = this.readTicket();
     this.api.getMonitorDumpState().subscribe({
       next: (state) => {
-        if (epoch !== this.changeEpoch || this._busy()) return;
-        this._state.set(state);
+        if (current()) this._state.set(state);
       },
       error: () => undefined,
     });
   }
 
   load(): void {
+    const current = this.readTicket();
     this.api.getMonitorDumpState().subscribe({
-      next: (state) => this._state.set(state),
-      error: () => this._state.set(null), // dump non disponibile: niente controllo nella barra
+      next: (state) => {
+        if (current()) this._state.set(state);
+      },
+      error: () => {
+        if (current()) this._state.set(null); // dump non disponibile: niente controllo nella barra
+      },
     });
+  }
+
+  /** Una lettura resta valida se nessun'altra è partita dopo e l'utente non ha agito nel frattempo. */
+  private readTicket(): () => boolean {
+    const seq = ++this.readSeq;
+    const epoch = this.changeEpoch;
+    return () => seq === this.readSeq && epoch === this.changeEpoch && !this._busy();
   }
 
   /** Attiva/disattiva la scrittura su disco dello storico. */

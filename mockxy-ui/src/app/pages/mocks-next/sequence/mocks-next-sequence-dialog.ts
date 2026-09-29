@@ -224,6 +224,7 @@ export class MocksNextSequenceDialog {
     apply: (read) => this.applyVariant(read),
     isDirty: () => this.changed(),
     errorMessage: (error) => this.store.detailReadErrorMessage(error),
+    unavailable: () => (this.store.staleWorkspace() ? 'blocked' : this.store.selectedGone() ? 'missing' : null),
   });
 
   protected readonly variantOptions: readonly UiSelectOption<string>[] = (this.data.detail.responses ?? [])

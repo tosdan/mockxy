@@ -1,4 +1,4 @@
-import { Injectable, inject, signal } from '@angular/core';
+import { DestroyRef, Injectable, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { Subscription, finalize } from 'rxjs';
 import { TranslocoService } from '@jsverse/transloco';
@@ -15,6 +15,10 @@ import { RuntimeSyncStore } from './runtime-sync.store';
  * accumula anche fuori dal Monitor e lo si ritrova tornando sulla pagina. La selezione/i filtri restano
  * locali alla pagina Monitor: qui vivono solo lo stream e l'elenco grezzo.
  */
+/** Primo tentativo di riapertura dello stream dopo un'interruzione; poi raddoppia fino al massimo. */
+export const STREAM_RETRY_MS = 2000;
+export const STREAM_RETRY_MAX_MS = 30000;
+
 @Injectable({ providedIn: 'root' })
 export class MonitorStreamStore {
   private readonly api = inject(MockAdminApiService);
@@ -32,17 +36,22 @@ export class MonitorStreamStore {
   readonly clearing = this._clearing.asReadonly();
   /** Lo stream si è chiuso per un errore, non per una pausa: si riapre appena il motore risponde. */
   private interrupted = false;
+  private retryTimer?: ReturnType<typeof setTimeout>;
+  private retryDelay = STREAM_RETRY_MS;
 
   constructor() {
+    inject(DestroyRef).onDestroy(() => this.clearRetry());
     // Un nuovo runtime ha uno storico nuovo: si riapre lo stream, la cui istantanea sostituisce
     // l'elenco. Dopo un'interruzione lo si riapre quando il collegamento torna.
     inject(RuntimeSyncStore)
       .events$.pipe(takeUntilDestroyed())
       .subscribe((event) => {
         if (event.kind === 'runtime' && (this._streaming() || this.interrupted)) {
+          this.clearRetry();
           this.close();
           this.resume();
         } else if (event.kind === 'resync' && this.interrupted) {
+          this.clearRetry();
           this.resume();
         }
       });
@@ -80,6 +89,9 @@ export class MonitorStreamStore {
           this.toast.show({ title: this.transloco.translate('stores.monitorUnreachable'), description: readErrorMessage(e) ?? this.transloco.translate('common.operationFailed'), tone: 'error' });
         }
         this.interrupted = true;
+        // Può cadere il solo stream mentre GET /info risponde come prima: nessun evento della
+        // sincronizzazione lo riaprirebbe, quindi riprova da sé, con attese crescenti.
+        this.scheduleRetry();
       },
     });
     this._streaming.set(true);
@@ -88,7 +100,25 @@ export class MonitorStreamStore {
   /** Pausa voluta: chiude la connessione live lasciando intatto lo storico ricevuto. */
   private pause(): void {
     this.interrupted = false;
+    this.clearRetry();
     this.close();
+  }
+
+  private scheduleRetry(): void {
+    this.clearRetry();
+    const delay = this.retryDelay;
+    this.retryDelay = Math.min(this.retryDelay * 2, STREAM_RETRY_MAX_MS);
+    this.retryTimer = setTimeout(() => {
+      this.retryTimer = undefined;
+      if (this.interrupted) this.resume();
+    }, delay);
+  }
+
+  private clearRetry(): void {
+    if (this.retryTimer !== undefined) {
+      clearTimeout(this.retryTimer);
+      this.retryTimer = undefined;
+    }
   }
 
   private close(): void {
@@ -101,6 +131,7 @@ export class MonitorStreamStore {
   private applyStreamEvent(event: RequestMonitorStreamEvent): void {
     this._loading.set(false);
     this.interrupted = false;
+    this.retryDelay = STREAM_RETRY_MS;
     if (event.type === 'snapshot') {
       this._entries.set(event.items);
       return;

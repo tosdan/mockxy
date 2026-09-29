@@ -498,6 +498,7 @@ export class MocksNextDetail {
     },
     isDirty: () => this.draftDescription() !== this.seededDescription,
     errorMessage: (error) => this.store.detailReadErrorMessage(error),
+    unavailable: () => this.syncUnavailable(),
   });
   protected readonly responseGuard = new DraftGuard<ResponseVariantRead>({
     load: (target) => this.api.getResponse(target.endpointId, target.responseFile ?? '').pipe(map(variantVersion)),
@@ -512,6 +513,7 @@ export class MocksNextDetail {
     // Anche un file scelto e rimasto in conflitto è una modifica locale: la ricarica lo scarterebbe.
     isDirty: () => this.pendingUpload != null || this.responseSnapshot() !== this.responseSeed,
     errorMessage: (error) => this.store.detailReadErrorMessage(error),
+    unavailable: () => this.syncUnavailable(),
   });
   /** Payload della bozza variante appena seminata: la ricarica chiede conferma se è cambiato. */
   private responseSeed = '';
@@ -556,6 +558,11 @@ export class MocksNextDetail {
         }),
       );
     });
+  }
+
+  /** Il dettaglio aperto, per la sincronizzazione: di un workspace precedente, o sparito. */
+  private syncUnavailable(): 'missing' | 'blocked' | null {
+    return this.store.staleWorkspace() ? 'blocked' : this.store.selectedGone() ? 'missing' : null;
   }
 
   /** Descrizione corrente come versione di confronto: stessa lettura, stessa revisione. */

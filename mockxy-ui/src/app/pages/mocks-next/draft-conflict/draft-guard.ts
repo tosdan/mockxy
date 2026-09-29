@@ -51,6 +51,11 @@ export interface DraftGuardOptions<T> {
   isDirty: () => boolean;
   /** Messaggio di una lettura fallita. */
   errorMessage: (error: unknown) => string;
+  /**
+   * Stato della risorsa già noto alla sincronizzazione quando la bozza si apre: una bozza aperta
+   * dopo che l'endpoint è sparito, o il runtime serve un altro workspace, nasce non salvabile.
+   */
+  unavailable?: () => 'missing' | 'blocked' | null;
 }
 
 /**
@@ -92,6 +97,9 @@ export class DraftGuard<T> implements DraftConflictView {
   open(target: DraftTarget): void {
     this.reset();
     this.target.set(target);
+    const unavailable = this.options.unavailable?.();
+    if (unavailable === 'blocked') this.blocked.set(true);
+    else if (unavailable === 'missing') this.missing.set(true);
   }
 
   close(): void {
