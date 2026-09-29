@@ -20,6 +20,7 @@ const { ServerStateStore } = require("./server-state");
 const { MonitorDumpWriter } = require("./monitoring/monitor-dump");
 const { createUpgradeHandler } = require("./proxy/upgrade-proxy");
 const { createRuntimeIdentity } = require("./runtime-identity");
+const { RuntimeConfigStore } = require("./runtime-config");
 const { RELOAD_REASONS, RuntimeStatusStore } = require("./runtime-status");
 const { CatalogRevisionTracker } = require("./catalog-revision");
 const { collectStreamSignatures, reconcileStreamConnections } = require("./mocks/stream-signature");
@@ -352,9 +353,12 @@ async function createServerRuntime({ configOverrides = {}, logger: extLogger } =
     runtimeStatus,
     catalogRevision,
   });
+  // Override effimeri della configurazione (§13 C8): vivono quanto il runtime.
+  const runtimeConfig = new RuntimeConfigStore(config);
   const app = createApp({
     registry,
     config,
+    runtimeConfig,
     logger,
     runtimeIdentity,
     runtimeStatus,
@@ -384,6 +388,7 @@ async function createServerRuntime({ configOverrides = {}, logger: extLogger } =
   return {
     app,
     config,
+    runtimeConfig,
     logger,
     proxyMiddlewareRegistry,
     requestMonitor,
@@ -432,7 +437,7 @@ async function startServer(options = {}) {
   // Prima il dispatcher dei mock ws (endpoint abilitato con variante selezionata ws →
   // handshake locale, vedi ws-serving.js), poi il passthrough verso il backend (upgrade-proxy.js).
   const upgradeHandler = createUpgradeHandler({
-    config: runtime.config,
+    runtimeConfig: runtime.runtimeConfig,
     serverState: runtime.serverState,
     logger: runtime.logger,
   });

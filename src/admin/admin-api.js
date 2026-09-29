@@ -51,7 +51,7 @@ const {
   deleteAdminDataFile,
 } = require("./admin-data-files");
 const { setNoCacheHeaders } = require("../utils/cache");
-const { describeRuntimeConfig, pickRuntimeConfig } = require("./runtime-config");
+const { RuntimeConfigStore } = require("../runtime-config");
 const { ENGINE_VERSION, ObservedRevision, describeWorkspace } = require("../runtime-info");
 const { canonicalPath } = require("../utils/canonical-path");
 const { trackWrites } = require("../utils/write-tracking");
@@ -204,15 +204,13 @@ function sendJson(res, status, payload) {
   res.status(status).json(payload);
 }
 
-function createAdminApiRouter({ config, runtimeIdentity, runtimeStatus, catalogRevision, watcherStatus, listener, registry, proxyMiddlewareRegistry, reloadRuntime, requestMonitor, serverState, monitorDump, sequenceStates, handlerStates, sharedStates, sseConnections, wsConnections }) {
+function createAdminApiRouter({ config, runtimeConfig = new RuntimeConfigStore(config), runtimeIdentity, runtimeStatus, catalogRevision, watcherStatus, listener, registry, proxyMiddlewareRegistry, reloadRuntime, requestMonitor, serverState, monitorDump, sequenceStates, handlerStates, sharedStates, sseConnections, wsConnections }) {
   const router = express.Router();
   // Store dello scenario runtime, passati alle mutazioni che possono invalidarlo: il reload da
   // solo non basta, perche' aggrega piu' scritture in un giro unico (vedi invalidateScenario).
   const scenarioStates = { sequenceStates, handlerStates };
   // Registri del runtime installato: il bersaglio delle console SSE/WS si risolve da qui.
   const installed = { registry, proxyMiddlewareRegistry };
-  // Configurazione di avvio, fotografata alla creazione del runtime (§13 C2).
-  const startupConfig = pickRuntimeConfig(config);
   const workspaceKey = canonicalWorkspaceKey(config?.mocksDir);
   // Esegue il gestore di una rotta di mutazione nel turno del workspace, dopo parsing e limiti
   // del body (già applicati dai middleware della rotta).
@@ -257,10 +255,18 @@ function createAdminApiRouter({ config, runtimeIdentity, runtimeStatus, catalogR
     res.status(200).type("application/yaml").send(source);
   });
 
-  // Configurazione effettiva in sola lettura: le nove chiavi di C8, senza altre variabili d'ambiente.
+  // Configurazione di avvio, effettiva e override: le nove chiavi di C8, senza altre variabili
+  // d'ambiente.
   router.get("/config", (_req, res) => {
-    sendJson(res, 200, describeRuntimeConfig({ runtimeId: runtimeIdentity?.runtimeId ?? null, startup: startupConfig, config }));
+    sendJson(res, 200, runtimeConfig.describe(runtimeIdentity?.runtimeId ?? null));
   });
+
+  // Override effimeri (§13 C8): il corpo si valida per intero prima di cambiare qualunque valore.
+  // Le richieste già entrate nel serving finiscono con la configurazione che hanno fotografato.
+  router.patch("/config", mutation((req, res) => {
+    runtimeConfig.patch(req.body);
+    sendJson(res, 200, runtimeConfig.describe(runtimeIdentity?.runtimeId ?? null));
+  }));
 
   // Identità del runtime e del workspace, indirizzo, watcher e revisioni leggere delle risorse
   // osservabili (§13 C2): uno snapshot in memoria, senza scansioni né attese. Le revisioni si
@@ -280,8 +286,7 @@ function createAdminApiRouter({ config, runtimeIdentity, runtimeStatus, catalogR
         server: serverRevision.observe(),
         dump: dumpRevision.observe(),
         diagnostics: runtimeStatus?.revision ?? 1,
-        // Nessuna configurazione modificabile a runtime prima di S8.
-        config: 1,
+        config: runtimeConfig.revision,
       },
     });
   });
@@ -413,7 +418,20 @@ function createAdminApiRouter({ config, runtimeIdentity, runtimeStatus, catalogR
     if ('threshold' in body && (!Number.isInteger(body.threshold) || body.threshold <= 0)) {
       throw createAdminError(400, 'threshold must be a positive integer.');
     }
-    monitorDump.setConfig({ intervalMs: body.intervalMs, threshold: body.threshold });
+    // Limiti effimeri (§13 C8): valgono dalla prossima scrittura, rotazione o potatura ordinaria,
+    // senza cancellare file adesso; un riavvio torna ai valori di avvio.
+    if ('maxFileBytes' in body && (!Number.isSafeInteger(body.maxFileBytes) || body.maxFileBytes <= 0)) {
+      throw createAdminError(400, 'maxFileBytes must be a positive integer.');
+    }
+    if ('maxTotalBytes' in body && (!Number.isSafeInteger(body.maxTotalBytes) || body.maxTotalBytes < 0)) {
+      throw createAdminError(400, 'maxTotalBytes must be a non-negative integer (0 disables pruning).');
+    }
+    monitorDump.setConfig({
+      intervalMs: body.intervalMs,
+      threshold: body.threshold,
+      maxFileBytes: body.maxFileBytes,
+      maxTotalBytes: body.maxTotalBytes,
+    });
     if (body.enabled === true) {
       monitorDump.start(requestMonitor);
     } else if (body.enabled === false) {

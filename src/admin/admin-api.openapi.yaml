@@ -1679,7 +1679,11 @@ paths:
         exceeds its total cap.
 
         Changing `intervalMs`/`threshold` while running re-arms the timer without rotating the
-        current file. Stopping performs a final flush.
+        current file. Stopping performs a final flush. The size limits apply from the next
+        write, rotation or pruning: no file is deleted by the call itself, and a single entry
+        larger than `maxFileBytes` can still exceed it. The whole body is validated before any
+        field applies. Every change lasts until the engine restarts, which brings back the
+        startup values.
       requestBody:
         required: true
         content:
@@ -1696,7 +1700,17 @@ paths:
                   type: integer
                   exclusiveMinimum: 0
                   description: Buffered entries that trigger an early flush.
-            example: { enabled: true, intervalMs: 5000, threshold: 50 }
+                maxFileBytes:
+                  type: integer
+                  minimum: 1
+                  maximum: 9007199254740991
+                  description: Size at which the current file rotates.
+                maxTotalBytes:
+                  type: integer
+                  minimum: 0
+                  maximum: 9007199254740991
+                  description: Size cap of the dump folder; older files are pruned above it. `0` disables pruning.
+            example: { enabled: true, intervalMs: 5000, threshold: 50, maxFileBytes: 10485760 }
       responses:
         "200":
           description: The resulting status
@@ -2055,7 +2069,8 @@ paths:
           limits), not its traffic counters.
         - `diagnostics`: status, errors or route availability reported by `GET /runtime/status`,
           not the attempt number alone.
-        - `config`: the effective configuration; always 1 while it cannot change at runtime.
+        - `config`: the effective configuration or the set of overrides (`PATCH /config`); a
+          patch that changes neither leaves it as it is.
       responses:
         "200":
           description: Runtime identity
@@ -2067,19 +2082,74 @@ paths:
     get:
       tags: [Runtime]
       operationId: getRuntimeConfig
-      summary: Effective configuration, read-only
+      summary: Startup, effective and overridden configuration
       description: |
-        The nine settings that a future version will let you change at runtime, as they were at
-        startup and as they are now. No other environment variable is exposed: the `/server`
-        switches and the monitor dump options stay on their own routes. Nothing here is
-        persisted (`persisted` is always `false`). In this version nothing can override them at
-        runtime, so `effective` equals `startup` and `overrides` is empty.
+        The nine settings that can change at runtime, as they were at startup and as they are
+        now, with the overrides set through `PATCH /config`. No other environment variable is
+        exposed: the `/server` switches and the monitor dump options stay on their own routes.
+        Nothing here is persisted (`persisted` is always `false`): a restart drops every
+        override.
       responses:
         "200":
           description: Effective configuration
           content:
             application/json:
               schema: { $ref: "#/components/schemas/RuntimeConfigState" }
+    patch:
+      tags: [Runtime]
+      operationId: patchRuntimeConfig
+      summary: Override settings for this run of the engine
+      description: |
+        Sets or removes ephemeral overrides of the nine runtime settings. The whole body is
+        validated before anything changes: an invalid body answers `400` and leaves values,
+        overrides and the `config` revision as they were.
+
+        - `set` overrides settings; an override stays explicit even when it equals the startup
+          value, until it is unset or the engine restarts. `set.backendUrl: null` disables the
+          backend.
+        - `unset` removes overrides, so the setting goes back to its startup value (for
+          `backendUrl`, the startup backend). Unsetting a setting that has no override succeeds
+          and changes nothing.
+        - At least one setting must be named; a name may not repeat in `unset` nor appear in
+          both. Host, port, folders, the admin API and the watcher cannot change here.
+
+        Each request takes the configuration as it is when it enters serving, before delays,
+        matching and the proxy, and keeps it to the end: a request delayed while the backend
+        changes still goes to the old one, the next goes to the new one. Open connections
+        (proxied WebSockets, streams) are neither moved nor closed. Nothing is written to disk.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                set: { $ref: "#/components/schemas/RuntimeConfigOverrides" }
+                unset:
+                  type: array
+                  uniqueItems: true
+                  items: { $ref: "#/components/schemas/RuntimeConfigKey" }
+            examples:
+              slowBackend:
+                summary: Point to another backend with a delay on every request
+                value: { set: { backendUrl: "http://localhost:8081", globalDelayMs: 1500, delayAllRequests: true } }
+              restore:
+                summary: Back to the startup values
+                value: { unset: [backendUrl, globalDelayMs, delayAllRequests] }
+      responses:
+        "200":
+          description: The configuration after the change, as `GET /config` returns it.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RuntimeConfigState" }
+        "400":
+          description: |
+            `MUTATION_REJECTED`: invalid body, unknown or immutable setting (`details.key`), or
+            invalid value (`details.key`). Nothing changed.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
 
   /runtime/status:
     get:
@@ -2646,12 +2716,41 @@ components:
             message: "001.handler.js: Unexpected token '{'"
             serving: retained
         fatalError: null
+    RuntimeConfigKey:
+      type: string
+      enum:
+        - backendUrl
+        - proxyFallbackEnabled
+        - corsEnabled
+        - delayAllRequests
+        - caseInsensitiveFilters
+        - adaptProxyCookies
+        - rewriteProxyRedirects
+        - globalDelayMs
+        - requestTimeoutMs
+    RuntimeConfigOverrides:
+      type: object
+      description: |
+        Settings changed at runtime and their values. Stricter than what startup accepts: no
+        coercion from strings, integers within the ranges of a Node timer.
+      additionalProperties: false
+      properties:
+        backendUrl:
+          type: [string, "null"]
+          description: Absolute HTTP/HTTPS URL, validated as at startup; `null` disables the backend.
+        proxyFallbackEnabled: { type: boolean }
+        corsEnabled: { type: boolean }
+        delayAllRequests: { type: boolean }
+        caseInsensitiveFilters: { type: boolean }
+        adaptProxyCookies: { type: boolean }
+        rewriteProxyRedirects: { type: boolean }
+        globalDelayMs: { type: integer, minimum: 0, maximum: 2147483647 }
+        requestTimeoutMs: { type: integer, minimum: 1, maximum: 2147483647 }
     RuntimeConfig:
       type: object
       description: |
-        Values as the engine accepted them at startup. The validation of runtime overrides, due in
-        a future version, will be stricter (for example an integer `requestTimeoutMs` from 1): it
-        does not describe what startup accepts today.
+        Values as the engine uses them. At startup they are what the engine accepted, which can
+        be looser than the validation of overrides (for example any finite `requestTimeoutMs`).
       additionalProperties: false
       required:
         - backendUrl
@@ -2688,8 +2787,9 @@ components:
         startup: { $ref: "#/components/schemas/RuntimeConfig" }
         effective: { $ref: "#/components/schemas/RuntimeConfig" }
         overrides:
-          type: object
-          description: Keys changed at runtime. Always empty in this version.
+          allOf:
+            - $ref: "#/components/schemas/RuntimeConfigOverrides"
+          description: Only the settings changed through `PATCH /config`, including those equal to their startup value.
         persisted:
           const: false
           description: Runtime configuration is never written to disk.
@@ -3826,6 +3926,9 @@ components:
         enabled: { type: boolean }
         intervalMs: { type: number, description: Flush cadence. }
         threshold: { type: integer, description: Buffered entries that trigger an early flush. }
+        maxFileBytes:
+          type: integer
+          description: Size at which the current file rotates.
         maxTotalBytes:
           type: integer
           description: Size cap of the dump folder; older files are pruned above it. `0` disables pruning.

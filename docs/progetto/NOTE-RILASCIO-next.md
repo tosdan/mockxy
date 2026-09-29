@@ -92,10 +92,10 @@ esistenti restano compatibili: nessuna migrazione richiesta.
   assente dall'app desktop e dall'immagine Docker; la configurazione effettiva non era leggibile
   via API.
 - **Ora:** `GET /openapi.yaml` restituisce il contratto della versione in esecuzione, anche
-  dall'app desktop e dall'immagine Docker di sviluppo, e `GET /config` la configurazione
-  effettiva in sola lettura: le nove chiavi che le prossime versioni renderanno modificabili a
-  runtime, con il `runtimeId` dell'avvio. Nessun'altra variabile d'ambiente viene esposta. Le due
-  rotte seguono l'abilitazione dell'admin API e restano spente nell'immagine standalone.
+  dall'app desktop e dall'immagine Docker di sviluppo, e `GET /config` la configurazione di
+  avvio ed effettiva: le nove chiavi modificabili a runtime (vedi «Configurazione effimera del
+  runtime»), con il `runtimeId` dell'avvio. Nessun'altra variabile d'ambiente viene esposta. Le
+  due rotte seguono l'abilitazione dell'admin API e restano spente nell'immagine standalone.
 - **Per i client:** la fonte del contratto si è spostata in `src/admin/admin-api.openapi.yaml`;
   chi la leggeva dal percorso precedente deve aggiornarlo o usare la rotta.
 
@@ -202,6 +202,25 @@ esistenti restano compatibili: nessuna migrazione richiesta.
   `warnings` di ogni elemento. Un batch non è idempotente: dopo una risposta persa rileggere il
   catalogo invece di ripetere.
 
+#### Configurazione effimera del runtime
+
+- **Prima:** backend, proxy fallback, CORS, ritardi, timeout, filtri, adattamento dei cookie e
+  riscrittura dei redirect si fissavano all'avvio; per cambiarli bisognava riavviare il motore.
+  I limiti di dimensione del dump non si leggevano né si cambiavano via API.
+- **Ora:** `PATCH /config` con `{ set?, unset? }` cambia quelle nove chiavi fino al prossimo
+  riavvio, senza scrivere niente su disco. Il corpo si valida per intero prima di applicare
+  qualunque cosa; `unset` riporta al valore di avvio, `set: { backendUrl: null }` disattiva il
+  backend. Ogni richiesta usa la configurazione con cui è entrata, anche se cambia mentre attende
+  il ritardo; le connessioni aperte non migrano. `GET /config` distingue valori di avvio,
+  effettivi e override, e la revisione `config` di `GET /info` cresce quando cambiano. Il dump
+  espone `maxFileBytes` e `maxTotalBytes` nel `GET` e li accetta nel `PATCH` esistente, dalla
+  scrittura successiva e senza cancellare file nella chiamata.
+- **Compatibilità:** `PATCH /monitoring/dump` prima ignorava `maxFileBytes` e `maxTotalBytes`;
+  ora li valida (un valore non valido è un `400` e nessun campo si applica) e li usa.
+- **Per i client:** un override vale solo per il runtime corrente: dopo un riavvio (nuovo
+  `runtimeId`) va reimpostato. Controllare `effective` prima di un test invece di supporre i
+  valori di avvio.
+
 ### Interfaccia
 
 - **Descrizione e abilitazione:** salvare la descrizione invia solo la descrizione, e il toggle
@@ -221,6 +240,13 @@ esistenti restano compatibili: nessuna migrazione richiesta.
   creata senza cambiare la risposta servita né lo scenario in corso. Nel Monitor, aggiungendo una
   risposta catturata a un endpoint esistente, si può scegliere «Aggiungi senza attivare». Le
   varianti SSE e WS, che nascono senza form, restano attivate alla creazione.
+- **Mock dal traffico del Monitor:** «Crea mock da questa» e la creazione dalla selezione
+  passano dal server, con le stesse regole dello Storico. La casella «Attiva subito», attiva di
+  default, decide se un endpoint nuovo nasce servito o disattivato. Il messaggio dice se la
+  cattura era incompleta, non più disponibile, o scritta ma non servita dal runtime. Catture
+  mostrate prima di un riavvio del motore non creano mock da richieste del nuovo runtime; se la
+  risposta si perde, l'esito è dichiarato sconosciuto e la creazione non si ripete da sola. Il
+  riepilogo dello Storico conta anche le varianti aggiunte e le voci non disponibili.
 - **Bozze protette dalle modifiche concorrenti:** la descrizione, il form di una variante e il
   dialog di una sequenza salvano sulla risorsa aperta, con la revisione letta all'apertura. Se
   intanto un agente o un altro client attiva un'altra variante, la bozza resta sulla sua. Se la
