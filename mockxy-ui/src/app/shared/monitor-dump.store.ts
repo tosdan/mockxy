@@ -14,6 +14,8 @@ import { RuntimeSyncStore, affects } from './runtime-sync.store';
  * carica lo stato all'avvio e lo espone a tutte le view. `available` è false quando il backend non offre
  * il dump (in quel caso la barra non mostra il controllo). Estratto dalla pagina Monitor.
  */
+type ReadStatus = 'current' | 'superseded' | 'changed';
+
 @Injectable({ providedIn: 'root' })
 export class MonitorDumpStore {
   private readonly api = inject(MockAdminApiService);
@@ -35,6 +37,8 @@ export class MonitorDumpStore {
   private readSeq = 0;
   // Una lettura fallita e ancora valida si ripete con una rilettura silenziosa (vedi ReadRetry).
   private readonly retry = new ReadRetry(() => this.refresh());
+  // Una rilettura saltata o superata da un'azione in corso: si rifà quando l'azione termina.
+  private rereadAfterAction = false;
 
   constructor() {
     inject(RuntimeSyncStore)
@@ -48,48 +52,82 @@ export class MonitorDumpStore {
   /**
    * Rilettura silenziosa per la sincronizzazione: un errore transitorio non nasconde il controllo
    * (lo stato di collegamento sta nella status bar), e un'azione dell'utente in corso o arrivata
-   * nel frattempo vince.
+   * nel frattempo vince. Con un'azione in corso non parte, ma riparte quando l'azione termina,
+   * riuscita o no.
    */
   refresh(): void {
     this.retry.cancel();
     if (this._busy()) {
+      this.rereadAfterAction = true;
       return;
     }
-    const current = this.readTicket();
+    const read = this.readTicket();
     this.api.getMonitorDumpState().subscribe({
-      next: (state) => this.applyRead(current, state),
-      // Si ritenta solo una lettura ancora valida: se è stata superata da un'altra lettura o da
-      // un'azione dell'utente, vale quella.
-      error: () => {
-        if (current()) this.retry.failed();
-      },
+      next: (state) =>
+        this.settleRead(read, () => {
+          this.retry.succeeded();
+          this._state.set(state);
+        }),
+      error: () => this.settleRead(read, () => this.retry.failed()),
     });
   }
 
   load(): void {
     this.retry.cancel();
-    const current = this.readTicket();
+    const read = this.readTicket();
     this.api.getMonitorDumpState().subscribe({
-      next: (state) => this.applyRead(current, state),
-      error: () => {
-        if (!current()) return;
-        this._state.set(null); // dump non disponibile: niente controllo nella barra, finché un tentativo non lo trova
-        this.retry.failed();
-      },
+      next: (state) =>
+        this.settleRead(read, () => {
+          this.retry.succeeded();
+          this._state.set(state);
+        }),
+      error: () =>
+        this.settleRead(read, () => {
+          this._state.set(null); // dump non disponibile: niente controllo nella barra, finché un tentativo non lo trova
+          this.retry.failed();
+        }),
     });
   }
 
-  private applyRead(current: () => boolean, state: MonitorDumpState): void {
-    if (!current()) return;
-    this.retry.succeeded();
-    this._state.set(state);
-  }
-
-  /** Una lettura resta valida se nessun'altra è partita dopo e l'utente non ha agito nel frattempo. */
-  private readTicket(): () => boolean {
+  /** Stato di una lettura al suo esito: ancora valida, superata da una più recente o da un'azione dell'utente. */
+  private readTicket(): () => ReadStatus {
     const seq = ++this.readSeq;
     const epoch = this.changeEpoch;
-    return () => seq === this.readSeq && epoch === this.changeEpoch && !this._busy();
+    return () => {
+      if (seq !== this.readSeq) return 'superseded';
+      return epoch !== this.changeEpoch || this._busy() ? 'changed' : 'current';
+    };
+  }
+
+  /**
+   * Applica l'esito di una lettura ancora valida. Una superata da una lettura più recente lascia
+   * decidere quella; una superata da un'azione dell'utente non la sovrascrive, ma si rifà quando
+   * l'azione è conclusa: il bisogno di rileggere non si perde.
+   */
+  private settleRead(read: () => ReadStatus, outcome: () => void): void {
+    const status = read();
+    if (status === 'current') {
+      outcome();
+    } else if (status === 'changed') {
+      this.rereadAfterSettled();
+    }
+  }
+
+  private rereadAfterSettled(): void {
+    if (this._busy()) {
+      this.rereadAfterAction = true;
+    } else {
+      this.refresh();
+    }
+  }
+
+  /** Azione dell'utente conclusa, riuscita o no: riparte la rilettura che aveva dovuto aspettare. */
+  private actionSettled(): void {
+    this._busy.set(false);
+    if (this.rereadAfterAction) {
+      this.rereadAfterAction = false;
+      this.refresh();
+    }
   }
 
   /** Attiva/disattiva la scrittura su disco dello storico. */
@@ -98,7 +136,7 @@ export class MonitorDumpStore {
     this._busy.set(true);
     this.api
       .setMonitorDumpState({ enabled })
-      .pipe(finalize(() => this._busy.set(false)))
+      .pipe(finalize(() => this.actionSettled()))
       .subscribe({
         next: (state) => {
           this._state.set(state);
@@ -118,7 +156,7 @@ export class MonitorDumpStore {
     this._busy.set(true);
     this.api
       .flushMonitorDump()
-      .pipe(finalize(() => this._busy.set(false)))
+      .pipe(finalize(() => this.actionSettled()))
       .subscribe({
         next: (result) => {
           if (typeof result.enabled === 'boolean') {

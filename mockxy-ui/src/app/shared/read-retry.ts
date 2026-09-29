@@ -11,18 +11,26 @@ export const READ_RETRY_MAX_MS = 30000;
  * store, che conserva le sue protezioni contro risposte superate e modifiche dell'utente.
  *
  * Va creato in un contesto di injection (un inizializzatore di campo dello store): allo smontaggio
- * annulla il tentativo in attesa.
+ * annulla il tentativo in attesa e non ne pianifica altri.
  */
 export class ReadRetry {
   private timer?: ReturnType<typeof setTimeout>;
   private delay = READ_RETRY_MIN_MS;
+  private destroyed = false;
 
   constructor(private readonly read: () => void) {
-    inject(DestroyRef).onDestroy(() => this.cancel());
+    inject(DestroyRef).onDestroy(() => {
+      this.destroyed = true;
+      this.cancel();
+    });
   }
 
-  /** Lettura fallita: la ripete dopo l'attesa corrente, che raddoppia per la volta successiva. */
+  /**
+   * Lettura fallita: la ripete dopo l'attesa corrente, che raddoppia per la volta successiva. Dopo
+   * lo smontaggio non pianifica più niente, anche se una richiesta ancora in volo fallisce.
+   */
   failed(): void {
+    if (this.destroyed) return;
     this.cancel();
     const delay = this.delay;
     this.delay = Math.min(delay * 2, READ_RETRY_MAX_MS);

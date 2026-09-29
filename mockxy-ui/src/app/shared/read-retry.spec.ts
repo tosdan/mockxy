@@ -34,6 +34,14 @@ describe('ReadRetry', () => {
     expect(read).toHaveBeenCalledTimes(8);
   });
 
+  it('dopo lo smontaggio una richiesta ancora in volo che fallisce non pianifica altri tentativi', () => {
+    const { read, retry } = TestBed.inject(Reader);
+    TestBed.resetTestingModule();
+    retry.failed();
+    vi.advanceTimersByTime(READ_RETRY_MAX_MS);
+    expect(read).not.toHaveBeenCalled();
+  });
+
   it('una lettura nuova, un successo o lo smontaggio annullano il tentativo in attesa', () => {
     const { read, retry } = TestBed.inject(Reader);
     retry.failed();

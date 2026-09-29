@@ -20,11 +20,17 @@ describe('MonitorDumpStore', () => {
   };
   let toastStub: { show: ReturnType<typeof vi.fn>; dismiss: ReturnType<typeof vi.fn> };
   let sync: ReturnType<typeof fakeRuntimeSync>;
+  // Lo stato sul server: le letture lo restituiscono, le azioni lo cambiano.
+  let dump: MonitorDumpState;
 
   beforeEach(() => {
+    dump = dumpState({ enabled: false });
     apiStub = {
-      getMonitorDumpState: vi.fn(() => of(dumpState({ enabled: false }))),
-      setMonitorDumpState: vi.fn((req: { enabled?: boolean }) => of(dumpState({ enabled: req.enabled ?? false }))),
+      getMonitorDumpState: vi.fn(() => of({ ...dump })),
+      setMonitorDumpState: vi.fn((req: { enabled?: boolean }) => {
+        dump = { ...dump, enabled: req.enabled ?? dump.enabled };
+        return of({ ...dump });
+      }),
       flushMonitorDump: vi.fn(() => of({ flushed: 0 })),
     };
     toastStub = { show: vi.fn(), dismiss: vi.fn() };
@@ -143,7 +149,7 @@ describe('MonitorDumpStore', () => {
       expect(store.available()).toBe(true);
     });
 
-    it('non si ritenta una lettura superata da un’azione dell’utente: vale l’azione', () => {
+    it('una lettura fallita superata da un’azione dell’utente non si ritenta: si rilegge ad azione conclusa', () => {
       const store = create();
       const read = new Subject<MonitorDumpState>();
       apiStub.getMonitorDumpState.mockReturnValueOnce(read);
@@ -151,9 +157,26 @@ describe('MonitorDumpStore', () => {
       store.setEnabled(true);
 
       read.error({ status: 503 });
+      expect(apiStub.getMonitorDumpState).toHaveBeenCalledTimes(3);
       vi.advanceTimersByTime(READ_RETRY_MAX_MS);
 
-      expect(apiStub.getMonitorDumpState).toHaveBeenCalledTimes(2);
+      expect(apiStub.getMonitorDumpState).toHaveBeenCalledTimes(3);
+      expect(store.enabled()).toBe(true);
+    });
+
+    it('un tentativo che scatta durante un’azione poi fallita riprende quando l’azione termina', () => {
+      const store = create();
+      // Un agente ha acceso il dump, ma la rilettura fallisce.
+      dump = dumpState({ enabled: true });
+      apiStub.getMonitorDumpState.mockReturnValueOnce(throwError(() => ({ status: 503 })));
+      sync.revisions('dump');
+
+      const flushing = new Subject<{ flushed: number }>();
+      apiStub.flushMonitorDump.mockReturnValueOnce(flushing);
+      store.flush();
+      vi.advanceTimersByTime(READ_RETRY_MIN_MS);
+      flushing.error({ status: 500, error: { message: 'boom' } });
+
       expect(store.enabled()).toBe(true);
     });
   });
