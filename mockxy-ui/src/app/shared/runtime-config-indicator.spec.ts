@@ -55,7 +55,7 @@ describe('RuntimeConfigIndicator', () => {
 
   it('con override li conta, mostra il valore di avvio e riporta a quello una chiave o tutte', () => {
     state = runtimeConfigState({ backendUrl: null, globalDelayMs: 1500 });
-    patchRuntimeConfig.mockReturnValue(of(runtimeConfigState({ globalDelayMs: 1500 })));
+    patchRuntimeConfig.mockReturnValue(of(runtimeConfigState()));
     const { fixture, trigger, panel } = open();
 
     expect(text(trigger)).toBe('2 override attivi');
@@ -64,16 +64,36 @@ describe('RuntimeConfigIndicator', () => {
     expect(text(row(panel, 'globalDelayMs'))).toContain('1500');
     expect(text(row(panel, 'corsEnabled'))).not.toContain('override');
 
+    // Dopo il ripristino la configurazione si rilegge dal server.
+    state = runtimeConfigState({ globalDelayMs: 1500 });
     (row(panel, 'backendUrl').querySelector('button') as HTMLButtonElement).click();
     fixture.detectChanges();
     expect(patchRuntimeConfig).toHaveBeenCalledWith({ unset: ['backendUrl'] });
     expect(text(trigger)).toBe('1 override attivo');
 
-    patchRuntimeConfig.mockReturnValue(of(runtimeConfigState()));
+    state = runtimeConfigState();
     const resetAll = Array.from(panel.querySelectorAll('button')).find((button) => text(button) === 'Torna ai valori di avvio') as HTMLButtonElement;
     resetAll.click();
     fixture.detectChanges();
     expect(patchRuntimeConfig).toHaveBeenLastCalledWith({ unset: ['globalDelayMs'] });
     expect(text(trigger)).toBe('Configurazione');
+  });
+
+  it('all’apertura il focus entra nel pannello; chiudendo con Escape o con Chiudi torna al pulsante', () => {
+    const { fixture, trigger, panel } = open();
+    expect(document.activeElement).toBe(panel);
+
+    panel.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    fixture.detectChanges();
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    expect(document.activeElement).toBe(trigger);
+
+    trigger.click();
+    fixture.detectChanges();
+    const reopened = document.querySelector('[role="dialog"]') as HTMLElement;
+    (reopened.querySelector('button[aria-label="Chiudi"]') as HTMLButtonElement).click();
+    fixture.detectChanges();
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    expect(document.activeElement).toBe(trigger);
   });
 });

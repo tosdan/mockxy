@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, type ElementRef, inject, signal, viewChild } from '@angular/core';
 import { CdkConnectedOverlay, CdkOverlayOrigin, type ConnectedPosition } from '@angular/cdk/overlay';
 import { NgIcon, provideIcons } from '@ng-icons/core';
 import { lucideRotateCcw, lucideSlidersHorizontal, lucideX } from '@ng-icons/lucide';
@@ -54,6 +54,7 @@ export function describeRuntimeConfigValue(value: RuntimeConfigValues[RuntimeCon
       type="button"
       cdkOverlayOrigin
       #origin="cdkOverlayOrigin"
+      #trigger
       class="flex items-center gap-1.5 rounded px-1 py-0.5 transition hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
       [class.font-semibold]="store.overrideCount() > 0"
       [class.text-[color:var(--status-3xx)]]="store.overrideCount() > 0"
@@ -77,17 +78,20 @@ export function describeRuntimeConfigValue(value: RuntimeConfigValues[RuntimeCon
       [cdkConnectedOverlayViewportMargin]="8"
       (overlayOutsideClick)="open.set(false)"
       (detach)="open.set(false)"
+      (attach)="focusPanel()"
     >
       <div
+        #panel
         role="dialog"
+        tabindex="-1"
         [attr.aria-label]="'runtimeConfig.title' | transloco"
-        class="max-h-[28rem] w-[32rem] overflow-y-auto rounded-xl border border-border bg-popover p-3 text-popover-foreground shadow-lg ring-1 ring-black/20 mx-scroll animate-in fade-in-0 zoom-in-95"
-        (keydown.escape)="open.set(false)"
+        class="max-h-[28rem] w-[32rem] overflow-y-auto rounded-xl border border-border bg-popover p-3 text-popover-foreground shadow-lg ring-1 ring-black/20 mx-scroll animate-in fade-in-0 zoom-in-95 focus-visible:outline-none"
+        (keydown.escape)="close()"
       >
         <div class="mb-1 flex items-center gap-2">
           <span class="text-[10px] font-bold uppercase tracking-[0.14em] text-muted-foreground">{{ 'runtimeConfig.title' | transloco }}</span>
           <span class="flex-1"></span>
-          <button type="button" class="grid size-5 place-items-center rounded text-muted-foreground transition hover:bg-accent hover:text-foreground" (click)="open.set(false)" [attr.aria-label]="'common.close' | transloco">
+          <button type="button" class="grid size-5 place-items-center rounded text-muted-foreground transition hover:bg-accent hover:text-foreground" (click)="close()" [attr.aria-label]="'common.close' | transloco">
             <ng-icon name="lucideX" size="0.7rem" />
           </button>
         </div>
@@ -144,6 +148,8 @@ export function describeRuntimeConfigValue(value: RuntimeConfigValues[RuntimeCon
 export class RuntimeConfigIndicator {
   protected readonly store = inject(RuntimeConfigStore);
   protected readonly open = signal(false);
+  private readonly trigger = viewChild.required<ElementRef<HTMLButtonElement>>('trigger');
+  private readonly panel = viewChild<ElementRef<HTMLElement>>('panel');
   protected readonly keys = DISPLAY_ORDER;
   protected readonly labels = RUNTIME_CONFIG_LABELS;
   protected readonly describe = describeRuntimeConfigValue;
@@ -152,6 +158,17 @@ export class RuntimeConfigIndicator {
     { originX: 'end', originY: 'top', overlayX: 'end', overlayY: 'bottom', offsetY: -6 },
     { originX: 'end', originY: 'bottom', overlayX: 'end', overlayY: 'top', offsetY: 6 },
   ];
+
+  /** All'apertura il focus entra nel pannello: da tastiera lo si scorre e lo si chiude con Escape. */
+  protected focusPanel(): void {
+    this.panel()?.nativeElement.focus();
+  }
+
+  /** Chiusura dai controlli del pannello o con Escape: il focus torna al pulsante che l'ha aperto. */
+  protected close(): void {
+    this.open.set(false);
+    this.trigger().nativeElement.focus();
+  }
 
   protected isOverridden(key: RuntimeConfigKey): boolean {
     return this.store.overrideKeys().includes(key);
