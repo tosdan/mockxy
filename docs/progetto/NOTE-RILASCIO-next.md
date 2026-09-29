@@ -178,6 +178,30 @@ esistenti restano compatibili: nessuna migrazione richiesta.
 - **Per i client:** chi chiama la rotta senza query non deve cambiare nulla. Chi passava parametri
   che venivano ignorati deve toglierli o passare a `view=page`.
 
+#### Mock dal traffico del Monitor e dello Storico
+
+- **Prima:** dal Monitor la trasformazione di una cattura in mock la faceva l'interfaccia, con una
+  copia delle regole del server; lo Storico aveva la sua rotta, che saltava un endpoint esistente
+  solo se il file stava nella cartella derivata dalla rotta.
+- **Ora:** `POST /monitoring/requests/create-mocks` crea mock da voci del Monitor, nell'ordine dato,
+  con esiti per elemento. Chiede il `runtimeId` delle catture (`409 RUNTIME_CHANGED` se il motore è
+  ripartito), la strategia per un endpoint esistente (`skip` o `add-variant`) e se i nuovi endpoint
+  vanno serviti. Una cattura non più disponibile, un body troncato o binario (bozza incompleta con
+  l'avviso `INCOMPLETE_CAPTURE`) o una destinazione ambigua non fermano gli altri elementi. Lo
+  Storico usa la stessa trasformazione e gli stessi esiti, e accetta le stesse opzioni.
+- **Compatibilità dello Storico:** senza opzioni si comporta come prima e i conteggi restano, con
+  `addedVariants` in più. Cambiano tre casi limite: l'endpoint esistente si riconosce da metodo e
+  rotta nel catalogo, quindi anche se sta in un'altra cartella; un file nella cartella derivata che
+  dichiara un'altra rotta fa fallire l'elemento invece di saltarlo; una chiave non più leggibile
+  compare fra gli elementi come non disponibile invece di sparire. Con `keys` gli elementi seguono
+  l'ordine delle chiavi.
+- **Body JSON `null`:** una risposta catturata `null`, un `body: null` in `POST /mocks` o un
+  `example: null` di una specifica OpenAPI ora diventano un mock che serve `null`; prima
+  diventavano `{}`. Un body assente resta `{}`.
+- **Per i client:** leggere `writeOutcome` (ora anche `variant_added`), `captureOutcome` e
+  `warnings` di ogni elemento. Un batch non è idempotente: dopo una risposta persa rileggere il
+  catalogo invece di ripetere.
+
 ### Interfaccia
 
 - **Descrizione e abilitazione:** salvare la descrizione invia solo la descrizione, e il toggle

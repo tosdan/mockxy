@@ -1,158 +1,69 @@
 const { readDumpFileEntries, readDumpEntriesByKeys } = require("../monitoring/monitor-dump-reader");
 const { createAdminError } = require("./admin-errors");
-const { finalizeBatch } = require("./admin-fs");
-const { resolveAdminFilePath } = require("./mock-ids");
-const { createAdminMock } = require("./endpoint-operations");
+const { createMocksFromCaptures, parseBatchOptions } = require("./capture-to-mock");
 
-// Creazione massiva di mock a partire dalle entry di un dump del monitor.
+// Creazione massiva di mock dalle entry di un dump del monitor. Trasformazione, conflitto ed esiti
+// per elemento sono quelli del Monitor (§13 C7); input e conteggi restano quelli storici.
 
-const DUMP_SKELETON_DESCRIPTION = "[da completare] body non catturato (binario/oltre 156KB)";
-const DUMP_UNSAFE_RESPONSE_HEADERS = new Set([
-  "content-length",
-  "content-encoding",
-  "transfer-encoding",
-  "connection",
-  "keep-alive",
-  "date",
-]);
+// Senza opzioni la rotta si comporta come prima: endpoint esistenti saltati, nuovi endpoint attivi.
+const LEGACY_OPTIONS = { onConflict: "skip", selectAddedVariants: false, newEndpointEnabled: true };
 
-// Header della response da copiare nel mock (es. content-type), saltando i calcolati dal server e i mascherati.
-function dumpSafeResponseHeaders(headers) {
-  const out = {};
-  for (const [name, value] of Object.entries(headers || {})) {
-    if (DUMP_UNSAFE_RESPONSE_HEADERS.has(String(name).toLowerCase())) {
-      continue;
+// Conteggi storici (creazioni su disco), più le varianti aggiunte.
+function legacyCounts(items) {
+  const counts = { created: 0, createdEmpty: 0, skippedExisting: 0, failed: 0, addedVariants: 0 };
+  for (const item of items || []) {
+    if (item.writeOutcome === "created") {
+      counts[item.captureOutcome === "incomplete" ? "createdEmpty" : "created"] += 1;
+    } else if (item.writeOutcome === "variant_added") {
+      counts.addedVariants += 1;
+    } else if (item.writeOutcome === "skipped" && item.captureOutcome !== "unavailable") {
+      counts.skippedExisting += 1;
+    } else if (item.writeOutcome === "failed") {
+      counts.failed += 1;
     }
-    const flat = Array.isArray(value) ? value.join(", ") : String(value);
-    if (flat === "" || flat === "***") {
-      continue;
-    }
-    out[name] = flat;
   }
-  return out;
-}
-
-// Motivo per cui il body catturato non è ricostruibile (→ skeleton), o null se è utilizzabile.
-function dumpBodyIssue(entry) {
-  if (entry.responseBodyTruncated) {
-    return "truncated";
-  }
-  if (/^\[(binary|compressed) payload:/.test(entry.responseBody || "")) {
-    return "binary";
-  }
-  return null;
-}
-
-function dumpParseBody(value) {
-  if (!value) {
-    return {};
-  }
-  try {
-    return JSON.parse(value);
-  } catch {
-    return value;
-  }
-}
-
-// Mappa una entry del dump a un payload createMock (gemello di buildMockRequest del frontend).
-function buildMockPayloadFromDumpEntry(entry) {
-  const routePath =
-    entry.matchedRoutePath && entry.matchedRoutePath !== "n/d" ? entry.matchedRoutePath : entry.path;
-  const skeleton = dumpBodyIssue(entry) != null;
-  const config = {
-    method: String(entry.method || "").toUpperCase(),
-    path: routePath,
-    status: entry.status,
-    disabled: false,
-    headers: dumpSafeResponseHeaders(entry.responseHeaders),
-    bodyFile: "001.response.json",
-    delayMs: 0,
-  };
-  const payload = { config, body: skeleton ? {} : dumpParseBody(entry.responseBody) };
-  if (skeleton) {
-    payload.description = DUMP_SKELETON_DESCRIPTION;
-  }
-  return { payload, skeleton };
+  return counts;
 }
 
 /**
- * Crea mock in massa dalle entry di un dump, guidata dalla selezione del frontend:
- * `selection.file` (tutto il file) oppure `selection.keys` (insieme di chiavi `file#riga`).
- * Salta gli endpoint già esistenti (409); per body binari/troncati crea uno skeleton (body vuoto,
- * descrizione "da completare"). Un solo reload finale. Ritorna i conteggi.
+ * Crea mock dalle entry di un dump: `file` (tutto il file, nel suo ordine) oppure `keys` (chiavi
+ * `file#riga`, nell'ordine dato; una chiave non più leggibile è una cattura non disponibile).
+ * Accetta le stesse opzioni del Monitor, con i default storici.
  */
-async function createMocksFromDump(mocksDir, dumpDir, selection, reloadRuntime) {
-  let entries;
-  if (selection && typeof selection.file === "string") {
-    entries = await readDumpFileEntries(dumpDir, selection.file);
-  } else if (selection && Array.isArray(selection.keys)) {
-    entries = await readDumpEntriesByKeys(dumpDir, selection.keys);
+async function createMocksFromDump(mocksDir, dumpDir, body, reloadRuntime, scenarioStates) {
+  const options = parseBatchOptions(body, LEGACY_OPTIONS);
+  let captures;
+  if (body && typeof body.file === "string") {
+    const entries = await readDumpFileEntries(dumpDir, body.file);
+    captures = entries.map((entry) => ({ ref: { key: entry.dumpKey ?? null }, entry }));
+  } else if (body && Array.isArray(body.keys)) {
+    // Una chiave ripetuta è la stessa entry: si elabora una volta, come prima.
+    const keys = [...new Set(body.keys)];
+    const entries = await readDumpEntriesByKeys(dumpDir, keys);
+    const byKey = new Map(entries.map((entry) => [entry.dumpKey, entry]));
+    captures = keys.map((key) => ({ ref: { key: typeof key === "string" ? key : null }, entry: byKey.get(key) ?? null }));
   } else {
     throw createAdminError(400, "selection must provide a 'file' or 'keys'.");
   }
 
-  const noReload = async () => {};
-  const counts = { created: 0, createdEmpty: 0, skippedExisting: 0, failed: 0 };
-  const items = [];
-  // Un elemento il cui ripristino fallisce (ROLLBACK_FAILED) ferma il batch: lo stato del
-  // workspace non è più garantito e continuare peggiorerebbe l'incertezza.
-  let interruption = null;
-  let processed = 0;
-
-  for (const entry of entries) {
-    if (interruption != null) {
-      break;
+  try {
+    const result = await createMocksFromCaptures({
+      mocksDir,
+      captures,
+      options,
+      source: "dump",
+      reloadRuntime,
+      scenarioStates,
+      rejectionLabel: "Mock creation from dump",
+    });
+    return { ...legacyCounts(result.items), ...result };
+  } catch (error) {
+    // Anche il risultato parziale di un batch fallito conserva i conteggi storici.
+    if (error?.details?.result != null) {
+      error.details.result = { ...legacyCounts(error.details.result.items), ...error.details.result };
     }
-    processed += 1;
-    const { payload, skeleton } = buildMockPayloadFromDumpEntry(entry);
-    const identity = { key: entry.dumpKey ?? null, method: payload.config.method, path: payload.config.path };
-    try {
-      // La descrizione "[da completare]" dello skeleton è ora impostata in fase di create
-      // (payload.description → buildEndpointFilePayload), senza più un update separato.
-      const detail = await createAdminMock(mocksDir, payload, noReload);
-      counts[skeleton ? "createdEmpty" : "created"] += 1;
-      items.push({
-        ...identity,
-        id: detail.id,
-        responseFile: "001.response.json",
-        writeOutcome: "created",
-        runtimeOutcome: "not_applied",
-        error: null,
-        endpointPath: resolveAdminFilePath(mocksDir, detail.id),
-        expectServing: true,
-      });
-    } catch (error) {
-      const existing = error && error.status === 409;
-      if (existing) {
-        counts.skippedExisting += 1;
-      } else {
-        counts.failed += 1;
-      }
-      items.push({
-        ...identity,
-        id: existing ? error.details?.existingMockId ?? null : null,
-        responseFile: null,
-        writeOutcome: existing ? "skipped" : "failed",
-        runtimeOutcome: "not_applicable",
-        error: existing ? null : error.message,
-      });
-      if (error?.details?.code === "ROLLBACK_FAILED") {
-        interruption = error;
-      }
-    }
+    throw error;
   }
-
-  // I conteggi conservano il significato storico di creazioni su disco; il servizio effettivo
-  // lo dicono items[].runtimeOutcome e runtime.status.
-  return finalizeBatch({
-    reloadRuntime,
-    mocksDir,
-    rejectionLabel: "Mock creation from dump",
-    interruption,
-    processed,
-    total: entries.length,
-    result: { ...counts, items },
-  });
 }
 
 module.exports = {

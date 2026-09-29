@@ -40,6 +40,7 @@ const {
   updateAdminCollectionEnabled,
 } = require("./collection-operations");
 const { createMocksFromDump } = require("./dump-to-mock");
+const { countCaptureOutcomes, createMocksFromCaptures, parseBatchOptions } = require("./capture-to-mock");
 const { importAdminOpenapi } = require("./openapi-admin-import");
 const { createAdminError } = require("./admin-errors");
 const {
@@ -339,6 +340,50 @@ function createAdminApiRouter({ config, runtimeIdentity, runtimeStatus, catalogR
     });
   });
 
+  // Mock dal traffico del Monitor (§13 C7), nell'ordine richiesto. Il runtime deve essere quello
+  // delle catture (gli ID ripartono a ogni avvio), e l'abilitazione dei nuovi endpoint va dichiarata:
+  // nessuna attivazione implicita dietro una cattura. Le voci si copiano all'inizio del turno nella
+  // coda: un'espulsione successiva non invalida una cattura già acquisita.
+  router.post('/monitoring/requests/create-mocks', mutation(async (req, res) => {
+    const body = req.body;
+    if (body == null || typeof body !== 'object' || Array.isArray(body)) {
+      throw createAdminError(400, 'The body must be a JSON object.');
+    }
+    const allowed = new Set(['runtimeId', 'ids', 'onConflict', 'selectAddedVariants', 'newEndpointEnabled']);
+    const unknown = Object.keys(body).find((name) => !allowed.has(name));
+    if (unknown !== undefined) {
+      throw createAdminError(400, `Unknown field: ${unknown}.`);
+    }
+    if (typeof body.runtimeId !== 'string' || body.runtimeId === '') {
+      throw createAdminError(400, 'runtimeId is required: the runtime the request ids belong to.');
+    }
+    const ids = body.ids;
+    if (!Array.isArray(ids) || ids.length < 1 || ids.length > 250
+      || !ids.every((id) => typeof id === 'string' && /^(0|[1-9][0-9]*)$/.test(id))
+      || new Set(ids).size !== ids.length) {
+      throw createAdminError(400, 'ids must be 1 to 250 distinct decimal request ids.');
+    }
+    const options = parseBatchOptions(body);
+    const runtimeId = runtimeIdentity?.runtimeId ?? null;
+    if (body.runtimeId !== runtimeId) {
+      throw createAdminError(409, 'The runtime restarted: these request ids belong to another runtime.', { code: 'RUNTIME_CHANGED', runtimeId });
+    }
+    const captures = ids.map((id) => {
+      const entry = requestMonitor?.getEntry(id);
+      return { ref: { requestId: id }, entry: entry == null ? null : structuredClone(entry) };
+    });
+    const result = await createMocksFromCaptures({
+      mocksDir: config.mocksDir,
+      captures,
+      options,
+      source: 'monitor',
+      reloadRuntime,
+      scenarioStates,
+      rejectionLabel: 'Mock creation from the monitor',
+    });
+    sendJson(res, 201, { runtimeId, counts: countCaptureOutcomes(result.items), ...result });
+  }));
+
   // Una voce per ID, completa. Dichiarata dopo /stream: il percorso statico non deve finire nella
   // rotta parametrica.
   router.get('/monitoring/requests/:id', (req, res) => {
@@ -400,7 +445,7 @@ function createAdminApiRouter({ config, runtimeIdentity, runtimeStatus, catalogR
 
   // Creazione massiva di mock dal dump, guidata dalla selezione del frontend (file intero o insieme di chiavi).
   router.post('/monitoring/dumps/create-mocks', mutation(async (req, res) => {
-    const result = await createMocksFromDump(config.mocksDir, config.monitorDumpDir, req.body, reloadRuntime);
+    const result = await createMocksFromDump(config.mocksDir, config.monitorDumpDir, req.body, reloadRuntime, scenarioStates);
     sendJson(res, 201, result);
   }));
 

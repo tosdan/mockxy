@@ -166,6 +166,7 @@ then start the scenario.
 |---|---|
 | `GET /monitoring/requests` | without a query: every in-RAM entry, complete, most recent first (`{ items }`, as before). With `view=page`: a [cursor page](#reading-the-monitor-page-by-page), in ascending order, with filters and declared loss |
 | `GET /monitoring/requests/:id?runtimeId=…` | one complete entry by id, in the given runtime: `{ runtimeId, item }`; `409 RUNTIME_CHANGED` if the engine restarted, `404 REQUEST_NOT_AVAILABLE` if the entry was evicted, cleared or never existed |
+| `POST /monitoring/requests/create-mocks` | creates mocks from monitor entries, in the order given — body `{ runtimeId, ids, onConflict, selectAddedVariants?, newEndpointEnabled }`; [rules and outcomes](#creating-mocks-from-traffic) |
 | `DELETE /monitoring/requests` | clears the live view (the archives are untouched) |
 | `GET /monitoring/requests/stream` | live event stream (SSE) |
 | `GET /monitoring/dump` | state of the disk writing |
@@ -173,7 +174,7 @@ then start the scenario.
 | `POST /monitoring/dump/flush` | manual flush; body `{}`; answers with the number of entries written |
 | `GET /monitoring/dumps` | list of the dump files |
 | `GET /monitoring/dumps/read` | cursor-paginated reading (`?fileIndex&lineIndex&limit`) |
-| `POST /monitoring/dumps/create-mocks` | creates mocks in bulk from a file or from a selection of entries; like the import, it reports `items` (with each entry's `key`) and `runtime`, and answers the same batch errors |
+| `POST /monitoring/dumps/create-mocks` | creates mocks in bulk from a file or from a selection of entries (`file` or `keys`), with the same [rules and outcomes](#creating-mocks-from-traffic) as the monitor; the options are optional, with the historical defaults `onConflict: "skip"`, `selectAddedVariants: false`, `newEndpointEnabled: true`. It keeps its counts (`created`, `createdEmpty`, `skippedExisting`, `failed`) and adds `addedVariants`; `items` carry each entry's `key` |
 | `DELETE /monitoring/dumps/:file` | deletes a dump file |
 
 ### Reading the monitor page by page
@@ -215,6 +216,45 @@ curl -s "http://localhost:3000/_admin/api/monitoring/requests?view=page&since=la
 # the GETs on /api/orders that arrived after that cursor
 curl -s "http://localhost:3000/_admin/api/monitoring/requests?view=page&method=GET&path=/api/orders&since=41&runtimeId=…&generation=1"
 ```
+
+### Creating mocks from traffic
+
+The monitor and the history turn a captured response into a mock with the same rules:
+
+- **Route and method:** the route that served it (`matchedRoutePath`, when present and not `n/d`),
+  otherwise the request path; the method in uppercase. No parametric route is inferred.
+- **Status and delay:** the captured status; `delayMs` 0.
+- **Body:** empty → `{}`; valid JSON → the value; other text → the string. A truncated body or a
+  `[binary payload: …]`/`[compressed payload: …]` placeholder becomes `{}` and the draft is
+  **incomplete**: a new endpoint gets the description `[da completare] …`, an added variant a
+  title starting with `[da completare]`, and the item the warning `INCOMPLETE_CAPTURE` with
+  `reason` `truncated` or `binary`. It is not a faithful copy and is never presented as one.
+- **Headers:** those of the captured response, without `content-length`, `content-encoding`,
+  `transfer-encoding`, `connection`, `keep-alive`, `date`, empty values and masked `***` values (a
+  masked value is never restored); multiple values are joined with `, `.
+- **Conflict:** on the destination's identity, exact method and route, against the catalog and the
+  items already processed in the same batch. `onConflict: "skip"` leaves it as it is;
+  `"add-variant"` adds a variant (titled with the source and the UTC capture time, e.g.
+  `monitor · 10:11:12`), keeps the endpoint's enabled state and selects it only with
+  `selectAddedVariants: true`. Several equivalent destinations are an error of the item, with
+  `candidates`, never an arbitrary choice; an endpoint file in the folder derived from the route
+  that does not declare that identity fails the item too. A new endpoint gets the variant
+  selected, and is enabled only with `newEndpointEnabled: true`.
+
+From the monitor `runtimeId` is required and must be the current one, because ids restart at every
+start: otherwise `409 RUNTIME_CHANGED` before writing. `onConflict` and `newEndpointEnabled` are
+required too: a capture never activates anything implicitly. The entries are copied at the start
+of the turn in the mutation queue, so a later eviction does not invalidate a capture already
+taken; an id no longer available is a skipped item with `captureOutcome: "unavailable"`, and the
+others go on. To prepare without touching what is served, send `newEndpointEnabled: false` and
+`selectAddedVariants: false`, and check the incomplete items before activating them.
+
+The `201` answer reports per item `writeOutcome` (`created`, `variant_added`, `skipped`,
+`failed`), `runtimeOutcome`, `captureOutcome` (`complete`, `incomplete`, `unavailable`) and
+`warnings`, with the `id` and `responseFile` written; from the monitor also `requestId` and
+`counts`. A batch is **not idempotent**: if the answer is lost, read the catalog again and stop
+unless you can tell with certainty which items were created, rather than retrying blindly. The
+conversion deletes neither captures nor dump files.
 
 ## Server state
 

@@ -114,7 +114,9 @@ async function createAdminEndpointFromMock(mocksDir, payload, reloadRuntime) {
     status: config.status,
     headers: config.headers == null ? {} : config.headers,
     delayMs: config.delayMs || 0,
-    body: payload?.body ?? {},
+    // Assente → oggetto vuoto; presente → così com'è, anche `null`: è un body JSON valido per il
+    // loader, e sostituirlo cambierebbe la risposta catturata o dichiarata.
+    body: payload?.body === undefined ? {} : payload.body,
   };
   const backups = [await readBackup(endpointPath), await readBackup(responsePath)];
 
