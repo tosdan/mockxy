@@ -26,18 +26,19 @@ const EXCLUDED_RESPONSE_HEADERS = new Set([
 const CONFLICT_STRATEGIES = new Set(["skip", "add-variant"]);
 
 // Header della risposta da copiare nel mock: esclusi quelli di trasporto e i valori vuoti o
-// mascherati (`***`: un valore mascherato non si ripristina); gli array si uniscono con ", ".
+// mascherati (`***`: un valore mascherato non si ripristina). I valori multipli si filtrano uno
+// per uno, poi si uniscono con ", ": due cookie mascherati non diventano "***, ***".
 function captureResponseHeaders(headers) {
   const out = {};
   for (const [name, value] of Object.entries(headers || {})) {
     if (EXCLUDED_RESPONSE_HEADERS.has(String(name).toLowerCase())) {
       continue;
     }
-    const flat = Array.isArray(value) ? value.join(", ") : String(value);
-    if (flat === "" || flat === "***") {
+    const values = (Array.isArray(value) ? value : [value]).map(String).filter((item) => item !== "" && item !== "***");
+    if (values.length === 0) {
       continue;
     }
-    out[name] = flat;
+    out[name] = values.join(", ");
   }
   return out;
 }
@@ -93,21 +94,44 @@ function variantTitle(entry, source, incomplete) {
 }
 
 // Opzioni del batch: `onConflict` e `newEndpointEnabled` sono obbligatorie nella rotta del
-// Monitor (nessuna attivazione implicita); lo Storico passa i suoi default storici.
+// Monitor (nessuna attivazione implicita); lo Storico passa i suoi default storici. Un default
+// vale solo per il campo omesso: un valore presente, `null` compreso, deve avere il tipo giusto.
 function parseBatchOptions(body, defaults = {}) {
-  const onConflict = body?.onConflict ?? defaults.onConflict;
+  const option = (name, fallback) => (body != null && Object.prototype.hasOwnProperty.call(body, name) ? body[name] : fallback);
+  const onConflict = option("onConflict", defaults.onConflict);
   if (!CONFLICT_STRATEGIES.has(onConflict)) {
     throw createAdminError(400, "onConflict must be \"skip\" or \"add-variant\".");
   }
-  const selectAddedVariants = body?.selectAddedVariants ?? defaults.selectAddedVariants ?? false;
+  const selectAddedVariants = option("selectAddedVariants", defaults.selectAddedVariants ?? false);
   if (typeof selectAddedVariants !== "boolean") {
     throw createAdminError(400, "selectAddedVariants must be a boolean.");
   }
-  const newEndpointEnabled = body?.newEndpointEnabled ?? defaults.newEndpointEnabled;
+  const newEndpointEnabled = option("newEndpointEnabled", defaults.newEndpointEnabled);
   if (typeof newEndpointEnabled !== "boolean") {
     throw createAdminError(400, "newEndpointEnabled must be a boolean: state whether new endpoints are served.");
   }
   return { onConflict, selectAddedVariants, newEndpointEnabled };
+}
+
+// Più elementi dello stesso batch possono selezionare una variante sullo stesso endpoint: resta
+// servita solo l'ultima. Le selezioni precedenti non si dichiarano applicate: niente verifica sul
+// runtime e l'avviso SUPERSEDED con la variante che le ha sostituite.
+function markSupersededSelections(items) {
+  const lastSelection = new Map();
+  for (let index = items.length - 1; index >= 0; index -= 1) {
+    const item = items[index];
+    if (item.selects !== true) continue;
+    const later = lastSelection.get(item.id);
+    if (later == null) {
+      lastSelection.set(item.id, item.responseFile);
+      continue;
+    }
+    delete item.endpointPath;
+    delete item.expectServing;
+    item.runtimeOutcome = "not_applicable";
+    item.warnings = [...item.warnings, { code: "SUPERSEDED", by: later }];
+  }
+  for (const item of items) delete item.selects;
 }
 
 function identityKey(method, routePath) {
@@ -213,6 +237,7 @@ async function createMocksFromCaptures({ mocksDir, captures, options, source, re
           writeOutcome: "variant_added",
           runtimeOutcome: served ? "not_applied" : "not_applicable",
           error: null,
+          selects: options.selectAddedVariants,
           ...(served ? { endpointPath: resolveAdminFilePath(mocksDir, destination.id), expectServing: true } : {}),
         });
         continue;
@@ -239,6 +264,7 @@ async function createMocksFromCaptures({ mocksDir, captures, options, source, re
         writeOutcome: "created",
         runtimeOutcome: options.newEndpointEnabled ? "not_applied" : "not_applicable",
         error: null,
+        selects: true,
         ...(options.newEndpointEnabled ? { endpointPath: resolveAdminFilePath(mocksDir, detail.id), expectServing: true } : {}),
       });
     } catch (error) {
@@ -261,6 +287,7 @@ async function createMocksFromCaptures({ mocksDir, captures, options, source, re
     }
   }
 
+  markSupersededSelections(items);
   return finalizeBatch({
     reloadRuntime,
     mocksDir,

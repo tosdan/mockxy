@@ -155,6 +155,24 @@ describe("POST /monitoring/requests/create-mocks e Storico", () => {
     expect((await request(app).get("/multi")).body).toEqual({ n: 1 });
   });
 
+  // Codex, #35: nello stesso batch resta servita solo l'ultima variante selezionata.
+  test("selezioni superate da un elemento successivo dello stesso batch non risultano applicate", async () => {
+    const itemsId = encodeMockId("items/GET.endpoint.json");
+    const first = capture({ path: "/items", matchedRoutePath: "/items", body: '{"v":"a"}' });
+    const second = capture({ path: "/items", matchedRoutePath: "/items", body: '{"v":"b"}' });
+    const created = capture({ path: "/fresh", body: '{"v":1}' });
+    const selected = capture({ path: "/fresh", body: '{"v":2}' });
+
+    const res = await createMocks({ ids: [first, second, created, selected], onConflict: "add-variant", selectAddedVariants: true, newEndpointEnabled: true });
+    const [a, b, c, d] = res.body.items;
+    expect(a).toMatchObject({ id: itemsId, responseFile: "002.response.json", runtimeOutcome: "not_applicable", warnings: [{ code: "SUPERSEDED", by: "003.response.json" }] });
+    expect(b).toMatchObject({ id: itemsId, responseFile: "003.response.json", runtimeOutcome: "applied", warnings: [] });
+    expect(c).toMatchObject({ writeOutcome: "created", responseFile: "001.response.json", runtimeOutcome: "not_applicable", warnings: [{ code: "SUPERSEDED", by: "002.response.json" }] });
+    expect(d).toMatchObject({ writeOutcome: "variant_added", responseFile: "002.response.json", runtimeOutcome: "applied" });
+    expect((await request(app).get("/items")).body).toEqual({ v: "b" });
+    expect((await request(app).get("/fresh")).body).toEqual({ v: 2 });
+  });
+
   test("una cattura assente o cancellata è saltata come non disponibile, le altre proseguono", async () => {
     const cleared = capture({ path: "/gone", body: "{}" });
     await request(app).delete("/_admin/api/monitoring/requests");
@@ -189,10 +207,20 @@ describe("POST /monitoring/requests/create-mocks e Storico", () => {
     expect(res.body.counts.incomplete).toBe(2);
   });
 
+  // Codex, #35: un body JSON null si conserva, non diventa {}.
+  test("una risposta JSON null diventa un mock che serve null", async () => {
+    const id = capture({ path: "/nothing", body: "null" });
+    const res = await createMocks({ ids: [id], onConflict: "skip", newEndpointEnabled: true });
+    expect(res.body.items[0]).toMatchObject({ writeOutcome: "created", captureOutcome: "complete" });
+    const served = await request(app).get("/nothing");
+    expect(served.status).toBe(200);
+    expect(served.text).toBe("null");
+  });
+
   test("gli header mascherati o di trasporto non finiscono nel mock", async () => {
     const id = capture({
       path: "/secret",
-      headers: { "content-type": "application/json", "set-cookie": "***", "x-api-key": "***", "content-length": "11", "x-trace": ["a", "b"] },
+      headers: { "content-type": "application/json", "set-cookie": ["***", "***"], "x-api-key": "***", "content-length": "11", "x-trace": ["a", "b"] },
       body: '{"ok":true}',
     });
 
@@ -237,6 +265,10 @@ describe("POST /monitoring/requests/create-mocks e Storico", () => {
     [{ onConflict: "skip", newEndpointEnabled: true, ids: ["uno"] }, /ids/],
     [{ onConflict: "skip", newEndpointEnabled: true, ids: Array.from({ length: 251 }, (_, i) => String(i + 1)) }, /ids/],
     [{ onConflict: "skip", newEndpointEnabled: true, force: true }, /Unknown field: force/],
+    // Codex, #35: un campo presente ma null non vale come omesso.
+    [{ onConflict: null, newEndpointEnabled: true }, /onConflict/],
+    [{ onConflict: "skip", newEndpointEnabled: null }, /newEndpointEnabled/],
+    [{ onConflict: "skip", newEndpointEnabled: true, selectAddedVariants: null }, /selectAddedVariants/],
   ])("richiesta non valida %#: 400 senza scrivere", async (body, message) => {
     const res = await request(app).post("/_admin/api/monitoring/requests/create-mocks").send({ runtimeId, ids: ["1"], ...body });
     expect(res.status).toBe(400);
@@ -263,6 +295,15 @@ describe("POST /monitoring/requests/create-mocks e Storico", () => {
       responseBody: '{"from":"dump"}',
       responseBodyTruncated: false,
       ...overrides,
+    });
+
+    test("un'opzione presente ma null è un 400, non il default storico", async () => {
+      writeDump("dump-2.ndjson", [entry({ path: "/never" })]);
+      for (const options of [{ newEndpointEnabled: null }, { onConflict: null }, { selectAddedVariants: null }]) {
+        const res = await request(app).post("/_admin/api/monitoring/dumps/create-mocks").send({ file: "dump-2.ndjson", ...options });
+        expect(res.status).toBe(400);
+      }
+      expect(fs.existsSync(path.join(mocksDir, "never"))).toBe(false);
     });
 
     test("senza opzioni resta il comportamento storico; con add-variant conta addedVariants", async () => {

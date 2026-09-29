@@ -36,6 +36,10 @@ describe("trasformazione cattura → mock", () => {
     expect(mock).toMatchObject({ body: "ciao, mondo", incomplete: false });
   });
 
+  test("JSON null resta null: è un valore, non un body assente", () => {
+    expect(buildMockFromCapture(capture({ responseBody: "null" }))).toMatchObject({ body: null, incomplete: false });
+  });
+
   test("body vuoto: oggetto vuoto, ma completo", () => {
     expect(buildMockFromCapture(capture({ status: 204, responseBody: undefined }))).toMatchObject({ status: 204, body: {}, incomplete: false });
     expect(buildMockFromCapture(capture({ responseBody: "" }))).toMatchObject({ body: {}, incomplete: false });
@@ -83,6 +87,10 @@ describe("trasformazione cattura → mock", () => {
       vary: "Origin, Accept-Encoding",
       "x-count": "3",
     });
+  });
+
+  test("i valori multipli si filtrano uno per uno: due cookie mascherati non diventano «***, ***»", () => {
+    expect(captureResponseHeaders({ "set-cookie": ["***", "***"], "x-mixed": ["a", "***", ""], "x-empty": [] })).toEqual({ "x-mixed": "a" });
   });
 
   test("la descrizione di una bozza incompleta porta il marcatore condiviso", () => {

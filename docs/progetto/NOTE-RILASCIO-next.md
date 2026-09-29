@@ -195,6 +195,9 @@ esistenti restano compatibili: nessuna migrazione richiesta.
   dichiara un'altra rotta fa fallire l'elemento invece di saltarlo; una chiave non più leggibile
   compare fra gli elementi come non disponibile invece di sparire. Con `keys` gli elementi seguono
   l'ordine delle chiavi.
+- **Body JSON `null`:** una risposta catturata `null`, un `body: null` in `POST /mocks` o un
+  `example: null` di una specifica OpenAPI ora diventano un mock che serve `null`; prima
+  diventavano `{}`. Un body assente resta `{}`.
 - **Per i client:** leggere `writeOutcome` (ora anche `variant_added`), `captureOutcome` e
   `warnings` di ogni elemento. Un batch non è idempotente: dopo una risposta persa rileggere il
   catalogo invece di ripetere.
