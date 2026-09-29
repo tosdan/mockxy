@@ -187,6 +187,14 @@ esistenti restano compatibili: nessuna migrazione richiesta.
   conferma se modificata) o di salvare la propria versione dopo averla vista. Se la risorsa non
   esiste più, il testo resta da copiare e il salvataggio è disabilitato. Le azioni immediate
   (status, delay e template in linea, attivazione, selezione) non cambiano.
+- **Sincronizzazione col runtime:** l'interfaccia interroga `GET /info` ogni 2 secondi mentre la
+  finestra è visibile, e rilegge tutto al ritorno sulla finestra. Catalogo, endpoint aperto, stato
+  del server (Proxy All compreso, anche dopo un riavvio del motore), dump del Monitor e diagnostica
+  si aggiornano senza ricaricare la pagina; il Monitor riapre il suo stream a ogni nuovo runtime e
+  quando il collegamento torna. La status bar segnala «Non aggiornato» quando il motore non
+  risponde, e mostra gli errori dell'ultimo caricamento con quello che il runtime serve al loro
+  posto. Una bozza aperta non cambia: se la sua risorsa cambia sul server lo segnala; se sparisce,
+  o se il motore ora serve un altro workspace, il salvataggio resta disabilitato.
 
 ---
 

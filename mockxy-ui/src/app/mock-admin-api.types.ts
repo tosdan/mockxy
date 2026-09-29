@@ -671,6 +671,52 @@ export interface DumpCreateMocksResult {
   runtime: BatchRuntime;
 }
 
+/** Revisioni informative di GET /info: crescono quando cambia la risorsa, non sono precondizioni. */
+export interface RuntimeRevisions {
+  catalog: number;
+  server: number;
+  dump: number;
+  diagnostics: number;
+  config: number;
+}
+
+/** Identità del runtime e del workspace che serve, con le revisioni delle risorse (GET /info). */
+export interface RuntimeInfo {
+  version: string;
+  /** Nuovo a ogni avvio del motore. */
+  runtimeId: string;
+  startedAt: string;
+  workspace: { id: string; root: string | null; mocksDir: string; filesDir: string | null };
+  listener: { host: string; port: number } | null;
+  watcher: { state: 'disabled' | 'starting' | 'ready' | 'error'; polling: boolean; lastError: string | null };
+  revisions: RuntimeRevisions;
+}
+
+/** Errore di caricamento di un file nel registro installato (GET /runtime/status). */
+export interface RuntimeLoadError {
+  endpointId: string | null;
+  /** Relativo alla cartella dei mock, con separatori `/`. */
+  filePath: string;
+  message: string;
+  /** `retained`: il runtime serve ancora la versione precedente; `missing`: nulla la serve. */
+  serving: 'retained' | 'missing';
+}
+
+/** Esito dell'ultimo caricamento del workspace (GET /runtime/status). */
+export interface RuntimeStatusReport {
+  runtimeId: string;
+  lastAttempt: {
+    id: number;
+    startedAt: string;
+    completedAt: string;
+    reasons: ('startup' | 'admin' | 'watcher')[];
+    status: 'applied' | 'degraded' | 'failed';
+  } | null;
+  lastAppliedAttemptId: number | null;
+  errors: RuntimeLoadError[];
+  fatalError: { message: string } | null;
+}
+
 /** Stato runtime di Mockxy: server on/off + "proxy all" (backend src/server-state.js). */
 export interface ServerState {
   serverEnabled: boolean;

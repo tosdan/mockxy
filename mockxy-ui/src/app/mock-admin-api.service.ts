@@ -54,6 +54,8 @@ import {
   WsPushResult,
   WsStateResponse,
   ServerState,
+  RuntimeInfo,
+  RuntimeStatusReport,
   SharedStateListResponse,
   UNSORTED_COLLECTION_ID,
   MockUpdateRequest,
@@ -462,6 +464,19 @@ export class MockAdminApiService {
   /** Elimina un file dati. */
   deleteDataFile(name: string): Observable<void> {
     return this.http.delete<void>(`${this.baseUrl}/files/${encodeURIComponent(name)}`);
+  }
+
+  /**
+   * Identità del runtime e revisioni delle risorse. Economica: legge uno stato in memoria, senza
+   * scandire il workspace; la sincronizzazione della GUI la interroga di continuo.
+   */
+  getRuntimeInfo(): Observable<RuntimeInfo> {
+    return this.http.get<RuntimeInfo>(`${this.baseUrl}/info`);
+  }
+
+  /** Esito dell'ultimo caricamento del workspace, con gli errori del registro installato. */
+  getRuntimeStatus(): Observable<RuntimeStatusReport> {
+    return this.http.get<RuntimeStatusReport>(`${this.baseUrl}/runtime/status`);
   }
 
   /** Recupera lo stato runtime del server (server on/off + proxy all). */

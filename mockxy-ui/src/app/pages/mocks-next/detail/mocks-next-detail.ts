@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, DestroyRef, ElementRef, computed, effect, inject, signal, viewChild, ViewContainerRef } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, ElementRef, computed, effect, inject, signal, untracked, viewChild, ViewContainerRef } from '@angular/core';
 import { CdkMenuTrigger } from '@angular/cdk/menu';
 import { CdkCopyToClipboard } from '@angular/cdk/clipboard';
 import { NgIcon, provideIcons } from '@ng-icons/core';
@@ -29,11 +29,11 @@ import { MocksNextSseConsole } from '../sse/mocks-next-sse-console';
 import { MocksNextWsConsole } from '../ws/mocks-next-ws-console';
 import { MocksNextResponseForm } from './response-form';
 import { ResponseDraft, seedFromVariant, type DraftPayloadType, type DraftScriptType } from './response-draft';
-import { DraftGuard } from '../draft-conflict/draft-guard';
+import { DraftGuard, type RemoteVersion } from '../draft-conflict/draft-guard';
 import { MocksNextDraftConflict } from '../draft-conflict/draft-conflict-panel';
-import { variantVersion } from '../draft-conflict/variant-version';
+import { observeVariantDraft, recheckVariantDraft, variantVersion } from '../draft-conflict/variant-version';
 import { mockIdToWorkspacePath, shortenWorkspacePath } from '../../../mock-id';
-import type { EndpointCreateType, ResponseVariantRead } from '../../../mock-admin-api.types';
+import type { EndpointCreateType, MockDetail, ResponseVariantRead } from '../../../mock-admin-api.types';
 
 const METHOD_TONES: ReadonlySet<string> = new Set(['get', 'post', 'put', 'delete', 'patch']);
 
@@ -68,6 +68,14 @@ const METHOD_TONES: ReadonlySet<string> = new Set(['get', 'post', 'put', 'delete
       </div>
     </div>
     } @else if (detail(); as d) {
+    @if (store.staleWorkspace() || store.selectedGone()) {
+    <!-- La sincronizzazione ha visto sparire l'endpoint, o il runtime serve un altro workspace: il
+         dettaglio resta com'era, bozze comprese, ma non si aggiorna né si salva. -->
+    <div role="status" class="relative z-10 flex shrink-0 items-start gap-2.5 border-b border-[color:var(--status-4xx)]/30 bg-[color:var(--status-4xx)]/[0.10] px-6 py-2.5 text-[12.5px]">
+      <ng-icon name="lucideTriangleAlert" size="0.9rem" class="mt-0.5 shrink-0 text-[color:var(--status-4xx)]" />
+      <p class="text-foreground">{{ (store.staleWorkspace() ? 'detail.staleWorkspace' : 'detail.endpointGone') | transloco }}</p>
+    </div>
+    }
     <!-- HEADER ENDPOINT -->
     <div class="relative z-10 shrink-0 border-b border-border px-6 pb-4 pt-4">
       <div class="flex flex-wrap items-start gap-x-4 gap-y-3">
@@ -106,7 +114,7 @@ const METHOD_TONES: ReadonlySet<string> = new Set(['get', 'post', 'put', 'delete
             <button ui-button size="icon" [disabled]="busy() || !descriptionGuard.canSave()" (click)="saveDescription()" [uiTooltip]="'detail.saveDescription' | transloco" [attr.aria-label]="'detail.saveDescription' | transloco"><ng-icon name="lucideCheck" size="0.9rem" /></button>
             <button ui-button variant="outline" size="icon" (click)="cancelEditDescription()" [uiTooltip]="'detail.cancel' | transloco" [attr.aria-label]="'detail.cancel' | transloco"><ng-icon name="lucideX" size="0.9rem" /></button>
           </div>
-          <mocks-next-draft-conflict class="mt-2 max-w-xl" [guard]="descriptionGuard" [busy]="busy()" (saveMine)="saveDescription($event)" />
+          <mocks-next-draft-conflict panelClass="mt-2 max-w-xl" [guard]="descriptionGuard" [busy]="busy()" (saveMine)="saveDescription($event)" />
           } @else {
           <div class="mt-2 flex items-center gap-2">
             <p class="text-[13.5px]" [class]="d.endpoint?.description ? 'text-muted-foreground' : 'text-muted-foreground/50 italic'">{{ d.endpoint?.description || ('detail.noDescription' | transloco) }}</p>
@@ -363,7 +371,7 @@ const METHOD_TONES: ReadonlySet<string> = new Set(['get', 'post', 'put', 'delete
       <div class="min-h-0 flex-1" [class]="responseFormOpen() ? 'overflow-y-auto mx-scroll' : 'flex flex-col overflow-hidden'">
         @if (responseFormOpen()) {
         @if (editingResponse()) {
-        <mocks-next-draft-conflict class="mx-6 mt-4" [guard]="responseGuard" [busy]="busy()" (saveMine)="saveMineResponse($event)" />
+        <mocks-next-draft-conflict panelClass="mx-6 mt-4" [guard]="responseGuard" [busy]="busy()" (saveMine)="saveMineResponse($event)" />
         }
         <mocks-next-response-form [draft]="draft" [creating]="creatingResponse()" (filePicked)="uploadResponseFile($event)" />
         } @else if (d.type === 'sse') {
@@ -481,14 +489,7 @@ export class MocksNextDetail {
    * salvataggi vanno lì con la revisione letta anche se nel frattempo la selezione cambia.
    */
   protected readonly descriptionGuard = new DraftGuard<string>({
-    load: (target) =>
-      this.api.getMock(target.endpointId).pipe(
-        map((detail) => {
-          const description = detail.endpoint?.description ?? '';
-          const label = this.transloco.translate('draftConflict.descriptionLabel');
-          return { revision: detail.descriptionRevision ?? '', data: description, blocks: [{ label, code: description, language: 'text' as const }] };
-        }),
-      ),
+    load: (target) => this.api.getMock(target.endpointId).pipe(map((detail) => this.descriptionVersion(detail))),
     apply: (description) => {
       this.draftDescription.set(description);
       this.seededDescription = description;
@@ -497,6 +498,7 @@ export class MocksNextDetail {
     },
     isDirty: () => this.draftDescription() !== this.seededDescription,
     errorMessage: (error) => this.store.detailReadErrorMessage(error),
+    unavailable: () => this.syncUnavailable(),
   });
   protected readonly responseGuard = new DraftGuard<ResponseVariantRead>({
     load: (target) => this.api.getResponse(target.endpointId, target.responseFile ?? '').pipe(map(variantVersion)),
@@ -511,6 +513,7 @@ export class MocksNextDetail {
     // Anche un file scelto e rimasto in conflitto è una modifica locale: la ricarica lo scarterebbe.
     isDirty: () => this.pendingUpload != null || this.responseSnapshot() !== this.responseSeed,
     errorMessage: (error) => this.store.detailReadErrorMessage(error),
+    unavailable: () => this.syncUnavailable(),
   });
   /** Payload della bozza variante appena seminata: la ricarica chiede conferma se è cambiato. */
   private responseSeed = '';
@@ -523,14 +526,61 @@ export class MocksNextDetail {
       this.responseGuard.close();
     });
     // Quando cambia l'endpoint selezionato, azzera lo stato di modifica (niente bozze stantie).
+    // Anche aprendo una risorsa di un nuovo workspace con lo stesso id: la bozza del precedente
+    // non passa in silenzio all'omonimo.
     let lastId: string | null | undefined = null;
+    let lastGeneration = this.store.workspaceGeneration();
     effect(() => {
       const id = this.detail()?.id;
-      if (id !== lastId) {
+      const generation = this.store.workspaceGeneration();
+      if (id !== lastId || generation !== lastGeneration) {
         lastId = id;
-        this.resetEditState();
+        lastGeneration = generation;
+        untracked(() => this.resetEditState());
       }
     });
+    // Sincronizzazione (piano agent/API, §13 C4): il dettaglio riletto aggiorna ciò che le bozze
+    // sanno del server, mai il loro testo, bersaglio o base.
+    effect(() => {
+      const synced = { detail: this.detail(), gone: this.store.selectedGone(), staleWorkspace: this.store.staleWorkspace() };
+      untracked(() => {
+        this.observeDescriptionDraft(synced.detail, synced.gone, synced.staleWorkspace);
+        observeVariantDraft(this.responseGuard, synced);
+      });
+    });
+    effect(() => {
+      this.store.syncTick();
+      untracked(() =>
+        recheckVariantDraft(this.responseGuard, {
+          detail: this.detail(),
+          gone: this.store.selectedGone(),
+          staleWorkspace: this.store.staleWorkspace(),
+        }),
+      );
+    });
+  }
+
+  /** Il dettaglio aperto, per la sincronizzazione: di un workspace precedente, o sparito. */
+  private syncUnavailable(): 'missing' | 'blocked' | null {
+    return this.store.staleWorkspace() ? 'blocked' : this.store.selectedGone() ? 'missing' : null;
+  }
+
+  /** Descrizione corrente come versione di confronto: stessa lettura, stessa revisione. */
+  private descriptionVersion(detail: MockDetail): RemoteVersion<string> {
+    const description = detail.endpoint?.description ?? '';
+    const label = this.transloco.translate('draftConflict.descriptionLabel');
+    return { revision: detail.descriptionRevision ?? '', data: description, blocks: [{ label, code: description, language: 'text' }] };
+  }
+
+  private observeDescriptionDraft(detail: MockDetail | undefined, gone: boolean, staleWorkspace: boolean): void {
+    const target = this.descriptionGuard.target();
+    if (!target) return;
+    if (staleWorkspace) {
+      this.descriptionGuard.block();
+    } else if (detail?.id === target.endpointId) {
+      if (gone) this.descriptionGuard.markMissing();
+      else if (detail.descriptionRevision) this.descriptionGuard.observe(this.descriptionVersion(detail));
+    }
   }
 
   protected readonly busy = computed(() => this.store.savingId() === this.detail()?.id);
@@ -914,21 +964,19 @@ export class MocksNextDetail {
   /**
    * Apre il dialog "Sequenza" sull'endpoint corrente. Il dettaglio viene riletto fresco dal
    * server: è il GET dettaglio a portare sequenceState (il cursore runtime), che nello stato
-   * in store può mancare o essere stantio dopo altre mutazioni.
+   * in store può mancare o essere stantio dopo altre mutazioni. Lo si rilegge attraverso lo store,
+   * così dialog e dettaglio partono dalla stessa versione: la sincronizzazione confronta la bozza
+   * della sequence con le letture successive, non con una precedente.
    */
   protected openSequence(mode?: 'create' | 'edit'): void {
-    const d = this.detail();
-    if (!d) return;
-    this.api.getMock(d.id).subscribe({
-      next: (detail) => {
-        const resolvedMode = mode ?? (detail.type === 'sequence' ? 'edit' : 'create');
-        this.dialog.open(MocksNextSequenceDialog, {
-          data: { detail, mode: resolvedMode } satisfies SequenceDialogData,
-          viewContainerRef: this.vcr,
-          autoFocus: 'dialog',
-        });
-      },
-      error: (e) => this.store.error.set(this.store.detailReadErrorMessage(e)),
+    if (!this.detail()) return;
+    this.store.reloadSelectedDetail((detail) => {
+      const resolvedMode = mode ?? (detail.type === 'sequence' ? 'edit' : 'create');
+      this.dialog.open(MocksNextSequenceDialog, {
+        data: { detail, mode: resolvedMode } satisfies SequenceDialogData,
+        viewContainerRef: this.vcr,
+        autoFocus: 'dialog',
+      });
     });
   }
 

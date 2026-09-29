@@ -1,10 +1,11 @@
 import { TestBed } from '@angular/core/testing';
-import { of, throwError } from 'rxjs';
+import { Subject, of, throwError } from 'rxjs';
 import { MonitorDumpStore } from './monitor-dump.store';
 import { MockAdminApiService } from '../mock-admin-api.service';
 import { ToastService } from '../ui/ui-toast/ui-toast';
 import type { MonitorDumpState } from '../mock-admin-api.types';
 import { translocoTesting } from '../testing/transloco-testing';
+import { fakeRuntimeSync } from '../testing/runtime-sync-testing';
 
 function dumpState(overrides: Partial<MonitorDumpState> = {}): MonitorDumpState {
   return { enabled: false, intervalMs: 5000, threshold: 100, currentFile: null, pendingCount: 0, ...overrides };
@@ -17,6 +18,7 @@ describe('MonitorDumpStore', () => {
     flushMonitorDump: ReturnType<typeof vi.fn>;
   };
   let toastStub: { show: ReturnType<typeof vi.fn>; dismiss: ReturnType<typeof vi.fn> };
+  let sync: ReturnType<typeof fakeRuntimeSync>;
 
   beforeEach(() => {
     apiStub = {
@@ -25,9 +27,11 @@ describe('MonitorDumpStore', () => {
       flushMonitorDump: vi.fn(() => of({ flushed: 0 })),
     };
     toastStub = { show: vi.fn(), dismiss: vi.fn() };
+    sync = fakeRuntimeSync();
     TestBed.configureTestingModule({
       imports: [translocoTesting()],
       providers: [
+        sync.provider,
         { provide: MockAdminApiService, useValue: apiStub },
         { provide: ToastService, useValue: toastStub },
       ],
@@ -78,5 +82,39 @@ describe('MonitorDumpStore', () => {
     const store = create();
     store.flush();
     expect(apiStub.flushMonitorDump).toHaveBeenCalledTimes(1);
+  });
+
+  describe('sincronizzazione', () => {
+    it('rilegge quando cambia la revisione del dump, senza toast', () => {
+      const store = create();
+      apiStub.getMonitorDumpState.mockReturnValue(of(dumpState({ enabled: true })));
+      sync.revisions('catalog');
+      expect(store.enabled()).toBe(false);
+
+      sync.revisions('dump');
+      expect(store.enabled()).toBe(true);
+      expect(toastStub.show).not.toHaveBeenCalled();
+    });
+
+    it('due riletture sovrapposte: vince la più recente anche se la prima arriva dopo', () => {
+      const store = create();
+      const first = new Subject<MonitorDumpState>();
+      const second = new Subject<MonitorDumpState>();
+      apiStub.getMonitorDumpState.mockReturnValueOnce(first).mockReturnValueOnce(second);
+      sync.revisions('dump');
+      sync.revisions('dump');
+
+      second.next(dumpState({ enabled: true }));
+      first.next(dumpState({ enabled: false }));
+
+      expect(store.enabled()).toBe(true);
+    });
+
+    it('un errore transitorio della rilettura non nasconde il controllo', () => {
+      const store = create();
+      apiStub.getMonitorDumpState.mockReturnValue(throwError(() => new Error('down')));
+      sync.resync();
+      expect(store.available()).toBe(true);
+    });
   });
 });

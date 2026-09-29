@@ -1,9 +1,11 @@
 import { computed, inject, Injectable, signal } from '@angular/core';
-import { Observable, concatMap, finalize, from, map, switchMap, toArray } from 'rxjs';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { EMPTY, Observable, catchError, concatMap, defer, filter, finalize, from, map, of, switchMap, throwError, toArray, type MonoTypeOperatorFunction } from 'rxjs';
 import { TranslocoService } from '@jsverse/transloco';
 import { MockAdminApiService } from '../../mock-admin-api.service';
 import { isNotFoundError, isReadInconsistentError, readRevisionConflict } from '../../shared/read-error-message';
 import { ViewStateService } from '../../shared/view-state.service';
+import { RuntimeSyncStore, affects, type RuntimeSyncEvent } from '../../shared/runtime-sync.store';
 import {
   CollectionSummary,
   CreateResponseRequest,
@@ -89,6 +91,17 @@ export class MocksStore {
   private readonly api = inject(MockAdminApiService);
   private readonly transloco = inject(TranslocoService);
   private readonly viewState = inject(ViewStateService);
+  private syncing = false;
+  private syncQueued = false;
+  // Cresce a ogni cambio di workspace: una lettura partita prima non installa niente dopo, perché
+  // lo stesso id nella nuova istanza è un'altra risorsa.
+  private workspaceEpoch = 0;
+
+  constructor() {
+    inject(RuntimeSyncStore)
+      .events$.pipe(takeUntilDestroyed())
+      .subscribe((event) => this.onSyncEvent(event));
+  }
 
   readonly mocks = signal<readonly MockSummary[]>([]);
   readonly collections = signal<readonly CollectionSummary[]>([]);
@@ -97,6 +110,18 @@ export class MocksStore {
   /** Definizioni presenti su disco ma scartate dal caricamento (es. formato legacy): il catalogo le segnala invece di farle sparire in silenzio. */
   readonly loadErrors = signal<readonly MockLoadError[]>([]);
   readonly selected = signal<MockDetail | undefined>(undefined);
+  /** La sincronizzazione non trova più l'endpoint aperto: il dettaglio resta, le bozze non si salvano. */
+  readonly selectedGone = signal(false);
+  /**
+   * Il runtime ora serve un altro workspace: il dettaglio aperto appartiene al precedente e non si
+   * aggiorna né si salva, neanche se la nuova istanza ha un endpoint con lo stesso id. Finisce
+   * quando l'utente apre un endpoint della nuova istanza.
+   */
+  readonly staleWorkspace = signal(false);
+  /** Cresce quando si apre una risorsa della nuova istanza: le bozze del workspace precedente decadono. */
+  readonly workspaceGeneration = signal(0);
+  /** Cresce a ogni rilettura di sincronizzazione applicata: le bozze su varianti non selezionate si ricontrollano. */
+  readonly syncTick = signal(0);
   /**
    * Motivo per cui il dettaglio dell'endpoint selezionato non è leggibile dopo una mutazione
    * RIUSCITA. Non è un errore dell'operazione: la modifica è su disco, è la sua descrizione a
@@ -186,11 +211,15 @@ export class MocksStore {
   loadCatalog(preselect?: { method: string; path: string }): void {
     this.loading.set(true);
     this.error.set(undefined);
+    const epoch = this.workspaceEpoch;
     this.api
       .listMocks()
       .pipe(finalize(() => this.loading.set(false)))
       .subscribe({
         next: (res) => {
+          // Partita prima di un cambio di workspace: l'elenco può essere del precedente, e quello
+          // della nuova istanza lo porta la rilettura seguita al cambio.
+          if (epoch !== this.workspaceEpoch) return;
           this.applyCatalogResponse(res);
           if (this.selected() === undefined && res.items.length > 0) {
             const rememberedId = this.viewState.read<string>(SELECTED_ENDPOINT_STATE_KEY);
@@ -208,23 +237,31 @@ export class MocksStore {
   reload(): void {
     this.loading.set(true);
     this.error.set(undefined);
-    const selId = this.selected()?.id;
+    // Col workspace cambiato il dettaglio aperto è del precedente: si riparte da una selezione nuova.
+    const selId = this.staleWorkspace() ? undefined : this.selected()?.id;
+    const epoch = this.workspaceEpoch;
     this.api
       .listMocks()
       .pipe(finalize(() => this.loading.set(false)))
       .subscribe({
         next: (res) => {
+          // Come per la rilettura di sincronizzazione: un cambio di workspace intervenuto nel
+          // frattempo annulla sia l'elenco sia la lettura del dettaglio omonimo.
+          if (epoch !== this.workspaceEpoch) return;
           this.applyCatalogResponse(res);
           if (selId && res.items.some((i) => i.id === selId)) {
             // Il dettaglio aperto resta quello di prima; solo una lettura incompleta va segnalata.
             this.api.getMock(selId).subscribe({
-              next: (d) => this.setSelected(d),
+              next: (d) => {
+                if (epoch === this.workspaceEpoch) this.setSelected(d);
+              },
               error: (e) => {
                 if (isReadInconsistentError(e)) this.error.set(this.detailReadErrorMessage(e));
               },
             });
           } else {
             this.selected.set(undefined);
+            this.leaveStaleWorkspace();
             if (res.items.length > 0) this.selectMock(res.items[0].id);
           }
         },
@@ -232,20 +269,185 @@ export class MocksStore {
       });
   }
 
-  /** Carica il dettaglio di un endpoint e lo rende selezionato. */
+  /**
+   * Carica il dettaglio di un endpoint e lo rende selezionato. Dopo un cambio di workspace anche lo
+   * stesso id si rilegge: è una risorsa della nuova istanza, e aprirla chiude lo stato stantio.
+   */
   selectMock(id: string): void {
-    if (this.selected()?.id === id) {
+    if (this.selected()?.id === id && !this.staleWorkspace()) {
       return;
     }
     this.detailLoading.set(true);
     this.error.set(undefined);
+    const epoch = this.workspaceEpoch;
     this.api
       .getMock(id)
       .pipe(finalize(() => this.detailLoading.set(false)))
       .subscribe({
-        next: (detail) => this.setSelected(detail),
+        next: (detail) => {
+          if (epoch !== this.workspaceEpoch) return;
+          this.leaveStaleWorkspace();
+          this.setSelected(detail);
+        },
         error: (e) => this.error.set(this.detailReadErrorMessage(e)),
       });
+  }
+
+  private onSyncEvent(event: RuntimeSyncEvent): void {
+    if (event.kind === 'runtime' && event.workspaceChanged) {
+      this.onWorkspaceChanged();
+      return;
+    }
+    if (affects(event, 'catalog')) {
+      this.syncRefresh();
+    }
+  }
+
+  /**
+   * Rilettura di sincronizzazione (piano agent/API, §7 S4): catalogo e dettaglio aperto, senza
+   * indicatori di caricamento né toast. Una alla volta; se ne serve un'altra nel frattempo, una sola
+   * segue. Il risultato si scarta se, mentre era in volo, lo stato è cambiato per un'altra strada
+   * (mutazione, selezione, ricarica) o una mutazione è in corso: una rilettura in ritardo non
+   * sovrascrive una risposta più recente. Le bozze non si toccano: il dettaglio cambia, i loro
+   * bersagli e le loro basi no.
+   */
+  syncRefresh(): void {
+    if (this.syncing) {
+      this.syncQueued = true;
+      return;
+    }
+    if (this.mutationInFlight()) {
+      return;
+    }
+    this.syncing = true;
+    const epoch = this.workspaceEpoch;
+    const before = { mocks: this.mocks(), collections: this.collections(), childOrder: this.childOrder(), selected: this.selected() };
+    // Col workspace cambiato il dettaglio aperto non si rilegge: lo stesso id nella nuova istanza è
+    // un'altra risorsa.
+    const selectedId = this.staleWorkspace() ? undefined : before.selected?.id;
+    this.api
+      .listMocks()
+      .pipe(
+        switchMap((res) =>
+          // Workspace cambiato mentre l'elenco era in volo: niente dettaglio, niente risultato. La
+          // rilettura in coda riparte dallo stato stantio.
+          epoch !== this.workspaceEpoch
+            ? EMPTY
+            : selectedId != null && res.items.some((item) => item.id === selectedId)
+            ? this.api.getMock(selectedId).pipe(
+                map((detail): MockDetail | null => detail),
+                // Dettaglio non leggibile adesso: resta quello mostrato, senza un toast a ogni giro.
+                catchError(() => of(null)),
+                map((detail) => ({ res, detail })),
+              )
+            : of({ res, detail: null }),
+        ),
+        finalize(() => {
+          this.syncing = false;
+          if (this.syncQueued) {
+            this.syncQueued = false;
+            this.syncRefresh();
+          }
+        }),
+      )
+      .subscribe({
+        next: ({ res, detail }) => {
+          const unchanged =
+            this.mocks() === before.mocks &&
+            this.collections() === before.collections &&
+            this.childOrder() === before.childOrder &&
+            this.selected() === before.selected;
+          if (!unchanged || epoch !== this.workspaceEpoch || this.mutationInFlight()) {
+            return;
+          }
+          this.applyCatalogResponse(res);
+          if (selectedId != null) {
+            this.selectedGone.set(!res.items.some((item) => item.id === selectedId));
+            if (detail) {
+              this.selected.set(detail);
+              this.detailUnavailable.set(undefined);
+            }
+          }
+          this.syncTick.update((tick) => tick + 1);
+        },
+        // Motore irraggiungibile: lo dice lo stato di collegamento nella status bar.
+        error: () => undefined,
+      });
+  }
+
+  /** Il runtime serve un altro workspace: si mostra il suo catalogo, il dettaglio aperto resta del precedente. */
+  private onWorkspaceChanged(): void {
+    this.workspaceEpoch += 1;
+    // Le mutazioni in volo appartengono al runtime precedente: i loro esiti non toccheranno più la
+    // GUI (vedi `sameWorkspace`), e i loro indicatori non bloccano la nuova istanza.
+    this.savingId.set(undefined);
+    this.erasingCollectionId.set(undefined);
+    this.creating.set(false);
+    this.staleWorkspace.set(this.selected() != null);
+    this.selectedGone.set(false);
+    this.syncRefresh();
+  }
+
+  /**
+   * Lega gli esiti di una mutazione al workspace in cui è partita (piano agent/API, §13 C4): se nel
+   * frattempo il runtime serve un altro workspace, risultato ed errore si scartano, quindi niente
+   * dettaglio o catalogo installati, niente riletture concatenate né callback. La mutazione sul
+   * server non si annulla. Va dopo la mutazione, perché la rilettura concatenata non parta, e in
+   * coda, perché non si applichi una rilettura già in volo.
+   */
+  private sameWorkspace<T>(): MonoTypeOperatorFunction<T> {
+    return (source) =>
+      defer(() => {
+        const epoch = this.workspaceEpoch;
+        const current = () => epoch === this.workspaceEpoch;
+        return source.pipe(
+          filter(current),
+          catchError((error: unknown) => (current() ? throwError(() => error) : EMPTY)),
+        );
+      });
+  }
+
+  /**
+   * Richieste in sequenza di un'azione di massa, legate al workspace in cui è partita: ognuna
+   * ricontrolla il workspace subito prima di partire e, se è cambiato, il batch si interrompe e le
+   * richieste non ancora inviate non partono (non devono colpire la nuova istanza). Quelle già
+   * eseguite restano sul server. L'interruzione arriva come errore, che `sameWorkspace` scarta.
+   */
+  private batchInWorkspace<T, R>(items: readonly T[], request: (item: T) => Observable<R>): Observable<R[]> {
+    return defer(() => {
+      const epoch = this.workspaceEpoch;
+      return from(items).pipe(
+        concatMap((item) =>
+          defer(() => (epoch === this.workspaceEpoch ? request(item) : throwError(() => new Error('Workspace changed during the batch.')))),
+        ),
+        toArray(),
+      );
+    });
+  }
+
+  /** Come `finalize`, ma solo nello stesso workspace: gli indicatori della nuova istanza non si toccano. */
+  private settle<T>(done: () => void): MonoTypeOperatorFunction<T> {
+    return (source) =>
+      defer(() => {
+        const epoch = this.workspaceEpoch;
+        return source.pipe(
+          finalize(() => {
+            if (epoch === this.workspaceEpoch) done();
+          }),
+        );
+      });
+  }
+
+  /** Si apre una risorsa della nuova istanza: le bozze del workspace precedente decadono. */
+  private leaveStaleWorkspace(): void {
+    if (this.staleWorkspace()) {
+      this.staleWorkspace.set(false);
+      this.workspaceGeneration.update((generation) => generation + 1);
+    }
+  }
+
+  private mutationInFlight(): boolean {
+    return this.savingId() != null || this.erasingCollectionId() != null || this.creating();
   }
 
   /**
@@ -261,8 +463,10 @@ export class MocksStore {
     this.api
       .updateEndpoint(id, { enabled })
       .pipe(
+        this.sameWorkspace(),
         switchMap((updated) => this.api.listMocks().pipe(map((res) => ({ updated, res })))),
-        finalize(() => this.savingId.set(undefined)),
+        this.sameWorkspace(),
+        this.settle(() => this.savingId.set(undefined)),
       )
       .subscribe({
         next: ({ updated, res }) => {
@@ -423,8 +627,10 @@ export class MocksStore {
     this.api
       .deleteMock(id)
       .pipe(
+        this.sameWorkspace(),
         switchMap(() => this.api.listMocks()),
-        finalize(() => this.savingId.set(undefined)),
+        this.sameWorkspace(),
+        this.settle(() => this.savingId.set(undefined)),
       )
       .subscribe({
         next: (res) => {
@@ -450,7 +656,7 @@ export class MocksStore {
     this.error.set(undefined);
     this.api
       .createCollection({ label: trimmed, parentId })
-      .pipe(switchMap(() => this.api.listMocks()))
+      .pipe(this.sameWorkspace(), switchMap(() => this.api.listMocks()), this.sameWorkspace())
       .subscribe({
         next: (res) => {
           this.applyCatalogResponse(res);
@@ -476,8 +682,10 @@ export class MocksStore {
     this.api
       .assignDefinitionCollection(itemId, { collectionId: normalized, targetIndex })
       .pipe(
+        this.sameWorkspace(),
         switchMap((detail) => this.api.listMocks().pipe(map((res) => ({ detail, res })))),
-        finalize(() => this.savingId.set(undefined)),
+        this.sameWorkspace(),
+        this.settle(() => this.savingId.set(undefined)),
       )
       .subscribe({
         next: ({ detail, res }) => {
@@ -499,7 +707,7 @@ export class MocksStore {
     this.error.set(undefined);
     this.api
       .deleteCollection(id)
-      .pipe(switchMap(() => this.api.listMocks()))
+      .pipe(this.sameWorkspace(), switchMap(() => this.api.listMocks()), this.sameWorkspace())
       .subscribe({
         next: (res) => {
           this.applyCatalogResponse(res);
@@ -519,8 +727,10 @@ export class MocksStore {
     this.api
       .eraseCollection(id)
       .pipe(
+        this.sameWorkspace(),
         switchMap(() => this.api.listMocks()),
-        finalize(() => this.erasingCollectionId.set(undefined)),
+        this.sameWorkspace(),
+        this.settle(() => this.erasingCollectionId.set(undefined)),
       )
       .subscribe({
         next: (res) => {
@@ -538,7 +748,7 @@ export class MocksStore {
   /** Abilita/disabilita in blocco tutti gli endpoint di una collection (e sotto-collection). */
   setCollectionEnabled(id: string, enabled: boolean): void {
     this.error.set(undefined);
-    this.api.updateCollectionEnabled(id, { enabled }).subscribe({
+    this.api.updateCollectionEnabled(id, { enabled }).pipe(this.sameWorkspace()).subscribe({
       next: (res) => {
         this.applyCatalogResponse(res);
         const sel = this.selected();
@@ -563,7 +773,7 @@ export class MocksStore {
       return;
     }
     this.error.set(undefined);
-    this.api.setEndpointsEnabled({ ids: [...ids], enabled }).subscribe({
+    this.api.setEndpointsEnabled({ ids: [...ids], enabled }).pipe(this.sameWorkspace()).subscribe({
       next: (res) => {
         this.applyCatalogResponse(res);
         // Il dettaglio aperto potrebbe essere uno di quelli toccati: allinea il suo interruttore.
@@ -589,11 +799,11 @@ export class MocksStore {
       return;
     }
     this.error.set(undefined);
-    from(ids)
+    this.batchInWorkspace(ids, (id) => this.api.assignDefinitionCollection(id, { collectionId }))
       .pipe(
-        concatMap((id) => this.api.assignDefinitionCollection(id, { collectionId })),
-        toArray(),
+        this.sameWorkspace(),
         switchMap(() => this.api.listMocks()),
+        this.sameWorkspace(),
       )
       .subscribe({
         next: (res) => {
@@ -614,11 +824,10 @@ export class MocksStore {
     }
     this.error.set(undefined);
     const selectedId = this.selected()?.id;
-    from(ids)
+    this.batchInWorkspace(ids, (id) => this.api.deleteDefinition(id))
       .pipe(
-        concatMap((id) => this.api.deleteDefinition(id)),
-        toArray(),
-        finalize(() => this.loadCatalog()),
+        this.sameWorkspace(),
+        this.settle(() => this.loadCatalog()),
       )
       .subscribe({
         next: () => {
@@ -638,7 +847,7 @@ export class MocksStore {
     this.error.set(undefined);
     this.api
       .reorderCollections({ collectionIds: orderedSiblingIds, parentId })
-      .pipe(switchMap(() => this.api.listMocks()))
+      .pipe(this.sameWorkspace(), switchMap(() => this.api.listMocks()), this.sameWorkspace())
       .subscribe({
         next: (res) => {
           this.applyCatalogResponse(res);
@@ -659,7 +868,7 @@ export class MocksStore {
     this.error.set(undefined);
     this.api
       .reparentCollection(id, { parentId: parentId ?? null, targetIndex })
-      .pipe(switchMap(() => this.api.listMocks()))
+      .pipe(this.sameWorkspace(), switchMap(() => this.api.listMocks()), this.sameWorkspace())
       .subscribe({
         next: (res) => {
           this.applyCatalogResponse(res);
@@ -698,7 +907,7 @@ export class MocksStore {
     this.error.set(undefined);
     this.api
       .reorderCollectionChildren(parentKey, { childRefs })
-      .pipe(switchMap(() => this.api.listMocks()))
+      .pipe(this.sameWorkspace(), switchMap(() => this.api.listMocks()), this.sameWorkspace())
       .subscribe({
         next: (res) => {
           this.applyCatalogResponse(res);
@@ -741,8 +950,10 @@ export class MocksStore {
     this.creating.set(true);
     this.error.set(undefined);
     op.pipe(
+      this.sameWorkspace(),
       switchMap((detail) => this.api.listMocks().pipe(map((res) => ({ detail, res })))),
-      finalize(() => this.creating.set(false)),
+      this.sameWorkspace(),
+      this.settle(() => this.creating.set(false)),
     ).subscribe({
       next: ({ detail, res }) => {
         this.applyCatalogResponse(res);
@@ -788,11 +999,16 @@ export class MocksStore {
     }
     this.detailLoading.set(true);
     this.error.set(undefined);
+    const epoch = this.workspaceEpoch;
     this.api
       .getMock(id)
       .pipe(finalize(() => this.detailLoading.set(false)))
       .subscribe({
         next: (detail) => {
+          if (epoch !== this.workspaceEpoch) return;
+          // Con il workspace cambiato, rileggere su richiesta è aprire la risorsa della nuova
+          // istanza: lo stato stantio finisce e le bozze del precedente decadono.
+          this.leaveStaleWorkspace();
           this.setSelected(detail);
           onLoaded?.(detail);
         },
@@ -815,6 +1031,7 @@ export class MocksStore {
 
   private setSelected(detail: MockDetail): void {
     this.selected.set(detail);
+    this.selectedGone.set(false);
     // Un dettaglio letto per intero chiude qualunque segnalazione di illeggibilità precedente,
     // da qualunque strada arrivi (ricarica, cambio di endpoint, mutazione successiva riuscita).
     this.detailUnavailable.set(undefined);
@@ -848,8 +1065,10 @@ export class MocksStore {
     this.savingId.set(savingId);
     this.error.set(undefined);
     op.pipe(
+      this.sameWorkspace(),
       switchMap((detail) => this.api.listMocks().pipe(map((res) => ({ detail, res })))),
-      finalize(() => this.savingId.set(undefined)),
+      this.sameWorkspace(),
+      this.settle(() => this.savingId.set(undefined)),
     ).subscribe({
       next: ({ detail, res }) => {
         this.applyMutationDetail(detail);

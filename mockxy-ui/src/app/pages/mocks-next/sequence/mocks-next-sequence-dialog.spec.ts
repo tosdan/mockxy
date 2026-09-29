@@ -85,6 +85,10 @@ describe('MocksNextSequenceDialog', () => {
     createSequence: ReturnType<typeof vi.fn>;
     updateSequence: ReturnType<typeof vi.fn>;
     detailReadErrorMessage: ReturnType<typeof vi.fn>;
+    selected: ReturnType<typeof signal<MockDetail | undefined>>;
+    selectedGone: ReturnType<typeof signal<boolean>>;
+    staleWorkspace: ReturnType<typeof signal<boolean>>;
+    syncTick: ReturnType<typeof signal<number>>;
   };
   let api: {
     getSequenceState: ReturnType<typeof vi.fn>;
@@ -94,13 +98,18 @@ describe('MocksNextSequenceDialog', () => {
   let toast: { show: ReturnType<typeof vi.fn>; dismiss: ReturnType<typeof vi.fn> };
   let dialogRef: { close: ReturnType<typeof vi.fn> };
 
-  function create(detail: MockDetail, mode: SequenceDialogData['mode']) {
+  function create(detail: MockDetail, mode: SequenceDialogData['mode'], setup?: (s: typeof store) => void) {
     store = {
       savingId: signal<string | undefined>(undefined),
       error: signal<string | undefined>(undefined),
       createSequence: vi.fn(),
       updateSequence: vi.fn(),
       detailReadErrorMessage: vi.fn(() => 'lettura fallita'),
+      // Il dialog si apre sul dettaglio appena riletto dallo store: stessa versione.
+      selected: signal<MockDetail | undefined>(detail),
+      selectedGone: signal(false),
+      staleWorkspace: signal(false),
+      syncTick: signal(0),
     };
     const initialState = detail.sequenceState ?? {
       stepIndex: 0,
@@ -129,6 +138,7 @@ describe('MocksNextSequenceDialog', () => {
         { provide: DIALOG_DATA, useValue: { detail, mode } satisfies SequenceDialogData },
       ],
     });
+    setup?.(store);
     const fixture = TestBed.createComponent(MocksNextSequenceDialog);
     fixture.detectChanges();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -373,6 +383,27 @@ describe('MocksNextSequenceDialog', () => {
         expect.any(Function),
         expect.objectContaining({ target: expect.objectContaining({ baseRevision: REV_B }) }),
       );
+    });
+
+    it('una rilettura che trova la sequence cambiata sul server lo segnala, la bozza resta', () => {
+      const { fixture, c } = create(editDetail(), 'edit');
+      c.title.set('Mia');
+      store.selected.set(editDetail({
+        responseRevision: REV_B,
+        response: { type: 'sequence', title: 'Dell’agent', steps: CURRENT.response['steps'], onEnd: 'loop', resetAfterMs: null },
+      }));
+      fixture.detectChanges();
+
+      expect(c.guard.remoteChanged()).toBe(true);
+      expect((fixture.nativeElement as HTMLElement).textContent).toContain('La versione sul server è cambiata');
+      expect(c.title()).toBe('Mia');
+    });
+
+    it('aperto col workspace cambiato non salva sul bersaglio del precedente', () => {
+      const { c } = create(editDetail(), 'edit', (s) => s.staleWorkspace.set(true));
+      c.title.set('Mia');
+      expect(c.guard.blocked()).toBe(true);
+      expect(c.canSave()).toBe(false);
     });
 
     it('con la variante sparita il salvataggio resta disabilitato', () => {
