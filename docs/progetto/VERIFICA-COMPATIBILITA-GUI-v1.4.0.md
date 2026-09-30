@@ -86,6 +86,12 @@ rilievi sul contratto o sulle regole del repository.
 La prova Windows dell’artefatto resta manuale. Il collaudo Linux usa un display
 virtuale; non sostituisce una prova delle integrazioni native su Windows.
 
+La review di Opus sul commit `3c2264c` approva la PR #40. Resta un miglioramento
+non bloccante e preesistente: se l’upload successivo alla creazione fallisce, il
+dialog resta aperto e «Crea» ripete la creazione invece di ritentare soltanto
+l’upload. La seconda creazione viene rifiutata perché l’endpoint esiste già.
+Questo caso resta fuori dalla patch di recupero e può essere affrontato separatamente.
+
 Il tag 1.4.0 è già pubblicato, mentre la release GitHub è in bozza. Il §9 della
 procedura di rilascio vieta di spostare o riutilizzare un tag per aggiungere codice:
 la correzione richiede una nuova patch e artefatti ricostruiti. Nessuna modifica
