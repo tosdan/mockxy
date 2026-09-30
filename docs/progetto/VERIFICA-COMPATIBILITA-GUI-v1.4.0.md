@@ -10,8 +10,8 @@ I flussi ordinari e i contratti API usati dalla GUI risultano compatibili. È st
 però trovata una regressione nel recupero del dettaglio dopo una creazione o una
 copia riuscita. Nella creazione con body da file, lo stesso percorso può anche
 scrivere il file sull’endpoint precedente. La correzione è nella
-[PR #40](https://github.com/tosdan/mockxy/pull/40),
-sul branch `fix-gui-created-detail-recovery`;
+[PR #40](https://github.com/tosdan/mockxy/pull/40), integrata su `main` con
+lo squash `8e79502` e inclusa nella preparazione della 1.4.1;
 non fa parte dell’AppImage o della portable già costruite per il tag 1.4.0.
 
 ## Evidenze sulla release originale
@@ -85,6 +85,12 @@ rilievi sul contratto o sulle regole del repository.
 
 La prova Windows dell’artefatto resta manuale. Il collaudo Linux usa un display
 virtuale; non sostituisce una prova delle integrazioni native su Windows.
+
+La review di Opus sul commit `3c2264c` approva la PR #40. Resta un miglioramento
+non bloccante e preesistente: se l’upload successivo alla creazione fallisce, il
+dialog resta aperto e «Crea» ripete la creazione invece di ritentare soltanto
+l’upload. La seconda creazione viene rifiutata perché l’endpoint esiste già.
+Questo caso resta fuori dalla patch di recupero e può essere affrontato separatamente.
 
 Il tag 1.4.0 è già pubblicato, mentre la release GitHub è in bozza. Il §9 della
 procedura di rilascio vieta di spostare o riutilizzare un tag per aggiungere codice:

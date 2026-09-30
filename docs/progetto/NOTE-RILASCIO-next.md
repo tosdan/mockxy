@@ -1,6 +1,13 @@
 # Note di rilascio
 
-## Prossima versione
+## v1.4.1
+
+Include le novità della 1.4.0 riportate sotto, più la correzione GUI della
+[PR #40](https://github.com/tosdan/mockxy/pull/40). La 1.4.0 rimane in bozza e non
+viene pubblicata. I workspace e il contratto API non cambiano rispetto alla 1.4.0.
+
+Le [note per la pubblicazione, in italiano e inglese](NOTE-RILASCIO-v1.4.1.md)
+riassumono l’intero aggiornamento dalla versione pubblica 1.3.2.
 
 ### Interfaccia
 
