@@ -8,7 +8,8 @@ l’integrazione fra GUI e motore. Base di confronto: `v1.3.2`. Release verifica
 
 I flussi ordinari e i contratti API usati dalla GUI risultano compatibili. È stata
 però trovata una regressione nel recupero del dettaglio dopo una creazione o una
-copia riuscita. La correzione è sul branch `fix-gui-created-detail-recovery`;
+copia riuscita. La correzione è nella [PR #40](https://github.com/tosdan/mockxy/pull/40),
+sul branch `fix-gui-created-detail-recovery`;
 non fa parte dell’AppImage o della portable già costruite per il tag 1.4.0.
 
 ## Evidenze sulla release originale
