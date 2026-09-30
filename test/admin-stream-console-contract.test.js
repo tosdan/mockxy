@@ -80,14 +80,19 @@ describe("console SSE/WS: risposte conformi alla spec", () => {
     try {
       await new Promise((resolve) => client.on("open", resolve));
       client.send("ping");
-      await admin().post(`/_admin/api/mocks/${SSE_ID}/sse/push`).send({ data: "manuale" });
-      await admin().post(`/_admin/api/mocks/${WS_ID}/ws/push`).send({ data: "manuale" });
-      // Copione, regola e messaggio ricevuto sono voci legate alla connessione.
+      const ssePush = await admin().post(`/_admin/api/mocks/${SSE_ID}/sse/push`).send({ data: "manuale" });
+      expect(ssePush.status).toBe(200);
+      expect(ssePush.body.delivered).toBe(1);
+      const wsPush = await admin().post(`/_admin/api/mocks/${WS_ID}/ws/push`).send({ data: "manuale" });
+      expect(wsPush.status).toBe(200);
+      expect(wsPush.body.delivered).toBe(1);
+      // Copione, regola e messaggio ricevuto sono voci legate alla connessione; i push manuali
+      // sono broadcast, registrati una volta sola.
       await waitFor(async () => {
         const sse = (await admin().get(`/_admin/api/mocks/${SSE_ID}/sse/connections`)).body;
         const ws = (await admin().get(`/_admin/api/mocks/${WS_ID}/ws/connections`)).body;
-        return sse.history.some((entry) => entry.origin === "script")
-          && ["script", "rule", "received"].every((origin) => ws.transcript.some((entry) => entry.origin === origin));
+        return ["script", "manual"].every((origin) => sse.history.some((entry) => entry.origin === origin))
+          && ["script", "rule", "received", "manual"].every((origin) => ws.transcript.some((entry) => entry.origin === origin));
       });
 
       const spec = yaml.safeLoad((await admin().get("/_admin/api/openapi.yaml")).text);
@@ -109,6 +114,14 @@ describe("console SSE/WS: risposte conformi alla spec", () => {
       for (const origin of ["script", "rule", "received"]) {
         expect(ws.body.transcript.find((entry) => entry.origin === origin)).toMatchObject({ connectionId: wsConnection.id });
       }
+
+      // I broadcast della console non sono legati a una connessione: niente connectionId.
+      const sseManual = sse.body.history.filter((entry) => entry.origin === "manual");
+      expect(sseManual).toEqual([expect.objectContaining({ data: "manuale" })]);
+      expect(sseManual[0]).not.toHaveProperty("connectionId");
+      const wsManual = ws.body.transcript.filter((entry) => entry.origin === "manual");
+      expect(wsManual).toEqual([expect.objectContaining({ direction: "out", data: "manuale" })]);
+      expect(wsManual[0]).not.toHaveProperty("connectionId");
     } finally {
       sseRequest.destroy();
       client.terminate();
