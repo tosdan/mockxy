@@ -79,6 +79,13 @@ describe("console SSE/WS: risposte conformi alla spec", () => {
 
     try {
       await new Promise((resolve) => client.on("open", resolve));
+      // Le due connessioni sono indipendenti: i push si inviano quando le console le riportano
+      // entrambe, altrimenti un broadcast potrebbe arrivare prima della registrazione.
+      await waitFor(async () => {
+        const sse = (await admin().get(`/_admin/api/mocks/${SSE_ID}/sse/connections`)).body;
+        const ws = (await admin().get(`/_admin/api/mocks/${WS_ID}/ws/connections`)).body;
+        return sse.connections.length === 1 && ws.connections.length === 1;
+      });
       client.send("ping");
       const ssePush = await admin().post(`/_admin/api/mocks/${SSE_ID}/sse/push`).send({ data: "manuale" });
       expect(ssePush.status).toBe(200);
