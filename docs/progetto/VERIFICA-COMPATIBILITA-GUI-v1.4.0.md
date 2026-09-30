@@ -96,3 +96,37 @@ Il tag 1.4.0 è già pubblicato, mentre la release GitHub è in bozza. Il §9 de
 procedura di rilascio vieta di spostare o riutilizzare un tag per aggiungere codice:
 la correzione richiede una nuova patch e artefatti ricostruiti. Nessuna modifica
 al formato dei workspace o al contratto dell’admin API è necessaria.
+
+## Verifica degli artefatti della 1.4.1
+
+La PR #40 è stata integrata con lo squash `8e79502`. Il commit di release
+`e37b0cc0ef1c244d79ca8f63ef223e5f47f989eb` e il tag `v1.4.1` sono sul remoto;
+root, GUI ed Electron sono allineati alla 1.4.1. I risultati seguenti sono stati
+registrati dopo la creazione del tag, senza modificare codice o artefatti.
+
+- [Pipeline del tag](https://github.com/tosdan/mockxy/actions/runs/36701225960):
+  tutti i job verdi, inclusi 1.086 test motore/Electron, 526 test GUI e 119 test
+  Playwright, build Windows e Linux e creazione della bozza. Anche la
+  [CI ordinaria](https://github.com/tosdan/mockxy/actions/runs/36701213874) e il
+  [black-box](https://github.com/tosdan/mockxy/actions/runs/36701213793) sono verdi
+  sullo stesso commit.
+- I checksum della portable e dell’AppImage corrispondono a `SHA256SUMS.txt`.
+  L’AppImage scaricato per il collaudo è identico a quello del bundle finale.
+- Smoke test dell’AppImage distribuito: app e motore riportano 1.4.1; il workspace
+  di fixture della 1.3.2 si apre, la sessione si ripristina dopo la riapertura,
+  GUI, configurazione e OpenAPI rispondono, le definizioni dei mock restano
+  invariate. Il controllo aggiornamenti reale risponde correttamente e vede
+  ancora la release pubblica 1.3.2.
+- **108 test contro GUI e motore inclusi nell’AppImage, senza ritentativi**, tutti
+  passati. Sono compresi i due nuovi casi della #40, che fallivano sul pacchetto
+  1.4.0: recupero di B e upload soltanto su B con A invariato. Gli 11 test di
+  setup agent esclusi da questo harness usano un secondo server e sono coperti
+  dai 119 test della pipeline.
+
+La [bozza della 1.4.1](https://github.com/tosdan/mockxy/releases/tag/untagged-3cc2d7c0a7289691eab5)
+contiene portable Windows, AppImage Linux e checksum. La 1.4.0 resta in bozza.
+Prima di pubblicare la 1.4.1 restano la prova nativa della portable su Windows
+(apertura workspace, ripristino sessione e controllo aggiornamenti) e
+l’inserimento delle [note curate bilingui](NOTE-RILASCIO-v1.4.1.md) nella bozza.
+Il token disponibile a `gh` non consente di accedere alle release in bozza;
+l’aggiornamento delle note e la pubblicazione richiedono l’interfaccia GitHub.
