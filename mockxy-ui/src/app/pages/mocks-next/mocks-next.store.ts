@@ -93,6 +93,9 @@ export class MocksStore {
   private readonly viewState = inject(ViewStateService);
   private syncing = false;
   private syncQueued = false;
+  // Una mutazione riuscita può restituire solo l’id: resta il bersaglio da rileggere,
+  // anche quando il dettaglio conservato appartiene all’endpoint aperto prima della creazione.
+  private readonly unavailableDetailId = signal<string | undefined>(undefined);
   // Cresce a ogni cambio di workspace: una lettura partita prima non installa niente dopo, perché
   // lo stesso id nella nuova istanza è un'altra risorsa.
   private workspaceEpoch = 0;
@@ -196,7 +199,7 @@ export class MocksStore {
     ).length;
   }
   readonly activeEndpoints = computed(() => this.mocks().filter((m) => !m.disabled).length);
-  readonly selectedId = computed(() => this.selected()?.id);
+  readonly selectedId = computed(() => this.unavailableDetailId() ?? this.selected()?.id);
   readonly hasActiveFilter = computed(
     () => this.searchTerm().trim() !== '' || this.typeFilter() !== 'all' || this.statusFilter() !== 'all',
   );
@@ -238,7 +241,7 @@ export class MocksStore {
     this.loading.set(true);
     this.error.set(undefined);
     // Col workspace cambiato il dettaglio aperto è del precedente: si riparte da una selezione nuova.
-    const selId = this.staleWorkspace() ? undefined : this.selected()?.id;
+    const selId = this.staleWorkspace() ? undefined : this.selectedId();
     const epoch = this.workspaceEpoch;
     this.api
       .listMocks()
@@ -260,7 +263,7 @@ export class MocksStore {
               },
             });
           } else {
-            this.selected.set(undefined);
+            this.clearSelected();
             this.leaveStaleWorkspace();
             if (res.items.length > 0) this.selectMock(res.items[0].id);
           }
@@ -274,7 +277,7 @@ export class MocksStore {
    * stesso id si rilegge: è una risorsa della nuova istanza, e aprirla chiude lo stato stantio.
    */
   selectMock(id: string): void {
-    if (this.selected()?.id === id && !this.staleWorkspace()) {
+    if (this.selected()?.id === id && !this.staleWorkspace() && !this.detailUnavailable()) {
       return;
     }
     this.detailLoading.set(true);
@@ -321,10 +324,10 @@ export class MocksStore {
     }
     this.syncing = true;
     const epoch = this.workspaceEpoch;
-    const before = { mocks: this.mocks(), collections: this.collections(), childOrder: this.childOrder(), selected: this.selected() };
+    const before = { mocks: this.mocks(), collections: this.collections(), childOrder: this.childOrder(), selected: this.selected(), selectedId: this.selectedId() };
     // Col workspace cambiato il dettaglio aperto non si rilegge: lo stesso id nella nuova istanza è
     // un'altra risorsa.
-    const selectedId = this.staleWorkspace() ? undefined : before.selected?.id;
+    const selectedId = this.staleWorkspace() ? undefined : before.selectedId;
     this.api
       .listMocks()
       .pipe(
@@ -356,7 +359,8 @@ export class MocksStore {
             this.mocks() === before.mocks &&
             this.collections() === before.collections &&
             this.childOrder() === before.childOrder &&
-            this.selected() === before.selected;
+            this.selected() === before.selected &&
+            this.selectedId() === before.selectedId;
           if (!unchanged || epoch !== this.workspaceEpoch || this.mutationInFlight()) {
             return;
           }
@@ -364,8 +368,7 @@ export class MocksStore {
           if (selectedId != null) {
             this.selectedGone.set(!res.items.some((item) => item.id === selectedId));
             if (detail) {
-              this.selected.set(detail);
-              this.detailUnavailable.set(undefined);
+              this.setSelected(detail);
             }
           }
           this.syncTick.update((tick) => tick + 1);
@@ -383,7 +386,7 @@ export class MocksStore {
     this.savingId.set(undefined);
     this.erasingCollectionId.set(undefined);
     this.creating.set(false);
-    this.staleWorkspace.set(this.selected() != null);
+    this.staleWorkspace.set(this.selectedId() != null);
     this.selectedGone.set(false);
     this.syncRefresh();
   }
@@ -471,7 +474,7 @@ export class MocksStore {
       .subscribe({
         next: ({ updated, res }) => {
           this.applyCatalogResponse(res);
-          if (this.selected()?.id === id) {
+          if (this.selectedId() === id) {
             this.applyMutationDetail(updated);
           }
         },
@@ -635,7 +638,7 @@ export class MocksStore {
       .subscribe({
         next: (res) => {
           this.applyCatalogResponse(res);
-          this.selected.set(undefined);
+          this.clearSelected();
           if (res.items.length > 0) {
             this.selectMock(res.items[0].id);
           }
@@ -690,7 +693,7 @@ export class MocksStore {
       .subscribe({
         next: ({ detail, res }) => {
           this.applyCatalogResponse(res);
-          if (this.selected()?.id === itemId) {
+          if (this.selectedId() === itemId) {
             this.applyMutationDetail(detail);
           }
         },
@@ -735,9 +738,9 @@ export class MocksStore {
       .subscribe({
         next: (res) => {
           this.applyCatalogResponse(res);
-          const selectedId = this.selected()?.id;
+          const selectedId = this.selectedId();
           if (selectedId != null && !res.items.some((item) => item.id === selectedId)) {
-            this.selected.set(undefined);
+            this.clearSelected();
           }
           onSuccess?.();
         },
@@ -752,7 +755,7 @@ export class MocksStore {
       next: (res) => {
         this.applyCatalogResponse(res);
         const sel = this.selected();
-        if (sel) {
+        if (sel && !this.detailUnavailable()) {
           const updated = res.items.find((i) => i.id === sel.id);
           if (updated) {
             this.setSelected({ ...sel, disabled: updated.disabled });
@@ -778,7 +781,7 @@ export class MocksStore {
         this.applyCatalogResponse(res);
         // Il dettaglio aperto potrebbe essere uno di quelli toccati: allinea il suo interruttore.
         const sel = this.selected();
-        if (sel) {
+        if (sel && !this.detailUnavailable()) {
           const updated = res.items.find((item) => item.id === sel.id);
           if (updated) {
             this.setSelected({ ...sel, disabled: updated.disabled });
@@ -823,7 +826,7 @@ export class MocksStore {
       return;
     }
     this.error.set(undefined);
-    const selectedId = this.selected()?.id;
+    const selectedId = this.selectedId();
     this.batchInWorkspace(ids, (id) => this.api.deleteDefinition(id))
       .pipe(
         this.sameWorkspace(),
@@ -833,7 +836,7 @@ export class MocksStore {
         next: () => {
           // Il dettaglio aperto è appena sparito: loadCatalog ne selezionerà un altro.
           if (selectedId != null && ids.includes(selectedId)) {
-            this.selected.set(undefined);
+            this.clearSelected();
           }
           onSuccess?.();
         },
@@ -921,8 +924,12 @@ export class MocksStore {
 
   // --- creazione definizioni (Fase D1) ---
 
-  /** Crea un nuovo mock e lo apre. */
-  createMockDef(config: MockConfig, body: unknown, onDone?: (ok: boolean) => void): void {
+  /** Crea un nuovo mock; il callback riceve l’id scritto anche senza dettaglio leggibile. */
+  createMockDef(
+    config: MockConfig,
+    body: unknown,
+    onDone?: (ok: boolean, createdId?: string) => void,
+  ): void {
     this.runCreate(this.api.createMock({ config, body }), onDone);
   }
 
@@ -945,8 +952,11 @@ export class MocksStore {
     this.runCreate(op, onDone);
   }
 
-  /** Crea una definizione, ricarica il catalogo e la rende selezionata; `onDone(ok)` per chiudere il dialog solo a buon fine. */
-  private runCreate(op: Observable<MockDetailAfterMutation>, onDone?: (ok: boolean) => void): void {
+  /** Crea una definizione, ricarica il catalogo e la rende selezionata; il callback riceve l’esito e l’id creato. */
+  private runCreate(
+    op: Observable<MockDetailAfterMutation>,
+    onDone?: (ok: boolean, createdId?: string) => void,
+  ): void {
     this.creating.set(true);
     this.error.set(undefined);
     op.pipe(
@@ -960,7 +970,7 @@ export class MocksStore {
         // Anche qui la creazione è avvenuta: il dialog si chiude a buon fine e il catalogo la
         // elenca. Se il dettaglio non si compone non la si può aprire, e il pannello lo dice.
         this.applyMutationDetail(detail);
-        onDone?.(true);
+        onDone?.(true, detail.id);
       },
       error: (e) => {
         this.error.set(readErrorMessage(e) ?? this.transloco.translate('common.unexpectedError'));
@@ -982,7 +992,9 @@ export class MocksStore {
    */
   private applyMutationDetail(detail: MockDetailAfterMutation): void {
     if (isDetailUnavailable(detail)) {
+      this.unavailableDetailId.set(detail.id);
       this.detailUnavailable.set(detail.detailUnavailable.message);
+      this.viewState.write(SELECTED_ENDPOINT_STATE_KEY, detail.id);
       return;
     }
     this.setSelected(detail);
@@ -993,26 +1005,29 @@ export class MocksStore {
    * ricarica di una bozza in conflitto. `onLoaded` riceve il dettaglio riletto.
    */
   reloadSelectedDetail(onLoaded?: (detail: MockDetail) => void): void {
-    const id = this.selected()?.id;
+    const id = this.selectedId();
     if (id == null) {
       return;
     }
     this.detailLoading.set(true);
     this.error.set(undefined);
     const epoch = this.workspaceEpoch;
+    const selected = this.selected();
+    const pendingId = this.unavailableDetailId();
+    const current = () => epoch === this.workspaceEpoch && this.selected() === selected && this.unavailableDetailId() === pendingId;
     this.api
       .getMock(id)
       .pipe(finalize(() => this.detailLoading.set(false)))
       .subscribe({
         next: (detail) => {
-          if (epoch !== this.workspaceEpoch) return;
+          if (!current()) return;
           // Con il workspace cambiato, rileggere su richiesta è aprire la risorsa della nuova
           // istanza: lo stato stantio finisce e le bozze del precedente decadono.
           this.leaveStaleWorkspace();
           this.setSelected(detail);
           onLoaded?.(detail);
         },
-        error: (e) => this.error.set(this.detailReadErrorMessage(e)),
+        error: (e) => { if (current()) this.error.set(this.detailReadErrorMessage(e)); },
       });
   }
 
@@ -1029,8 +1044,17 @@ export class MocksStore {
     return message ?? this.transloco.translate('common.unexpectedError');
   }
 
+  /** Abbandonare la selezione abbandona anche il dettaglio ancora da recuperare. */
+  private clearSelected(): void {
+    this.selected.set(undefined);
+    this.unavailableDetailId.set(undefined);
+    this.detailUnavailable.set(undefined);
+    this.selectedGone.set(false);
+  }
+
   private setSelected(detail: MockDetail): void {
     this.selected.set(detail);
+    this.unavailableDetailId.set(undefined);
     this.selectedGone.set(false);
     // Un dettaglio letto per intero chiude qualunque segnalazione di illeggibilità precedente,
     // da qualunque strada arrivi (ricarica, cambio di endpoint, mutazione successiva riuscita).
