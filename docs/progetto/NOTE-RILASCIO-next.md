@@ -1,5 +1,16 @@
 # Note di rilascio
 
+## Prossima versione
+
+### Admin API
+
+- **Identificativi delle connessioni SSE/WS dichiarati interi:** lo spec OpenAPI dichiarava
+  stringhe per `id` delle connessioni in `GET /mocks/:id/sse/connections` e
+  `GET /mocks/:id/ws/connections`, e per `connectionId` nello storico SSE e nel transcript WS.
+  Il motore ha sempre restituito interi, e la GUI li usa come tali: ora lo spec li dichiara
+  `integer`. Le risposte non cambiano. L'`id` degli eventi SSE resta una stringa. La
+  divergenza è emersa dai test di accettazione esterni (T2).
+
 ## v1.4.1
 
 Include le novità della 1.4.0 riportate sotto, più la correzione GUI della
