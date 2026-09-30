@@ -1,5 +1,5 @@
 const { test, expect } = require("@playwright/test");
-const { gotoMocks, resetWorkspace } = require("./helpers");
+const { gotoMocks, resetWorkspace, E2E_BACKEND } = require("./helpers");
 
 // E7 — CRUD endpoint: crea via dialog "Nuovo" (mock/handler), elimina dal dettaglio, copia verso
 // un nuovo metodo+path. Scrittura: l'afterEach ripristina la run dir dalle fixture.
@@ -29,6 +29,44 @@ test.describe("E7 · CRUD endpoint", () => {
 
     await expect(catalog.getByText("/api/nuovo-mock", { exact: true })).toBeVisible();
     await expect(statusBar.getByText(/9\s+endpoint/)).toBeVisible();
+  });
+
+  test("una creazione riuscita senza dettaglio rilegge il nuovo endpoint", async ({ page, request }) => {
+    await catalog.getByText("/api/health", { exact: true }).click();
+    const info = await (await request.get(`${E2E_BACKEND}/_admin/api/info`)).json();
+    // Congela soltanto l'evento catalogo: questo test verifica il pulsante di recupero,
+    // prima che una rilettura automatica possa sostituirlo.
+    await page.route("**/_admin/api/info", async (route) => {
+      const response = await route.fetch();
+      const body = await response.json();
+      body.revisions.catalog = info.revisions.catalog;
+      await route.fulfill({ response, json: body });
+    });
+    let createdId;
+    await page.route("**/_admin/api/mocks", async (route) => {
+      if (route.request().method() !== "POST") return route.continue();
+      const response = await route.fetch();
+      expect(response.ok()).toBe(true);
+      const body = await response.json();
+      createdId = body.id;
+      // La creazione avviene sul server reale. Simula solo il ramo di successo C1
+      // nel quale la lettura successiva alla scrittura non compone il dettaglio.
+      await route.fulfill({ response, json: { id: createdId, detailUnavailable: { message: "Dettaglio temporaneamente non disponibile" } } });
+    });
+
+    await catalog.getByRole("button", { name: "Nuovo", exact: true }).click();
+    await page.getByRole("menuitem", { name: "Mock", exact: true }).click();
+    const dialog = page.locator("cdk-dialog-container");
+    await page.getByPlaceholder("/es/risorsa/:id").fill("/api/nuovo-senza-dettaglio");
+    await dialog.getByRole("button", { name: "Crea", exact: true }).click();
+    await expect(dialog).toBeHidden();
+    await expect(detail.getByText("Dettaglio temporaneamente non disponibile")).toBeVisible();
+
+    await detail.getByRole("button", { name: "Rileggi" }).click();
+
+    await expect(detail.getByRole("heading", { name: "/api/nuovo-senza-dettaglio", exact: true })).toBeVisible();
+    const saved = await (await request.get(`${E2E_BACKEND}/_admin/api/mocks/${createdId}`)).json();
+    expect(saved.path).toBe("/api/nuovo-senza-dettaglio");
   });
 
   test("crea un nuovo endpoint handler dal dialog Nuovo", async ({ page }) => {

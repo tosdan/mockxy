@@ -90,6 +90,7 @@ function makeApiStub() {
       reorderCollections: vi.fn(() => of(undefined)),
       reparentCollection: vi.fn(() => of(undefined)),
       reorderCollectionChildren: vi.fn(() => of(undefined)),
+      setEndpointsEnabled: vi.fn(() => of(listResponse([summary('e1'), summary('nuovo')]))),
       createMock: vi.fn((): Observable<MockDetailAfterMutation> => of(detail('nuovo'))),
       copyEndpoint: vi.fn((): Observable<MockDetailAfterMutation> => of(detail('copia'))),
       createHandler: vi.fn((): Observable<MockDetailAfterMutation> => of(detail('nuovo-handler'))),
@@ -1110,6 +1111,153 @@ describe('MocksStore', () => {
   });
 
   describe('creazione definizioni (runCreate)', () => {
+    it('il toggle del precedente endpoint non abbandona il dettaglio nuovo da recuperare', () => {
+      const store = create();
+      store.selected.set(detail('e1'));
+      api.createMock.mockReturnValueOnce(of({ id: 'nuovo', detailUnavailable: { message: 'lettura non disponibile' } }));
+      store.createMockDef({ method: 'GET', path: '/nuovo', status: 200 }, {});
+
+      store.toggleEnabled('e1', false);
+
+      expect(store.selectedId()).toBe('nuovo');
+      expect(store.detailUnavailable()).toBe('lettura non disponibile');
+    });
+
+    it('eliminare l’endpoint da recuperare abbandona anche il dettaglio pendente', () => {
+      const store = create();
+      store.selected.set(detail('e1'));
+      api.createMock.mockReturnValueOnce(of({ id: 'nuovo', detailUnavailable: { message: 'lettura non disponibile' } }));
+      store.createMockDef({ method: 'GET', path: '/nuovo', status: 200 }, {});
+      api.listMocks.mockReturnValue(of(listResponse([])));
+
+      store.removeEndpoints(['nuovo']);
+
+      expect(store.selectedId()).toBeUndefined();
+      expect(store.detailUnavailable()).toBeUndefined();
+    });
+
+    it('abbandona il dettaglio da recuperare quando la ricarica del nuovo workspace è vuota', () => {
+      const store = create();
+      api.createMock.mockReturnValueOnce(of({ id: 'nuovo', detailUnavailable: { message: 'lettura non disponibile' } }));
+      store.createMockDef({ method: 'GET', path: '/nuovo', status: 200 }, {});
+      api.listMocks.mockReturnValue(of(listResponse([])));
+      sync.runtime(true);
+
+      store.reload();
+      store.reloadSelectedDetail();
+
+      expect(store.selectedId()).toBeUndefined();
+      expect(store.detailUnavailable()).toBeUndefined();
+      expect(api.getMock).not.toHaveBeenCalled();
+    });
+
+    it('una rilettura tardiva del nuovo endpoint non sostituisce un’altra selezione', () => {
+      const store = create();
+      store.selected.set(detail('e1'));
+      api.createMock.mockReturnValueOnce(of({ id: 'nuovo', detailUnavailable: { message: 'lettura non disponibile' } }));
+      store.createMockDef({ method: 'GET', path: '/nuovo', status: 200 }, {});
+      const pending = new Subject<MockDetail>();
+      api.getMock.mockReturnValueOnce(pending);
+      store.reloadSelectedDetail();
+      store.selectMock('e2');
+
+      pending.next(detail('nuovo'));
+      pending.complete();
+
+      expect(store.selectedId()).toBe('e2');
+      expect(store.detailUnavailable()).toBeUndefined();
+    });
+
+    it('un toggle massivo del precedente endpoint non chiude il recupero di quello nuovo', () => {
+      const store = create();
+      store.selected.set(detail('e1'));
+      api.createMock.mockReturnValueOnce(of({ id: 'nuovo', detailUnavailable: { message: 'lettura non disponibile' } }));
+      store.createMockDef({ method: 'GET', path: '/nuovo', status: 200 }, {});
+
+      store.setEndpointsEnabled(['e1'], false);
+
+      expect(store.selectedId()).toBe('nuovo');
+      expect(store.detailUnavailable()).toBe('lettura non disponibile');
+    });
+
+    it('una copia senza dettaglio conserva il duplicato come selezione e bersaglio della ricarica', () => {
+      const store = create();
+      store.selected.set(detail('e1'));
+      api.copyEndpoint.mockReturnValueOnce(of({ id: 'copia', detailUnavailable: { message: 'lettura non disponibile' } }));
+      api.listMocks.mockReturnValue(of(listResponse([summary('e1'), summary('copia')])));
+      store.copyEndpoint('e1', { method: 'POST', path: '/copia', copyResponses: true });
+      expect(store.selectedId()).toBe('copia');
+      expect(viewState.write).toHaveBeenCalledWith('mocks-selected', 'copia');
+
+      store.reload();
+
+      expect(api.getMock).toHaveBeenCalledWith('copia');
+      expect(store.selected()?.id).toBe('copia');
+      expect(store.detailUnavailable()).toBeUndefined();
+    });
+
+    it('la sincronizzazione recupera il nuovo endpoint, senza riaprire quello precedente', () => {
+      const store = create();
+      store.selected.set(detail('e1'));
+      api.createMock.mockReturnValueOnce(of({ id: 'nuovo', detailUnavailable: { message: 'lettura non disponibile' } }));
+      api.listMocks.mockReturnValue(of(listResponse([summary('e1'), summary('nuovo')])));
+      store.createMockDef({ method: 'GET', path: '/nuovo', status: 200 }, {});
+
+      sync.revisions('catalog');
+
+      expect(api.getMock).toHaveBeenCalledWith('nuovo');
+      expect(store.selected()?.id).toBe('nuovo');
+      expect(store.detailUnavailable()).toBeUndefined();
+    });
+
+    it('si può riaprire il precedente endpoint dopo una creazione senza dettaglio', () => {
+      const store = create();
+      store.selected.set(detail('e1'));
+      api.createMock.mockReturnValueOnce(of({ id: 'nuovo', detailUnavailable: { message: 'lettura non disponibile' } }));
+      store.createMockDef({ method: 'GET', path: '/nuovo', status: 200 }, {});
+
+      store.selectMock('e1');
+
+      expect(api.getMock).toHaveBeenCalledWith('e1');
+      expect(store.selectedId()).toBe('e1');
+      expect(store.detailUnavailable()).toBeUndefined();
+    });
+
+    it('una prima creazione senza dettaglio resta legata al workspace di partenza', () => {
+      const store = create();
+      api.createMock.mockReturnValueOnce(of({ id: 'nuovo', detailUnavailable: { message: 'lettura non disponibile' } }));
+      api.listMocks.mockReturnValue(of(listResponse([summary('nuovo')])));
+      store.createMockDef({ method: 'GET', path: '/nuovo', status: 200 }, {});
+
+      sync.runtime(true);
+
+      expect(store.staleWorkspace()).toBe(true);
+      expect(api.getMock).not.toHaveBeenCalled();
+    });
+
+    it('rilegge il nuovo endpoint quando la creazione riesce senza dettaglio', () => {
+      const store = create();
+      store.selected.set(detail('e1'));
+      api.createMock.mockReturnValueOnce(of({ id: 'nuovo', detailUnavailable: { message: 'lettura temporaneamente non disponibile' } }));
+      store.createMockDef({ method: 'GET', path: '/nuovo', status: 200 }, { ok: true });
+
+      store.reloadSelectedDetail();
+
+      expect(api.getMock).toHaveBeenCalledWith('nuovo');
+      expect(store.selected()?.id).toBe('nuovo');
+    });
+
+    it('rilegge il primo endpoint creato senza dettaglio anche senza selezione precedente', () => {
+      const store = create();
+      api.createMock.mockReturnValueOnce(of({ id: 'nuovo', detailUnavailable: { message: 'lettura temporaneamente non disponibile' } }));
+      store.createMockDef({ method: 'GET', path: '/nuovo', status: 200 }, { ok: true });
+
+      store.reloadSelectedDetail();
+
+      expect(api.getMock).toHaveBeenCalledWith('nuovo');
+      expect(store.selected()?.id).toBe('nuovo');
+    });
+
     it('a successo apre la nuova definizione e segnala onDone(true)', () => {
       const store = create();
       const onDone = vi.fn();

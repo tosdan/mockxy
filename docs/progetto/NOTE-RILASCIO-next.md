@@ -1,5 +1,16 @@
 # Note di rilascio
 
+## Prossima versione
+
+### Interfaccia
+
+- **Recupero del dettaglio dopo una creazione riuscita:** quando il server conferma la
+  creazione o la copia con `id` e `detailUnavailable`, la GUI conserva l’identità
+  dell’endpoint appena scritto. «Rileggi», ricarica del catalogo e sincronizzazione
+  recuperano quell’endpoint; prima riaprivano quello precedente oppure, alla prima
+  creazione, non inviavano nessuna lettura. La mutazione resta un successo e non si
+  ripete. Anche il cambio di workspace conserva la separazione delle risorse.
+
 ## v1.4.0
 
 Note dettagliate della release 1.4.0. I workspace esistenti restano compatibili:
