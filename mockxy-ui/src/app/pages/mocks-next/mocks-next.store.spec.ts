@@ -1263,7 +1263,7 @@ describe('MocksStore', () => {
       const onDone = vi.fn();
       store.createMockDef({ method: 'GET', path: '/nuovo', status: 200 }, { ok: true }, onDone);
       expect(store.selected()?.id).toBe('nuovo');
-      expect(onDone).toHaveBeenCalledWith(true);
+      expect(onDone).toHaveBeenCalledWith(true, 'nuovo');
       expect(store.creating()).toBe(false);
     });
 

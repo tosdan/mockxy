@@ -924,8 +924,12 @@ export class MocksStore {
 
   // --- creazione definizioni (Fase D1) ---
 
-  /** Crea un nuovo mock e lo apre. */
-  createMockDef(config: MockConfig, body: unknown, onDone?: (ok: boolean) => void): void {
+  /** Crea un nuovo mock; il callback riceve l’id scritto anche senza dettaglio leggibile. */
+  createMockDef(
+    config: MockConfig,
+    body: unknown,
+    onDone?: (ok: boolean, createdId?: string) => void,
+  ): void {
     this.runCreate(this.api.createMock({ config, body }), onDone);
   }
 
@@ -948,8 +952,11 @@ export class MocksStore {
     this.runCreate(op, onDone);
   }
 
-  /** Crea una definizione, ricarica il catalogo e la rende selezionata; `onDone(ok)` per chiudere il dialog solo a buon fine. */
-  private runCreate(op: Observable<MockDetailAfterMutation>, onDone?: (ok: boolean) => void): void {
+  /** Crea una definizione, ricarica il catalogo e la rende selezionata; il callback riceve l’esito e l’id creato. */
+  private runCreate(
+    op: Observable<MockDetailAfterMutation>,
+    onDone?: (ok: boolean, createdId?: string) => void,
+  ): void {
     this.creating.set(true);
     this.error.set(undefined);
     op.pipe(
@@ -963,7 +970,7 @@ export class MocksStore {
         // Anche qui la creazione è avvenuta: il dialog si chiude a buon fine e il catalogo la
         // elenca. Se il dettaglio non si compone non la si può aprire, e il pannello lo dice.
         this.applyMutationDetail(detail);
-        onDone?.(true);
+        onDone?.(true, detail.id);
       },
       error: (e) => {
         this.error.set(readErrorMessage(e) ?? this.transloco.translate('common.unexpectedError'));

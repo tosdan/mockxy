@@ -9,7 +9,10 @@
   dell’endpoint appena scritto. «Rileggi», ricarica del catalogo e sincronizzazione
   recuperano quell’endpoint; prima riaprivano quello precedente oppure, alla prima
   creazione, non inviavano nessuna lettura. La mutazione resta un successo e non si
-  ripete. Anche il cambio di workspace conserva la separazione delle risorse.
+  ripete. Nella creazione con body da file, l’upload usa sempre l’id appena
+  restituito e la prima variante, anche se il dettaglio non è disponibile: prima
+  poteva sovrascrivere la variante dell’endpoint precedente o non partire senza
+  selezione. Anche il cambio di workspace conserva la separazione delle risorse.
 
 ## v1.4.0
 

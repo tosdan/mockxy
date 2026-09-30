@@ -189,10 +189,14 @@ export class MocksNextCreateDialog {
       if (this.bodyFormat() === 'file') {
         // crea l'endpoint (body vuoto) e poi carica il file sulla sua prima response.
         const file = this.fileDraft();
-        this.store.createMockDef(config, {}, (ok) => {
-          if (!ok) return;
-          if (file) this.store.uploadResponseFile(file, () => this.dialogRef.close('created'));
-          else this.dialogRef.close('created');
+        this.store.createMockDef(config, {}, (ok, createdId) => {
+          if (!ok || !createdId) return;
+          // Il dettaglio può mancare: la selezione precedente non è il bersaglio dell’upload.
+          if (file) {
+            this.store.uploadResponseFile(file, () => this.dialogRef.close('created'), undefined, {
+              target: { endpointId: createdId, responseFile: config.bodyFile },
+            });
+          } else this.dialogRef.close('created');
         });
       } else {
         const body = this.bodyFormat() === 'text' ? this.bodyDraft() : safeParse(this.bodyDraft());

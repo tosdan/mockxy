@@ -8,7 +8,9 @@ l’integrazione fra GUI e motore. Base di confronto: `v1.3.2`. Release verifica
 
 I flussi ordinari e i contratti API usati dalla GUI risultano compatibili. È stata
 però trovata una regressione nel recupero del dettaglio dopo una creazione o una
-copia riuscita. La correzione è nella [PR #40](https://github.com/tosdan/mockxy/pull/40),
+copia riuscita. Nella creazione con body da file, lo stesso percorso può anche
+scrivere il file sull’endpoint precedente. La correzione è nella
+[PR #40](https://github.com/tosdan/mockxy/pull/40),
 sul branch `fix-gui-created-detail-recovery`;
 non fa parte dell’AppImage o della portable già costruite per il tag 1.4.0.
 
@@ -51,6 +53,21 @@ cambio di workspace blocca le riletture automatiche dell’omonimo del precedent
 anche quando B è il primo endpoint e non esiste ancora un dettaglio selezionato.
 Non si modifica né si ripete la creazione già riuscita.
 
+La review di Opus ha individuato il caso aggiuntivo della creazione con body da
+file: il dialog creava B e poi l’upload ricavava il bersaglio da `selected()`, ancora
+A. Con A aperto, ne sovrascriveva la variante; senza selezione, non partiva e il
+dialog restava aperto. La creazione ora passa al callback l’id restituito dal
+server, e il dialog usa quel bersaglio esplicito con la prima variante già
+dichiarata nella richiesta di creazione. Riusa il percorso di upload con bersaglio
+fisso e senza precondizione, senza dipendere dal dettaglio o dalla selezione.
+
+Tre regressioni dialog–store falliscono prima della correzione: upload su A,
+nessun upload alla prima creazione e upload fallito sul bersaglio sbagliato. Un
+quarto test verifica che il cambio di workspace impedisca l’upload successivo a
+una creazione tardiva. Il collaudo browser sul pacchetto originale fallisce
+confermando l’id di A nella richiesta di upload. Sul codice corretto verifica il
+file effettivamente servito da B e sia il token sia il contenuto di A invariati.
+
 Le due regressioni iniziali falliscono sulla GUI della 1.4.0: GET per A al posto
 di B e nessuna GET alla prima creazione. Con la correzione passano. Le ulteriori
 prove coprono copia, ricarica, sincronizzazione, riapertura del precedente e cambio
@@ -58,9 +75,9 @@ workspace. Un collaudo Playwright crea realmente B e simula soltanto la risposta
 C1 senza dettaglio, per verificare l’intero percorso di recupero nell’interfaccia.
 
 La stessa prova fallisce contro la GUI e il motore dell’AppImage originale:
-«Rileggi» torna al dettaglio A. Sul branch corretto passano **522 test GUI**
-(11 nuove regressioni), **1.086 test motore/Electron** e **118 test Playwright**
-senza ritentativi (una nuova regressione nell’interfaccia). Il collaudo Playwright
+«Rileggi» torna al dettaglio A. Sul branch corretto passano **526 test GUI**
+(15 nuovi test), **1.086 test motore/Electron** e **119 test Playwright**
+senza ritentativi (due nuove regressioni nell’interfaccia). Il collaudo Playwright
 esegue anche la build di produzione. La review finale del diff non ha ulteriori
 rilievi sul contratto o sulle regole del repository.
 
