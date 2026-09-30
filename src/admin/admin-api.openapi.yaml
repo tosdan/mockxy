@@ -3269,7 +3269,7 @@ components:
       type: object
       required: [id, startedAt, eventsSent, scriptIndex, scriptLength]
       properties:
-        id: { type: string }
+        id: { type: integer, description: Identifies the connection within this run of the engine. }
         startedAt: { type: integer, description: Epoch milliseconds. }
         eventsSent: { type: integer }
         scriptIndex: { type: integer, description: Position reached in the script. }
@@ -3284,8 +3284,8 @@ components:
           type: string
           enum: [script, manual]
         connectionId:
-          type: string
-          description: Absent for broadcasts that were not tied to one connection.
+          type: integer
+          description: The `id` of the connection; absent for broadcasts that were not tied to one connection.
         event: { type: string }
         id: { type: string }
         data: {}
@@ -3362,7 +3362,7 @@ components:
       type: object
       required: [id, startedAt, messagesSent, messagesReceived, scriptIndex, scriptLength]
       properties:
-        id: { type: string }
+        id: { type: integer, description: Identifies the connection within this run of the engine. }
         startedAt: { type: integer, description: Epoch milliseconds. }
         messagesSent: { type: integer }
         messagesReceived: { type: integer }
@@ -3380,7 +3380,9 @@ components:
         origin:
           type: string
           enum: [script, rule, manual, received]
-        connectionId: { type: string }
+        connectionId:
+          type: integer
+          description: The `id` of the connection; absent for broadcasts that were not tied to one connection.
         data: {}
 
     # ── Request bodies ───────────────────────────────────────────────────────
