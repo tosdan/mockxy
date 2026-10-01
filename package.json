@@ -1,6 +1,6 @@
 {
   "name": "mockxy",
-  "version": "1.4.1",
+  "version": "1.4.2",
   "private": true,
   "description": "Mockxy Mock Server — mock API server with backend proxy fallback",
   "repository": {

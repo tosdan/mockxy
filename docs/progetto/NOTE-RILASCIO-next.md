@@ -2,6 +2,14 @@
 
 ## Prossima versione
 
+## v1.4.2
+
+Correzioni compatibili dell'admin API e della creazione di mock dalle catture.
+I workspace esistenti restano compatibili: nessuna migrazione richiesta.
+
+Le [note per la pubblicazione, in italiano e inglese](NOTE-RILASCIO-v1.4.2.md)
+riassumono le correzioni rispetto alla 1.4.1.
+
 ### Admin API
 
 - **Identificativi delle connessioni SSE/WS dichiarati interi:** lo spec OpenAPI dichiarava
