@@ -35,6 +35,32 @@ engine tracks their dependencies and recompiles when something changes (see [the
 file](RESPONSE.md)). It cannot declare `method`, `path` or `disabled`: routing belongs to the
 endpoint file. The UI offers a starter template already in this shape.
 
+### Helpers shared across mocks
+
+Code used by several handlers lives in a folder at the root of the mocks directory, by
+convention `_shared`, and is imported **from the root**:
+
+```js
+module.exports = { resolveResponse: require("_shared/ravvedimento-flusso").annulla };
+```
+
+The string is the same at any depth, so copying an endpoint to another path (or moving its
+folder) does not break the reference. A relative `require` such as
+`"../../../_shared/ravvedimento-flusso"` depends on the folder depth instead: it keeps working,
+but breaks as soon as the mock changes level, and in the worst case resolves another file with
+the same name without any error.
+
+Rules:
+
+- Importing from the root works for **handler and middleware** scripts. Helpers import each
+  other with relative paths (`require("./ravvedimento-dati")`): these stay valid as long as the
+  helpers move together.
+- Packages in `node_modules` take precedence over the mocks root. `_shared` cannot collide with a
+  published package (npm does not allow names starting with `_`).
+- Moving or renaming a helper requires updating the `require` calls that use it: with root
+  imports it is the same string in every file, so a single replace is enough.
+- Changes to helpers are tracked like any other dependency and reload the handlers using them.
+
 ## The context it receives
 
 `resolveResponse` receives an object with:

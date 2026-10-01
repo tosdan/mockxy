@@ -38,11 +38,23 @@ function purgeModuleCacheUnder(rootDir) {
 // modulo (per ispezionarne le dipendenze). La freschezza dipende dalla cache: il chiamante che
 // vuole l'hot reload svuota prima con purgeModuleCacheUnder.
 // Interop con export ES default: `module.exports.default` ha la precedenza se presente.
-function loadScriptModule(filePath) {
+//
+// `mocksDir` è obbligatorio: viene accodato ai percorsi di risoluzione, così lo script può
+// importare dalla radice dei mock (`require("_shared/helper")`) con la stessa stringa a
+// qualsiasi profondità; un mock copiato o spostato non rompe il riferimento. Sta in coda, dopo
+// i node_modules: i pacchetti npm mantengono la precedenza (npm non ammette nomi che iniziano
+// con `_`, quindi `_shared` non può collidere con un pacchetto pubblicato). Vale solo per lo
+// script di primo livello: i moduli che richiede risolvono con le regole standard di Node, e
+// gli helper si importano tra loro con path relativi. Nessun fallback alla directory corrente:
+// un chiamante che dimentica la radice deve fallire subito, non risolvere a metà.
+function loadScriptModule(filePath, mocksDir) {
+  if (typeof mocksDir !== "string" || mocksDir.trim() === "") {
+    throw new Error("loadScriptModule requires the mocks directory as resolution root");
+  }
   const source = fs.readFileSync(filePath, "utf8");
   const scriptModule = new Module(filePath);
   scriptModule.filename = filePath;
-  scriptModule.paths = Module._nodeModulePaths(path.dirname(filePath));
+  scriptModule.paths = [...Module._nodeModulePaths(path.dirname(filePath)), path.resolve(mocksDir)];
   scriptModule._compile(source, filePath);
   const loadedModule = scriptModule.exports;
   const definition = loadedModule?.default || loadedModule;
