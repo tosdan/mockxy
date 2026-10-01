@@ -230,8 +230,9 @@ The monitor and the history turn a captured response into a mock with the same r
   title starting with `[da completare]`, and the item the warning `INCOMPLETE_CAPTURE` with
   `reason` `truncated` or `binary`. It is not a faithful copy and is never presented as one.
 - **Headers:** those of the captured response, without `content-length`, `content-encoding`,
-  `transfer-encoding`, `connection`, `keep-alive`, `date`, empty values and masked `***` values (a
-  masked value is never restored); multiple values are joined with `, `.
+  `transfer-encoding`, `connection`, `keep-alive`, `date`, Mockxy's own `x-mock-source` (serving
+  sets it), empty values and masked `***` values (a masked value is never restored); multiple
+  values are joined with `, `.
 - **Conflict:** on the destination's identity, exact method and route, against the catalog and the
   items already processed in the same batch. `onConflict: "skip"` leaves it as it is;
   `"add-variant"` adds a variant (titled with the source and the UTC capture time, e.g.

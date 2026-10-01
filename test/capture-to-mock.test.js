@@ -89,6 +89,13 @@ describe("trasformazione cattura → mock", () => {
     });
   });
 
+  test("l'header tecnico di Mockxy non passa nel mock: chi ha risposto lo dichiara il serving", () => {
+    // La cattura di una risposta del backend porta x-mock-source: backend; nel mock sarebbe un
+    // valore fuorviante, che il serving comunque sostituisce con il proprio.
+    expect(captureResponseHeaders({ "content-type": "application/json", "x-mock-source": "backend" })).toEqual({ "content-type": "application/json" });
+    expect(captureResponseHeaders({ "X-Mock-Source": "proxy", "x-receipt-id": "r-1" })).toEqual({ "x-receipt-id": "r-1" });
+  });
+
   test("i valori multipli si filtrano uno per uno: due cookie mascherati non diventano «***, ***»", () => {
     expect(captureResponseHeaders({ "set-cookie": ["***", "***"], "x-mixed": ["a", "***", ""], "x-empty": [] })).toEqual({ "x-mixed": "a" });
   });

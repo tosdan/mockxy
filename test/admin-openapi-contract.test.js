@@ -4,6 +4,7 @@ const path = require("path");
 const express = require("express");
 const yaml = require("js-yaml");
 const { createAdminApiRouter } = require("../src/admin/admin-api");
+const { findSplitFlowMappings } = require("../scripts/validate-admin-openapi");
 
 const SPEC_PATH = path.join(__dirname, "..", "src", "admin", "admin-api.openapi.yaml");
 // Tutte le chiavi di operazione di un Path Item OpenAPI 3.1: un'operazione dichiarata solo nello
@@ -47,6 +48,46 @@ describe("Admin API OpenAPI contract", () => {
 
     expect(result.stderr).toBe("");
     expect(result.status).toBe(0);
+  });
+
+  test("nessuna descrizione spezzata da una virgola in una mappa YAML su una riga", () => {
+    // Il caso rilevato: la virgola chiude la descrizione e apre una chiave senza valore.
+    const broken = yaml.safeLoad("properties:\n  path: { type: string, description: Request path, without query string. }\n");
+    expect(findSplitFlowMappings(broken)).toEqual(["/properties/path/without query string."]);
+    expect(findSplitFlowMappings(yaml.safeLoad('properties:\n  path: { type: string, description: "Request path, without query string." }\n'))).toEqual([]);
+
+    expect(findSplitFlowMappings(yaml.safeLoad(fs.readFileSync(SPEC_PATH, "utf8")))).toEqual([]);
+  });
+
+  test("i dati di esempi e default restano liberi: una chiave con spazi e valore null è legittima", () => {
+    const valid = yaml.safeLoad([
+      "components:",
+      "  schemas:",
+      "    Profile:",
+      "      type: object",
+      "      description: A profile.",
+      '      examples: [{ "display name": null }]',
+      '      default: { "display name": null }',
+      "      properties:",
+      '        tags: { type: array, enum: [{ "a b": null }], example: { "a b": null } }',
+      "",
+    ].join("\n"));
+    expect(findSplitFlowMappings(valid)).toEqual([]);
+  });
+
+  test("una proprietà che si chiama come una keyword di dati resta uno schema da controllare", () => {
+    const broken = yaml.safeLoad([
+      "properties:",
+      "  label: { type: string, description: Request path, without query string. }",
+      "  example: { type: string, description: Request path, without query string. }",
+      "  default: { type: string, description: Request path, without query string. }",
+      "",
+    ].join("\n"));
+    expect(findSplitFlowMappings(broken)).toEqual([
+      "/properties/label/without query string.",
+      "/properties/example/without query string.",
+      "/properties/default/without query string.",
+    ]);
   });
 
   // Guardia su metodi e percorsi: non verifica payload, status o comportamenti, che restano

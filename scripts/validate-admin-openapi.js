@@ -23,6 +23,62 @@ function inlinePathParameterReferences(document) {
   return document;
 }
 
+// In una mappa YAML su una riga (`{ type: string, description: A, B }`) una virgola non quotata
+// chiude il testo e apre una chiave nuova senza valore: lo schema resta valido, ma il testo
+// pubblicato è troncato. Il segno è una chiave con spazi e valore null accanto a un testo nella
+// stessa mappa.
+//
+// Le chiavi vanno lette nel loro contesto. Dove sono parole chiave, esempi, default, const ed enum
+// sono dati liberi, dove una chiave così è legittima: non si attraversano. Nelle mappe di nomi
+// (proprietà, schemi, risposte, parametri, header, media type, path...) le chiavi sono nomi scelti
+// dall'autore, anche `example` o `default`, e sotto c'è uno schema o un oggetto da controllare.
+const DATA_KEYWORDS = new Set(["example", "examples", "default", "const", "enum"]);
+const TEXT_KEYWORDS = ["description", "summary", "title"];
+const NAME_MAPS = new Set([
+  "properties",
+  "patternProperties",
+  "dependentSchemas",
+  "$defs",
+  "definitions",
+  "schemas",
+  "responses",
+  "parameters",
+  "headers",
+  "requestBodies",
+  "securitySchemes",
+  "links",
+  "callbacks",
+  "pathItems",
+  "paths",
+  "webhooks",
+  "content",
+  "encoding",
+  "variables",
+]);
+
+function findSplitFlowMappings(node, location = "", keysAreNames = false) {
+  if (node == null || typeof node !== "object") {
+    return [];
+  }
+  if (Array.isArray(node)) {
+    return node.flatMap((item, index) => findSplitFlowMappings(item, `${location}/${index}`));
+  }
+  const hasText = TEXT_KEYWORDS.some((keyword) => typeof node[keyword] === "string");
+  return Object.entries(node).flatMap(([key, value]) => {
+    const here = `${location}/${key}`;
+    if (keysAreNames) {
+      return findSplitFlowMappings(value, here);
+    }
+    if (hasText && value === null && /\s/.test(key)) {
+      return [here];
+    }
+    if (DATA_KEYWORDS.has(key)) {
+      return [];
+    }
+    return findSplitFlowMappings(value, here, NAME_MAPS.has(key));
+  });
+}
+
 async function validateAdminOpenapi() {
   const { validate } = await import("@scalar/openapi-parser");
   const source = await fs.promises.readFile(
@@ -31,7 +87,12 @@ async function validateAdminOpenapi() {
   );
   // Scalar's path-template pass does not follow reusable Parameter Object references. Inline
   // those references before validation; this also rejects a missing component explicitly.
-  const document = inlinePathParameterReferences(yaml.safeLoad(source));
+  const parsed = yaml.safeLoad(source);
+  const split = findSplitFlowMappings(parsed);
+  if (split.length > 0) {
+    throw new Error(`Admin API OpenAPI contract: descriptions split by an unquoted comma in a one-line mapping (quote them):\n${split.join("\n")}`);
+  }
+  const document = inlinePathParameterReferences(parsed);
   const result = await validate(JSON.stringify(document));
   if (!result.valid || result.errors.length > 0) {
     throw new Error(`Invalid Admin API OpenAPI contract:\n${JSON.stringify(result.errors, null, 2)}`);
@@ -45,4 +106,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { inlinePathParameterReferences, validateAdminOpenapi };
+module.exports = { findSplitFlowMappings, inlinePathParameterReferences, validateAdminOpenapi };
