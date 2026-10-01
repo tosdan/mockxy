@@ -2,6 +2,14 @@
 
 ## Prossima versione
 
+## v1.5.0
+
+Nuova funzionalità per riusare gli helper condivisi tra mock. I workspace esistenti restano
+compatibili: nessuna migrazione obbligatoria e nessun cambiamento dell'admin API.
+
+Le [note per la pubblicazione, in italiano e inglese](NOTE-RILASCIO-v1.5.0.md)
+riassumono le novità rispetto alla 1.4.2.
+
 ### Handler e middleware
 
 - **Helper condivisi importati dalla radice dei mock:** gli script handler e middleware possono
