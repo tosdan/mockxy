@@ -205,6 +205,39 @@ agli utenti.
 - Se una release già pubblicata è difettosa, riportarla immediatamente in bozza, senza sostituire
   gli artefatti. Preparare quindi una nuova patch.
 
+## 10. Allineare le tag di skill e test di accettazione
+
+Dopo la pubblicazione (§8), la stessa tag `v<versione>` va creata anche in
+[mockxy-skills](https://github.com/tosdan/mockxy-skills) e in
+[mockxy-acceptance-tests](https://github.com/tosdan/mockxy-acceptance-tests). I due repository non
+hanno una numerazione propria: la tag dice quale stato corrisponde a quella release del motore.
+Per le skill serve all'installazione per versione, che segue la tag invece di `main`:
+
+```bash
+npx skills@latest add https://github.com/tosdan/mockxy-skills/tree/v1.4.2
+```
+
+Il commit da taggare:
+
+- **mockxy-skills:** l'ultimo commit di `main` le cui skill descrivono solo funzioni presenti nella
+  release. Se `main` documenta già funzioni rimaste fuori, taggare il commit precedente a quelle
+  modifiche.
+- **mockxy-acceptance-tests:** il commit della suite risultata verde sul motore alla tag della
+  release, o su un commit con lo stesso codice (va dichiarato nella checklist). La workflow
+  `black-box.yml` accetta il ref del motore in `engine-ref`; se il dispatch non è disponibile, la
+  verifica si fa in locale con `../mockxy` sulla tag.
+
+Se un repository non è cambiato dalla release precedente, la nuova tag va sullo stesso commit
+della precedente. Come per il motore, si usano tag semplici, si pubblica solo la singola tag e non
+la si sposta: una correzione successiva entra nella release seguente.
+
+```bash
+git tag v1.4.2 <commit>
+git push origin v1.4.2
+```
+
+Le prime tag allineate sono le `v1.4.2`, create dopo la release.
+
 ## Checklist rapida
 
 - [ ] Funzionalità e correzioni committate.
@@ -219,4 +252,5 @@ agli utenti.
 - [ ] Checksum e smoke test degli artefatti completati.
 - [ ] Note della bozza riviste.
 - [ ] Release pubblicata manualmente.
+- [ ] Tag `vx.y.z` creata anche in mockxy-skills e mockxy-acceptance-tests.
 
