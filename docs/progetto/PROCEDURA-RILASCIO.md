@@ -214,7 +214,7 @@ hanno una numerazione propria: la tag dice quale stato corrisponde a quella rele
 Per le skill serve all'installazione per versione, che segue la tag invece di `main`:
 
 ```bash
-npx skills@latest add https://github.com/tosdan/mockxy-skills/tree/v1.3.2
+npx skills@latest add https://github.com/tosdan/mockxy-skills/tree/v1.4.2
 ```
 
 Il commit da taggare:
@@ -232,8 +232,8 @@ della precedente. Come per il motore, si usano tag semplici, si pubblica solo la
 la si sposta: una correzione successiva entra nella release seguente.
 
 ```bash
-git tag v1.3.2 <commit>
-git push origin v1.3.2
+git tag v1.4.2 <commit>
+git push origin v1.4.2
 ```
 
 Le prime tag allineate sono le `v1.4.2`, create dopo la release.
