@@ -140,7 +140,7 @@ module.exports = {
       { method: "GET" },
       path.join(mocksDir, "seq", "GET.endpoint.json"),
       { steps: [{ response: "001.response.json" }] },
-      { persistCache: false }
+      { mocksDir, persistCache: false }
     );
 
     const second = await loadEndpointRouteGroups(mocksDir);

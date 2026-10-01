@@ -272,7 +272,7 @@ async function loadScriptDefinition(filePath, label, options) {
 
   try {
     const signature = await getFileSignature(filePath);
-    const { definition, moduleRecord } = loadScriptModule(filePath);
+    const { definition, moduleRecord } = loadScriptModule(filePath, options?.mocksDir);
 
     // Una entry di cache è affidabile solo se la compilazione è avvenuta dentro il ciclo di
     // scansione, dopo purgeModuleCacheUnder: fuori da quel ciclo (persistCache: false, usato
@@ -437,8 +437,8 @@ async function loadResponseByName(endpoint, endpointFilePath, responseFileName, 
   };
 }
 
-async function loadSelectedResponse(endpoint, endpointFilePath) {
-  return loadResponseByName(endpoint, endpointFilePath, endpoint.selectedResponseFile, "selected response");
+async function loadSelectedResponse(endpoint, endpointFilePath, options) {
+  return loadResponseByName(endpoint, endpointFilePath, endpoint.selectedResponseFile, "selected response", options);
 }
 
 // Carica le response referenzate dagli step di una sequenza attiva. Le sequenze scelgono la
@@ -525,6 +525,8 @@ async function loadEndpointRouteGroups(mocksDir) {
   // viene saltato e segnalato qui, senza far fallire il caricamento degli altri. Sta ai
   // chiamanti decidere la policy (warning all'avvio, keep-previous al reload a caldo).
   const loadErrors = [];
+  // La radice dei mock arriva fino a loadScriptModule: è la base dei require dalla radice.
+  const loadOptions = { mocksDir };
 
   for (const filePath of endpointFiles) {
     try {
@@ -541,9 +543,9 @@ async function loadEndpointRouteGroups(mocksDir) {
         continue;
       }
 
-      const response = await loadSelectedResponse(endpoint, filePath);
+      const response = await loadSelectedResponse(endpoint, filePath, loadOptions);
       if (response.type === "sequence") {
-        const steps = await loadSequenceSteps(endpoint, filePath, response.sequence);
+        const steps = await loadSequenceSteps(endpoint, filePath, response.sequence, loadOptions);
         const group = createRouteGroup(sequenceRouteGroups, endpoint, filePath);
         group.methods.set(endpoint.method, {
           method: endpoint.method,

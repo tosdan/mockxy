@@ -131,12 +131,13 @@ function normalizeHandlerDefinition(definition, expectedMethod) {
   };
 }
 
-// Validazione di uno script appena scritto: compila con API pubbliche (vedi script-loader) e
-// restituisce la definizione esportata. loadScriptModule toglie il file dalla cache prima del
-// load, quindi la ri-validazione dello stesso percorso riflette sempre il contenuto attuale.
-function loadScriptDefinition(filePath, label) {
+// Validazione di uno script appena scritto: lo compila con il loader condiviso (vedi
+// script-loader) e restituisce la definizione esportata. La compilazione è sempre fresca per lo
+// script stesso, che non passa dalla Module._cache; i suoi require annidati invece sì, ed è il
+// reload che segue la scrittura a validarli con la cache ripulita.
+function loadScriptDefinition(filePath, label, mocksDir) {
   try {
-    return loadScriptModule(filePath).definition;
+    return loadScriptModule(filePath, mocksDir).definition;
   } catch (error) {
     throw createAdminError(400, `Invalid ${label} ${filePath}: ${error.message}`);
   }
@@ -192,8 +193,8 @@ function normalizeEndpointSource(source, type) {
   return createEndpointSourceTemplate(type);
 }
 
-function assertEndpointSourceIsValid(sourceFilePath, type) {
-  const definition = loadScriptDefinition(sourceFilePath, type);
+function assertEndpointSourceIsValid(mocksDir, sourceFilePath, type) {
+  const definition = loadScriptDefinition(sourceFilePath, type, mocksDir);
   if (type === "handler" && typeof definition?.resolveResponse !== "function") {
     throw createAdminError(400, "Handler source must export a resolveResponse function.");
   }

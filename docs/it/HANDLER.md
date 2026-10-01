@@ -35,6 +35,33 @@ traccia le dipendenze e ricompila quando qualcosa cambia (vedi [il file di
 risposta](RESPONSE.md)). Non può dichiarare `method`, `path` o `disabled`: il routing appartiene
 al file endpoint. L'interfaccia propone un template di partenza già in questa forma.
 
+### Helper condivisi tra più mock
+
+Il codice usato da più handler si tiene in una cartella della radice dei mock, per convenzione
+`_shared`, e si importa **dalla radice**:
+
+```js
+module.exports = { resolveResponse: require("_shared/ravvedimento-flusso").annulla };
+```
+
+La stringa è la stessa a qualsiasi profondità, quindi copiare un endpoint verso un altro path (o
+spostarne la cartella) non rompe il riferimento. Un `require` relativo come
+`"../../../_shared/ravvedimento-flusso"` dipende invece dalla profondità della cartella: continua
+a funzionare, ma si rompe appena il mock cambia livello, e nel caso peggiore risolve un altro file
+con lo stesso nome senza dare errore.
+
+Regole:
+
+- L'import dalla radice vale per gli script **handler e middleware**. Gli helper si importano tra
+  loro con path relativi (`require("./ravvedimento-dati")`): restano validi finché si spostano
+  insieme.
+- I pacchetti in `node_modules` hanno la precedenza sulla radice dei mock. `_shared` non può
+  collidere con un pacchetto pubblicato (npm non ammette nomi che iniziano con `_`).
+- Spostare o rinominare un helper richiede di aggiornare i `require` che lo usano: con l'import
+  dalla radice è la stessa stringa in tutti i file, quindi basta una sostituzione.
+- Le modifiche agli helper sono tracciate come le altre dipendenze e ricaricano gli handler che li
+  usano.
+
 ## Il contesto ricevuto
 
 `resolveResponse` riceve un oggetto con:

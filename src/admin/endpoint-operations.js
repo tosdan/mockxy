@@ -183,7 +183,7 @@ async function createAdminEndpointFromScript(mocksDir, payload, reloadRuntime, t
       await writeFileAtomic(sourcePath, source, "utf8");
       await writeFileAtomic(responsePath, `${JSON.stringify(response, null, 2)}\n`, "utf8");
       await writeFileAtomic(endpointPath, `${JSON.stringify(endpoint, null, 2)}\n`, "utf8");
-      await assertEndpointSourceIsValid(sourcePath, type);
+      await assertEndpointSourceIsValid(mocksDir, sourcePath, type);
     },
     validateReloadResult: validateEndpointReload(endpointPath, mocksDir),
     involved: [endpointPath],
@@ -532,7 +532,7 @@ function buildUpdatedEndpointResponse(response, payload, endpoint) {
   };
 }
 
-async function validateSequenceGraph(endpointPath, endpoint, response) {
+async function validateSequenceGraph(mocksDir, endpointPath, endpoint, response) {
   if (response.type !== "sequence") {
     return;
   }
@@ -540,7 +540,7 @@ async function validateSequenceGraph(endpointPath, endpoint, response) {
     // persistCache: false — questa validazione gira fuori dal ciclo purge/scan del reload,
     // dove una compilazione può catturare dipendenze annidate stantie da Module._cache;
     // la definizione non deve finire nella cache condivisa che i reload riusano.
-    await loadSequenceSteps(endpoint, endpointPath, response, { persistCache: false });
+    await loadSequenceSteps(endpoint, endpointPath, response, { mocksDir, persistCache: false });
   } catch (error) {
     throw createAdminError(400, error.message);
   }
@@ -650,11 +650,11 @@ async function createAdminResponse(mocksDir, id, payload, reloadRuntime, scenari
       await writeFileAtomic(endpointPath, `${JSON.stringify(nextEndpoint, null, 2)}\n`, "utf8");
 
       const validatedResponse = await readEndpointResponse(responseFilePath, nextEndpoint);
-      await validateSequenceGraph(endpointPath, nextEndpoint, validatedResponse);
+      await validateSequenceGraph(mocksDir, endpointPath, nextEndpoint, validatedResponse);
       assertResponseAssetExists(responseDir, validatedResponse);
       if (nextResponse.type === "handler" || nextResponse.type === "middleware") {
         const sourcePath = resolvePayloadPath(responseDir, nextResponse.sourceFile);
-        assertEndpointSourceIsValid(sourcePath, nextResponse.type);
+        assertEndpointSourceIsValid(mocksDir, sourcePath, nextResponse.type);
       }
     },
     validateReloadResult: validateEndpointReload(endpointPath, mocksDir),
@@ -846,10 +846,10 @@ async function updateAdminResponse(mocksDir, id, responseFileName, payload, relo
       await writeFileAtomic(responseFilePath, `${JSON.stringify(nextResponse, null, 2)}\n`, "utf8");
 
       const validatedResponse = await readEndpointResponse(responseFilePath, endpoint);
-      await validateSequenceGraph(endpointPath, endpoint, validatedResponse);
+      await validateSequenceGraph(mocksDir, endpointPath, endpoint, validatedResponse);
       assertResponseAssetExists(responseDir, validatedResponse);
       if (sourcePath != null) {
-        assertEndpointSourceIsValid(sourcePath, nextResponse.type);
+        assertEndpointSourceIsValid(mocksDir, sourcePath, nextResponse.type);
       }
     },
     validateReloadResult: validateEndpointReload(endpointPath, mocksDir),
@@ -1187,7 +1187,7 @@ async function updateAdminMock(mocksDir, id, payload, reloadRuntime, scenarioSta
     }
 
     const selectedResponse = await readEndpointResponse(responseFilePath, endpoint);
-    await validateSequenceGraph(endpointPath, endpoint, selectedResponse);
+    await validateSequenceGraph(mocksDir, endpointPath, endpoint, selectedResponse);
     const nextEndpoint = {
       ...endpoint,
       selectedResponseFile,
@@ -1296,7 +1296,7 @@ async function updateAdminMock(mocksDir, id, payload, reloadRuntime, scenarioSta
       await writeFileAtomic(responseFilePath, `${JSON.stringify(nextResponse, null, 2)}\n`, "utf8");
       await writeFileAtomic(endpointPath, `${JSON.stringify(nextEndpoint, null, 2)}\n`, "utf8");
       if (sourcePath != null) {
-        assertEndpointSourceIsValid(sourcePath, requestedType);
+        assertEndpointSourceIsValid(mocksDir, sourcePath, requestedType);
       }
     },
     validateReloadResult: validateEndpointReload(endpointPath, mocksDir),
@@ -1680,7 +1680,7 @@ async function copyAdminEndpoint(mocksDir, id, payload, reloadRuntime) {
       for (const responseFile of responseFiles) {
         const copiedResponsePath = resolvePayloadPath(targetResponseDir, responseFile);
         const copiedResponse = await readEndpointResponse(copiedResponsePath, targetEndpoint);
-        await validateSequenceGraph(targetEndpointPath, targetEndpoint, copiedResponse);
+        await validateSequenceGraph(mocksDir, targetEndpointPath, targetEndpoint, copiedResponse);
       }
     },
     validateReloadResult: validateEndpointReload(targetEndpointPath, mocksDir),
