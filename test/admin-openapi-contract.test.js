@@ -75,6 +75,21 @@ describe("Admin API OpenAPI contract", () => {
     expect(findSplitFlowMappings(valid)).toEqual([]);
   });
 
+  test("una proprietà che si chiama come una keyword di dati resta uno schema da controllare", () => {
+    const broken = yaml.safeLoad([
+      "properties:",
+      "  label: { type: string, description: Request path, without query string. }",
+      "  example: { type: string, description: Request path, without query string. }",
+      "  default: { type: string, description: Request path, without query string. }",
+      "",
+    ].join("\n"));
+    expect(findSplitFlowMappings(broken)).toEqual([
+      "/properties/label/without query string.",
+      "/properties/example/without query string.",
+      "/properties/default/without query string.",
+    ]);
+  });
+
   // Guardia su metodi e percorsi: non verifica payload, status o comportamenti, che restano
   // compito dei test di integrazione delle singole rotte.
   test("ogni operazione del router admin è documentata nell'OpenAPI e viceversa", () => {

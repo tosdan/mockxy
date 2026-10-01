@@ -26,25 +26,56 @@ function inlinePathParameterReferences(document) {
 // In una mappa YAML su una riga (`{ type: string, description: A, B }`) una virgola non quotata
 // chiude il testo e apre una chiave nuova senza valore: lo schema resta valido, ma il testo
 // pubblicato è troncato. Il segno è una chiave con spazi e valore null accanto a un testo nella
-// stessa mappa. Esempi, default, const ed enum sono dati liberi, dove una chiave così è legittima:
-// non si attraversano.
+// stessa mappa.
+//
+// Le chiavi vanno lette nel loro contesto. Dove sono parole chiave, esempi, default, const ed enum
+// sono dati liberi, dove una chiave così è legittima: non si attraversano. Nelle mappe di nomi
+// (proprietà, schemi, risposte, parametri, header, media type, path...) le chiavi sono nomi scelti
+// dall'autore, anche `example` o `default`, e sotto c'è uno schema o un oggetto da controllare.
 const DATA_KEYWORDS = new Set(["example", "examples", "default", "const", "enum"]);
 const TEXT_KEYWORDS = ["description", "summary", "title"];
+const NAME_MAPS = new Set([
+  "properties",
+  "patternProperties",
+  "dependentSchemas",
+  "$defs",
+  "definitions",
+  "schemas",
+  "responses",
+  "parameters",
+  "headers",
+  "requestBodies",
+  "securitySchemes",
+  "links",
+  "callbacks",
+  "pathItems",
+  "paths",
+  "webhooks",
+  "content",
+  "encoding",
+  "variables",
+]);
 
-function findSplitFlowMappings(node, location = "") {
+function findSplitFlowMappings(node, location = "", keysAreNames = false) {
   if (node == null || typeof node !== "object") {
     return [];
   }
-  const hasText = !Array.isArray(node) && TEXT_KEYWORDS.some((keyword) => typeof node[keyword] === "string");
+  if (Array.isArray(node)) {
+    return node.flatMap((item, index) => findSplitFlowMappings(item, `${location}/${index}`));
+  }
+  const hasText = TEXT_KEYWORDS.some((keyword) => typeof node[keyword] === "string");
   return Object.entries(node).flatMap(([key, value]) => {
     const here = `${location}/${key}`;
+    if (keysAreNames) {
+      return findSplitFlowMappings(value, here);
+    }
     if (hasText && value === null && /\s/.test(key)) {
       return [here];
     }
     if (DATA_KEYWORDS.has(key)) {
       return [];
     }
-    return findSplitFlowMappings(value, here);
+    return findSplitFlowMappings(value, here, NAME_MAPS.has(key));
   });
 }
 
