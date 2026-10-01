@@ -2,6 +2,21 @@
 
 ## Prossima versione
 
+### Handler e middleware
+
+- **Helper condivisi importati dalla radice dei mock:** gli script handler e middleware possono
+  importare un helper con `require("_shared/<helper>")`, la stessa stringa a qualsiasi profondità
+  della cartella dell'endpoint. Prima funzionavano solo i path relativi, che dipendono dalla
+  profondità: copiare un endpoint verso una rotta di profondità diversa faceva rifiutare la copia
+  oppure, per un endpoint disabilitato o una variante non selezionata, lasciava il riferimento
+  rotto fino all'attivazione; nel caso peggiore il path risolveva un altro file con lo stesso nome,
+  senza errori. I `require` relativi esistenti continuano a funzionare. Limiti: vale per lo script
+  di primo livello, mentre gli helper si importano tra loro con path relativi; i pacchetti in
+  `node_modules` hanno la precedenza; spostare o rinominare un helper richiede ancora di
+  aggiornarne i riferimenti. Nessuna migrazione richiesta
+  ([PR #43](https://github.com/tosdan/mockxy/pull/43); skill in
+  [mockxy-skills#16](https://github.com/tosdan/mockxy-skills/pull/16)).
+
 ## v1.4.2
 
 Correzioni compatibili dell'admin API e della creazione di mock dalle catture.
