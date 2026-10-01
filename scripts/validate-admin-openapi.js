@@ -23,6 +23,22 @@ function inlinePathParameterReferences(document) {
   return document;
 }
 
+// In una mappa YAML su una riga (`{ type: string, description: A, B }`) una virgola non quotata
+// chiude la descrizione e apre una chiave nuova senza valore: lo schema resta valido, ma la
+// descrizione pubblicata è troncata. Una chiave con spazi e valore null ne è il segno.
+function findSplitFlowMappings(node, location = "") {
+  if (node == null || typeof node !== "object") {
+    return [];
+  }
+  return Object.entries(node).flatMap(([key, value]) => {
+    const here = `${location}/${key}`;
+    if (value === null && /\s/.test(key)) {
+      return [here];
+    }
+    return findSplitFlowMappings(value, here);
+  });
+}
+
 async function validateAdminOpenapi() {
   const { validate } = await import("@scalar/openapi-parser");
   const source = await fs.promises.readFile(
@@ -31,7 +47,12 @@ async function validateAdminOpenapi() {
   );
   // Scalar's path-template pass does not follow reusable Parameter Object references. Inline
   // those references before validation; this also rejects a missing component explicitly.
-  const document = inlinePathParameterReferences(yaml.safeLoad(source));
+  const parsed = yaml.safeLoad(source);
+  const split = findSplitFlowMappings(parsed);
+  if (split.length > 0) {
+    throw new Error(`Admin API OpenAPI contract: descriptions split by an unquoted comma in a one-line mapping (quote them):\n${split.join("\n")}`);
+  }
+  const document = inlinePathParameterReferences(parsed);
   const result = await validate(JSON.stringify(document));
   if (!result.valid || result.errors.length > 0) {
     throw new Error(`Invalid Admin API OpenAPI contract:\n${JSON.stringify(result.errors, null, 2)}`);
@@ -45,4 +66,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { inlinePathParameterReferences, validateAdminOpenapi };
+module.exports = { findSplitFlowMappings, inlinePathParameterReferences, validateAdminOpenapi };

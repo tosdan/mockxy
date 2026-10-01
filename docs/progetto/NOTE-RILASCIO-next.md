@@ -10,6 +10,14 @@
   Il motore ha sempre restituito interi, e la GUI li usa come tali: ora lo spec li dichiara
   `integer`. Le risposte non cambiano. L'`id` degli eventi SSE resta una stringa. La
   divergenza è emersa dai test di accettazione esterni (T2).
+- **Mock dalle catture senza l'header tecnico:** creando mock dal Monitor o dallo Storico, la
+  trasformazione esclude anche `x-mock-source`. Una risposta del backend catturata lo portava con
+  valore `backend`, che finiva nella definizione del mock: il serving lo sostituiva comunque con
+  `mock`, ma il file era fuorviante. Emerso dai test di accettazione esterni (T5).
+- **Descrizioni dello spec OpenAPI:** quattro descrizioni scritte in mappe YAML su una riga erano
+  spezzate da una virgola (`BatchRuntime.errors[].filePath`, `MonitorEntry.path`,
+  `MonitorEntry.requestBodyBytes`, `DumpFile.mtime`) e producevano chiavi spurie. Ora sono
+  integre, e `check:admin-openapi` rifiuta questo errore.
 
 ## v1.4.1
 

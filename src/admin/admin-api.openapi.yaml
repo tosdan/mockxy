@@ -1543,8 +1543,9 @@ paths:
           the title prefix `[da completare]`, and the item the warning `INCOMPLETE_CAPTURE` with
           `reason` `truncated` or `binary`. Enabling and selection follow the flags anyway.
         - **Headers:** the captured response headers, without `content-length`, `content-encoding`,
-          `transfer-encoding`, `connection`, `keep-alive`, `date`, empty values and masked `***`
-          values (a masked value is never restored); array values are joined with `, `.
+          `transfer-encoding`, `connection`, `keep-alive`, `date`, Mockxy's own `x-mock-source`
+          (serving sets it), empty values and masked `***` values (a masked value is never
+          restored); array values are joined with `, `.
         - **Conflict:** on the destination's identity, exact method and route path, against the
           catalog and the items already processed in the same batch. `skip` leaves it; `add-variant`
           adds a variant (titled with the source and the UTC capture time, e.g. `monitor · 10:11:12`)
@@ -1893,8 +1894,9 @@ paths:
           the title prefix `[da completare]`, and the item the warning `INCOMPLETE_CAPTURE` with
           `reason` `truncated` or `binary`. Enabling and selection follow the flags anyway.
         - **Headers:** the captured response headers, without `content-length`, `content-encoding`,
-          `transfer-encoding`, `connection`, `keep-alive`, `date`, empty values and masked `***`
-          values (a masked value is never restored); array values are joined with `, `.
+          `transfer-encoding`, `connection`, `keep-alive`, `date`, Mockxy's own `x-mock-source`
+          (serving sets it), empty values and masked `***` values (a masked value is never
+          restored); array values are joined with `, `.
         - **Conflict:** on the destination's identity, exact method and route path, against the
           catalog and the items already processed in the same batch. `skip` leaves it; `add-variant`
           adds a variant (titled with the source and the UTC capture time, e.g. `monitor · 10:11:12`)
@@ -3651,7 +3653,7 @@ components:
             type: object
             required: [filePath, message]
             properties:
-              filePath: { type: string, description: Endpoint file, relative to the mocks folder. }
+              filePath: { type: string, description: "Endpoint file, relative to the mocks folder." }
               message: { type: string }
     BatchItemOutcome:
       type: object
@@ -3833,7 +3835,7 @@ components:
         method:
           type: string
           description: The request method as received — any method the HTTP server accepts (e.g. `M-SEARCH`), not only those a mock can declare.
-        path: { type: string, description: Request path, without query string. }
+        path: { type: string, description: "Request path, without query string." }
         originalUrl: { type: string, description: Path with query string. }
         status: { type: integer }
         latencyMs: { type: integer }
@@ -3883,7 +3885,7 @@ components:
           description: |
             Readable preview: JSON is pretty-printed, compressed payloads are inflated when
             possible, binary ones are described rather than dumped. Absent when there was no body.
-        requestBodyBytes: { type: integer, description: Real size, even when the preview is truncated. }
+        requestBodyBytes: { type: integer, description: "Real size, even when the preview is truncated." }
         requestBodyTruncated: { type: boolean }
         responseHeaders:
           type: object
@@ -3945,7 +3947,7 @@ components:
       properties:
         name: { type: string }
         size: { type: integer, description: Size in bytes. }
-        mtime: { type: number, description: Last modification, epoch milliseconds. }
+        mtime: { type: number, description: "Last modification, epoch milliseconds." }
 
     DumpEntry:
       allOf:

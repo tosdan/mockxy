@@ -3,6 +3,7 @@ const { createAdminError } = require("./admin-errors");
 const { resolveAdminFilePath } = require("./mock-ids");
 const { listAdminMocks } = require("./mock-catalog");
 const { createAdminMock, createAdminResponse } = require("./endpoint-operations");
+const { TECH_HEADER } = require("../proxy/proxy");
 
 // Creazione di mock dal traffico catturato (piano agent/API, §10 S7 e §13 C7): una sola
 // trasformazione, usata dal Monitor e dallo Storico, e un solo motore del batch.
@@ -13,7 +14,9 @@ const INCOMPLETE_MARKER = "[da completare]";
 const INCOMPLETE_DESCRIPTION = `${INCOMPLETE_MARKER} body non catturato (binario/oltre 156KB)`;
 
 // Header che il server calcola o che descrivono il trasporto del body originale: nel mock
-// sarebbero incompatibili col body ricostruito.
+// sarebbero incompatibili col body ricostruito. Più l'header tecnico con cui Mockxy dichiara chi
+// ha risposto (`x-mock-source`): catturato da una risposta del backend direbbe "backend" anche nel
+// mock, e il serving lo sostituisce comunque con il proprio.
 const EXCLUDED_RESPONSE_HEADERS = new Set([
   "content-length",
   "content-encoding",
@@ -21,6 +24,7 @@ const EXCLUDED_RESPONSE_HEADERS = new Set([
   "connection",
   "keep-alive",
   "date",
+  TECH_HEADER,
 ]);
 
 const CONFLICT_STRATEGIES = new Set(["skip", "add-variant"]);

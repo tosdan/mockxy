@@ -4,6 +4,7 @@ const path = require("path");
 const express = require("express");
 const yaml = require("js-yaml");
 const { createAdminApiRouter } = require("../src/admin/admin-api");
+const { findSplitFlowMappings } = require("../scripts/validate-admin-openapi");
 
 const SPEC_PATH = path.join(__dirname, "..", "src", "admin", "admin-api.openapi.yaml");
 // Tutte le chiavi di operazione di un Path Item OpenAPI 3.1: un'operazione dichiarata solo nello
@@ -47,6 +48,15 @@ describe("Admin API OpenAPI contract", () => {
 
     expect(result.stderr).toBe("");
     expect(result.status).toBe(0);
+  });
+
+  test("nessuna descrizione spezzata da una virgola in una mappa YAML su una riga", () => {
+    // Il caso rilevato: la virgola chiude la descrizione e apre una chiave senza valore.
+    const broken = yaml.safeLoad("properties:\n  path: { type: string, description: Request path, without query string. }\n");
+    expect(findSplitFlowMappings(broken)).toEqual(["/properties/path/without query string."]);
+    expect(findSplitFlowMappings(yaml.safeLoad('properties:\n  path: { type: string, description: "Request path, without query string." }\n'))).toEqual([]);
+
+    expect(findSplitFlowMappings(yaml.safeLoad(fs.readFileSync(SPEC_PATH, "utf8")))).toEqual([]);
   });
 
   // Guardia su metodi e percorsi: non verifica payload, status o comportamenti, che restano

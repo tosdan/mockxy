@@ -234,8 +234,9 @@ Monitor e Storico trasformano una risposta catturata in un mock con le stesse re
   il titolo che inizia con `[da completare]`, e l'elemento l'avviso `INCOMPLETE_CAPTURE` con
   `reason` `truncated` o `binary`. Non è una riproduzione fedele e non viene presentata come tale.
 - **Header:** quelli della risposta catturata, senza `content-length`, `content-encoding`,
-  `transfer-encoding`, `connection`, `keep-alive`, `date`, valori vuoti e valori mascherati `***`
-  (un valore mascherato non viene mai ripristinato); i valori multipli si uniscono con `, `.
+  `transfer-encoding`, `connection`, `keep-alive`, `date`, l'header tecnico di Mockxy
+  `x-mock-source` (lo imposta il serving), valori vuoti e valori mascherati `***` (un valore
+  mascherato non viene mai ripristinato); i valori multipli si uniscono con `, `.
 - **Conflitto:** sull'identità della destinazione, metodo e rotta esatti, rispetto al catalogo e
   agli elementi già elaborati nello stesso batch. `onConflict: "skip"` la lascia com'è;
   `"add-variant"` aggiunge una variante (titolo con la provenienza e l'ora UTC della cattura, per
