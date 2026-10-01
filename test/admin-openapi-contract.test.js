@@ -59,6 +59,22 @@ describe("Admin API OpenAPI contract", () => {
     expect(findSplitFlowMappings(yaml.safeLoad(fs.readFileSync(SPEC_PATH, "utf8")))).toEqual([]);
   });
 
+  test("i dati di esempi e default restano liberi: una chiave con spazi e valore null è legittima", () => {
+    const valid = yaml.safeLoad([
+      "components:",
+      "  schemas:",
+      "    Profile:",
+      "      type: object",
+      "      description: A profile.",
+      '      examples: [{ "display name": null }]',
+      '      default: { "display name": null }',
+      "      properties:",
+      '        tags: { type: array, enum: [{ "a b": null }], example: { "a b": null } }',
+      "",
+    ].join("\n"));
+    expect(findSplitFlowMappings(valid)).toEqual([]);
+  });
+
   // Guardia su metodi e percorsi: non verifica payload, status o comportamenti, che restano
   // compito dei test di integrazione delle singole rotte.
   test("ogni operazione del router admin è documentata nell'OpenAPI e viceversa", () => {
