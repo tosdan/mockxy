@@ -49,9 +49,11 @@ in [PIANO-SCRIPT-CONDIVISI.md](PIANO-SCRIPT-CONDIVISI.md).
 - **Ora:** le regole per handler, middleware e helper sono scritte nel contratto degli script.
   Chi non le rispetta non viene bloccato; le violazioni si vedono al salvataggio (avvisi nella
   risposta e nell'app), nello stato del runtime e nella validazione completa, dove sono errori.
-- **Validazione completa:** `node index.js validate [cartella]` controlla tutti gli script del
+- **Validazione completa:** `node index.js validate [workspace]` controlla tutti gli script del
   workspace senza avviare il server, compresi quelli degli endpoint disabilitati e delle varianti
-  non selezionate, ed esce con codice 1 se trova errori.
+  non selezionate, ed esce con codice 1 se trova errori. L'argomento è la radice del workspace;
+  `--mocks-dir <cartella>` indica direttamente la cartella dei mock. Una cartella che potrebbe
+  essere l'una o l'altra viene rifiutata con codice 2, invece di validare solo una sottocartella.
 
 ### Cambiamenti dell'admin API
 

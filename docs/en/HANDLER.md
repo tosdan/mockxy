@@ -108,6 +108,11 @@ places:
 node index.js validate path/to/workspace   # no server needed; exit code 1 when there are errors
 ```
 
+The folder is the workspace root, the one that contains `mocks/`. To name the mocks folder itself
+use `--mocks-dir path/to/mocks`. A folder that could be either one (it contains a `mocks`
+subfolder, like a root, and mock files of its own, like a mocks folder that has the `/mocks`
+endpoint) is refused with exit code `2` instead of being guessed. `--json` prints the report.
+
 The same validation is the `POST /_admin/api/scripts/validate` route ([the admin API](ADMIN-API.md)).
 
 ## The context it receives

@@ -108,6 +108,12 @@ tre punti:
 node index.js validate percorso/del/workspace   # senza server; codice di uscita 1 se ci sono errori
 ```
 
+La cartella è la radice del workspace, quella che contiene `mocks/`. Per indicare la cartella dei
+mock stessa si usa `--mocks-dir percorso/dei/mock`. Una cartella che potrebbe essere l'una o
+l'altra (contiene una sottocartella `mocks`, come una radice, e file di mock propri, come una
+cartella dei mock che ha l'endpoint `/mocks`) viene rifiutata con codice di uscita `2` invece di
+essere interpretata. `--json` stampa il rapporto.
+
 La stessa validazione è la rotta `POST /_admin/api/scripts/validate` ([l'admin API](ADMIN-API.md)).
 
 ## Il contesto ricevuto

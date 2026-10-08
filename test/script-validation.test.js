@@ -289,10 +289,80 @@ module.exports = { resolveResponse: () => ({ jsonBody: [iniziale.value, new Lett
       expect(JSON.parse(json.lines.join("\n"))).toMatchObject({ ok: false, scripts: 1, errors: [{ code: "SCRIPT_LATE_REQUIRE" }] });
     });
 
-    test("cartella inesistente: errore esplicito", () => {
-      const { exitCode, lines } = run([path.join(workspaceDir, "non-esiste")]);
-      expect(exitCode).toBe(1);
-      expect(lines[0]).toContain("Mocks folder not found");
+    test("bersaglio non utilizzabile: esce con 2, senza rapporto", () => {
+      const missing = run([path.join(workspaceDir, "non-esiste"), "--json"]);
+      expect(missing.exitCode).toBe(2);
+      expect(missing.lines).toEqual([expect.stringContaining("Mocks folder not found")]);
+
+      // Un'opzione sconosciuta non viene ignorata: il suo valore passerebbe per cartella.
+      expect(run(["--mock-dir", mocksDir])).toEqual({ exitCode: 2, lines: ["Unknown option: --mock-dir"] });
+      expect(run(["--mocks-dir"])).toEqual({ exitCode: 2, lines: ["Option --mocks-dir needs a value."] });
+      expect(run([workspaceDir, "--mocks-dir", mocksDir]).exitCode).toBe(2);
+      expect(run([workspaceDir, mocksDir]).exitCode).toBe(2);
+    });
+
+    describe("cartella dei mock che contiene l'endpoint /mocks", () => {
+      // La cartella `mocks/mocks` è quella di un normale endpoint. Presa per la cartella dei mock
+      // di un workspace, la validazione vedrebbe solo il suo script, direbbe OK e le creerebbe un
+      // package.json, che toglie l'alias `#shared/` agli script di quell'endpoint.
+      beforeEach(async () => {
+        await writeEndpointWithInactiveHandler("tardivo", LATE_HANDLER);
+        await writeEndpointWithInactiveHandler("mocks", "module.exports = { resolveResponse: () => ({ jsonBody: {} }) };\n");
+      });
+
+      const expectWholeFolderValidated = ({ exitCode, lines }) => {
+        expect(exitCode).toBe(1);
+        expect(JSON.parse(lines.join("\n"))).toMatchObject({
+          mocksDir: fs.realpathSync(mocksDir),
+          scripts: 2,
+          errors: [{ code: "SCRIPT_LATE_REQUIRE" }],
+        });
+      };
+
+      test("la radice del workspace e --mocks-dir indicano la cartella intera", () => {
+        expectWholeFolderValidated(run([workspaceDir, "--json"]));
+        expectWholeFolderValidated(run(["--mocks-dir", mocksDir, "--json"]));
+        expectWholeFolderValidated(run([`--mocks-dir=${mocksDir}`, "--json"]));
+      });
+
+      test("la cartella dei mock passata come argomento è rifiutata, non letta come radice", () => {
+        const { exitCode, lines } = run([mocksDir, "--json"]);
+
+        expect(exitCode).toBe(2);
+        expect(lines).toHaveLength(1);
+        expect(lines[0]).toMatch(/^Ambiguous folder: .+ contains a "mocks" subfolder, as a workspace root does, but also /);
+        expect(lines[0]).toContain(`--mocks-dir ${mocksDir}`);
+        // Nessun package creato nella sottocartella presa per sbaglio come radice.
+        expect(fs.existsSync(path.join(mocksDir, "mocks", "package.json"))).toBe(false);
+      });
+
+      test("ogni indizio di cartella dei mock basta a rifiutare", () => {
+        const bare = path.join(workspaceDir, "nuda");
+        const signs = {
+          ".collections.json": () => write(path.join(bare, ".collections.json"), "{}"),
+          _shared: () => write(path.join(bare, "_shared", "dati.js"), "module.exports = {};\n"),
+          "package.json with the #shared alias": () => write(path.join(bare, "package.json"), JSON.stringify(STANDARD_PACKAGE)),
+          [path.join("altro", "GET.endpoint.json")]: () => write(path.join(bare, "altro", "GET.endpoint.json"), "{}"),
+        };
+        for (const [sign, create] of Object.entries(signs)) {
+          fs.rmSync(bare, { recursive: true, force: true });
+          fs.mkdirSync(path.join(bare, "mocks"), { recursive: true });
+          // Senza indizi è una radice: contiene solo `mocks/`.
+          expect(run([bare]).exitCode).toBe(0);
+
+          create();
+          const { exitCode, lines } = run([bare]);
+          expect(exitCode).toBe(2);
+          expect(lines[0]).toContain(`but also ${sign}, as a mocks folder does`);
+        }
+      });
+
+      test("con il segnaposto mockxy.json non c'è ambiguità: né per la radice né per la sua cartella mocks", () => {
+        write(path.join(workspaceDir, "mockxy.json"), JSON.stringify({ formatVersion: 1 }));
+
+        expectWholeFolderValidated(run([workspaceDir, "--json"]));
+        expectWholeFolderValidated(run([mocksDir, "--json"]));
+      });
     });
   });
 
