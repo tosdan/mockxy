@@ -3,6 +3,7 @@ const path = require("path");
 const { writeFileAtomic } = require("../utils/fs-atomic");
 const { validatePathFormat } = require("../mocks/route-groups");
 const { loadSequenceSteps } = require("../mocks/endpoint-loader");
+const { refreshModulesForValidation } = require("../mocks/script-loader");
 const { createAdminError } = require("./admin-errors");
 const {
   readBackup,
@@ -139,6 +140,8 @@ async function createAdminEndpointFromMock(mocksDir, payload, reloadRuntime) {
 }
 
 async function createAdminEndpointFromScript(mocksDir, payload, reloadRuntime, type) {
+  // Violazioni del contratto dello script salvato: avvisi nella risposta, non bloccanti.
+  let scriptWarnings = [];
   const definitionInput = payload?.definition || {};
   const method = String(definitionInput.method || "").toUpperCase();
   if (!HTTP_METHOD_PATTERN.test(method)) {
@@ -183,14 +186,14 @@ async function createAdminEndpointFromScript(mocksDir, payload, reloadRuntime, t
       await writeFileAtomic(sourcePath, source, "utf8");
       await writeFileAtomic(responsePath, `${JSON.stringify(response, null, 2)}\n`, "utf8");
       await writeFileAtomic(endpointPath, `${JSON.stringify(endpoint, null, 2)}\n`, "utf8");
-      await assertEndpointSourceIsValid(mocksDir, sourcePath, type);
+      scriptWarnings = await assertEndpointSourceIsValid(mocksDir, sourcePath, type);
     },
     validateReloadResult: validateEndpointReload(endpointPath, mocksDir),
     involved: [endpointPath],
     baseDir: mocksDir,
   });
 
-  return getAdminMockDetailAfterCommit(mocksDir, encodeMockId(relativePath));
+  return withScriptWarnings(await getAdminMockDetailAfterCommit(mocksDir, encodeMockId(relativePath)), scriptWarnings);
 }
 
 async function createAdminMock(mocksDir, payload, reloadRuntime) {
@@ -537,10 +540,10 @@ async function validateSequenceGraph(mocksDir, endpointPath, endpoint, response)
     return;
   }
   try {
-    // persistCache: false — questa validazione gira fuori dal ciclo purge/scan del reload,
-    // dove una compilazione può catturare dipendenze annidate stantie da Module._cache;
-    // la definizione non deve finire nella cache condivisa che i reload riusano.
-    await loadSequenceSteps(endpoint, endpointPath, response, { mocksDir, persistCache: false });
+    // Fuori da una scansione: rinfresca i moduli locali, così gli step handler vedono gli helper
+    // come li vedrà il reload che segue la scrittura.
+    refreshModulesForValidation(mocksDir);
+    await loadSequenceSteps(endpoint, endpointPath, response, { mocksDir });
   } catch (error) {
     throw createAdminError(400, error.message);
   }
@@ -561,6 +564,12 @@ function assertResponseAssetExists(responseDir, response) {
 // Verifica del reload per una mutazione su un singolo endpoint: nessun errore di caricamento su
 // quel file e, a seconda dello stato scritto, endpoint installato (abilitato) o assente
 // (disabilitato). Il fallimento globale del reload lo gestisce già commitWithRollback.
+// Aggiunge alla risposta di una scrittura gli avvisi sul contratto dello script salvato. Il
+// campo c'è solo quando ci sono avvisi: la scrittura è comunque avvenuta.
+function withScriptWarnings(result, scriptWarnings) {
+  return scriptWarnings.length > 0 ? { ...result, warnings: scriptWarnings } : result;
+}
+
 function validateEndpointReload(endpointPath, mocksDir) {
   return async (reloadResult) => {
     const endpoint = await readEndpointConfig(endpointPath);
@@ -574,6 +583,8 @@ function validateEndpointReload(endpointPath, mocksDir) {
 // selezione, cursore della sequence e memoria handler restano quelli di prima; la validazione è
 // la stessa delle scritture normali. Il valore omesso conserva la selezione automatica.
 async function createAdminResponse(mocksDir, id, payload, reloadRuntime, scenarioStates) {
+  // Violazioni del contratto dello script salvato: avvisi nella risposta, non bloccanti.
+  let scriptWarnings = [];
   const endpointPath = resolveAdminFilePath(mocksDir, id);
   if (!fs.existsSync(endpointPath)) {
     throw createAdminError(404, "Endpoint definition not found.");
@@ -654,7 +665,7 @@ async function createAdminResponse(mocksDir, id, payload, reloadRuntime, scenari
       assertResponseAssetExists(responseDir, validatedResponse);
       if (nextResponse.type === "handler" || nextResponse.type === "middleware") {
         const sourcePath = resolvePayloadPath(responseDir, nextResponse.sourceFile);
-        assertEndpointSourceIsValid(mocksDir, sourcePath, nextResponse.type);
+        scriptWarnings = assertEndpointSourceIsValid(mocksDir, sourcePath, nextResponse.type);
       }
     },
     validateReloadResult: validateEndpointReload(endpointPath, mocksDir),
@@ -668,7 +679,10 @@ async function createAdminResponse(mocksDir, id, payload, reloadRuntime, scenari
     invalidateScenario(scenarioStates, endpoint.method, endpoint.path);
   }
 
-  return { ...(await getAdminMockDetailAfterCommit(mocksDir, id)), createdResponseFile: responseFileName };
+  return withScriptWarnings(
+    { ...(await getAdminMockDetailAfterCommit(mocksDir, id)), createdResponseFile: responseFileName },
+    scriptWarnings
+  );
 }
 
 // Separa la precondizione dal payload: i builder rifiutano i campi che non conoscono. Un valore
@@ -807,6 +821,8 @@ async function updateAdminEndpointsEnabled(mocksDir, payload, reloadRuntime) {
 }
 
 async function updateAdminResponse(mocksDir, id, responseFileName, payload, reloadRuntime, scenarioStates) {
+  // Violazioni del contratto dello script salvato: avvisi nella risposta, non bloccanti.
+  let scriptWarnings = [];
   const endpointPath = resolveAdminFilePath(mocksDir, id);
   if (!fs.existsSync(endpointPath)) {
     throw createAdminError(404, "Endpoint definition not found.");
@@ -849,7 +865,7 @@ async function updateAdminResponse(mocksDir, id, responseFileName, payload, relo
       await validateSequenceGraph(mocksDir, endpointPath, endpoint, validatedResponse);
       assertResponseAssetExists(responseDir, validatedResponse);
       if (sourcePath != null) {
-        assertEndpointSourceIsValid(mocksDir, sourcePath, nextResponse.type);
+        scriptWarnings = assertEndpointSourceIsValid(mocksDir, sourcePath, nextResponse.type);
       }
     },
     validateReloadResult: validateEndpointReload(endpointPath, mocksDir),
@@ -871,11 +887,11 @@ async function updateAdminResponse(mocksDir, id, responseFileName, payload, relo
 
   // La variante aggiornata e la sua nuova revisione, indipendenti dalla selezionata descritta dal
   // dettaglio (§13 C3 e C4).
-  return {
+  return withScriptWarnings({
     ...(await getAdminMockDetailAfterCommit(mocksDir, id)),
     updatedResponseFile,
     updatedResponseRevision: await revisionAfterCommit(mocksDir, endpointPath, updatedResponseFile),
-  };
+  }, scriptWarnings);
 }
 
 function sanitizeUploadExtension(filename) {
@@ -1159,6 +1175,8 @@ function invalidateScenario(scenarioStates, method, routePath) {
 }
 
 async function updateAdminMock(mocksDir, id, payload, reloadRuntime, scenarioStates) {
+  // Violazioni del contratto dello script salvato: avvisi nella risposta, non bloccanti.
+  let scriptWarnings = [];
   const endpointPath = resolveAdminFilePath(mocksDir, id);
   if (!fs.existsSync(endpointPath)) {
     throw createAdminError(404, "Endpoint definition not found.");
@@ -1296,7 +1314,7 @@ async function updateAdminMock(mocksDir, id, payload, reloadRuntime, scenarioSta
       await writeFileAtomic(responseFilePath, `${JSON.stringify(nextResponse, null, 2)}\n`, "utf8");
       await writeFileAtomic(endpointPath, `${JSON.stringify(nextEndpoint, null, 2)}\n`, "utf8");
       if (sourcePath != null) {
-        assertEndpointSourceIsValid(mocksDir, sourcePath, requestedType);
+        scriptWarnings = assertEndpointSourceIsValid(mocksDir, sourcePath, requestedType);
       }
     },
     validateReloadResult: validateEndpointReload(endpointPath, mocksDir),
@@ -1304,7 +1322,7 @@ async function updateAdminMock(mocksDir, id, payload, reloadRuntime, scenarioSta
     baseDir: mocksDir,
   });
 
-  return getAdminMockDetailAfterCommit(mocksDir, id);
+  return withScriptWarnings(await getAdminMockDetailAfterCommit(mocksDir, id), scriptWarnings);
 }
 
 // Reset del cursore runtime di una sequenza: la prossima richiesta riparte dal primo step.

@@ -1,6 +1,8 @@
 const { validatePathFormat } = require("../mocks/route-groups");
 const { isValidHttpStatus } = require("../utils/http-body-utils");
-const { loadScriptModule } = require("../mocks/script-loader");
+const { loadScriptModule, refreshModulesForValidation } = require("../mocks/script-loader");
+const { describeScriptLoadFailure } = require("../mocks/script-package");
+const { findScriptContractFindings } = require("../mocks/workspace-validation");
 const { createAdminError } = require("./admin-errors");
 
 // Validazione e normalizzazione dei payload admin: config dei mock, definizioni di
@@ -132,14 +134,16 @@ function normalizeHandlerDefinition(definition, expectedMethod) {
 }
 
 // Validazione di uno script appena scritto: lo compila con il loader condiviso (vedi
-// script-loader) e restituisce la definizione esportata. La compilazione è sempre fresca per lo
-// script stesso, che non passa dalla Module._cache; i suoi require annidati invece sì, ed è il
-// reload che segue la scrittura a validarli con la cache ripulita.
-function loadScriptDefinition(filePath, label, mocksDir) {
+// script-loader), cioè con la stessa risoluzione del runtime, e restituisce la definizione
+// esportata con il record del modulo. Avviene fuori da una scansione: prima rinfresca i moduli
+// locali del workspace, così vede gli helper come li vedrà il reload che segue la scrittura (a
+// file invariati).
+function loadScript(filePath, label, mocksDir) {
   try {
-    return loadScriptModule(filePath, mocksDir).definition;
+    refreshModulesForValidation(mocksDir);
+    return loadScriptModule(filePath, mocksDir);
   } catch (error) {
-    throw createAdminError(400, `Invalid ${label} ${filePath}: ${error.message}`);
+    throw createAdminError(400, `Invalid ${label} ${filePath}: ${describeScriptLoadFailure(error, mocksDir, filePath)}`);
   }
 }
 
@@ -193,8 +197,12 @@ function normalizeEndpointSource(source, type) {
   return createEndpointSourceTemplate(type);
 }
 
+// Rifiuta uno script che non si compila, non si risolve o non esporta la funzione attesa.
+// Restituisce le violazioni del contratto degli script: al salvataggio sono avvisi, non
+// impediscono la scrittura (uno script funzionante ma non ancora migrato deve restare
+// modificabile dall'app). Diventano errori solo nella validazione completa.
 function assertEndpointSourceIsValid(mocksDir, sourceFilePath, type) {
-  const definition = loadScriptDefinition(sourceFilePath, type, mocksDir);
+  const { definition, moduleRecord } = loadScript(sourceFilePath, type, mocksDir);
   if (type === "handler" && typeof definition?.resolveResponse !== "function") {
     throw createAdminError(400, "Handler source must export a resolveResponse function.");
   }
@@ -204,6 +212,8 @@ function assertEndpointSourceIsValid(mocksDir, sourceFilePath, type) {
   if (definition?.method != null || definition?.path != null || definition?.disabled != null) {
     throw createAdminError(400, "Source metadata method, path and disabled must live in the endpoint file.");
   }
+  return findScriptContractFindings({ scriptPath: sourceFilePath, moduleRecord, mocksDir, includeDependencies: false })
+    .map(({ code, line, column, message }) => ({ code, ...(line != null ? { line, column } : {}), message }));
 }
 
 module.exports = {

@@ -20,6 +20,8 @@ export class RuntimeDiagnosticsStore {
   private readonly _report = signal<RuntimeStatusReport | null>(null);
   readonly report = this._report.asReadonly();
   readonly errors = computed(() => this._report()?.errors ?? []);
+  /** Problemi che non impediscono il caricamento: non rendono "degradato" il runtime. */
+  readonly warnings = computed(() => this._report()?.warnings ?? []);
   readonly fatalError = computed(() => this._report()?.fatalError ?? null);
   /** Qualcosa da segnalare: errori di file o un caricamento fallito nel suo insieme. */
   readonly hasProblems = computed(() => this.errors().length > 0 || this.fatalError() != null);

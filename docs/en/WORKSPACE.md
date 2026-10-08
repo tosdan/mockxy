@@ -21,6 +21,8 @@ mio-workspace/
 │   │   ├── GET.endpoint.json
 │   │   └── GET.responses/
 │   │       └── 001.response.json
+│   ├── _shared/             # helpers shared by the scripts, imported with #shared/
+│   ├── package.json         # defines the #shared/ alias for the scripts
 │   └── .collections.json    # collection layout of the catalog (UI)
 ├── files/                   # JSON data files for handlers and middleware   (shared)
 └── .mockxy/                 # local part                                    (outside git)
@@ -40,6 +42,11 @@ path, with one definition file per HTTP method and the response variants in a de
 subfolder. The `.collections.json` file at the root stores the collection layout of the
 catalog used by the UI (groupings and ordering). The file format is documented in the pages
 dedicated to the endpoint and response formats.
+
+When the workspace contains scripts, `mocks/` also holds the **shared helpers** in `_shared/`
+and the `package.json` file that defines the `#shared/` alias used to import them. Mockxy
+creates `package.json` at the first script, if it is missing; commit it with the mocks. The
+details are in the [handlers page](HANDLER.md#helpers-shared-across-mocks).
 
 **`files/`** contains the JSON data files of the Data page: reusable datasets that handlers and
 middleware read at runtime through the `data()` accessor. The folder is flat (no

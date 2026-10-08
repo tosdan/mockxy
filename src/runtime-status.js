@@ -16,6 +16,9 @@ class RuntimeStatusStore {
     this.lastAttempt = null;
     this.lastAppliedAttemptId = null;
     this.errors = [];
+    // Avvisi dell'ultimo registro installato: violazioni del contratto degli script e problemi
+    // del package dei mock. Non cambiano lo stato del tentativo: `applied` resta `applied`.
+    this.warnings = [];
     this.fatalError = null;
     // Revisione della diagnostica: cambia con stato, errori e disponibilità delle rotte in
     // errore, non col solo numero o istante del tentativo.
@@ -34,6 +37,7 @@ class RuntimeStatusStore {
     this.nextAttemptId += 1;
     const applied = outcome?.applied !== false;
     const loadErrors = applied ? outcome?.loadErrors || [] : [];
+    const loadWarnings = applied ? outcome?.loadWarnings || [] : [];
     this.lastAttempt = {
       id,
       startedAt,
@@ -45,6 +49,7 @@ class RuntimeStatusStore {
       // Gli errori descrivono l'ultimo registro installato; un file corretto ne esce.
       this.lastAppliedAttemptId = id;
       this.errors = loadErrors.map((loadError) => this.describeLoadError(loadError, registries));
+      this.warnings = loadWarnings.map((loadWarning) => this.describeLoadWarning(loadWarning));
       this.fatalError = null;
     } else {
       // Un fallimento globale non installa nulla: restano gli errori del registro in uso.
@@ -53,23 +58,39 @@ class RuntimeStatusStore {
     this.updateRevision();
   }
 
-  describeLoadError(loadError, registries) {
-    const filePath = path.resolve(loadError.filePath);
+  // Percorso relativo alla cartella dei mock e id dell'endpoint, quando il file è un endpoint.
+  describeFile(rawFilePath) {
+    const filePath = path.resolve(rawFilePath);
     const relativePath = path.relative(path.resolve(this.mocksDir), filePath).split(path.sep).join("/");
     const insideMocksDir = relativePath !== "" && !relativePath.startsWith("../") && !path.isAbsolute(relativePath);
-    const retained = (registries || []).some((registry) => findEntryByConfigFile(registry?.routeGroups || [], filePath) != null);
     return {
+      absolutePath: filePath,
       endpointId: insideMocksDir && relativePath.endsWith(".endpoint.json") ? encodeMockId(relativePath) : null,
-      filePath: insideMocksDir ? relativePath : loadError.filePath,
+      filePath: insideMocksDir ? relativePath : rawFilePath,
+    };
+  }
+
+  describeLoadError(loadError, registries) {
+    const { absolutePath, endpointId, filePath } = this.describeFile(loadError.filePath);
+    const retained = (registries || []).some((registry) => findEntryByConfigFile(registry?.routeGroups || [], absolutePath) != null);
+    return {
+      endpointId,
+      filePath,
       message: loadError.message,
       serving: retained ? "retained" : "missing",
     };
+  }
+
+  describeLoadWarning(loadWarning) {
+    const { endpointId, filePath } = this.describeFile(loadWarning.filePath);
+    return { code: loadWarning.code, endpointId, filePath, message: loadWarning.message };
   }
 
   updateRevision() {
     const fingerprint = JSON.stringify({
       status: this.lastAttempt?.status ?? null,
       errors: [...this.errors].sort((a, b) => a.filePath.localeCompare(b.filePath)),
+      warnings: [...this.warnings].sort((a, b) => `${a.filePath} ${a.code}`.localeCompare(`${b.filePath} ${b.code}`)),
       fatalError: this.fatalError,
     });
     // Il primo tentativo (l'avvio) fissa lo stato iniziale, che è la revisione 1.
@@ -85,6 +106,7 @@ class RuntimeStatusStore {
       lastAttempt: this.lastAttempt == null ? null : { ...this.lastAttempt, reasons: [...this.lastAttempt.reasons] },
       lastAppliedAttemptId: this.lastAppliedAttemptId,
       errors: this.errors.map((error) => ({ ...error })),
+      warnings: this.warnings.map((warning) => ({ ...warning })),
       fatalError: this.fatalError == null ? null : { ...this.fatalError },
     };
   }

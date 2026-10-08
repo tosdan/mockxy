@@ -58,6 +58,19 @@ export class MocksNextPage implements OnInit {
         this.toast.show({ title: this.transloco.translate('common.error'), description: err, tone: 'error' });
       }
     });
+
+    // Uno script salvato che viola il contratto: la scrittura è riuscita, gli avvisi lo dicono.
+    effect(() => {
+      const warnings = this.store.scriptWarnings();
+      if (warnings?.length) {
+        this.toast.show({
+          title: this.transloco.translate('mocks.scriptWarningsTitle'),
+          description: warnings.map((w) => (w.line != null ? `${this.transloco.translate('mocks.scriptWarningLine', { line: w.line })} ` : '') + w.message).join('\n'),
+          tone: 'warning',
+          duration: 12000,
+        });
+      }
+    });
   }
 
   ngOnInit(): void {

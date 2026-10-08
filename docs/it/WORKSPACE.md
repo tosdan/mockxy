@@ -21,6 +21,8 @@ mio-workspace/
 │   │   ├── GET.endpoint.json
 │   │   └── GET.responses/
 │   │       └── 001.response.json
+│   ├── _shared/             # helper condivisi dagli script, importati con #shared/
+│   ├── package.json         # definisce l'alias #shared/ per gli script
 │   └── .collections.json    # organizzazione del catalogo in collezioni (UI)
 ├── files/                   # file dati JSON per handler e middleware        (condiviso)
 └── .mockxy/                 # parte locale                                   (fuori da git)
@@ -40,6 +42,11 @@ percorso dell'API, con un file di definizione per metodo HTTP e le varianti di r
 sottocartella dedicata. Il file `.collections.json` alla radice memorizza l'organizzazione del
 catalogo in collezioni usata dall'interfaccia (raggruppamenti e ordinamento). Il formato dei
 file è documentato nelle pagine dedicate al formato endpoint e response.
+
+Quando il workspace contiene script, `mocks/` ospita anche gli **helper condivisi** in
+`_shared/` e il file `package.json` che definisce l'alias `#shared/` con cui si importano.
+Mockxy crea `package.json` al primo script, se manca; va versionato con i mock. I dettagli sono
+nella pagina [degli handler](HANDLER.md#helper-condivisi-tra-più-mock).
 
 **`files/`** contiene i file dati JSON della pagina Dati: dataset riusabili che handler e
 middleware leggono a runtime tramite l'accessor `data()`. La cartella è piatta (nessuna

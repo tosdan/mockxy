@@ -70,12 +70,12 @@ describe("endpoint loader graceful degradation", () => {
     expect(result.loadErrors[0].message).toContain("Missing selected response");
   });
 
-  test("un helper condiviso modificato viene ricaricato alla scansione successiva", async () => {
+  test("un helper modificato viene ricaricato alla scansione successiva, anche con data e dimensione invariate", async () => {
     await writeHandler({
       mocksDir,
       folder: "with-helper",
       method: "GET",
-      source: `const helper = require("./helper");
+      source: `const helper = require("./helper.js");
 module.exports = {
   path: "/with-helper",
   async resolveResponse() {
@@ -92,12 +92,11 @@ module.exports = {
     const firstResult = await first.handlerRouteGroups[0].methods.get("GET").resolveResponse({});
     expect(firstResult.jsonBody.value).toBe(1);
 
+    // Stessa dimensione e stessa data di modifica: una firma mtime+dimensione non vedrebbe la
+    // modifica. Senza cache delle definizioni non c'è nessuna firma da ingannare.
+    const before = await fs.promises.stat(helperPath);
     await fs.promises.writeFile(helperPath, "module.exports = { value: 2 };\n", "utf8");
-    // La firma della cache è mtime+dimensione: qui la dimensione non cambia e due scritture
-    // nello stesso millisecondo avrebbero lo stesso mtime (flaky). Un utente reale non riscrive
-    // il file nello stesso istante della scansione: forziamo un mtime diverso, senza sleep.
-    const bumpedMtime = new Date(Date.now() + 10);
-    await fs.promises.utimes(helperPath, bumpedMtime, bumpedMtime);
+    await fs.promises.utimes(helperPath, before.atime, before.mtime);
 
     const second = await loadEndpointRouteGroups(mocksDir);
     expect(second.loadErrors).toEqual([]);
@@ -105,16 +104,14 @@ module.exports = {
     expect(secondResult.jsonBody.value).toBe(2);
   });
 
-  test("una compilazione fuori scansione non lascia in cache una definizione con dipendenze stantie", async () => {
+  test("una compilazione fuori scansione non lascia dipendenze stantie alla scansione successiva", async () => {
     // La validazione admin del grafo sequence (validateSequenceGraph) chiama loadSequenceSteps
-    // FUORI dal ciclo purge/scan: lì i require annidati risolvono ancora dalla Module._cache, e
-    // quella definizione — stantia — non deve essere persistita con le firme correnti, altrimenti
-    // il reload successivo la considererebbe fresca e installerebbe il vecchio helper.
+    // FUORI dal ciclo di scansione. La scansione successiva riparte comunque dal disco.
     await writeHandler({
       mocksDir,
       folder: "seq",
       method: "GET",
-      source: `const helper = require("./helper");
+      source: `const helper = require("./helper.js");
 module.exports = {
   path: "/seq",
   async resolveResponse() {
@@ -132,15 +129,12 @@ module.exports = {
     expect(firstResult.jsonBody.value).toBe(1);
 
     await fs.promises.writeFile(helperPath, "module.exports = { value: 2 };\n", "utf8");
-    // Come sopra: mtime forzato perché la firma è mtime+dimensione e la dimensione non cambia.
-    const bumpedMtime = new Date(Date.now() + 10);
-    await fs.promises.utimes(helperPath, bumpedMtime, bumpedMtime);
 
     await loadSequenceSteps(
       { method: "GET" },
       path.join(mocksDir, "seq", "GET.endpoint.json"),
       { steps: [{ response: "001.response.json" }] },
-      { mocksDir, persistCache: false }
+      { mocksDir }
     );
 
     const second = await loadEndpointRouteGroups(mocksDir);
@@ -149,15 +143,17 @@ module.exports = {
     expect(secondResult.jsonBody.value).toBe(2);
   });
 
-  test("la scansione non ri-esegue gli script non toccati (compilazione incrementale)", async () => {
-    // Handler con side effect al top-level: ogni compilazione appende un carattere al marker.
+  test("ogni scansione ricompila gli script selezionati", async () => {
+    // Contratto degli script: nessuna cache delle definizioni. Il caricamento di un modulo non
+    // deve avere effetti persistenti proprio perché viene rieseguito a ogni scansione; il
+    // marker qui serve solo a contare le compilazioni.
     await writeHandler({
       mocksDir,
       folder: "fx",
       method: "GET",
       source: `const fs = require("fs");
 const nodePath = require("path");
-const helper = require("./helper");
+const helper = require("./helper.js");
 fs.appendFileSync(nodePath.join(__dirname, "..", "..", "marker.txt"), "x");
 module.exports = {
   path: "/fx",
@@ -177,18 +173,15 @@ module.exports = {
     expect(first.loadErrors).toEqual([]);
     expect(await readMarker()).toBe(1);
 
-    // Aggiungere/modificare un mock JSON non deve ricompilare l'handler.
+    // Anche una modifica che non tocca lo script (un mock JSON in più) lo ricompila.
     await writeMock({ mocksDir, folder: "other", method: "GET", routePath: "/other", body: { ok: true } });
     const second = await loadEndpointRouteGroups(mocksDir);
     expect(second.loadErrors).toEqual([]);
-    expect(await readMarker()).toBe(1);
-    const secondResult = await second.handlerRouteGroups[0].methods.get("GET").resolveResponse({});
-    expect(secondResult.jsonBody.value).toBe(1);
+    expect(await readMarker()).toBe(2);
 
-    // Modificare una dipendenza dell'handler deve invalidarlo e ricompilare.
     await fs.promises.writeFile(helperPath, "module.exports = { value: 22 };\n", "utf8");
     const third = await loadEndpointRouteGroups(mocksDir);
-    expect(await readMarker()).toBe(2);
+    expect(await readMarker()).toBe(3);
     const thirdResult = await third.handlerRouteGroups[0].methods.get("GET").resolveResponse({});
     expect(thirdResult.jsonBody.value).toBe(22);
   });

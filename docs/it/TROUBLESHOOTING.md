@@ -64,6 +64,17 @@ incriminato). Qui sotto, i sintomi ricorrenti per area.
 - **Gli item aggiunti sono spariti.** Lo stato condiviso è volatile: riavvio, chiusura o cambio
   effettivo del motore ripartono dal seed. Anche browser e test diversi sulla stessa istanza lo
   condividono, quindi isolare le suite con un reset esplicito.
+- **`Cannot find module '#shared/…'`** — l'import di un [helper condiviso](HANDLER.md#helper-condivisi-tra-più-mock)
+  non si risolve. Il messaggio di Mockxy dice quale dei casi è: file inesistente, estensione
+  mancante (`#shared/flusso.js`, non `#shared/flusso`), un `package.json` in una sottocartella
+  dei mock, oppure `mocks/package.json` assente o senza l'alias. Se il file è stato aggiunto o
+  modificato mentre Mockxy era in esecuzione serve un riavvio: nell'app desktop va riavviata
+  l'app, chiudere e riaprire il workspace non basta.
+- **`require("_shared/…")` non funziona più.** Era l'import dalla radice della 1.5.0, ritirato
+  dalla 1.6.0: si scrive `require("#shared/….js")`. I `require` relativi continuano a funzionare.
+- **Un helper modificato non si aggiorna dentro una richiesta.** Lo script lo importa dentro una
+  funzione invece che in cima al modulo: `node index.js validate` lo segnala
+  ([il contratto degli script](HANDLER.md#il-contratto-degli-script)).
 - **Il middleware non trasforma.** Risposte oltre 10 MB e stream (`text/event-stream`) passano
   integre con `x-mock-source: backend` e un avviso nel log; un middleware che *fallisce* è
   fail-open: passa la risposta originale ([i middleware](MIDDLEWARE.md)).

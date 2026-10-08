@@ -113,9 +113,10 @@ Lo script **non** può dichiarare `method`, `path` o `disabled`: quelle propriet
 file endpoint, e la loro presenza nello script è un errore di validazione — la fonte di verità
 sul routing resta una sola.
 
-Gli script possono richiedere altri file locali (`require` relativi): il motore traccia queste
-dipendenze e ricompila lo script quando il sorgente **o una delle dipendenze** cambia su disco;
-finché nulla cambia, la definizione compilata viene riusata tra le ricariche.
+Gli script possono richiedere altri file locali, con un `require` relativo o con l'alias
+`#shared/` degli [helper condivisi](HANDLER.md#helper-condivisi-tra-più-mock). A ogni ricarica
+il motore ricompila gli script selezionati insieme ai file che importano: una modifica al
+sorgente o a una dipendenza vale dalla ricarica successiva.
 
 ## Risposta `middleware`
 

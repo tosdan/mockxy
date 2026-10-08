@@ -114,6 +114,13 @@ scrivere.
 | `PUT /mocks/:id/responses/:file/file` | carica i byte grezzi che rendono la variante [file-backed](RESPONSE.md) — body `application/octet-stream` (fino a 12 MB), MIME e nome in query (`?contentType=…&filename=…`). La precondizione va nell'header `X-Mockxy-Expected-Revision` |
 | `DELETE /mocks/:id/responses/:file` | elimina una variante; risponde `409` con `details.referencedBy` se è usata da una sequence |
 
+Quando una scrittura salva il sorgente di un handler o di un middleware che viola il
+[contratto degli script](HANDLER.md#il-contratto-degli-script), la risposta riporta anche
+`warnings`: un elenco di `{ code, line?, column?, message }`. Lo script è stato salvato ed è
+servito; gli avvisi dicono ciò che `POST /scripts/validate` riporterebbe come errore. Il campo
+manca quando non c'è nulla da segnalare. Un sorgente che non si compila, o un import che non si
+risolve, continua invece a far rifiutare la scrittura con `400`.
+
 ## Collezioni
 
 | Metodo e percorso | Cosa fa |
@@ -282,7 +289,8 @@ la forma della `201`, conteggi compresi.
 | `GET /info` | chi risponde e su cosa: `version`, `runtimeId` e `startedAt` (nuovi a ogni avvio), `workspace` (`id`, `root`, `mocksDir`, `filesDir` canonici; `root` solo dall'app desktop), `listener` realmente in ascolto, `watcher` (`state` fra `disabled`, `starting`, `ready`, `error`) e `revisions` (`catalog`, `server`, `dump`, `diagnostics`, `config`). Le revisioni partono da 1 e crescono quando la risorsa cambia: servono a sapere cosa rileggere, non sono precondizioni di scrittura. Non scansiona il workspace |
 | `GET /config` | configurazione di avvio, effettiva e override: `{ runtimeId, startup, effective, overrides, persisted }`, con le sole nove chiavi modificabili a runtime (`backendUrl` è `null` senza backend). Nessun'altra variabile d'ambiente; `persisted` è sempre `false` e `runtimeId` cambia a ogni avvio |
 | `PATCH /config` | override effimeri delle nove chiavi — body `{ set?, unset? }`; [regole](#configurazione-effimera) |
-| `GET /runtime/status` | esito dell'ultimo caricamento del workspace, `200` anche se degradato o fallito: `lastAttempt` (`id`, istanti, `reasons` fra `startup`, `admin`, `watcher`, `status` `applied`, `degraded` o `failed`), `lastAppliedAttemptId`, `errors` per file (`endpointId`, `filePath`, `message`, `serving`: `retained` se resta servita la versione precedente, `missing` se nulla la serve) e `fatalError`. Solo l'ultimo tentativo, senza storico |
+| `GET /runtime/status` | esito dell'ultimo caricamento del workspace, `200` anche se degradato o fallito: `lastAttempt` (`id`, istanti, `reasons` fra `startup`, `admin`, `watcher`, `status` `applied`, `degraded` o `failed`), `lastAppliedAttemptId`, `errors` per file (`endpointId`, `filePath`, `message`, `serving`: `retained` se resta servita la versione precedente, `missing` se nulla la serve), `warnings` (`code`, `endpointId`, `filePath`, `message`) e `fatalError`. Gli avvisi sono problemi che non impediscono il caricamento — un handler o middleware importato da un altro script, o un problema di `mocks/package.json` come una modifica che richiede il riavvio — e non cambiano `status`: un tentativo con soli avvisi resta `applied`. Solo l'ultimo tentativo, senza storico |
+| `POST /scripts/validate` | validazione completa degli [script del workspace](HANDLER.md#il-contratto-degli-script): carica tutti gli handler e middleware, anche degli endpoint disabilitati e delle varianti non selezionate, e risponde `200` con `{ ok, mocksDir, scripts, errors, warnings }`. Qui le violazioni del contratto sono errori (`code`, `filePath`, `line` e `column` quando indicano un punto del sorgente, `message`). Non installa rotte e non tocca `state`, `sharedState`, sequenze o stream. Senza server: `node index.js validate [cartella]` |
 | `GET /openapi.yaml` | il [contratto](#la-descrizione-leggibile-dalle-macchine) della versione in esecuzione, come `application/yaml` |
 
 ### Configurazione effimera

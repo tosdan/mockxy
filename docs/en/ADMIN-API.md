@@ -112,6 +112,13 @@ never discovered by trying a write.
 | `PUT /mocks/:id/responses/:file/file` | uploads the raw bytes that make the variant [file-backed](RESPONSE.md) — body `application/octet-stream` (up to 12 MB), MIME type and name in the query (`?contentType=…&filename=…`). The precondition goes in the `X-Mockxy-Expected-Revision` header |
 | `DELETE /mocks/:id/responses/:file` | deletes a variant; returns `409` with `details.referencedBy` when a sequence uses it |
 
+When a write saves a handler or middleware source that violates the
+[script contract](HANDLER.md#the-script-contract), the response also carries `warnings`: a list
+of `{ code, line?, column?, message }`. The script was saved and is served; the warnings say what
+`POST /scripts/validate` would report as errors. The field is absent when there is nothing to
+report. A source that does not compile, or an import that does not resolve, still makes the write
+fail with `400`.
+
 ## Collections
 
 | Method and path | What it does |
@@ -277,7 +284,8 @@ batch that fails after writing (`BATCH_RUNTIME_FAILED`, `ROLLBACK_FAILED`) repor
 | `GET /info` | who answers and on what: `version`, `runtimeId` and `startedAt` (new at every start), `workspace` (canonical `id`, `root`, `mocksDir`, `filesDir`; `root` only from the desktop app), the `listener` actually in use, the `watcher` (`state` among `disabled`, `starting`, `ready`, `error`) and `revisions` (`catalog`, `server`, `dump`, `diagnostics`, `config`). Revisions start at 1 and grow when the resource changes: they tell what to read again and are not write preconditions. It never scans the workspace |
 | `GET /config` | startup, effective and overridden configuration: `{ runtimeId, startup, effective, overrides, persisted }`, with only the nine keys that can change at runtime (`backendUrl` is `null` without a backend). No other environment variable; `persisted` is always `false` and `runtimeId` changes at every start |
 | `PATCH /config` | ephemeral overrides of the nine keys — body `{ set?, unset? }`; [rules](#ephemeral-configuration) |
-| `GET /runtime/status` | outcome of the last load of the workspace, `200` even when degraded or failed: `lastAttempt` (`id`, timestamps, `reasons` among `startup`, `admin`, `watcher`, `status` `applied`, `degraded` or `failed`), `lastAppliedAttemptId`, per-file `errors` (`endpointId`, `filePath`, `message`, `serving`: `retained` when the previous version is still served, `missing` when nothing serves it) and `fatalError`. Only the last attempt, no history |
+| `GET /runtime/status` | outcome of the last load of the workspace, `200` even when degraded or failed: `lastAttempt` (`id`, timestamps, `reasons` among `startup`, `admin`, `watcher`, `status` `applied`, `degraded` or `failed`), `lastAppliedAttemptId`, per-file `errors` (`endpointId`, `filePath`, `message`, `serving`: `retained` when the previous version is still served, `missing` when nothing serves it), `warnings` (`code`, `endpointId`, `filePath`, `message`) and `fatalError`. Warnings are problems that do not prevent loading — a handler or middleware imported by another script, or a problem with `mocks/package.json` such as a change that needs a restart — and do not change `status`: an attempt with warnings only stays `applied`. Only the last attempt, no history |
+| `POST /scripts/validate` | full validation of the [workspace scripts](HANDLER.md#the-script-contract): loads every handler and middleware, including those of disabled endpoints and unselected variants, and answers `200` with `{ ok, mocksDir, scripts, errors, warnings }`. Here contract violations are errors (`code`, `filePath`, `line` and `column` when they point at a place in the source, `message`). It installs no routes and leaves `state`, `sharedState`, sequences and streams alone. Without a server: `node index.js validate [folder]` |
 | `GET /openapi.yaml` | the [contract](#the-machine-readable-description) of the running version, as `application/yaml` |
 
 ### Ephemeral configuration

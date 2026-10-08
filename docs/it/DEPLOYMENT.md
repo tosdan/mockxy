@@ -21,6 +21,7 @@ cp .env.example .env      # raccomandato: configura almeno BACKEND_URL e PORT
 npm run dev:backend       # sviluppo, con watch dei mock
 node index.js             # esecuzione semplice
 node index.js --delay=500 --delay-all   # con latenza simulata (vedi docs/RITARDI.md)
+node index.js validate [cartella]       # controlla gli script del workspace ed esce (vedi docs/HANDLER.md)
 ```
 
 Il file è tecnicamente facoltativo, ma per un uso headless reale è consigliabile crearlo e

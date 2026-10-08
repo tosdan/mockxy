@@ -2170,14 +2170,53 @@ paths:
         - `errors` are the load errors of the installed registry. `serving: retained` means the
           previous version of that definition is still served; `missing` means nothing serves it.
           A file that loads again leaves the list.
-        - A global failure installs nothing: `errors` keep describing the registry in use, and
-          `fatalError` reports the failure until the next attempt that installs.
+        - `warnings` are problems of the installed registry that do not prevent loading: a
+          violation of the script contract seen while loading (a handler or middleware imported
+          by another script), or a problem of the script package `mocks/package.json`, such as a
+          change that needs a restart. They never change `lastAttempt.status`: an attempt with
+          warnings only stays `applied`. Having no warnings is not a statement of full compliance
+          with the script contract: `POST /scripts/validate` checks it.
+        - A global failure installs nothing: `errors` and `warnings` keep describing the registry
+          in use, and `fatalError` reports the failure until the next attempt that installs.
       responses:
         "200":
           description: Load outcome
           content:
             application/json:
               schema: { $ref: "#/components/schemas/RuntimeStatus" }
+
+  /scripts/validate:
+    post:
+      tags: [Runtime]
+      operationId: validateWorkspaceScripts
+      summary: Check every script of the workspace against the script contract
+      description: |
+        Loads **every** `*.handler.js` and `*.middleware.js` under the mocks folder — disabled
+        endpoints and unselected variants included, which an ordinary reload does not load — with
+        the same compilation and resolution the runtime uses, and reports what does not load and
+        what violates the script contract.
+
+        - It answers `200` whether or not it finds errors: `ok` is the outcome.
+        - `errors` are load failures (`SCRIPT_LOAD_FAILED`, `SCRIPT_INVALID_EXPORT`) and contract
+          violations: a local `require` inside a function or in an instance field of a class
+          (`SCRIPT_LATE_REQUIRE`), with a computed path (`SCRIPT_DYNAMIC_REQUIRE`) or without an
+          extension (`SCRIPT_REQUIRE_WITHOUT_EXTENSION`), a local ES module
+          (`SCRIPT_ESM_DEPENDENCY`), a handler or middleware imported by another script
+          (`SCRIPT_ENTRYPOINT_IMPORTED`), a helper outside the mocks folder, a nested
+          `package.json`, a script package that does not define the standard `#shared/` alias.
+          A file that loads but that the contract check cannot analyze is reported as
+          `SCRIPT_CONTRACT_NOT_ANALYZED`: it is never certified by omission.
+          The runtime tolerates the contract violations and reports only some of them as
+          warnings; here they are errors.
+        - Loading a script runs its top level, as the runtime does. Nothing is installed: routes,
+          `state`, `sharedState`, sequences and open streams are left as they are.
+        - The same check is available without a server: `node index.js validate [folder]`.
+      responses:
+        "200":
+          description: Validation report
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ScriptValidationReport" }
 
   /openapi.yaml:
     get:
@@ -2677,9 +2716,80 @@ components:
           type: string
           enum: [retained, missing]
           description: "`retained`: the previous version of the definition is still served. `missing`: nothing serves it."
+    RuntimeLoadWarning:
+      type: object
+      required: [code, endpointId, filePath, message]
+      properties:
+        code:
+          type: string
+          description: |
+            `SCRIPT_ENTRYPOINT_IMPORTED`, or a `SCRIPT_PACKAGE_*` code about `mocks/package.json`:
+            `RESTART_REQUIRED`, `NOT_CREATABLE`, `INCOMPATIBLE`, `INVALID`, `UNREADABLE`.
+          examples: [SCRIPT_PACKAGE_RESTART_REQUIRED]
+        endpointId:
+          type: [string, "null"]
+          description: Id of the endpoint, when the warning is about one.
+        filePath:
+          type: string
+          description: Path relative to the mocks folder, with `/` separators.
+        message: { type: string }
+    ScriptValidationFinding:
+      type: object
+      required: [code, filePath, message]
+      properties:
+        code: { type: string, examples: [SCRIPT_LATE_REQUIRE] }
+        filePath:
+          type: string
+          description: Path relative to the mocks folder, with `/` separators.
+        line:
+          type: integer
+          description: 1-based line, when the finding points at a place in the source.
+        column:
+          type: integer
+          description: 1-based column, present with `line`.
+        message: { type: string }
+    ScriptValidationReport:
+      type: object
+      required: [ok, mocksDir, scripts, errors, warnings]
+      properties:
+        ok:
+          type: boolean
+          description: "`true` when there are no errors; warnings do not change it."
+        mocksDir:
+          type: string
+          description: Canonical absolute path of the mocks folder that was checked.
+        scripts:
+          type: integer
+          description: Number of handler and middleware scripts found.
+        errors:
+          type: array
+          items: { $ref: "#/components/schemas/ScriptValidationFinding" }
+        warnings:
+          type: array
+          items: { $ref: "#/components/schemas/ScriptValidationFinding" }
+      example:
+        ok: false
+        mocksDir: /workspace/mocks
+        scripts: 2
+        errors:
+          - code: SCRIPT_LATE_REQUIRE
+            filePath: users/GET.responses/001.handler.js
+            line: 4
+            column: 19
+            message: "require(\"#shared/users.js\") runs inside a function: import local dependencies at the top of the module, or after a reload the function gets new code in the middle of a request"
+        warnings: []
+    ScriptContractWarning:
+      type: object
+      description: A violation of the script contract in a script that was saved anyway.
+      required: [code, message]
+      properties:
+        code: { type: string, examples: [SCRIPT_ENTRYPOINT_IMPORTED] }
+        line: { type: integer }
+        column: { type: integer }
+        message: { type: string }
     RuntimeStatus:
       type: object
-      required: [runtimeId, lastAttempt, lastAppliedAttemptId, errors, fatalError]
+      required: [runtimeId, lastAttempt, lastAppliedAttemptId, errors, warnings, fatalError]
       properties:
         runtimeId: { type: string, format: uuid }
         lastAttempt:
@@ -2695,6 +2805,9 @@ components:
         errors:
           type: array
           items: { $ref: "#/components/schemas/RuntimeLoadError" }
+        warnings:
+          type: array
+          items: { $ref: "#/components/schemas/RuntimeLoadWarning" }
         fatalError:
           description: The global failure of the last attempt; `null` once an attempt installs again.
           anyOf:
@@ -2717,6 +2830,7 @@ components:
             filePath: users/GET.endpoint.json
             message: "001.handler.js: Unexpected token '{'"
             serving: retained
+        warnings: []
         fatalError: null
     RuntimeConfigKey:
       type: string
@@ -2992,6 +3106,10 @@ components:
             message:
               type: string
               description: Why the detail could not be composed.
+        warnings:
+          type: array
+          description: Only when the mutation saved a script violating the script contract.
+          items: { $ref: "#/components/schemas/ScriptContractWarning" }
 
     RevisionToken:
       type: string
@@ -3070,6 +3188,11 @@ components:
         The affected endpoint's `MockDetail`, or `MockDetailUnavailable` when the mutation
         succeeded but its detail could not be composed. Tell them apart by the presence of
         `detailUnavailable`.
+
+        When the mutation saved a handler or middleware source that violates the script
+        contract, the result also carries `warnings` (a list of `ScriptContractWarning`): the
+        script was saved and is served, the warnings say what `POST /scripts/validate` reports as
+        errors. The field is absent when there is nothing to report.
       oneOf:
         - $ref: "#/components/schemas/MockDetail"
         - $ref: "#/components/schemas/MockDetailUnavailable"
@@ -3094,6 +3217,10 @@ components:
         - type: object
           required: [editable, definitionFilePath, responseFilePath, responses, endpoint, response]
           properties:
+            warnings:
+              type: array
+              description: Only in the result of a mutation that saved a script violating the script contract.
+              items: { $ref: "#/components/schemas/ScriptContractWarning" }
             editable:
               type: boolean
               description: Always `true`; kept so a client can render read-only sources uniformly.

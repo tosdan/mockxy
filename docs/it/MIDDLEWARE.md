@@ -8,7 +8,7 @@ provocare un caso specifico nel frontend, arricchire un payload che non è ancor
 
 Un middleware è collegato all'endpoint tramite un [file di risposta](RESPONSE.md) di tipo
 `middleware`, che punta a uno script `*.middleware.js`. Vale tutto ciò che vale per gli script
-degli handler: modulo CommonJS, `require` locali con ricompilazione al cambio, niente
+degli handler: modulo CommonJS, `require` locali e [helper condivisi](HANDLER.md#helper-condivisi-tra-più-mock), stesso [contratto degli script](HANDLER.md#il-contratto-degli-script), niente
 `method`/`path`/`disabled` nello script.
 
 ## La forma dello script

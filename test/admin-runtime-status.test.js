@@ -106,6 +106,7 @@ describe("GET /runtime/status", () => {
       },
       lastAppliedAttemptId: 1,
       errors: [brokenError("missing")],
+      warnings: [],
       fatalError: null,
     });
   });

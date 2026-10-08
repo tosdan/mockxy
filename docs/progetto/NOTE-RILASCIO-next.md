@@ -2,6 +2,78 @@
 
 ## Prossima versione
 
+Versione prevista: **1.6.0**. Contiene una modifica incompatibile per i soli workspace che
+avevano adottato l'import dalla radice della 1.5.0: è un'eccezione dichiarata alla politica di
+versionamento (vedi [PROCEDURA-RILASCIO.md](PROCEDURA-RILASCIO.md), §1). Il disegno completo è
+in [PIANO-SCRIPT-CONDIVISI.md](PIANO-SCRIPT-CONDIVISI.md).
+
+### Script condivisi e ricarica
+
+#### Helper condivisi con l'alias `#shared/`
+
+- **Prima (1.5.0):** gli script potevano importare dalla radice dei mock con
+  `require("_shared/helper")`. Funzionava solo per lo script caricato direttamente dal motore:
+  un handler riusato da un'altra variante o da un helper non risolveva più l'import, e l'esito
+  dipendeva dall'ordine di caricamento. Una migrazione reale ha reso non caricabili 22 script su
+  55.
+- **Ora:** gli helper stanno in `mocks/_shared/` e si importano con `require("#shared/….js")`.
+  È l'alias nativo di Node, definito da `mocks/package.json`: vale per ogni script e helper sotto
+  la cartella dei mock, chiunque lo carichi e a qualsiasi profondità. Mockxy crea il file al
+  primo script del workspace, se manca, e non riscrive mai un file già presente.
+- **Ritirato:** l'import dalla radice `require("_shared/…")`. Lo script che lo usa non si carica,
+  con un messaggio che indica la sostituzione.
+- **Invariato:** i `require` relativi continuano a funzionare e non richiedono migrazione.
+- **Per chi ha usato `require("_shared/…")`:** sostituirlo con `require("#shared/….js")`,
+  con l'estensione, e versionare `mocks/package.json`. Se il file viene aggiunto o modificato
+  mentre Mockxy è in esecuzione serve un riavvio (dell'app, nel desktop): Node lo legge una volta
+  per processo.
+
+#### Ricompilazione a ogni ricarica
+
+- **Prima:** una cache conservava le definizioni degli script invariati, riconosciuti da data di
+  modifica e dimensione del sorgente e delle dipendenze. Ne derivavano dati non aggiornati senza
+  errori: una modifica che lasciava invariati data e dimensione, un helper importato dentro una
+  funzione, una cartella dei mock raggiunta da un collegamento simbolico. Dopo la ricompilazione
+  di un solo handler, due handler potevano inoltre vedere due istanze dello stesso helper.
+- **Ora:** a ogni ricarica il motore ricompila tutti gli script selezionati, dopo aver svuotato
+  i moduli locali del workspace (anche quando la cartella è raggiunta da un collegamento
+  simbolico). I pacchetti in `node_modules` non vengono toccati. `state`, `sharedState`, i cursori
+  delle sequenze e le connessioni SSE e WebSocket si conservano come prima.
+- **Per gli autori:** il livello superiore di uno script viene rieseguito a ogni ricarica, anche
+  se lo script non è cambiato. Il [contratto degli script](../it/HANDLER.md#il-contratto-degli-script)
+  lo rende sicuro: dipendenze importate in cima al modulo, stato in `state` e `sharedState`,
+  nessun effetto al caricamento.
+
+#### Contratto degli script, avvisi e validazione
+
+- **Ora:** le regole per handler, middleware e helper sono scritte nel contratto degli script.
+  Chi non le rispetta non viene bloccato; le violazioni si vedono al salvataggio (avvisi nella
+  risposta e nell'app), nello stato del runtime e nella validazione completa, dove sono errori.
+- **Validazione completa:** `node index.js validate [cartella]` controlla tutti gli script del
+  workspace senza avviare il server, compresi quelli degli endpoint disabilitati e delle varianti
+  non selezionate, ed esce con codice 1 se trova errori.
+
+### Cambiamenti dell'admin API
+
+- **`GET /runtime/status`: campo `warnings`.** Elenco degli avvisi del registro installato
+  (`code`, `endpointId`, `filePath`, `message`): un handler o middleware importato da un altro
+  script, o un problema di `mocks/package.json`. Non cambia `lastAttempt.status`: un tentativo
+  con soli avvisi resta `applied`. È un campo in più; chi confronta la risposta per uguaglianza
+  esatta deve tenerne conto.
+- **`POST /scripts/validate`: nuova rotta.** La validazione completa degli script, con lo stesso
+  rapporto della riga di comando. Risponde `200` anche con errori e non installa nulla.
+- **Scritture di script: campo `warnings`.** Le rotte che salvano il sorgente di un handler o di
+  un middleware riportano `warnings` quando lo script viola il contratto. Lo script viene
+  salvato; il campo manca quando non c'è nulla da segnalare. Gli errori di compilazione e di
+  risoluzione continuano a rispondere `400`.
+
+### Interfaccia
+
+- **Avvisi del runtime nella barra di stato:** un indicatore separato dagli errori elenca gli
+  avvisi, con il file e il messaggio.
+- **Avvisi al salvataggio di uno script:** l'app conferma il salvataggio e mostra le violazioni
+  del contratto con la riga.
+
 ## v1.5.0
 
 Nuova funzionalità per riusare gli helper condivisi tra mock. I workspace esistenti restano
