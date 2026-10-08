@@ -71,6 +71,14 @@ function collectInstalledDefinitions(routeGroups) {
   return installed;
 }
 
+// Il motore ha creato il package degli script in un workspace che non lo aveva: è un file
+// scritto nel repository dell'utente, quindi va detto.
+function logCreatedScriptPackage(logger, packagePath) {
+  if (packagePath != null) {
+    logger.info("Created the script package of the workspace (it enables the #shared/ alias).", { filePath: packagePath });
+  }
+}
+
 function createReloadHandler({ mocksDir, registry, proxyMiddlewareRegistry, logger, handlerStates, sseConnections, wsConnections, runtimeStatus, catalogRevision }) {
   let drainPromise = null;
   let queuedWaiters = [];
@@ -98,8 +106,9 @@ function createReloadHandler({ mocksDir, registry, proxyMiddlewareRegistry, logg
 
   const loadAndInstall = async () => {
     try {
-      const { mockRouteGroups, handlerRouteGroups, proxyMiddlewareRouteGroups, sequenceRouteGroups, sseRouteGroups, wsRouteGroups, loadErrors } =
+      const { mockRouteGroups, handlerRouteGroups, proxyMiddlewareRouteGroups, sequenceRouteGroups, sseRouteGroups, wsRouteGroups, loadErrors, loadWarnings = [], createdScriptPackagePath } =
         await loadEndpointRouteGroups(mocksDir);
+      logCreatedScriptPackage(logger, createdScriptPackagePath);
       let routeGroups = mergeLocalRouteGroups({
         mockRouteGroups,
         handlerRouteGroups,
@@ -140,6 +149,7 @@ function createReloadHandler({ mocksDir, registry, proxyMiddlewareRegistry, logg
         routeCount: routeGroups.length,
         proxyMiddlewareCount: middlewareRouteGroups.length,
         endpointLoadErrors: loadErrors.length,
+        endpointLoadWarnings: loadWarnings.length,
       });
       // Le definizioni davvero installate (versioni reinnestate comprese): le mutazioni admin le
       // confrontano con l'effetto richiesto, perché l'assenza di errori non basta a provarlo.
@@ -147,6 +157,7 @@ function createReloadHandler({ mocksDir, registry, proxyMiddlewareRegistry, logg
       return {
         applied: true,
         loadErrors,
+        loadWarnings,
         fatalError: null,
         installedConfigFilePaths: new Set(installedDefinitions.keys()),
         installedDefinitions,
@@ -288,8 +299,18 @@ async function createServerRuntime({ configOverrides = {}, logger: extLogger } =
   };
   const listener = { address: null };
   const startupStartedAt = new Date().toISOString();
-  const { mockRouteGroups, handlerRouteGroups, proxyMiddlewareRouteGroups, sequenceRouteGroups, sseRouteGroups, wsRouteGroups, loadErrors } =
+  const { mockRouteGroups, handlerRouteGroups, proxyMiddlewareRouteGroups, sequenceRouteGroups, sseRouteGroups, wsRouteGroups, loadErrors, loadWarnings = [], createdScriptPackagePath } =
     await loadEndpointRouteGroups(config.mocksDir);
+  logCreatedScriptPackage(logger, createdScriptPackagePath);
+  // Gli avvisi non impediscono nulla: violazioni del contratto degli script o problemi del
+  // package dei mock, riportati anche nello stato del runtime.
+  for (const loadWarning of loadWarnings) {
+    logger.warn("Workspace loaded with a warning.", {
+      filePath: loadWarning.filePath,
+      code: loadWarning.code,
+      warning: loadWarning.message,
+    });
+  }
   // Avvio resiliente: un file rotto non blocca il boot — l'endpoint viene saltato con un
   // warning per file, gli altri mock partono normalmente.
   for (const loadError of loadErrors) {
@@ -325,7 +346,7 @@ async function createServerRuntime({ configOverrides = {}, logger: extLogger } =
     reasons: ["startup"],
     startedAt: startupStartedAt,
     completedAt: new Date().toISOString(),
-    outcome: { applied: true, loadErrors, fatalError: null },
+    outcome: { applied: true, loadErrors, loadWarnings, fatalError: null },
     registries: [registry, proxyMiddlewareRegistry],
   });
   // La prima scansione fissa la revisione 1 del catalogo prima di servire qualunque richiesta:

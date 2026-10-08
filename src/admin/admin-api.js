@@ -54,6 +54,7 @@ const { setNoCacheHeaders } = require("../utils/cache");
 const { RuntimeConfigStore } = require("../runtime-config");
 const { ENGINE_VERSION, ObservedRevision, describeWorkspace } = require("../runtime-info");
 const { canonicalPath } = require("../utils/canonical-path");
+const { validateWorkspaceScripts } = require("../mocks/workspace-validation");
 const { trackWrites } = require("../utils/write-tracking");
 const { getEndpointResponsesDir } = require("./endpoint-files");
 const { resolveAdminFilePath } = require("./mock-ids");
@@ -299,9 +300,19 @@ function createAdminApiRouter({ config, runtimeConfig = new RuntimeConfigStore(c
       lastAttempt: null,
       lastAppliedAttemptId: null,
       errors: [],
+      warnings: [],
       fatalError: null,
     };
     sendJson(res, 200, status);
+  });
+
+  // Validazione completa degli script del workspace: tutti gli handler e middleware, anche
+  // degli endpoint disabilitati e delle varianti non selezionate, con le violazioni del
+  // contratto come errori. Risponde 200 anche con errori: il rapporto è l'esito. Non installa
+  // rotte e non tocca lo stato del runtime. È sincrona, quindi non si intreccia con una
+  // scansione in corso.
+  router.post("/scripts/validate", (_req, res) => {
+    sendJson(res, 200, validateWorkspaceScripts(config.mocksDir));
   });
 
   // Senza query: la vista storica {items}, più recente prima. Con view=page: pagine crescenti con

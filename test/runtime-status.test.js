@@ -62,6 +62,7 @@ describe("RuntimeStatusStore", () => {
       lastAttempt: expect.objectContaining({ id: 2, reasons: ["admin", "watcher"], status: "failed" }),
       lastAppliedAttemptId: 1,
       errors: [{ endpointId: encodeMockId("broken/GET.endpoint.json"), filePath: "broken/GET.endpoint.json", message: "sintassi", serving: "missing" }],
+      warnings: [],
       fatalError: { message: "scan failed" },
     });
     expect(store.revision).toBe(2);

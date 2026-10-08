@@ -8,10 +8,16 @@ const {
   validatePathFormat,
 } = require("./route-groups");
 const {
-  purgeModuleCacheUnder,
+  beginScan,
   loadScriptModule,
-  collectLocalDependencyFiles,
+  findImportedEntrypoints,
 } = require("./script-loader");
+const {
+  consumeCreatedNotice,
+  describeImportedEntrypoint,
+  describeScriptLoadFailure,
+  inspectScriptPackage,
+} = require("./script-package");
 const { normalizeSequenceResponse } = require("./sequence-config");
 const { templateReferencesRequestBody } = require("./mock-template");
 const { normalizeSseConfig } = require("./sse-config");
@@ -221,76 +227,20 @@ function validateMockResponse(response, filePath, responseDir) {
   return resolveLocalFile(responseDir, response.file, "Response file payload");
 }
 
-// Firma economica di un file per la cache degli script: mtime+dimensione bastano a rilevare
-// una modifica salvata da un editor, senza rileggere il contenuto a ogni scansione.
-async function getFileSignature(filePath) {
-  const stats = await fs.promises.stat(filePath);
-  return `${stats.mtimeMs}:${stats.size}`;
-}
-
-// Cache delle definizioni script: percorso sorgente -> { signature, dependencies, definition }.
-// Ricompilare ed eseguire il top-level di ogni handler a ogni evento del watcher è il costo
-// dominante del reload (e ripete gli eventuali side effect degli script): la cache riusa la
-// definizione finché sorgente e dipendenze locali risultano invariati su disco.
-const scriptDefinitionCache = new Map();
-
-async function isScriptCacheEntryFresh(entry) {
+// Compila uno script e ne restituisce la definizione. Nessuna cache delle definizioni: ogni
+// scansione ricompila gli script selezionati (vedi script-loader). `options.warnings`, se
+// presente, raccoglie le violazioni del contratto che non impediscono il caricamento.
+function loadScriptDefinition(filePath, label, options) {
   try {
-    if ((await getFileSignature(entry.sourcePath)) !== entry.signature) {
-      return false;
-    }
-    for (const [dependencyPath, dependencySignature] of entry.dependencies) {
-      if ((await getFileSignature(dependencyPath)) !== dependencySignature) {
-        return false;
-      }
-    }
-    return true;
-  } catch (_error) {
-    return false;
-  }
-}
-
-// Toglie dalla cache gli script (sotto rootDir) il cui sorgente non esiste più su disco, per
-// non trattenere in memoria definizioni di file eliminati.
-async function pruneScriptDefinitionCacheUnder(resolvedRoot) {
-  for (const sourcePath of [...scriptDefinitionCache.keys()]) {
-    const relativePath = path.relative(resolvedRoot, sourcePath);
-    if (relativePath.startsWith("..") || path.isAbsolute(relativePath)) {
-      continue;
-    }
-    if (!(await fileExists(sourcePath))) {
-      scriptDefinitionCache.delete(sourcePath);
-    }
-  }
-}
-
-async function loadScriptDefinition(filePath, label, options) {
-  const cachedEntry = scriptDefinitionCache.get(filePath);
-  if (cachedEntry != null && (await isScriptCacheEntryFresh(cachedEntry))) {
-    return cachedEntry.definition;
-  }
-
-  try {
-    const signature = await getFileSignature(filePath);
     const { definition, moduleRecord } = loadScriptModule(filePath, options?.mocksDir);
-
-    // Una entry di cache è affidabile solo se la compilazione è avvenuta dentro il ciclo di
-    // scansione, dopo purgeModuleCacheUnder: fuori da quel ciclo (persistCache: false, usato
-    // dalla validazione admin) i require annidati possono risolvere moduli stantii da
-    // Module._cache, e persistere quella definizione con le firme correnti la farebbe
-    // sembrare fresca ai reload successivi.
-    if (options?.persistCache !== false) {
-      const dependencies = new Map();
-      for (const dependencyFile of collectLocalDependencyFiles(moduleRecord)) {
-        dependencies.set(dependencyFile, await getFileSignature(dependencyFile));
+    if (Array.isArray(options?.warnings)) {
+      for (const entrypointPath of findImportedEntrypoints(moduleRecord)) {
+        options.warnings.push(describeImportedEntrypoint(filePath, entrypointPath));
       }
-      scriptDefinitionCache.set(filePath, { sourcePath: filePath, signature, dependencies, definition });
     }
-
     return definition;
   } catch (error) {
-    scriptDefinitionCache.delete(filePath);
-    throw new Error(`Invalid ${label} ${filePath}: ${error.message}`);
+    throw new Error(`Invalid ${label} ${filePath}: ${describeScriptLoadFailure(error, options?.mocksDir, filePath)}`);
   }
 }
 
@@ -511,8 +461,18 @@ function createRouteGroup(routeGroups, endpoint, filePath) {
 }
 
 async function loadEndpointRouteGroups(mocksDir) {
-  purgeModuleCacheUnder(mocksDir);
-  await pruneScriptDefinitionCacheUnder(path.resolve(mocksDir));
+  // Ogni scansione riparte dal disco: svuota i moduli locali del workspace e ricompila gli
+  // script selezionati. Lo svuotamento avviene una volta, all'inizio: gli handler dello stesso
+  // giro condividono gli helper già caricati.
+  const endScan = beginScan(mocksDir);
+  try {
+    return await scanEndpointRouteGroups(mocksDir);
+  } finally {
+    endScan();
+  }
+}
+
+async function scanEndpointRouteGroups(mocksDir) {
   const endpointFiles = await listEndpointFiles(mocksDir);
   const seenEndpointKeys = new Map();
   const mockRouteGroups = new Map();
@@ -525,10 +485,13 @@ async function loadEndpointRouteGroups(mocksDir) {
   // viene saltato e segnalato qui, senza far fallire il caricamento degli altri. Sta ai
   // chiamanti decidere la policy (warning all'avvio, keep-previous al reload a caldo).
   const loadErrors = [];
-  // La radice dei mock arriva fino a loadScriptModule: è la base dei require dalla radice.
-  const loadOptions = { mocksDir };
+  // Violazioni del contratto degli script e problemi del package che non impediscono il
+  // caricamento: finiscono nello stato del runtime come avvisi, senza cambiare l'esito.
+  const loadWarnings = [];
 
   for (const filePath of endpointFiles) {
+    const scriptWarnings = [];
+    const loadOptions = { mocksDir, warnings: scriptWarnings };
     try {
       const rawEndpoint = await readJsonFile(filePath);
       const endpoint = validateEndpointConfig(rawEndpoint, filePath);
@@ -640,8 +603,18 @@ async function loadEndpointRouteGroups(mocksDir) {
       });
     } catch (error) {
       loadErrors.push({ filePath, message: error.message });
+    } finally {
+      // Riferiti al file endpoint, come gli errori: è l'unità che l'interfaccia sa mostrare.
+      for (const warning of scriptWarnings) {
+        loadWarnings.push({ ...warning, filePath });
+      }
     }
   }
+
+  // Dopo le compilazioni: solo ora si sa se il package degli script è stato creato o se non
+  // era creabile (lo prepara il loader, al primo script del workspace nel processo).
+  const scriptPackage = inspectScriptPackage(mocksDir);
+  loadWarnings.push(...scriptPackage.warnings);
 
   return {
     mockRouteGroups: sortRouteGroups(Array.from(mockRouteGroups.values())),
@@ -651,6 +624,8 @@ async function loadEndpointRouteGroups(mocksDir) {
     sseRouteGroups: sortRouteGroups(Array.from(sseRouteGroups.values())),
     wsRouteGroups: sortRouteGroups(Array.from(wsRouteGroups.values())),
     loadErrors,
+    loadWarnings,
+    createdScriptPackagePath: consumeCreatedNotice(mocksDir),
   };
 }
 
