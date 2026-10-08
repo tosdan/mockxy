@@ -61,7 +61,8 @@ in [PIANO-SCRIPT-CONDIVISI.md](PIANO-SCRIPT-CONDIVISI.md).
   con soli avvisi resta `applied`. È un campo in più; chi confronta la risposta per uguaglianza
   esatta deve tenerne conto.
 - **`POST /scripts/validate`: nuova rotta.** La validazione completa degli script, con lo stesso
-  rapporto della riga di comando. Risponde `200` anche con errori e non installa nulla.
+  rapporto della riga di comando. Risponde `200` anche con errori e non installa nulla. Come le
+  altre POST senza parametri vuole `Content-Type: application/json` e un body `{}`.
 - **Scritture di script: campo `warnings`.** Le rotte che salvano il sorgente di un handler o di
   un middleware riportano `warnings` quando lo script viola il contratto. Lo script viene
   salvato; il campo manca quando non c'è nulla da segnalare. Gli errori di compilazione e di

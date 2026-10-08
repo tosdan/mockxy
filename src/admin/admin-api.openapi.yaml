@@ -2211,12 +2211,22 @@ paths:
         - Loading a script runs its top level, as the runtime does. Nothing is installed: routes,
           `state`, `sharedState`, sequences and open streams are left as they are.
         - The same check is available without a server: `node index.js validate [folder]`.
+        - It changes nothing, but it runs code, so it follows the wire contract of the other
+          parameterless actions: `Content-Type: application/json` and a body that is exactly
+          `{}`. Any other body answers `400`, any other media type `415`.
+      requestBody:
+        $ref: "#/components/requestBodies/EmptyJsonObject"
       responses:
         "200":
           description: Validation report
           content:
             application/json:
               schema: { $ref: "#/components/schemas/ScriptValidationReport" }
+        "400":
+          description: The body is not an empty JSON object.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
 
   /openapi.yaml:
     get:

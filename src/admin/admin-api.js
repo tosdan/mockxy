@@ -311,7 +311,11 @@ function createAdminApiRouter({ config, runtimeConfig = new RuntimeConfigStore(c
   // contratto come errori. Risponde 200 anche con errori: il rapporto è l'esito. Non installa
   // rotte e non tocca lo stato del runtime. È sincrona, quindi non si intreccia con una
   // scansione in corso.
-  router.post("/scripts/validate", (_req, res) => {
+  //
+  // Non scrive nulla, ma esegue il livello superiore di ogni script: come le altre POST senza
+  // parametri accetta solo un corpo JSON `{}`, così una pagina web qualsiasi non può farla
+  // partire con una richiesta "semplice" cross-origin (form o text/plain, senza preflight).
+  router.post("/scripts/validate", requireEmptyJsonObject, (_req, res) => {
     sendJson(res, 200, validateWorkspaceScripts(config.mocksDir));
   });
 

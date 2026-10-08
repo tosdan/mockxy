@@ -28,8 +28,8 @@ scrivere.
   cross-origin con `content-type: application/json` scatena il preflight del browser e muore
   lì. L'unica eccezione strutturale è l'import OpenAPI, che accetta YAML ma **rifiuta
   `text/plain` con `415`** proprio per non aprire la falla delle richieste "semplici".
-- Le POST senza parametri (`sequence/reset`, `monitoring/dump/flush` e i due reset dello stato
-  condiviso) richiedono comunque `Content-Type: application/json` e un body esattamente `{}`.
+- Le POST senza parametri (`sequence/reset`, `monitoring/dump/flush`, `scripts/validate` e i due
+  reset dello stato condiviso) richiedono comunque `Content-Type: application/json` e un body esattamente `{}`.
   Body assente o vuoto, `null`, array, scalari e oggetti non vuoti rispondono `400`; un media
   type diverso risponde `415`. La forma unica rende il contratto esplicito e uniforme.
 
@@ -290,7 +290,7 @@ la forma della `201`, conteggi compresi.
 | `GET /config` | configurazione di avvio, effettiva e override: `{ runtimeId, startup, effective, overrides, persisted }`, con le sole nove chiavi modificabili a runtime (`backendUrl` è `null` senza backend). Nessun'altra variabile d'ambiente; `persisted` è sempre `false` e `runtimeId` cambia a ogni avvio |
 | `PATCH /config` | override effimeri delle nove chiavi — body `{ set?, unset? }`; [regole](#configurazione-effimera) |
 | `GET /runtime/status` | esito dell'ultimo caricamento del workspace, `200` anche se degradato o fallito: `lastAttempt` (`id`, istanti, `reasons` fra `startup`, `admin`, `watcher`, `status` `applied`, `degraded` o `failed`), `lastAppliedAttemptId`, `errors` per file (`endpointId`, `filePath`, `message`, `serving`: `retained` se resta servita la versione precedente, `missing` se nulla la serve), `warnings` (`code`, `endpointId`, `filePath`, `message`) e `fatalError`. Gli avvisi sono problemi che non impediscono il caricamento — un handler o middleware importato da un altro script, o un problema di `mocks/package.json` come una modifica che richiede il riavvio — e non cambiano `status`: un tentativo con soli avvisi resta `applied`. Solo l'ultimo tentativo, senza storico |
-| `POST /scripts/validate` | validazione completa degli [script del workspace](HANDLER.md#il-contratto-degli-script): carica tutti gli handler e middleware, anche degli endpoint disabilitati e delle varianti non selezionate, e risponde `200` con `{ ok, mocksDir, scripts, errors, warnings }`. Qui le violazioni del contratto sono errori (`code`, `filePath`, `line` e `column` quando indicano un punto del sorgente, `message`). Non installa rotte e non tocca `state`, `sharedState`, sequenze o stream. Senza server: `node index.js validate [cartella]` |
+| `POST /scripts/validate` | validazione completa degli [script del workspace](HANDLER.md#il-contratto-degli-script): carica tutti gli handler e middleware, anche degli endpoint disabilitati e delle varianti non selezionate, e risponde `200` con `{ ok, mocksDir, scripts, errors, warnings }`; body `{}`. Qui le violazioni del contratto sono errori (`code`, `filePath`, `line` e `column` quando indicano un punto del sorgente, `message`). Non installa rotte e non tocca `state`, `sharedState`, sequenze o stream. Senza server: `node index.js validate [cartella]` |
 | `GET /openapi.yaml` | il [contratto](#la-descrizione-leggibile-dalle-macchine) della versione in esecuzione, come `application/yaml` |
 
 ### Configurazione effimera
