@@ -85,7 +85,8 @@ script (handler, middleware e helper) seguono poche regole:
 | Aspetto | Regola |
 |---|---|
 | Punti di ingresso | I file `*.handler.js` e `*.middleware.js` non vengono importati da altri script. La logica riusabile si estrae in un helper. |
-| Dipendenze locali | `require` in cima al modulo, con un percorso letterale e completo di estensione (`./dati.js`, `#shared/flusso.js`). Niente `require` dentro una funzione, dopo un `await` o con un percorso calcolato. |
+| Dipendenze locali | `require` in cima al modulo, con un percorso letterale e completo di estensione (`./dati.js`, `#shared/flusso.js`). Niente `require` dentro una funzione, in un campo di istanza di una classe, dopo un `await` o con un percorso calcolato. |
+| Formato | Script e helper sono CommonJS. Un modulo ES locale (`.mjs`) è fuori dal contratto: Node non lo ricarica mai, le sue modifiche richiedono un riavvio. |
 | Stato | `state` per l'endpoint, `sharedState` fra endpoint. Le variabili di modulo contengono funzioni, costanti e configurazioni che non cambiano: contatori e cache nei moduli non sono lo stato del mock e non sopravvivono alla ricarica. |
 | Caricamento | Caricare un modulo non avvia timer, listener o server e non scrive nulla: viene rieseguito a ogni ricarica. |
 | Confine | Il codice locale sta sotto `mocks/`. Moduli Node e pacchetti npm si usano normalmente, ma non vengono ricaricati. |

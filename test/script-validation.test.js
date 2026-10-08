@@ -80,17 +80,52 @@ module.exports = { resolveResponse: () => ({ jsonBody: [testo, modello] }) };
     expect(findContractViolations(source)).toEqual([]);
   });
 
-  test("CommonJS come lo accetta il motore: return a livello di modulo, sintassi recente", () => {
-    const source = `const dati = require("./dati.js");
+  test("CommonJS come lo compila Node: return, new.target e arguments a livello di modulo, sintassi recente", () => {
+    const source = `#!/usr/bin/env node
+const dati = require("./dati.js");
+const chiamante = new.target;
+const quanti = arguments.length;
 if (!dati) { return; }
 class Stato { #privato = dati?.valore ?? 1n; static { Stato.pronto = true; } }
-module.exports = { resolveResponse: () => ({ jsonBody: new Stato() }) };
+module.exports = { resolveResponse: () => ({ jsonBody: [new Stato(), chiamante, quanti] }) };
 `;
     expect(findContractViolations(source)).toEqual([]);
   });
 
-  test("un sorgente con un errore di sintassi non produce violazioni: resta l'errore di compilazione", () => {
-    expect(findContractViolations("module.exports = { resolveResponse: ( => 1 };")).toEqual([]);
+  test("sintassi valida a livello di modulo non spegne l'analisi del resto del file", () => {
+    const source = `const chiamante = new.target;
+module.exports = { resolveResponse: () => require("#shared/dati.js") };
+`;
+    expect(findContractViolations(source)).toEqual([expect.objectContaining({ code: "SCRIPT_LATE_REQUIRE", line: 2 })]);
+  });
+
+  test("i campi di istanza sono codice differito; i campi e i blocchi static no", () => {
+    const source = `const iniziale = require("#shared/dati.js");
+class Lettore {
+  valore = require("#shared/dati.js");
+  static condiviso = require("./statico.js");
+  static { require("./blocco.js"); }
+  [require("./chiave.js")] = 1;
+}
+module.exports = { resolveResponse: () => [iniziale, new Lettore().valore] };
+`;
+    expect(findContractViolations(source).map(({ code, line }) => [code, line])).toEqual([["SCRIPT_LATE_REQUIRE", 3]]);
+  });
+
+  test("la colonna resta quella del sorgente anche sulla prima riga", () => {
+    expect(findContractViolations("const f = () => require(\"./a.js\");\n")).toEqual([
+      expect.objectContaining({ code: "SCRIPT_LATE_REQUIRE", line: 1, column: 17 }),
+    ]);
+  });
+
+  test("un modulo ES locale è fuori contratto, anche importato in cima al file", () => {
+    expect(findContractViolations("const h = require(\"#shared/valore.mjs\");\n").map(({ code }) => code)).toEqual(["SCRIPT_ESM_DEPENDENCY"]);
+  });
+
+  test("un sorgente che il parser rifiuta non passa per conforme: l'analisi mancata viene dichiarata", () => {
+    expect(findContractViolations("module.exports = { resolveResponse: ( => 1 };")).toEqual([
+      { code: "SCRIPT_CONTRACT_NOT_ANALYZED", message: expect.stringContaining("could not be checked") },
+    ]);
   });
 });
 
@@ -162,6 +197,43 @@ module.exports = { resolveResponse: () => ({ jsonBody: { value: dati.value } }) 
       ["senza-funzione/GET.responses/002.handler.js", "SCRIPT_INVALID_EXPORT", undefined],
       ["tardivo/GET.responses/002.handler.js", "SCRIPT_LATE_REQUIRE", 1],
     ]);
+  });
+
+  test("require in un campo di istanza: errore, e l'helper cambierebbe a metà richiesta", async () => {
+    await writeEndpointWithInactiveHandler("campo", `const iniziale = require("#shared/dati.js");
+class Lettore { valore = require("#shared/dati.js"); }
+module.exports = { resolveResponse: () => ({ jsonBody: [iniziale.value, new Lettore().valore.value] }) };
+`);
+
+    const report = validateWorkspaceScripts(mocksDir);
+
+    expect(report.errors.map(({ code, filePath, line }) => [filePath, code, line])).toEqual([
+      ["campo/GET.responses/002.handler.js", "SCRIPT_LATE_REQUIRE", 2],
+    ]);
+  });
+
+  test("helper ES locale: segnalato come fuori contratto, non certificato", async () => {
+    write(path.join(mocksDir, "_shared", "valore.mjs"), "export const value = 1;\n");
+    await writeEndpointWithInactiveHandler("esm", "const h = require(\"#shared/valore.mjs\");\nmodule.exports = { resolveResponse: () => ({ jsonBody: h.value }) };\n");
+
+    const report = validateWorkspaceScripts(mocksDir);
+
+    expect(report.ok).toBe(false);
+    expect(report.errors.map(({ code, filePath, line }) => [filePath, code, line])).toEqual([
+      ["esm/GET.responses/002.handler.js", "SCRIPT_ESM_DEPENDENCY", 1],
+    ]);
+  });
+
+  test("uno script che si carica ma che il parser non analizza viene dichiarato non verificato", async () => {
+    // Un helper con sintassi ES in un package senza "type": Node lo carica come modulo ES per
+    // rilevamento della sintassi, il parser CommonJS lo rifiuta.
+    write(path.join(mocksDir, "package.json"), JSON.stringify({ imports: { "#shared/*": "./_shared/*" } }));
+    write(path.join(mocksDir, "_shared", "ambiguo.js"), "export const value = 1;\n");
+    await writeEndpointWithInactiveHandler("ambiguo", "const h = require(\"#shared/ambiguo.js\");\nmodule.exports = { resolveResponse: () => ({ jsonBody: h.value }) };\n");
+
+    const report = validateWorkspaceScripts(mocksDir);
+
+    expect(report.errors.map(({ code, filePath }) => [filePath, code])).toEqual([["_shared/ambiguo.js", "SCRIPT_CONTRACT_NOT_ANALYZED"]]);
   });
 
   test("package annidato, helper fuori dal workspace e alias fuori contratto", async () => {
@@ -288,6 +360,15 @@ module.exports = { resolveResponse: () => ({ jsonBody: { value: dati.value } }) 
       expect((await request(app).get("/a")).body).toEqual({ value: "condiviso" });
       // Lo stesso script è un errore per la validazione completa.
       expect((await request(app).post("/_admin/api/scripts/validate")).body.errors.map((error) => error.code)).toEqual(["SCRIPT_LATE_REQUIRE"]);
+
+      // Un campo di istanza è differito quanto il corpo di una funzione.
+      const field = await request(app).post(`/_admin/api/mocks/${id}/responses`).send({
+        type: "handler",
+        title: "Campo di istanza",
+        source: "class Lettore { valore = require(\"#shared/dati.js\"); }\nmodule.exports = { resolveResponse: () => ({ jsonBody: new Lettore().valore }) };\n",
+      });
+      expect(field.status).toBe(201);
+      expect(field.body.warnings.map((warning) => [warning.code, warning.line])).toEqual([["SCRIPT_LATE_REQUIRE", 1]]);
 
       const conforming = await request(app).post(`/_admin/api/mocks/${id}/responses`).send({ type: "handler", title: "Conforme", source: OK_HANDLER });
       expect(conforming.status).toBe(201);

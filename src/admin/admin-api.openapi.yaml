@@ -2198,11 +2198,14 @@ paths:
 
         - It answers `200` whether or not it finds errors: `ok` is the outcome.
         - `errors` are load failures (`SCRIPT_LOAD_FAILED`, `SCRIPT_INVALID_EXPORT`) and contract
-          violations: a local `require` inside a function (`SCRIPT_LATE_REQUIRE`), with a computed
-          path (`SCRIPT_DYNAMIC_REQUIRE`) or without an extension
-          (`SCRIPT_REQUIRE_WITHOUT_EXTENSION`), a handler or middleware imported by another script
+          violations: a local `require` inside a function or in an instance field of a class
+          (`SCRIPT_LATE_REQUIRE`), with a computed path (`SCRIPT_DYNAMIC_REQUIRE`) or without an
+          extension (`SCRIPT_REQUIRE_WITHOUT_EXTENSION`), a local ES module
+          (`SCRIPT_ESM_DEPENDENCY`), a handler or middleware imported by another script
           (`SCRIPT_ENTRYPOINT_IMPORTED`), a helper outside the mocks folder, a nested
           `package.json`, a script package that does not define the standard `#shared/` alias.
+          A file that loads but that the contract check cannot analyze is reported as
+          `SCRIPT_CONTRACT_NOT_ANALYZED`: it is never certified by omission.
           The runtime tolerates the contract violations and reports only some of them as
           warnings; here they are errors.
         - Loading a script runs its top level, as the runtime does. Nothing is installed: routes,

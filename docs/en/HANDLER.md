@@ -85,7 +85,8 @@ Mockxy recompiles scripts at every reload. For this to be always safe and predic
 | Aspect | Rule |
 |---|---|
 | Entry points | `*.handler.js` and `*.middleware.js` files are not imported by other scripts. Reusable logic is extracted into a helper. |
-| Local dependencies | `require` at the top of the module, with a literal path including the extension (`./dati.js`, `#shared/flusso.js`). No `require` inside a function, after an `await` or with a computed path. |
+| Local dependencies | `require` at the top of the module, with a literal path including the extension (`./dati.js`, `#shared/flusso.js`). No `require` inside a function, in an instance field of a class, after an `await` or with a computed path. |
+| Format | Scripts and helpers are CommonJS. A local ES module (`.mjs`) is outside the contract: Node never reloads it, so its changes need a restart. |
 | State | `state` for the endpoint, `sharedState` across endpoints. Module variables hold functions, constants and configuration that does not change: counters and caches in modules are not the mock's state and do not survive a reload. |
 | Loading | Loading a module starts no timers, listeners or servers and writes nothing: it runs again at every reload. |
 | Boundary | Local code lives under `mocks/`. Node modules and npm packages are used normally, but are not reloaded. |
