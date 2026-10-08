@@ -113,9 +113,10 @@ The script **cannot** declare `method`, `path` or `disabled`: those properties b
 endpoint file, and their presence in the script is a validation error — there is only one
 source of truth about routing.
 
-Scripts can require other local files (relative `require`s): the engine tracks these
-dependencies and recompiles the script when the source **or one of the dependencies** changes
-on disk; as long as nothing changes, the compiled definition is reused across reloads.
+Scripts can require other local files, with a relative `require` or with the `#shared/` alias of
+the [shared helpers](HANDLER.md#helpers-shared-across-mocks). At every reload the engine
+recompiles the selected scripts together with the files they import: a change to the source or
+to a dependency applies from the next reload.
 
 ## `middleware` response
 

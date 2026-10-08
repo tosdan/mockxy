@@ -8,7 +8,7 @@ trigger a specific case in the frontend, enriching a payload that isn't complete
 
 A middleware is attached to the endpoint through a [response file](RESPONSE.md) of type
 `middleware`, which points to a `*.middleware.js` script. Everything that holds for handler
-scripts holds here too: CommonJS module, local `require` calls with recompilation on change, no
+scripts holds here too: CommonJS module, local `require` calls and [shared helpers](HANDLER.md#helpers-shared-across-mocks), the same [script contract](HANDLER.md#the-script-contract), no
 `method`/`path`/`disabled` in the script.
 
 ## The shape of the script

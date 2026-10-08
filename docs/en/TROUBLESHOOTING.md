@@ -65,6 +65,17 @@ file). Below, the recurring symptoms by area.
 - **Added items disappeared.** Shared state is volatile: restart, closing or actually replacing
   the engine starts from the seed. Different browsers and tests on one instance also share it,
   so isolate suites with an explicit reset.
+- **`Cannot find module '#shared/…'`** — the import of a [shared helper](HANDLER.md#helpers-shared-across-mocks)
+  does not resolve. Mockxy's message says which case it is: the file does not exist, the
+  extension is missing (`#shared/flusso.js`, not `#shared/flusso`), a `package.json` in a
+  subfolder of the mocks, or `mocks/package.json` missing or without the alias. If the file was
+  added or changed while Mockxy was running, a restart is needed: in the desktop app restart the
+  app, closing and reopening the workspace is not enough.
+- **`require("_shared/…")` no longer works.** It was the root import of 1.5.0, removed in 1.6.0:
+  write `require("#shared/….js")`. Relative `require` calls keep working.
+- **A changed helper does not update inside a request.** The script imports it inside a function
+  instead of at the top of the module: `node index.js validate` reports it
+  ([the script contract](HANDLER.md#the-script-contract)).
 - **The middleware doesn't transform.** Responses over 10 MB and streams (`text/event-stream`)
   pass through intact with `x-mock-source: backend` and a warning in the log; a middleware
   that *fails* is fail-open: it lets the original response through ([middleware](MIDDLEWARE.md)).

@@ -30,36 +30,84 @@ module.exports = {
 ```
 
 The script is a CommonJS module exporting an object with the **`resolveResponse`** function
-(synchronous or `async`). It can require other local files with relative `require` calls: the
-engine tracks their dependencies and recompiles when something changes (see [the response
-file](RESPONSE.md)). It cannot declare `method`, `path` or `disabled`: routing belongs to the
-endpoint file. The UI offers a starter template already in this shape.
+(synchronous or `async`). It can require other local files: at every reload the engine recompiles
+the selected scripts and the files they import (see [the response file](RESPONSE.md)). It cannot
+declare `method`, `path` or `disabled`: routing belongs to the endpoint file. The UI offers a
+starter template already in this shape.
 
 ### Helpers shared across mocks
 
-Code used by several handlers lives in a folder at the root of the mocks directory, by
-convention `_shared`, and is imported **from the root**:
+Code used by several scripts lives in **`mocks/_shared/`**, organised in subfolders as you like,
+and is imported with the **`#shared/`** alias:
 
 ```js
-module.exports = { resolveResponse: require("_shared/ravvedimento-flusso").annulla };
+const { annulla } = require("#shared/ravvedimento/flusso.js");
+
+module.exports = { resolveResponse: annulla };
 ```
 
-The string is the same at any depth, so copying an endpoint to another path (or moving its
-folder) does not break the reference. A relative `require` such as
-`"../../../_shared/ravvedimento-flusso"` depends on the folder depth instead: it keeps working,
-but breaks as soon as the mock changes level, and in the worst case resolves another file with
-the same name without any error.
+The import is the same at any depth, so copying an endpoint to another path does not break it. It
+works in handlers, in middleware and inside the helpers themselves. A relative `require` such as
+`"../../../_shared/ravvedimento/flusso.js"` stays valid, but depends on the folder depth and
+breaks when the endpoint changes level.
 
-Rules:
+The alias is Node's native one, defined by the **`mocks/package.json`** file:
 
-- Importing from the root works for **handler and middleware** scripts. Helpers import each
-  other with relative paths (`require("./ravvedimento-dati")`): these stay valid as long as the
-  helpers move together.
-- Packages in `node_modules` take precedence over the mocks root. `_shared` cannot collide with a
-  published package (npm does not allow names starting with `_`).
-- Moving or renaming a helper requires updating the `require` calls that use it: with root
-  imports it is the same string in every file, so a single replace is enough.
-- Changes to helpers are tracked like any other dependency and reload the handlers using them.
+```json
+{
+  "private": true,
+  "type": "commonjs",
+  "imports": {
+    "#shared/*": "./_shared/*"
+  }
+}
+```
+
+Mockxy creates this file at the first script of the workspace, if it is missing. An existing file
+is used as it is and never rewritten: it must contain that `imports` entry, have no other keys
+starting with `#shared`, and have `type` absent or `"commonjs"`. Commit it together with the mocks.
+
+- **The extension is mandatory:** `#shared/flusso.js`, not `#shared/flusso`. Aliases look for
+  neither an extension nor an `index.js`.
+- **Node must read the file before the first script.** Node reads it once per process: adding it,
+  or changing its `imports` or `type`, while Mockxy is running has no effect until a restart. In
+  the desktop app, restart the app; closing and reopening the workspace is not enough.
+- **A single `package.json` under `mocks/`.** Another `package.json` in a subfolder changes the
+  scope of the alias for the scripts it contains.
+- **Read-only workspace:** if the file is missing and cannot be created, scripts still load and
+  only `#shared/` imports fail, with a message that explains it.
+
+### The script contract
+
+Mockxy recompiles scripts at every reload. For this to be always safe and predictable, scripts
+(handlers, middleware and helpers) follow a few rules:
+
+| Aspect | Rule |
+|---|---|
+| Entry points | `*.handler.js` and `*.middleware.js` files are not imported by other scripts. Reusable logic is extracted into a helper. |
+| Local dependencies | `require` at the top of the module, with a literal path including the extension (`./dati.js`, `#shared/flusso.js`). No `require` inside a function, after an `await` or with a computed path. |
+| State | `state` for the endpoint, `sharedState` across endpoints. Module variables hold functions, constants and configuration that does not change: counters and caches in modules are not the mock's state and do not survive a reload. |
+| Loading | Loading a module starts no timers, listeners or servers and writes nothing: it runs again at every reload. |
+| Boundary | Local code lives under `mocks/`. Node modules and npm packages are used normally, but are not reloaded. |
+
+With these rules a request already in flight finishes with the code it started with, and the
+requests after the reload use the new one. A `require` executed during a request, instead, would
+return the new code in the middle of the request after a reload.
+
+Scripts that do not follow them are not blocked: they still load. Violations show up in three
+places:
+
+- **when saving from the app or the admin API**, as warnings: the script is saved;
+- **in the app's status bar** and in `GET /runtime/status`, for those the engine sees while
+  loading (a handler imported by another script, a problem with `mocks/package.json`);
+- **in the full validation**, where they are errors: it checks every script, including those of
+  disabled endpoints and unselected variants, which a reload does not load.
+
+```bash
+node index.js validate path/to/workspace   # no server needed; exit code 1 when there are errors
+```
+
+The same validation is the `POST /_admin/api/scripts/validate` route ([the admin API](ADMIN-API.md)).
 
 ## The context it receives
 

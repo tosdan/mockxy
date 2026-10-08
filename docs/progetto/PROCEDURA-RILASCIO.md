@@ -36,6 +36,14 @@ indipendentemente dal numero di versione. Il piano S0–S8 non prevede incompati
 le sue modifiche API possono essere rilasciate come minor; questa regola non assegna già il numero
 né impone di pubblicare ogni passo separatamente.
 
+**Eccezione registrata: 1.6.0.** La 1.6.0 ritira l'import dalla radice dei mock introdotto nella
+1.5.0 (`require("_shared/…")`), sostituito dall'alias `#shared/`. È un'incompatibilità per i
+workspace che l'avevano adottato, e secondo la regola sopra chiederebbe una major. Il
+proprietario ha scelto la minor perché la funzione è esistita solo nella 1.5.0, era difettosa
+proprio nei casi d'uso reali, i workspace noti non l'avevano adottata e i percorsi relativi
+restano supportati. La regola generale non cambia: l'eccezione vale per questa migrazione, è
+dichiarata nelle note di rilascio con le istruzioni per gli import, e non va presa a precedente.
+
 La versione deve essere stabile e composta soltanto da tre numeri. La pipeline non accetta
 prerelease come `1.4.0-beta.1`.
 

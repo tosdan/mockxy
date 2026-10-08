@@ -30,37 +30,84 @@ module.exports = {
 ```
 
 Lo script è un modulo CommonJS che esporta un oggetto con la funzione **`resolveResponse`**
-(sincrona o `async`). Può richiedere altri file locali con `require` relativi: il motore ne
-traccia le dipendenze e ricompila quando qualcosa cambia (vedi [il file di
-risposta](RESPONSE.md)). Non può dichiarare `method`, `path` o `disabled`: il routing appartiene
-al file endpoint. L'interfaccia propone un template di partenza già in questa forma.
+(sincrona o `async`). Può richiedere altri file locali: a ogni ricarica il motore ricompila gli
+script selezionati e i file che importano (vedi [il file di risposta](RESPONSE.md)). Non può
+dichiarare `method`, `path` o `disabled`: il routing appartiene al file endpoint. L'interfaccia
+propone un template di partenza già in questa forma.
 
 ### Helper condivisi tra più mock
 
-Il codice usato da più handler si tiene in una cartella della radice dei mock, per convenzione
-`_shared`, e si importa **dalla radice**:
+Il codice usato da più script sta in **`mocks/_shared/`**, organizzato in sottocartelle a
+piacere, e si importa con l'alias **`#shared/`**:
 
 ```js
-module.exports = { resolveResponse: require("_shared/ravvedimento-flusso").annulla };
+const { annulla } = require("#shared/ravvedimento/flusso.js");
+
+module.exports = { resolveResponse: annulla };
 ```
 
-La stringa è la stessa a qualsiasi profondità, quindi copiare un endpoint verso un altro path (o
-spostarne la cartella) non rompe il riferimento. Un `require` relativo come
-`"../../../_shared/ravvedimento-flusso"` dipende invece dalla profondità della cartella: continua
-a funzionare, ma si rompe appena il mock cambia livello, e nel caso peggiore risolve un altro file
-con lo stesso nome senza dare errore.
+L'import è lo stesso a qualsiasi profondità, quindi copiare un endpoint verso un altro path non
+lo rompe. Funziona negli handler, nei middleware e dentro gli helper stessi. Un `require` relativo
+come `"../../../_shared/ravvedimento/flusso.js"` resta valido, ma dipende dalla profondità della
+cartella e si rompe quando l'endpoint cambia livello.
 
-Regole:
+L'alias è quello nativo di Node, definito dal file **`mocks/package.json`**:
 
-- L'import dalla radice vale per gli script **handler e middleware**. Gli helper si importano tra
-  loro con path relativi (`require("./ravvedimento-dati")`): restano validi finché si spostano
-  insieme.
-- I pacchetti in `node_modules` hanno la precedenza sulla radice dei mock. `_shared` non può
-  collidere con un pacchetto pubblicato (npm non ammette nomi che iniziano con `_`).
-- Spostare o rinominare un helper richiede di aggiornare i `require` che lo usano: con l'import
-  dalla radice è la stessa stringa in tutti i file, quindi basta una sostituzione.
-- Le modifiche agli helper sono tracciate come le altre dipendenze e ricaricano gli handler che li
-  usano.
+```json
+{
+  "private": true,
+  "type": "commonjs",
+  "imports": {
+    "#shared/*": "./_shared/*"
+  }
+}
+```
+
+Mockxy crea questo file al primo script del workspace, se manca. Un file già presente viene
+usato così com'è e mai riscritto: deve contenere quella voce di `imports`, non avere altre chiavi
+che iniziano con `#shared`, e avere `type` assente o `"commonjs"`. Va versionato insieme ai mock.
+
+- **L'estensione è obbligatoria:** `#shared/flusso.js`, non `#shared/flusso`. Gli alias non
+  cercano né l'estensione né un `index.js`.
+- **Il file va letto da Node prima del primo script.** Node lo legge una volta per processo:
+  aggiungerlo o cambiarne `imports` o `type` mentre Mockxy è in esecuzione non ha effetto fino al
+  riavvio. Nell'app desktop va riavviata l'app; chiudere e riaprire il workspace non basta.
+- **Un solo `package.json` sotto `mocks/`.** Un altro `package.json` in una sottocartella cambia
+  l'ambito dell'alias per gli script che contiene.
+- **Workspace in sola lettura:** se il file manca e non può essere creato, gli script si caricano
+  comunque e solo gli import `#shared/` falliscono, con un messaggio che lo spiega.
+
+### Il contratto degli script
+
+Mockxy ricompila gli script a ogni ricarica. Perché questo sia sempre sicuro e prevedibile, gli
+script (handler, middleware e helper) seguono poche regole:
+
+| Aspetto | Regola |
+|---|---|
+| Punti di ingresso | I file `*.handler.js` e `*.middleware.js` non vengono importati da altri script. La logica riusabile si estrae in un helper. |
+| Dipendenze locali | `require` in cima al modulo, con un percorso letterale e completo di estensione (`./dati.js`, `#shared/flusso.js`). Niente `require` dentro una funzione, dopo un `await` o con un percorso calcolato. |
+| Stato | `state` per l'endpoint, `sharedState` fra endpoint. Le variabili di modulo contengono funzioni, costanti e configurazioni che non cambiano: contatori e cache nei moduli non sono lo stato del mock e non sopravvivono alla ricarica. |
+| Caricamento | Caricare un modulo non avvia timer, listener o server e non scrive nulla: viene rieseguito a ogni ricarica. |
+| Confine | Il codice locale sta sotto `mocks/`. Moduli Node e pacchetti npm si usano normalmente, ma non vengono ricaricati. |
+
+Con queste regole una richiesta già iniziata termina con il codice con cui è partita, e le
+richieste successive alla ricarica usano quello nuovo. Un `require` eseguito durante una
+richiesta, invece, dopo una ricarica restituirebbe il codice nuovo a metà richiesta.
+
+Chi non le rispetta non viene bloccato: lo script si carica comunque. Le violazioni si vedono in
+tre punti:
+
+- **al salvataggio dall'app o dall'admin API**, come avvisi: lo script viene salvato;
+- **nella barra di stato dell'app** e in `GET /runtime/status`, per quelle che il motore vede al
+  caricamento (un handler importato da un altro script, un problema di `mocks/package.json`);
+- **nella validazione completa**, dove sono errori: controlla tutti gli script, anche quelli degli
+  endpoint disabilitati e delle varianti non selezionate, che la ricarica non carica.
+
+```bash
+node index.js validate percorso/del/workspace   # senza server; codice di uscita 1 se ci sono errori
+```
+
+La stessa validazione è la rotta `POST /_admin/api/scripts/validate` ([l'admin API](ADMIN-API.md)).
 
 ## Il contesto ricevuto
 
