@@ -28,7 +28,7 @@ never discovered by trying a write.
   request with `content-type: application/json` triggers the browser's preflight and dies
   there. The only structural exception is the OpenAPI import, which accepts YAML but
   **rejects `text/plain` with `415`** precisely to avoid opening the "simple" request hole.
-- Parameterless POST operations (`sequence/reset`, `monitoring/dump/flush`, and both shared
+- Parameterless POST operations (`sequence/reset`, `monitoring/dump/flush`, `scripts/validate`, and both shared
   state resets) still require `Content-Type: application/json` and a body exactly equal to
   `{}`. A missing or empty body, `null`, arrays, scalars and non-empty objects return `400`; a
   different media type returns `415`. One form keeps the contract explicit and uniform.
@@ -285,7 +285,7 @@ batch that fails after writing (`BATCH_RUNTIME_FAILED`, `ROLLBACK_FAILED`) repor
 | `GET /config` | startup, effective and overridden configuration: `{ runtimeId, startup, effective, overrides, persisted }`, with only the nine keys that can change at runtime (`backendUrl` is `null` without a backend). No other environment variable; `persisted` is always `false` and `runtimeId` changes at every start |
 | `PATCH /config` | ephemeral overrides of the nine keys — body `{ set?, unset? }`; [rules](#ephemeral-configuration) |
 | `GET /runtime/status` | outcome of the last load of the workspace, `200` even when degraded or failed: `lastAttempt` (`id`, timestamps, `reasons` among `startup`, `admin`, `watcher`, `status` `applied`, `degraded` or `failed`), `lastAppliedAttemptId`, per-file `errors` (`endpointId`, `filePath`, `message`, `serving`: `retained` when the previous version is still served, `missing` when nothing serves it), `warnings` (`code`, `endpointId`, `filePath`, `message`) and `fatalError`. Warnings are problems that do not prevent loading — a handler or middleware imported by another script, or a problem with `mocks/package.json` such as a change that needs a restart — and do not change `status`: an attempt with warnings only stays `applied`. Only the last attempt, no history |
-| `POST /scripts/validate` | full validation of the [workspace scripts](HANDLER.md#the-script-contract): loads every handler and middleware, including those of disabled endpoints and unselected variants, and answers `200` with `{ ok, mocksDir, scripts, errors, warnings }`. Here contract violations are errors (`code`, `filePath`, `line` and `column` when they point at a place in the source, `message`). It installs no routes and leaves `state`, `sharedState`, sequences and streams alone. Without a server: `node index.js validate [folder]` |
+| `POST /scripts/validate` | full validation of the [workspace scripts](HANDLER.md#the-script-contract): loads every handler and middleware, including those of disabled endpoints and unselected variants, and answers `200` with `{ ok, mocksDir, scripts, errors, warnings }`; body `{}`. Here contract violations are errors (`code`, `filePath`, `line` and `column` when they point at a place in the source, `message`). It installs no routes and leaves `state`, `sharedState`, sequences and streams alone. Without a server: `node index.js validate [folder]` |
 | `GET /openapi.yaml` | the [contract](#the-machine-readable-description) of the running version, as `application/yaml` |
 
 ### Ephemeral configuration

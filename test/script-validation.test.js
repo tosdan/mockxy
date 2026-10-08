@@ -323,7 +323,7 @@ module.exports = { resolveResponse: () => ({ jsonBody: [iniziale.value, new Lett
       await start();
       expect((await request(app).get("/conta")).body).toEqual({ n: 1 });
 
-      const response = await request(app).post("/_admin/api/scripts/validate");
+      const response = await request(app).post("/_admin/api/scripts/validate").send({});
 
       expect(response.status).toBe(200);
       expect(response.body).toEqual(validateWorkspaceScripts(mocksDir));
@@ -333,10 +333,33 @@ module.exports = { resolveResponse: () => ({ jsonBody: [iniziale.value, new Lett
       expect((await request(app).get("/conta")).body).toEqual({ n: 2 });
     });
 
+    test("come le altre POST senza parametri accetta solo un corpo JSON {}, e senza non esegue nulla", async () => {
+      // Lo script conta le proprie esecuzioni: è una variante inattiva, quindi la carica solo la
+      // validazione. Una richiesta "semplice" cross-origin (form, text/plain) non deve farla partire.
+      const markerPath = path.join(workspaceDir, "esecuzioni.txt");
+      await writeEndpointWithInactiveHandler("conta", `require("node:fs").appendFileSync(${JSON.stringify(markerPath)}, "x");
+module.exports = { resolveResponse: () => ({ jsonBody: {} }) };
+`);
+      await start();
+      const executions = () => (fs.existsSync(markerPath) ? fs.readFileSync(markerPath, "utf8").length : 0);
+      const validate = () => request(app).post("/_admin/api/scripts/validate");
+
+      const textPlain = await validate().set("Content-Type", "text/plain").send("{}");
+      const form = await validate().type("form").send({});
+      const noBody = await validate();
+      const nonEmpty = await validate().send({ force: true });
+
+      expect([textPlain.status, form.status, noBody.status, nonEmpty.status]).toEqual([415, 415, 415, 400]);
+      expect(executions()).toBe(0);
+
+      expect((await validate().send({})).status).toBe(200);
+      expect(executions()).toBe(1);
+    });
+
     test("una variante inattiva validata si attiva poi correttamente", async () => {
       await writeEndpointWithInactiveHandler("a", OK_HANDLER);
       await start();
-      expect((await request(app).post("/_admin/api/scripts/validate")).body.ok).toBe(true);
+      expect((await request(app).post("/_admin/api/scripts/validate").send({})).body.ok).toBe(true);
 
       const selected = await request(app)
         .put(`/_admin/api/mocks/${encodeMockId("a/GET.endpoint.json")}`)
@@ -359,7 +382,7 @@ module.exports = { resolveResponse: () => ({ jsonBody: [iniziale.value, new Lett
       ]);
       expect((await request(app).get("/a")).body).toEqual({ value: "condiviso" });
       // Lo stesso script è un errore per la validazione completa.
-      expect((await request(app).post("/_admin/api/scripts/validate")).body.errors.map((error) => error.code)).toEqual(["SCRIPT_LATE_REQUIRE"]);
+      expect((await request(app).post("/_admin/api/scripts/validate").send({})).body.errors.map((error) => error.code)).toEqual(["SCRIPT_LATE_REQUIRE"]);
 
       // Un campo di istanza è differito quanto il corpo di una funzione.
       const field = await request(app).post(`/_admin/api/mocks/${id}/responses`).send({
