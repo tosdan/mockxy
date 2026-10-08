@@ -2,7 +2,7 @@ const fs = require("fs");
 const path = require("path");
 const { loadConfig } = require("./config");
 const { PACKAGE_FILE, SHARED_DIR, consumeCreatedNotice } = require("./mocks/script-package");
-const { validateWorkspaceScripts } = require("./mocks/workspace-validation");
+const { SCRIPT_PATTERN, validateWorkspaceScripts } = require("./mocks/workspace-validation");
 
 // `node index.js validate [cartella] [--mocks-dir <cartella>] [--json]`: la validazione completa
 // degli script senza avviare il server. Stessa implementazione della rotta admin
@@ -32,25 +32,30 @@ function readJsonOrNull(filePath) {
   }
 }
 
-// Primo file endpoint sotto `rootDir`, senza entrare in `skippedDir`. Si ferma al primo.
-function findEndpointFile(rootDir, skippedDir) {
-  const stack = [rootDir];
+// Primo file che il motore leggerebbe se `rootDir` fosse la cartella dei mock, cercato fuori da
+// `skippedDir`. Segue le stesse cartelle del motore, senza eccezioni proprie: il loader degli
+// endpoint le attraversa tutte, anche quelle nascoste; la validazione degli script tutte tranne
+// `node_modules`. Una cartella saltata qui e letta là sarebbe contenuto validato a metà.
+function findMocksContent(rootDir, skippedDir) {
+  const stack = [{ dir: rootDir, insideNodeModules: false }];
   while (stack.length > 0) {
-    const currentDir = stack.pop();
+    const { dir, insideNodeModules } = stack.pop();
     let entries;
     try {
-      entries = fs.readdirSync(currentDir, { withFileTypes: true });
+      entries = fs.readdirSync(dir, { withFileTypes: true });
     } catch (_error) {
       continue;
     }
     for (const entry of entries) {
-      const entryPath = path.join(currentDir, entry.name);
+      const entryPath = path.join(dir, entry.name);
       if (entry.isDirectory()) {
-        if (entryPath !== skippedDir && entry.name !== "node_modules" && !entry.name.startsWith(".")) {
-          stack.push(entryPath);
+        if (entryPath !== skippedDir) {
+          stack.push({ dir: entryPath, insideNodeModules: insideNodeModules || entry.name === "node_modules" });
         }
-      } else if (entry.isFile() && entry.name.endsWith(ENDPOINT_SUFFIX)) {
-        return entryPath;
+      } else if (entry.isFile()) {
+        if (entry.name.endsWith(ENDPOINT_SUFFIX) || (!insideNodeModules && SCRIPT_PATTERN.test(entry.name))) {
+          return entryPath;
+        }
       }
     }
   }
@@ -69,8 +74,8 @@ function findMocksFolderSign(folder) {
   if (imports != null && typeof imports === "object" && Object.keys(imports).some((key) => key.startsWith("#shared"))) {
     return `${PACKAGE_FILE} with the #shared alias`;
   }
-  const endpointFile = findEndpointFile(folder, path.join(folder, MOCKS_FOLDER));
-  return endpointFile == null ? null : path.relative(folder, endpointFile);
+  const mocksContent = findMocksContent(folder, path.join(folder, MOCKS_FOLDER));
+  return mocksContent == null ? null : path.relative(folder, mocksContent);
 }
 
 // Quale cartella dei mock indica l'argomento. L'argomento posizionale può essere la radice di un

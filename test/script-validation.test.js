@@ -301,6 +301,43 @@ module.exports = { resolveResponse: () => ({ jsonBody: [iniziale.value, new Lett
       expect(run([workspaceDir, mocksDir]).exitCode).toBe(2);
     });
 
+    test("cartella dei mock con un endpoint in una cartella nascosta accanto a mocks/: rifiutata, senza scritture", async () => {
+      // Nessun segnaposto, package, _shared o collezioni: l'unico indizio è l'endpoint sotto
+      // `.privata`, che il loader carica come ogni altro.
+      const bare = path.join(workspaceDir, "nuda");
+      const writeHandlerEndpoint = (folder, source) => {
+        write(path.join(bare, folder, "GET.endpoint.json"), JSON.stringify({
+          method: "GET",
+          path: `/${folder}`,
+          enabled: true,
+          responseFiles: ["001.response.json"],
+          selectedResponseFile: "001.response.json",
+        }));
+        write(path.join(bare, folder, "GET.responses", "001.response.json"), JSON.stringify({ type: "handler", sourceFile: "001.handler.js" }));
+        write(path.join(bare, folder, "GET.responses", "001.handler.js"), source);
+      };
+      writeHandlerEndpoint("mocks", "module.exports = { resolveResponse: () => ({ jsonBody: {} }) };\n");
+      writeHandlerEndpoint(".privata", "module.exports = { resolveResponse: () => ({ jsonBody: require(\"./helper.js\") }) };\n");
+      write(path.join(bare, ".privata", "GET.responses", "helper.js"), "module.exports = 1;\n");
+      const snapshot = () => fs.readdirSync(bare, { recursive: true }).sort();
+      const before = snapshot();
+
+      const guessed = run([bare, "--json"]);
+
+      expect(guessed.exitCode).toBe(2);
+      expect(guessed.lines).toEqual([expect.stringContaining(`but also ${path.join(".privata", "GET.endpoint.json")}, as a mocks folder does`)]);
+      expect(snapshot()).toEqual(before);
+
+      const exact = run(["--mocks-dir", bare, "--json"]);
+
+      expect(exact.exitCode).toBe(1);
+      expect(JSON.parse(exact.lines.join("\n"))).toMatchObject({
+        mocksDir: fs.realpathSync(bare),
+        scripts: 2,
+        errors: [{ code: "SCRIPT_LATE_REQUIRE", filePath: ".privata/GET.responses/001.handler.js" }],
+      });
+    });
+
     describe("cartella dei mock che contiene l'endpoint /mocks", () => {
       // La cartella `mocks/mocks` è quella di un normale endpoint. Presa per la cartella dei mock
       // di un workspace, la validazione vedrebbe solo il suo script, direbbe OK e le creerebbe un
@@ -343,6 +380,11 @@ module.exports = { resolveResponse: () => ({ jsonBody: [iniziale.value, new Lett
           _shared: () => write(path.join(bare, "_shared", "dati.js"), "module.exports = {};\n"),
           "package.json with the #shared alias": () => write(path.join(bare, "package.json"), JSON.stringify(STANDARD_PACKAGE)),
           [path.join("altro", "GET.endpoint.json")]: () => write(path.join(bare, "altro", "GET.endpoint.json"), "{}"),
+          // Il loader attraversa anche le cartelle nascoste e node_modules: sono contenuto dei mock.
+          [path.join(".privata", "GET.endpoint.json")]: () => write(path.join(bare, ".privata", "GET.endpoint.json"), "{}"),
+          [path.join("node_modules", "x", "GET.endpoint.json")]: () => write(path.join(bare, "node_modules", "x", "GET.endpoint.json"), "{}"),
+          // Uno script senza file endpoint: il loader non lo carica, la validazione completa sì.
+          [path.join("orfano", "001.handler.js")]: () => write(path.join(bare, "orfano", "001.handler.js"), ""),
         };
         for (const [sign, create] of Object.entries(signs)) {
           fs.rmSync(bare, { recursive: true, force: true });
@@ -355,6 +397,14 @@ module.exports = { resolveResponse: () => ({ jsonBody: [iniziale.value, new Lett
           expect(exitCode).toBe(2);
           expect(lines[0]).toContain(`but also ${sign}, as a mocks folder does`);
         }
+      });
+
+      test("gli script in node_modules non sono contenuto dei mock: la validazione non li legge", () => {
+        const bare = path.join(workspaceDir, "nuda");
+        fs.mkdirSync(path.join(bare, "mocks"), { recursive: true });
+        write(path.join(bare, "node_modules", "pacchetto", "001.handler.js"), "");
+
+        expect(run([bare]).exitCode).toBe(0);
       });
 
       test("con il segnaposto mockxy.json non c'è ambiguità: né per la radice né per la sua cartella mocks", () => {
