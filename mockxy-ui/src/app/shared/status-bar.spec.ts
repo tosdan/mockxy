@@ -9,6 +9,7 @@ import { MockAdminApiService } from '../mock-admin-api.service';
 import type { RuntimeStatusReport } from '../mock-admin-api.types';
 import { runtimeConfigState } from '../testing/runtime-config-testing';
 import { of } from 'rxjs';
+import { vi } from 'vitest';
 
 describe('StatusBar', () => {
   let summary: WorkspaceSummaryStore;
@@ -152,6 +153,67 @@ describe('StatusBar', () => {
       expect(panel?.textContent).toContain('riuso/GET.endpoint.json');
       expect(panel?.textContent).toContain('SCRIPT_ENTRYPOINT_IMPORTED');
       expect(panel?.textContent).toContain('entry points');
+    });
+
+    it('da tastiera: il focus entra nel pannello degli avvisi, Escape lo chiude e lo riporta al pulsante', () => {
+      runtimeReport = {
+        ...runtimeReport,
+        warnings: [{ code: 'SCRIPT_ENTRYPOINT_IMPORTED', endpointId: 'e1', filePath: 'riuso/GET.endpoint.json', message: 'entry points' }],
+      };
+      const fixture = create();
+      const trigger = buttonWith(fixture, 'Runtime: 1 avviso')!;
+      trigger.focus();
+      trigger.click();
+      fixture.detectChanges();
+
+      const panel = document.querySelector<HTMLElement>('[role="dialog"]')!;
+      expect(document.activeElement).toBe(panel);
+
+      panel.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      fixture.detectChanges();
+      expect(document.querySelector('[role="dialog"]')).toBeNull();
+      expect(document.activeElement).toBe(trigger);
+    });
+
+    it('il pulsante di chiusura riporta il focus al pulsante che ha aperto il pannello', () => {
+      runtimeReport = {
+        ...runtimeReport,
+        errors: [{ endpointId: 'e1', filePath: 'users/GET.endpoint.json', message: 'x', serving: 'retained' }],
+        warnings: [{ code: 'SCRIPT_ENTRYPOINT_IMPORTED', endpointId: 'e1', filePath: 'riuso/GET.endpoint.json', message: 'entry points' }],
+      };
+      const fixture = create();
+      for (const label of ['Runtime: 1 errore', 'Runtime: 1 avviso']) {
+        const trigger = buttonWith(fixture, label)!;
+        trigger.click();
+        fixture.detectChanges();
+        const panel = document.querySelector<HTMLElement>('[role="dialog"]')!;
+        expect(document.activeElement).toBe(panel);
+
+        panel.querySelector<HTMLButtonElement>('button')!.click();
+        fixture.detectChanges();
+        expect(document.querySelector('[role="dialog"]')).toBeNull();
+        expect(document.activeElement).toBe(trigger);
+      }
+    });
+
+    it('più avvisi con lo stesso file e lo stesso codice restano righe distinte', () => {
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+      const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+      const samePackage = (message: string) => ({ code: 'SCRIPT_PACKAGE_INCOMPATIBLE', endpointId: null, filePath: 'package.json', message });
+      runtimeReport = { ...runtimeReport, warnings: [samePackage('type is module'), samePackage('imports must contain'), samePackage('reserved #shared namespace')] };
+      const fixture = create();
+
+      buttonWith(fixture, 'Runtime: 3 avvisi')!.click();
+      fixture.detectChanges();
+
+      const rows = Array.from(document.querySelectorAll('[role="dialog"] li')).map((row) => row.textContent ?? '');
+      expect(rows).toHaveLength(3);
+      expect(rows[0]).toContain('type is module');
+      expect(rows[2]).toContain('reserved #shared namespace');
+      const logged = [...consoleError.mock.calls, ...consoleWarn.mock.calls].flat().join(' ');
+      expect(logged).not.toContain('NG0955');
+      consoleError.mockRestore();
+      consoleWarn.mockRestore();
     });
 
     it('un motore che non riporta avvisi (precedente alla 1.6.0) non rompe la barra', () => {

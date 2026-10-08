@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, signal, viewChild, type ElementRef, type WritableSignal } from '@angular/core';
 import { CdkConnectedOverlay, CdkOverlayOrigin, type ConnectedPosition } from '@angular/cdk/overlay';
 import { NgIcon, provideIcons } from '@ng-icons/core';
 import { lucideServerCrash, lucideTriangleAlert, lucideUnplug, lucideX } from '@ng-icons/lucide';
@@ -68,19 +68,22 @@ import { RuntimeConfigIndicator } from './runtime-config-indicator';
         [cdkConnectedOverlayViewportMargin]="8"
         (overlayOutsideClick)="open.set(false)"
         (detach)="open.set(false)"
+        (attach)="focusPanel(loadErrorsPanel())"
       >
         <div
+          #loadErrorsPanel
           role="dialog"
+          tabindex="-1"
           [attr.aria-label]="'statusBar.loadErrorsTitle' | transloco"
-          class="max-h-96 w-[34rem] overflow-y-auto rounded-xl border border-border bg-popover p-3 text-popover-foreground shadow-lg ring-1 ring-black/20 mx-scroll animate-in fade-in-0 zoom-in-95"
-          (keydown.escape)="open.set(false)"
+          class="max-h-96 w-[34rem] overflow-y-auto rounded-xl border border-border bg-popover p-3 text-popover-foreground shadow-lg ring-1 ring-black/20 mx-scroll animate-in fade-in-0 zoom-in-95 focus-visible:outline-none"
+          (keydown.escape)="close(open, origin)"
         >
           <div class="mb-1 flex items-center gap-2">
             <span class="text-[10px] font-bold uppercase tracking-[0.14em] text-muted-foreground">
               {{ 'statusBar.loadErrorsTitle' | transloco }}
             </span>
             <span class="flex-1"></span>
-            <button type="button" class="grid size-5 place-items-center rounded text-muted-foreground transition hover:bg-accent hover:text-foreground" (click)="open.set(false)" [attr.aria-label]="'common.close' | transloco">
+            <button type="button" class="grid size-5 place-items-center rounded text-muted-foreground transition hover:bg-accent hover:text-foreground" (click)="close(open, origin)" [attr.aria-label]="'common.close' | transloco">
               <ng-icon name="lucideX" size="0.7rem" />
             </button>
           </div>
@@ -121,19 +124,22 @@ import { RuntimeConfigIndicator } from './runtime-config-indicator';
         [cdkConnectedOverlayViewportMargin]="8"
         (overlayOutsideClick)="runtimeOpen.set(false)"
         (detach)="runtimeOpen.set(false)"
+        (attach)="focusPanel(runtimePanel())"
       >
         <div
+          #runtimePanel
           role="dialog"
+          tabindex="-1"
           [attr.aria-label]="'statusBar.runtimeTitle' | transloco"
-          class="max-h-96 w-[34rem] overflow-y-auto rounded-xl border border-border bg-popover p-3 text-popover-foreground shadow-lg ring-1 ring-black/20 mx-scroll animate-in fade-in-0 zoom-in-95"
-          (keydown.escape)="runtimeOpen.set(false)"
+          class="max-h-96 w-[34rem] overflow-y-auto rounded-xl border border-border bg-popover p-3 text-popover-foreground shadow-lg ring-1 ring-black/20 mx-scroll animate-in fade-in-0 zoom-in-95 focus-visible:outline-none"
+          (keydown.escape)="close(runtimeOpen, runtimeOrigin)"
         >
           <div class="mb-1 flex items-center gap-2">
             <span class="text-[10px] font-bold uppercase tracking-[0.14em] text-muted-foreground">
               {{ 'statusBar.runtimeTitle' | transloco }}
             </span>
             <span class="flex-1"></span>
-            <button type="button" class="grid size-5 place-items-center rounded text-muted-foreground transition hover:bg-accent hover:text-foreground" (click)="runtimeOpen.set(false)" [attr.aria-label]="'common.close' | transloco">
+            <button type="button" class="grid size-5 place-items-center rounded text-muted-foreground transition hover:bg-accent hover:text-foreground" (click)="close(runtimeOpen, runtimeOrigin)" [attr.aria-label]="'common.close' | transloco">
               <ng-icon name="lucideX" size="0.7rem" />
             </button>
           </div>
@@ -182,25 +188,30 @@ import { RuntimeConfigIndicator } from './runtime-config-indicator';
         [cdkConnectedOverlayViewportMargin]="8"
         (overlayOutsideClick)="warningsOpen.set(false)"
         (detach)="warningsOpen.set(false)"
+        (attach)="focusPanel(warningsPanel())"
       >
         <div
+          #warningsPanel
           role="dialog"
+          tabindex="-1"
           [attr.aria-label]="'statusBar.runtimeWarningsTitle' | transloco"
-          class="max-h-96 w-[34rem] overflow-y-auto rounded-xl border border-border bg-popover p-3 text-popover-foreground shadow-lg ring-1 ring-black/20 mx-scroll animate-in fade-in-0 zoom-in-95"
-          (keydown.escape)="warningsOpen.set(false)"
+          class="max-h-96 w-[34rem] overflow-y-auto rounded-xl border border-border bg-popover p-3 text-popover-foreground shadow-lg ring-1 ring-black/20 mx-scroll animate-in fade-in-0 zoom-in-95 focus-visible:outline-none"
+          (keydown.escape)="close(warningsOpen, warningsOrigin)"
         >
           <div class="mb-1 flex items-center gap-2">
             <span class="text-[10px] font-bold uppercase tracking-[0.14em] text-muted-foreground">
               {{ 'statusBar.runtimeWarningsTitle' | transloco }}
             </span>
             <span class="flex-1"></span>
-            <button type="button" class="grid size-5 place-items-center rounded text-muted-foreground transition hover:bg-accent hover:text-foreground" (click)="warningsOpen.set(false)" [attr.aria-label]="'common.close' | transloco">
+            <button type="button" class="grid size-5 place-items-center rounded text-muted-foreground transition hover:bg-accent hover:text-foreground" (click)="close(warningsOpen, warningsOrigin)" [attr.aria-label]="'common.close' | transloco">
               <ng-icon name="lucideX" size="0.7rem" />
             </button>
           </div>
           <p class="mb-2.5 text-[12px] text-muted-foreground">{{ 'statusBar.runtimeWarningsHint' | transloco }}</p>
           <ul class="flex flex-col gap-2">
-            @for (w of diagnostics.warnings(); track w.filePath + w.code) {
+            <!-- Più avvisi possono riguardare lo stesso file con lo stesso codice (un package con
+                 tre problemi): l'identità è l'occorrenza, non la coppia file + codice. -->
+            @for (w of diagnostics.warnings(); track $index) {
             <li class="rounded-lg border border-border bg-black/20 p-2.5">
               <div class="flex items-center gap-2">
                 <span class="min-w-0 flex-1 truncate font-mono text-[11.5px] text-foreground/85" [title]="w.filePath">{{ w.filePath }}</span>
@@ -234,11 +245,25 @@ export class StatusBar {
   protected readonly open = signal(false);
   protected readonly runtimeOpen = signal(false);
   protected readonly warningsOpen = signal(false);
+  protected readonly loadErrorsPanel = viewChild<ElementRef<HTMLElement>>('loadErrorsPanel');
+  protected readonly runtimePanel = viewChild<ElementRef<HTMLElement>>('runtimePanel');
+  protected readonly warningsPanel = viewChild<ElementRef<HTMLElement>>('warningsPanel');
   /** Un caricamento fallito nel suo insieme prevale sul conteggio degli errori dei file. */
   protected readonly runtimeLabel = computed(() => {
     if (this.diagnostics.fatalError()) return 'statusBar.runtimeFailed';
     return this.diagnostics.errors().length === 1 ? 'statusBar.runtimeErrorsOne' : 'statusBar.runtimeErrors';
   });
+
+  /** All'apertura il focus entra nel pannello: da tastiera lo si scorre e lo si chiude con Escape. */
+  protected focusPanel(panel: ElementRef<HTMLElement> | undefined): void {
+    panel?.nativeElement.focus();
+  }
+
+  /** Chiusura dai controlli del pannello o con Escape: il focus torna al pulsante che l'ha aperto. */
+  protected close(open: WritableSignal<boolean>, origin: CdkOverlayOrigin): void {
+    open.set(false);
+    origin.elementRef.nativeElement.focus();
+  }
 
   /** Su macOS la scorciatoia si annuncia con Cmd, altrove con Ctrl. */
   protected readonly modifierKey =
