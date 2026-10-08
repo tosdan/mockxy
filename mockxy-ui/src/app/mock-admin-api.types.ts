@@ -271,8 +271,19 @@ export interface MockDetailUnavailable {
   detailUnavailable: { message: string };
 }
 
-/** Ciò che risponde una mutazione: il dettaglio aggiornato, oppure il motivo per cui manca. */
-export type MockDetailAfterMutation = MockDetail | MockDetailUnavailable;
+/** Violazione del contratto degli script in uno script che è stato comunque salvato. */
+export interface ScriptContractWarning {
+  code: string;
+  line?: number;
+  column?: number;
+  message: string;
+}
+
+/**
+ * Ciò che risponde una mutazione: il dettaglio aggiornato, oppure il motivo per cui manca. Con
+ * `warnings` quando la mutazione ha salvato uno script che viola il contratto degli script.
+ */
+export type MockDetailAfterMutation = (MockDetail | MockDetailUnavailable) & { warnings?: ScriptContractWarning[] };
 
 export function isDetailUnavailable(
   detail: MockDetailAfterMutation,
@@ -787,6 +798,19 @@ export interface RuntimeLoadError {
   serving: 'retained' | 'missing';
 }
 
+/**
+ * Avviso dell'ultimo registro installato: una violazione del contratto degli script vista al
+ * caricamento, o un problema del package degli script (`mocks/package.json`). Non cambia lo
+ * stato del tentativo.
+ */
+export interface RuntimeLoadWarning {
+  code: string;
+  endpointId: string | null;
+  /** Relativo alla cartella dei mock, con separatori `/`. */
+  filePath: string;
+  message: string;
+}
+
 /** Esito dell'ultimo caricamento del workspace (GET /runtime/status). */
 export interface RuntimeStatusReport {
   runtimeId: string;
@@ -799,6 +823,8 @@ export interface RuntimeStatusReport {
   } | null;
   lastAppliedAttemptId: number | null;
   errors: RuntimeLoadError[];
+  /** Assente nei motori precedenti alla 1.6.0. */
+  warnings?: RuntimeLoadWarning[];
   fatalError: { message: string } | null;
 }
 

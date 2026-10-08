@@ -20,7 +20,8 @@ import { RuntimeConfigIndicator } from './runtime-config-indicator';
  *
  * Mostra anche lo stato del collegamento col motore (dati forse non aggiornati) e gli errori del
  * runtime: quello che il caricamento ha scartato e cosa serve al suo posto, anche quando la vecchia
- * rotta resta attiva (piano agent/API, §7 S4).
+ * rotta resta attiva (piano agent/API, §7 S4). Gli avvisi del runtime stanno in un indicatore a
+ * parte: non sono errori, il caricamento è riuscito e tutto è servito.
  */
 @Component({
   selector: 'app-status-bar',
@@ -158,6 +159,61 @@ import { RuntimeConfigIndicator } from './runtime-config-indicator';
       </ng-template>
       }
 
+      @if (diagnostics.warnings().length > 0) {
+      <span class="h-3 w-px bg-border"></span>
+      <button
+        type="button"
+        cdkOverlayOrigin
+        #warningsOrigin="cdkOverlayOrigin"
+        class="flex items-center gap-1.5 rounded px-1 py-0.5 font-semibold text-[color:var(--status-3xx)] transition hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+        [attr.aria-expanded]="warningsOpen()"
+        aria-haspopup="dialog"
+        (click)="warningsOpen.set(!warningsOpen())"
+      >
+        <ng-icon name="lucideTriangleAlert" size="0.8rem" />
+        {{ (diagnostics.warnings().length === 1 ? 'statusBar.runtimeWarningsOne' : 'statusBar.runtimeWarnings') | transloco: { count: diagnostics.warnings().length } }}
+      </button>
+
+      <ng-template
+        cdkConnectedOverlay
+        [cdkConnectedOverlayOrigin]="warningsOrigin"
+        [cdkConnectedOverlayOpen]="warningsOpen()"
+        [cdkConnectedOverlayPositions]="positions"
+        [cdkConnectedOverlayViewportMargin]="8"
+        (overlayOutsideClick)="warningsOpen.set(false)"
+        (detach)="warningsOpen.set(false)"
+      >
+        <div
+          role="dialog"
+          [attr.aria-label]="'statusBar.runtimeWarningsTitle' | transloco"
+          class="max-h-96 w-[34rem] overflow-y-auto rounded-xl border border-border bg-popover p-3 text-popover-foreground shadow-lg ring-1 ring-black/20 mx-scroll animate-in fade-in-0 zoom-in-95"
+          (keydown.escape)="warningsOpen.set(false)"
+        >
+          <div class="mb-1 flex items-center gap-2">
+            <span class="text-[10px] font-bold uppercase tracking-[0.14em] text-muted-foreground">
+              {{ 'statusBar.runtimeWarningsTitle' | transloco }}
+            </span>
+            <span class="flex-1"></span>
+            <button type="button" class="grid size-5 place-items-center rounded text-muted-foreground transition hover:bg-accent hover:text-foreground" (click)="warningsOpen.set(false)" [attr.aria-label]="'common.close' | transloco">
+              <ng-icon name="lucideX" size="0.7rem" />
+            </button>
+          </div>
+          <p class="mb-2.5 text-[12px] text-muted-foreground">{{ 'statusBar.runtimeWarningsHint' | transloco }}</p>
+          <ul class="flex flex-col gap-2">
+            @for (w of diagnostics.warnings(); track w.filePath + w.code) {
+            <li class="rounded-lg border border-border bg-black/20 p-2.5">
+              <div class="flex items-center gap-2">
+                <span class="min-w-0 flex-1 truncate font-mono text-[11.5px] text-foreground/85" [title]="w.filePath">{{ w.filePath }}</span>
+                <span class="shrink-0 font-mono text-[10.5px] text-muted-foreground">{{ w.code }}</span>
+              </div>
+              <div class="mt-1 break-words text-[12px] text-foreground/85">{{ w.message }}</div>
+            </li>
+            }
+          </ul>
+        </div>
+      </ng-template>
+      }
+
       <!-- Configurazione runtime e suggerimento stanno a destra, fuori dal blocco del riepilogo: ci
            sono anche quando il catalogo non e' ancora stato aperto. -->
       <span class="ml-auto"></span>
@@ -177,6 +233,7 @@ export class StatusBar {
   protected readonly diagnostics = inject(RuntimeDiagnosticsStore);
   protected readonly open = signal(false);
   protected readonly runtimeOpen = signal(false);
+  protected readonly warningsOpen = signal(false);
   /** Un caricamento fallito nel suo insieme prevale sul conteggio degli errori dei file. */
   protected readonly runtimeLabel = computed(() => {
     if (this.diagnostics.fatalError()) return 'statusBar.runtimeFailed';

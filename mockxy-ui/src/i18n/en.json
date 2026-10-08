@@ -128,7 +128,11 @@
     "runtimeHint": "Outcome of the last workspace load. A file with errors may still be served in its previous version.",
     "runtimeFatal": "Load failed",
     "servingRetained": "previous version still served",
-    "servingMissing": "not served"
+    "servingMissing": "not served",
+    "runtimeWarningsOne": "Runtime: 1 warning",
+    "runtimeWarnings": "Runtime: {{count}} warnings",
+    "runtimeWarningsTitle": "Runtime warnings",
+    "runtimeWarningsHint": "The load succeeded and everything is served. These problems do not prevent it: scripts that do not follow the script contract, or the configuration of shared helpers (mocks/package.json)."
   },
   "runtimeStatus": {
     "title": "Runtime",
@@ -383,6 +387,8 @@
     "partialResult": "Written so far: {{summary}}."
   },
   "mocks": {
+    "scriptWarningsTitle": "Script saved, with script contract warnings",
+    "scriptWarningLine": "Line {{line}}:",
     "resizeHint": "Drag to resize · double-click to reset"
   },
   "catalog": {

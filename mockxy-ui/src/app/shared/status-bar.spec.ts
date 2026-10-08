@@ -136,6 +136,29 @@ describe('StatusBar', () => {
       expect(text(fixture)).toContain('Runtime: caricamento fallito');
     });
 
+    it('mostra gli avvisi del runtime a parte, senza presentarli come errori', () => {
+      runtimeReport = {
+        ...runtimeReport,
+        warnings: [{ code: 'SCRIPT_ENTRYPOINT_IMPORTED', endpointId: 'e1', filePath: 'riuso/GET.endpoint.json', message: 'handler and middleware scripts are entry points' }],
+      };
+      const fixture = create();
+      expect(text(fixture)).not.toContain('errore');
+      const trigger = buttonWith(fixture, 'Runtime: 1 avviso');
+      expect(trigger).toBeTruthy();
+
+      trigger!.click();
+      fixture.detectChanges();
+      const panel = document.querySelector('[role="dialog"]');
+      expect(panel?.textContent).toContain('riuso/GET.endpoint.json');
+      expect(panel?.textContent).toContain('SCRIPT_ENTRYPOINT_IMPORTED');
+      expect(panel?.textContent).toContain('entry points');
+    });
+
+    it('un motore che non riporta avvisi (precedente alla 1.6.0) non rompe la barra', () => {
+      const fixture = create();
+      expect(text(fixture)).not.toContain('avvis');
+    });
+
     it('senza problemi del runtime non mostra niente', () => {
       const fixture = create();
       expect(text(fixture)).not.toContain('Runtime');

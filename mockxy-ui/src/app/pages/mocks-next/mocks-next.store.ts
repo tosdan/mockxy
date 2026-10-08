@@ -22,6 +22,7 @@ import {
   ResponseSequenceCreateRequest,
   ResponseSequenceUpdateRequest,
   ResponseUpdateRequest,
+  type ScriptContractWarning,
   UNSORTED_COLLECTION_ID,
   type DraftTarget,
   type RevisionConflict,
@@ -134,6 +135,11 @@ export class MocksStore {
   readonly loading = signal(false);
   readonly detailLoading = signal(false);
   readonly error = signal<string | undefined>(undefined);
+  /**
+   * Avvisi dell'ultima scrittura riuscita di uno script: lo script è salvato e servito, ma viola
+   * il contratto degli script. Un nuovo array a ogni scrittura, così chi ascolta li rimostra.
+   */
+  readonly scriptWarnings = signal<readonly ScriptContractWarning[] | undefined>(undefined);
   /** Id dell'endpoint con una mutazione in corso (per disabilitare i controlli). */
   readonly savingId = signal<string | undefined>(undefined);
   readonly erasingCollectionId = signal<string | undefined>(undefined);
@@ -970,6 +976,7 @@ export class MocksStore {
         // Anche qui la creazione è avvenuta: il dialog si chiude a buon fine e il catalogo la
         // elenca. Se il dettaglio non si compone non la si può aprire, e il pannello lo dice.
         this.applyMutationDetail(detail);
+        this.scriptWarnings.set(detail.warnings?.length ? [...detail.warnings] : undefined);
         onDone?.(true, detail.id);
       },
       error: (e) => {
@@ -1097,6 +1104,7 @@ export class MocksStore {
       next: ({ detail, res }) => {
         this.applyMutationDetail(detail);
         this.applyCatalogResponse(res);
+        this.scriptWarnings.set(detail.warnings?.length ? [...detail.warnings] : undefined);
         onSuccess?.(detail);
       },
       error: (e) => {
