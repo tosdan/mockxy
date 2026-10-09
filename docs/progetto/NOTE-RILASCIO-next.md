@@ -2,10 +2,16 @@
 
 ## Prossima versione
 
-Versione prevista: **1.6.0**. Contiene una modifica incompatibile per i soli workspace che
+## v1.6.0
+
+Nuovo modo di importare gli helper condivisi tra mock, ricarica degli script senza cache e
+validazione completa degli script. Contiene una modifica incompatibile per i soli workspace che
 avevano adottato l'import dalla radice della 1.5.0: è un'eccezione dichiarata alla politica di
 versionamento (vedi [PROCEDURA-RILASCIO.md](PROCEDURA-RILASCIO.md), §1). Il disegno completo è
 in [PIANO-SCRIPT-CONDIVISI.md](PIANO-SCRIPT-CONDIVISI.md).
+
+Le [note per la pubblicazione, in italiano e inglese](NOTE-RILASCIO-v1.6.0.md)
+riassumono le novità rispetto alla 1.5.0.
 
 ### Script condivisi e ricarica
 
