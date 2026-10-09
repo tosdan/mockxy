@@ -2210,7 +2210,8 @@ paths:
           warnings; here they are errors.
         - Loading a script runs its top level, as the runtime does. Nothing is installed: routes,
           `state`, `sharedState`, sequences and open streams are left as they are.
-        - The same check is available without a server: `node index.js validate [folder]`.
+        - The same check is available without a server: `node index.js validate [workspace]`
+          (or `--mocks-dir <folder>` to name the mocks folder itself).
         - It changes nothing, but it runs code, so it follows the wire contract of the other
           parameterless actions: `Content-Type: application/json` and a body that is exactly
           `{}`. Any other body answers `400`, any other media type `415`.

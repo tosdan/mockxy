@@ -206,6 +206,7 @@ function validateWorkspaceScripts(mocksDir) {
 }
 
 module.exports = {
+  SCRIPT_PATTERN,
   findScriptContractFindings,
   validateWorkspaceScripts,
 };
