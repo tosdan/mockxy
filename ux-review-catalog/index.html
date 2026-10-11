@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Catalogo: prima e dopo</title>
+<style>
+  :root {
+    --bg: #131315;
+    --card: #1a1a1d;
+    --border: rgba(255, 255, 255, 0.09);
+    --text: #e3e3e6;
+    --muted: #a3a3a3;
+    --brand: #9aa1b2;
+    --before: #fda4af;
+    --after: #6ee7b7;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 40px 24px 80px;
+    background: var(--bg);
+    color: var(--text);
+    font: 15px/1.6 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  main { max-width: 900px; margin: 0 auto; }
+  h1 { margin: 0 0 6px; font-size: 26px; letter-spacing: -0.01em; }
+  .lead { margin: 0 0 12px; color: var(--muted); max-width: 68ch; }
+  .meta { margin: 0 0 36px; color: var(--muted); font-size: 13px; }
+  code { font: 13px ui-monospace, SFMono-Regular, "Cascadia Code", monospace; color: var(--brand); }
+  nav { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 44px; }
+  nav a {
+    padding: 5px 12px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    color: var(--text);
+    font-size: 13px;
+    text-decoration: none;
+  }
+  nav a:hover { background: var(--card); }
+  section { margin-bottom: 56px; scroll-margin-top: 20px; }
+  h2 { display: flex; align-items: baseline; gap: 12px; margin: 0 0 6px; font-size: 19px; }
+  h2 span { color: var(--brand); font: 600 13px ui-monospace, monospace; }
+  section > p { margin: 0 0 18px; color: var(--muted); max-width: 72ch; }
+  section > p strong { color: var(--text); font-weight: 600; }
+  .pair { display: grid; grid-template-columns: repeat(2, minmax(0, 384px)); gap: 28px; align-items: start; }
+  .pair + .pair { margin-top: 28px; }
+  figure { margin: 0; }
+  figcaption {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+  figcaption::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+  .before figcaption { color: var(--before); }
+  .after figcaption { color: var(--after); }
+  img { display: block; width: 100%; height: auto; border: 1px solid var(--border); border-radius: 10px; }
+  .note { margin: 14px 0 0; font-size: 13px; color: var(--muted); }
+  @media (max-width: 760px) { .pair { grid-template-columns: minmax(0, 384px); } }
+</style>
+</head>
+<body>
+<main>
+  <h1>Catalogo: prima e dopo</h1>
+  <p class="lead">Sei difetti del pannello catalogo corretti sul branch <code>fix/catalog-ux-defects</code>. Ogni coppia mostra lo stesso stato dell'app, ripreso prima su <code>main</code> e poi sul branch.</p>
+  <p class="meta">Catalogo demo di 33 endpoint, pannello alla larghezza minima (380 px), Chromium a 1440 × 900. Cartella temporanea: va cancellata prima del merge.</p>
+
+  <nav>
+    <a href="#conteggi">1 · Conteggi</a>
+    <a href="#troncamento">2 · Path troncati</a>
+    <a href="#filtro">3 · Collection sotto filtro</a>
+    <a href="#barra">4 · Barra di massa</a>
+    <a href="#tastiera">5 · Tastiera</a>
+    <a href="#disattivi">6 · Disattivi</a>
+  </nav>
+
+  <section id="conteggi">
+    <h2><span>1</span>Conteggio delle collection</h2>
+    <p>Il conteggio guardava solo gli endpoint diretti: <strong>Shop mostrava 0</strong> pur contenendo 12 endpoint nelle sotto-collection. Ora conta l'intero sottoalbero: Shop 12, Core API 10 (7 propri più i 3 di Admin).</p>
+    <div class="pair">
+      <figure class="before"><figcaption>Prima</figcaption><img src="before/01-conteggi.png" alt="Prima: Shop mostra 0, Core API mostra 7"></figure>
+      <figure class="after"><figcaption>Dopo</figcaption><img src="after/01-conteggi.png" alt="Dopo: Shop mostra 12, Core API mostra 10"></figure>
+    </div>
+  </section>
+
+  <section id="troncamento">
+    <h2><span>2</span>Path troncati</h2>
+    <p>Troncati in coda, <strong>PATCH e GET diventavano entrambi</strong> <code>/api/orders/{orderId}/…</code>. Ora l'ellissi cade in testa e resta la parte che li distingue: <code>…/status</code> e <code>…/shipment-tracking</code>. Il path intero resta nel tooltip.</p>
+    <div class="pair">
+      <figure class="before"><figcaption>Prima</figcaption><img src="before/02-troncamento.png" alt="Prima: due path diversi troncati allo stesso modo"></figure>
+      <figure class="after"><figcaption>Dopo</figcaption><img src="after/02-troncamento.png" alt="Dopo: i due path mostrano la coda e si distinguono"></figure>
+    </div>
+  </section>
+
+  <section id="filtro">
+    <h2><span>3</span>Collection senza risultati sotto filtro</h2>
+    <p>Cercando "orders" restavano in vista Auth, Admin, Payments e Catalog, vuote. Ora sotto filtro <strong>resta solo ciò che ha risultati</strong>, con i suoi antenati. Senza filtro le collection vuote restano, altrimenti non si potrebbero riempire.</p>
+    <div class="pair">
+      <figure class="before"><figcaption>Prima</figcaption><img src="before/03-filtro.png" alt="Prima: quattro collection vuote fra i risultati"></figure>
+      <figure class="after"><figcaption>Dopo</figcaption><img src="after/03-filtro.png" alt="Dopo: solo Core API e Shop con Orders"></figure>
+    </div>
+    <div class="pair">
+      <figure class="before"><figcaption>Prima · nessun risultato</figcaption><img src="before/04-nessun-risultato.png" alt="Prima: otto cartelle a zero"></figure>
+      <figure class="after"><figcaption>Dopo · nessun risultato</figcaption><img src="after/04-nessun-risultato.png" alt="Dopo: messaggio Nessun endpoint corrisponde ai filtri"></figure>
+    </div>
+    <p class="note">Effetto collaterale utile: il messaggio "Nessun endpoint corrisponde ai filtri" esisteva già, ma in un workspace con collection non compariva mai.</p>
+  </section>
+
+  <section id="barra">
+    <h2><span>4</span>Barra delle azioni di massa</h2>
+    <p>Alla larghezza minima <strong>"2 selezionati" andava a capo</strong> dentro la propria etichetta. Ora non si spezza: "Sposta in" è diventato "Sposta", e se lo spazio non basta (font più larghi, altre lingue) scende a capo il gruppo dei pulsanti, intero.</p>
+    <div class="pair">
+      <figure class="before"><figcaption>Prima</figcaption><img src="before/05-barra-massa.png" alt="Prima: etichetta su due righe"></figure>
+      <figure class="after"><figcaption>Dopo</figcaption><img src="after/05-barra-massa.png" alt="Dopo: barra su una riga"></figure>
+    </div>
+  </section>
+
+  <section id="tastiera">
+    <h2><span>5</span>Navigazione da tastiera</h2>
+    <p>Stessa sequenza in entrambi: <code>/</code> e poi quattro volte freccia giù. Prima <strong>non succedeva nulla</strong>: le righe erano <code>div</code> cliccabili, irraggiungibili da tastiera. Ora il catalogo è un albero ARIA con un solo punto di Tab.</p>
+    <div class="pair">
+      <figure class="before"><figcaption>Prima</figcaption><img src="before/06-tastiera.png" alt="Prima: il fuoco resta nel campo di ricerca"></figure>
+      <figure class="after"><figcaption>Dopo</figcaption><img src="after/06-tastiera.png" alt="Dopo: la riga /api/search ha il fuoco"></figure>
+    </div>
+    <p class="note">Frecce su e giù fra le righe, Home ed End agli estremi, destra e sinistra per aprire, chiudere e risalire alla cartella, Invio o Spazio per aprire l'endpoint. Spunta, menu e switch restano raggiungibili col Tab come prima.</p>
+  </section>
+
+  <section id="disattivi">
+    <h2><span>6</span>Contrasto degli endpoint disattivi</h2>
+    <p>L'opacità al 42% portava il path a circa <strong>2,7:1</strong>, sotto il 4,5:1 di WCAG AA. Ora la riga perde il colore invece dell'opacità: grigio pieno a 5,9:1, e lo stato lo dicono il grigio e lo switch.</p>
+    <div class="pair">
+      <figure class="before"><figcaption>Prima</figcaption><img src="before/07-disattivi.png" alt="Prima: righe disattive quasi illeggibili"></figure>
+      <figure class="after"><figcaption>Dopo</figcaption><img src="after/07-disattivi.png" alt="Dopo: righe disattive grigie ma leggibili"></figure>
+    </div>
+  </section>
+
+  <section id="extra">
+    <h2><span>+</span>Fuori dai sei: nomi dei pulsanti a icona</h2>
+    <p>Controllando l'albero con axe sono emersi i pulsanti "⋮" di riga e di cartella, e quelli di conferma e annulla della creazione collection: avevano solo il tooltip, quindi per uno screen reader erano un "pulsante" senza nome. Ora hanno un'etichetta. È un commit a sé (<code>f645553</code>), senza effetti visibili: si può scartare senza toccare il resto.</p>
+    <p class="note">Con questo axe non segnala violazioni sul pannello catalogo, né a riposo né con la riga di creazione e la barra di massa aperte. Prima ne segnalava una, critica, su 42 pulsanti.</p>
+  </section>
+</main>
+</body>
+</html>
