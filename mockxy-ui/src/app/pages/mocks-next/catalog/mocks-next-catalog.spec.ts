@@ -428,7 +428,8 @@ describe('MocksNextCatalog', () => {
   }
 
   // Le righe erano div cliccabili: da tastiera non si apriva un endpoint ne' si chiudeva una
-  // cartella. Ora il catalogo e' un albero ARIA con un solo punto di Tab e le frecce per muoversi.
+  // cartella. Ora il catalogo e' un albero ARIA: una sola riga raggiungibile col Tab e le frecce
+  // per muoversi fra le righe. I controlli interni alle righe restano fermate del Tab.
   describe('navigazione da tastiera', () => {
     function setup() {
       const created = create();

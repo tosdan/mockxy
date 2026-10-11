@@ -275,7 +275,8 @@ interface NavRow {
         }
       } @else {
       <!-- Un albero ARIA piatto: le righe sono sorelle nel DOM e il livello lo dichiara aria-level.
-           Il fuoco e' uno solo per tutto l'albero (roving tabindex) e si sposta con le frecce. -->
+           Col Tab si raggiunge una sola riga alla volta (roving tabindex) e fra le righe ci si
+           sposta con le frecce; spunta, menu e switch di ogni riga restano fermate del Tab. -->
       <div role="tree" [attr.aria-label]="'catalog.title' | transloco">
       <!-- Unsorted: intestazione fissa, non trascinabile (i suoi endpoint sono le prime righe della lista) -->
       @if (store.unsortedNode(); as u) {
