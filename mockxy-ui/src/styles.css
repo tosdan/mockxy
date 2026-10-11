@@ -192,9 +192,15 @@
   box-shadow: inset 2px 0 0 0 var(--brand-soft);
 }
 /* Endpoint disabilitato: perde il colore, non l'opacita'. L'opacita' portava il path sotto il
-   contrasto AA; cosi' la riga resta leggibile e lo stato lo dicono il grigio e lo switch. */
+   contrasto AA; cosi' la riga resta leggibile e lo stato lo dicono il grigio, il badge del metodo
+   svuotato e lo switch. */
 .mx-muted {
   color: var(--foreground-disabled);
+}
+/* Il pomello bianco dello switch spento era il punto piu' luminoso di una riga che deve
+   arretrare: prende il grigio del testo (3:1 sulla traccia, quanto serve a un controllo). */
+.mx-muted brn-switch-thumb {
+  background-color: var(--foreground-disabled);
 }
 /* Glow d'angolo dietro l'header del dettaglio. */
 .mx-glow {

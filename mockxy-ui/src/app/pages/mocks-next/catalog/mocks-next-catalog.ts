@@ -477,8 +477,10 @@ interface NavRow {
           }
         </span>
         <!-- Da spenta la riga perde il colore, non l'opacita': ogni testo eredita il grigio di
-             .mx-muted, che resta sopra il contrasto AA anche sulla riga selezionata. -->
-        <ui-badge [tone]="methodTone(ep.method)" [class]="ep.enabled ? 'w-[42px] shrink-0' : 'w-[42px] shrink-0 text-inherit'">{{ ep.method }}</ui-badge>
+             .mx-muted, che resta sopra il contrasto AA anche sulla riga selezionata. Il solo
+             grigio pero' si nota poco, su un tema gia' grigio: il badge del metodo si svuota e
+             resta un contorno tratteggiato, un segnale di forma nella colonna che si scorre. -->
+        <ui-badge [tone]="methodTone(ep.method)" [class]="ep.enabled ? 'w-[42px] shrink-0' : DISABLED_BADGE_CLASS">{{ ep.method }}</ui-badge>
         <div class="min-w-0 flex-1">
           <!-- Di un path conta la coda: e' li' che due endpoint della stessa collection si
                distinguono. La riga e' quindi rtl, cosi' l'ellissi cade in testa, e il testo sta
@@ -837,6 +839,10 @@ export class MocksNextCatalog {
   protected readonly flatRows = computed<readonly CatalogRow[]>(() =>
     buildCatalogRows(this.store.unsortedNode(), this.store.catalogTree(), this.collapsed()),
   );
+
+  /** Badge del metodo su una riga spenta: niente fondo, contorno tratteggiato nel grigio della riga. */
+  protected readonly DISABLED_BADGE_CLASS =
+    'w-[42px] shrink-0 bg-transparent text-inherit ring-0 outline-1 -outline-offset-1 outline-dashed outline-current/70';
 
   protected rowKey(row: CatalogRow): string {
     return row.kind === 'collection' ? `c:${row.node.collection.id}` : `e:${row.endpoint.id}`;

@@ -577,6 +577,18 @@ describe('MocksNextCatalog', () => {
       expect(colored(rowOf(fixture, 'e:uno'))).toBe(true);
     });
 
+    // Il solo grigio si notava poco: da spenta il badge del metodo resta un contorno tratteggiato.
+    it('da spenta svuota il badge del metodo, da accesa lo lascia pieno', () => {
+      const { fixture } = setup();
+      const badge = (key: string) => rowOf(fixture, key).querySelector('ui-badge')!.classList;
+
+      expect(badge('e:sciolto')).toContain('outline-dashed');
+      expect(badge('e:sciolto')).toContain('bg-transparent');
+      expect(badge('e:sciolto')).not.toContain('ring-1');
+      expect(badge('e:uno')).not.toContain('outline-dashed');
+      expect(badge('e:uno')).toContain('ring-1');
+    });
+
     // I menu "⋮" di riga e di cartella avevano solo il tooltip: per uno screen reader, "pulsante".
     it('i pulsanti a sola icona hanno un nome accessibile', () => {
       const { fixture } = setup();
