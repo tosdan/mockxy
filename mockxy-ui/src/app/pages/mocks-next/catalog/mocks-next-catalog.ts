@@ -302,7 +302,15 @@ interface NavRow {
           </div>
         </div>
         @if (creatingCollection() && creatingParentId() === row.node.collection.id) {
-        <div class="flex items-center gap-1.5 py-1 pr-1" [style.padding-left.px]="8 + (row.depth + 1) * 14">
+        <!-- La riga di creazione sta nell'albero al posto che prendera' la sotto-collection: e'
+             un suo elemento a tutti gli effetti, anche se il fuoco va al campo e non alla riga. -->
+        <div
+          role="treeitem"
+          [attr.aria-level]="row.depth + 2"
+          [attr.aria-label]="'catalog.newSubCollection' | transloco"
+          class="flex items-center gap-1.5 py-1 pr-1"
+          [style.padding-left.px]="8 + (row.depth + 1) * 14"
+        >
           <ng-icon name="lucideFolderPlus" size="0.85rem" class="shrink-0 text-brand" />
           <input
             #createInput

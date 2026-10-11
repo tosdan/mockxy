@@ -35,14 +35,14 @@ test.describe("E9 · collection", () => {
   });
 
   test("sposta un endpoint in una collection dal menu della riga", async ({ page }) => {
-    // Core API ha 2 endpoint propri (users, users/:id).
-    await expect(folderBadge("Core API")).toHaveText("2");
+    // Core API conta l'intero sottoalbero: 2 endpoint propri (users, users/:id) più quello di Admin.
+    await expect(folderBadge("Core API")).toHaveText("3");
 
     await kebab("/api/health").click();
     await page.getByRole("menuitem", { name: "Core API" }).click();
 
-    // ora Core API ne ha 3, e health non è più fra i non categorizzati (Unsorted).
-    await expect(folderBadge("Core API")).toHaveText("3");
+    // ora Core API ne ha 4, e health non è più fra i non categorizzati (Unsorted).
+    await expect(folderBadge("Core API")).toHaveText("4");
   });
 
   test("crea una sotto-collection annidata sotto una collection", async ({ page }) => {
