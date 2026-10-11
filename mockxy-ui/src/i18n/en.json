@@ -448,6 +448,7 @@
     "selectedOne": "1 selected",
     "bulkEnable": "Enable",
     "bulkDisable": "Disable",
+    "bulkMove": "Move",
     "confirmBulkDelete": "Delete {{count}}",
     "deleteSelectedTip": "Delete the selected ones",
     "clearSelectionTip": "Clear the selection",
