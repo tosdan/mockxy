@@ -34,15 +34,28 @@ test.describe("E2 · ricerca e filtri", () => {
     await expect(path("/api/health")).toHaveCount(0);
   });
 
-  test("una ricerca senza corrispondenze svuota gli endpoint mantenendo le collezioni", async () => {
-    // Nota: il messaggio "Nessun endpoint corrisponde…" scatta solo in un workspace SENZA
-    // collezioni (catalogIsEmpty). Con collezioni presenti, la ricerca svuota gli endpoint ma
-    // le cartelle restano, a conteggio zero.
+  test("una ricerca senza corrispondenze svuota il catalogo e lo dichiara", async () => {
+    // Sotto filtro le collezioni senza risultati spariscono: prima restavano, a conteggio zero, e
+    // il messaggio non compariva mai in un workspace con collezioni.
     await search.fill("zzz-nessun-endpoint");
     for (const p of ["/api/health", "/api/users", "/api/echo", "/api/enrich", "/api/legacy", "/api/status"]) {
       await expect(path(p)).toHaveCount(0);
     }
+    await expect(catalog.getByText("Core API")).toHaveCount(0);
+    await expect(catalog.getByText("Dynamic")).toHaveCount(0);
+    await expect(catalog.getByText("Nessun endpoint corrisponde ai filtri.")).toBeVisible();
+  });
+
+  test("sotto filtro restano solo le collezioni che hanno risultati, con i loro antenati", async () => {
+    // "config" sta solo in Admin, sotto-collection di Core API: resta il ramo, sparisce il resto.
+    await search.fill("config");
+    await expect(path("/api/admin/config")).toBeVisible();
     await expect(catalog.getByText("Core API")).toBeVisible();
+    await expect(catalog.getByText("Admin", { exact: true })).toBeVisible();
+    await expect(catalog.getByText("Dynamic")).toHaveCount(0);
+    await expect(catalog.getByText("Unsorted")).toHaveCount(0);
+
+    await search.fill("");
     await expect(catalog.getByText("Dynamic")).toBeVisible();
   });
 

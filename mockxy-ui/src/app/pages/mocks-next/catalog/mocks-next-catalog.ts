@@ -48,10 +48,11 @@ import { UiTooltip } from '../../../ui/ui-tooltip/ui-tooltip';
 import {
   MocksStore,
   type CatalogCollectionVM,
+  type CatalogEndpointVM,
   type StatusFilter,
   type TypeFilter,
 } from '../mocks-next.store';
-import { UNSORTED_COLLECTION_ID, type EndpointCreateType, type MockType } from '../../../mock-admin-api.types';
+import { UNSORTED_COLLECTION_ID, type EndpointCreateType } from '../../../mock-admin-api.types';
 import { ViewStateService } from '../../../shared/view-state.service';
 import {
   ROOT_ORDER_KEY,
@@ -70,6 +71,14 @@ const MAX_GUIDE_DEPTH = 12;
 
 /** Chiave (ViewStateService) delle collection collassate, ritrovate tornando sulla view. */
 const COLLAPSED_COLLECTIONS_STATE_KEY = 'mocks-collapsed';
+
+/** Riga dell'albero vista dalla tastiera: una collection (intestazione) o un endpoint. */
+interface NavRow {
+  readonly key: string;
+  readonly depth: number;
+  readonly collectionId?: string;
+  readonly endpointId?: string;
+}
 
 /**
  * Pannello catalogo: albero appiattito in un'UNICA lista piatta (endpoint e collection intercalati,
@@ -166,7 +175,7 @@ const COLLAPSED_COLLECTIONS_STATE_KEY = 'mocks-collapsed';
       <label class="relative mt-2.5 block">
         <ng-icon name="lucideSearch" size="0.85rem" class="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
         <!-- pr-8 anche a campo vuoto: il testo non deve spostarsi quando il pulsante compare. -->
-        <input #searchInput ui-input type="text" [placeholder]="'catalog.searchPlaceholder' | transloco" class="w-full pl-8 pr-8 text-[12.5px]" [value]="store.searchTerm()" (input)="store.searchTerm.set($any($event.target).value)" />
+        <input #searchInput ui-input type="text" [placeholder]="'catalog.searchPlaceholder' | transloco" class="w-full pl-8 pr-8 text-[12.5px]" [value]="store.searchTerm()" (input)="store.searchTerm.set($any($event.target).value)" (keydown.arrowDown)="focusTree($event)" />
         @if (store.searchTerm() !== '') {
         <button
           type="button"
@@ -246,8 +255,8 @@ const COLLAPSED_COLLECTIONS_STATE_KEY = 'mocks-collapsed';
           (keydown.enter)="saveCreateCollection()"
           (keydown.escape)="cancelCreateCollection()"
         />
-        <button ui-button size="icon" (click)="saveCreateCollection()" [uiTooltip]="'catalog.createTip' | transloco"><ng-icon name="lucideCheck" size="0.85rem" /></button>
-        <button ui-button variant="outline" size="icon" (click)="cancelCreateCollection()" [uiTooltip]="'catalog.cancelTip' | transloco"><ng-icon name="lucideX" size="0.85rem" /></button>
+        <button ui-button size="icon" (click)="saveCreateCollection()" [uiTooltip]="'catalog.createTip' | transloco" [attr.aria-label]="'catalog.createTip' | transloco"><ng-icon name="lucideCheck" size="0.85rem" /></button>
+        <button ui-button variant="outline" size="icon" (click)="cancelCreateCollection()" [uiTooltip]="'catalog.cancelTip' | transloco" [attr.aria-label]="'catalog.cancelTip' | transloco"><ng-icon name="lucideX" size="0.85rem" /></button>
       </div>
       }
     </div>
@@ -265,6 +274,10 @@ const COLLAPSED_COLLECTIONS_STATE_KEY = 'mocks-collapsed';
         </div>
         }
       } @else {
+      <!-- Un albero ARIA piatto: le righe sono sorelle nel DOM e il livello lo dichiara aria-level.
+           Col Tab si raggiunge una sola riga alla volta (roving tabindex) e fra le righe ci si
+           sposta con le frecce; spunta, menu e switch di ogni riga restano fermate del Tab. -->
+      <div role="tree" [attr.aria-label]="'catalog.title' | transloco">
       <!-- Unsorted: intestazione fissa, non trascinabile (i suoi endpoint sono le prime righe della lista) -->
       @if (store.unsortedNode(); as u) {
       <ng-container *ngTemplateOutlet="folderHeaderTpl; context: { $implicit: u.collection, depth: 0 }" />
@@ -290,7 +303,15 @@ const COLLAPSED_COLLECTIONS_STATE_KEY = 'mocks-collapsed';
           </div>
         </div>
         @if (creatingCollection() && creatingParentId() === row.node.collection.id) {
-        <div class="flex items-center gap-1.5 py-1 pr-1" [style.padding-left.px]="8 + (row.depth + 1) * 14">
+        <!-- La riga di creazione sta nell'albero al posto che prendera' la sotto-collection: e'
+             un suo elemento a tutti gli effetti, anche se il fuoco va al campo e non alla riga. -->
+        <div
+          role="treeitem"
+          [attr.aria-level]="row.depth + 2"
+          [attr.aria-label]="'catalog.newSubCollection' | transloco"
+          class="flex items-center gap-1.5 py-1 pr-1"
+          [style.padding-left.px]="8 + (row.depth + 1) * 14"
+        >
           <ng-icon name="lucideFolderPlus" size="0.85rem" class="shrink-0 text-brand" />
           <input
             #createInput
@@ -303,8 +324,8 @@ const COLLAPSED_COLLECTIONS_STATE_KEY = 'mocks-collapsed';
             (keydown.enter)="saveCreateCollection()"
             (keydown.escape)="cancelCreateCollection()"
           />
-          <button ui-button size="icon" (click)="saveCreateCollection()" [uiTooltip]="'catalog.createTip' | transloco"><ng-icon name="lucideCheck" size="0.85rem" /></button>
-          <button ui-button variant="outline" size="icon" (click)="cancelCreateCollection()" [uiTooltip]="'catalog.cancelTip' | transloco"><ng-icon name="lucideX" size="0.85rem" /></button>
+          <button ui-button size="icon" (click)="saveCreateCollection()" [uiTooltip]="'catalog.createTip' | transloco" [attr.aria-label]="'catalog.createTip' | transloco"><ng-icon name="lucideCheck" size="0.85rem" /></button>
+          <button ui-button variant="outline" size="icon" (click)="cancelCreateCollection()" [uiTooltip]="'catalog.cancelTip' | transloco" [attr.aria-label]="'catalog.cancelTip' | transloco"><ng-icon name="lucideX" size="0.85rem" /></button>
         </div>
         }
         } @else {
@@ -321,14 +342,18 @@ const COLLAPSED_COLLECTIONS_STATE_KEY = 'mocks-collapsed';
         }
         }
       </div>
+      </div>
       }
     </div>
 
     <!-- Azioni di massa: compaiono solo con una selezione, in fondo al pannello che le riguarda. -->
     @if (selection().size > 0) {
-    <div class="flex shrink-0 items-center gap-1.5 border-t border-border bg-[color-mix(in_srgb,var(--brand)_12%,transparent)] px-2.5 py-2">
-      <span class="text-[11.5px] font-bold text-foreground">{{ (selection().size === 1 ? 'catalog.selectedOne' : 'catalog.selectedCount') | transloco: { count: selection().size } }}</span>
-      <span class="flex-1"></span>
+    <!-- A 380 px il conteggio andava a capo dentro la propria etichetta. Ora non si spezza mai:
+         se lo spazio non basta (font di sistema piu' larghi, altre lingue) scende a capo il gruppo
+         dei pulsanti, intero. -->
+    <div class="flex shrink-0 flex-wrap items-center gap-x-2 gap-y-1.5 border-t border-border bg-[color-mix(in_srgb,var(--brand)_12%,transparent)] px-2 py-2">
+      <span class="whitespace-nowrap text-[11.5px] font-bold text-foreground">{{ (selection().size === 1 ? 'catalog.selectedOne' : 'catalog.selectedCount') | transloco: { count: selection().size } }}</span>
+      <div class="ml-auto flex items-center gap-1">
       @if (confirmingBulkDelete()) {
       <button ui-button variant="destructive" size="xs" (click)="confirmBulkDelete()">{{ 'catalog.confirmBulkDelete' | transloco: { count: selection().size } }}</button>
       <button ui-button variant="outline" size="xs" (click)="confirmingBulkDelete.set(false)">{{ 'catalog.cancel' | transloco }}</button>
@@ -336,7 +361,7 @@ const COLLAPSED_COLLECTIONS_STATE_KEY = 'mocks-collapsed';
       <button ui-button variant="outline" size="xs" (click)="bulkEnabled(true)">{{ 'catalog.bulkEnable' | transloco }}</button>
       <button ui-button variant="outline" size="xs" (click)="bulkEnabled(false)">{{ 'catalog.bulkDisable' | transloco }}</button>
       <button ui-button variant="outline" size="xs" [cdkMenuTriggerFor]="bulkMoveMenu">
-        {{ 'catalog.moveToLabel' | transloco }}
+        {{ 'catalog.bulkMove' | transloco }}
         <ng-icon name="lucideChevronDown" size="0.7rem" class="opacity-70" />
       </button>
       <button ui-button variant="destructive" size="xs" [uiTooltip]="'catalog.deleteSelectedTip' | transloco" [attr.aria-label]="'catalog.deleteSelectedTip' | transloco" (click)="confirmingBulkDelete.set(true)">
@@ -346,6 +371,7 @@ const COLLAPSED_COLLECTIONS_STATE_KEY = 'mocks-collapsed';
         <ng-icon name="lucideX" size="0.75rem" />
       </button>
       }
+      </div>
     </div>
     }
 
@@ -371,10 +397,17 @@ const COLLAPSED_COLLECTIONS_STATE_KEY = 'mocks-collapsed';
     <!-- INTESTAZIONE COLLECTION (riga cartella) -->
     <ng-template #folderHeaderTpl let-col let-depth="depth">
       <div
-        class="group/folder relative flex w-full cursor-pointer items-center gap-1.5 rounded-lg py-1.5 pr-1 text-left transition hover:bg-accent"
+        role="treeitem"
+        [attr.aria-level]="depth + 1"
+        [attr.aria-expanded]="!collapsed().has(col.id)"
+        [attr.data-row-key]="'c:' + col.id"
+        [attr.tabindex]="tabbableKey() === 'c:' + col.id ? 0 : -1"
+        class="group/folder relative flex w-full cursor-pointer items-center gap-1.5 rounded-lg py-1.5 pr-1 text-left transition hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/70"
         [class.mx-drop-into]="dropIntoId() === col.id"
         [style.padding-left.px]="8 + depth * 14"
         (click)="toggleCollapse(col.id)"
+        (focus)="activeRowKey.set('c:' + col.id)"
+        (keydown)="onRowKeydown($event)"
       >
         @for (guide of guides(depth); track guide) {
         <span class="mx-tree-line" [style.left.px]="guide"></span>
@@ -400,7 +433,7 @@ const COLLAPSED_COLLECTIONS_STATE_KEY = 'mocks-collapsed';
           <button ui-button variant="outline" size="sm" [disabled]="store.erasingCollectionId() != null" (click)="cancelCollectionAction()">{{ 'catalog.cancel' | transloco }}</button>
         </span>
         } @else {
-        <button ui-button variant="ghost" size="icon" class="shrink-0 opacity-0 transition focus-visible:opacity-100 group-hover/folder:opacity-100" (click)="$event.stopPropagation()" [cdkMenuTriggerFor]="isUnsorted(col) ? unsortedMenu : folderMenu" [cdkMenuTriggerData]="{ col: col }" [uiTooltip]="'catalog.collectionActionsTip' | transloco">
+        <button ui-button variant="ghost" size="icon" class="shrink-0 opacity-0 transition focus-visible:opacity-100 group-hover/folder:opacity-100" (click)="$event.stopPropagation()" [cdkMenuTriggerFor]="isUnsorted(col) ? unsortedMenu : folderMenu" [cdkMenuTriggerData]="{ col: col }" [uiTooltip]="'catalog.collectionActionsTip' | transloco" [attr.aria-label]="'catalog.collectionActionsTip' | transloco">
           <ng-icon name="lucideEllipsisVertical" size="0.9rem" />
         </button>
         }
@@ -411,8 +444,15 @@ const COLLAPSED_COLLECTIONS_STATE_KEY = 'mocks-collapsed';
     <!-- RIGA ENDPOINT -->
     <ng-template #endpointRowTpl let-ep let-depth="depth">
       <div
+        role="treeitem"
+        [attr.aria-level]="depth + 1"
+        [attr.aria-selected]="ep.id === store.selectedId()"
+        [attr.data-row-key]="'e:' + ep.id"
+        [attr.tabindex]="tabbableKey() === 'e:' + ep.id ? 0 : -1"
         (click)="store.selectMock(ep.id)"
-        class="group relative flex cursor-pointer items-center gap-2 rounded-lg py-1.5 pr-2 transition"
+        (focus)="activeRowKey.set('e:' + ep.id)"
+        (keydown)="onRowKeydown($event)"
+        class="group relative flex cursor-pointer items-center gap-2 rounded-lg py-1.5 pr-2 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/70"
         [style.padding-left.px]="8 + depth * 14"
         [class]="ep.id === store.selectedId() ? 'mx-selected' : 'hover:bg-accent'"
         [class.mx-muted]="!ep.enabled"
@@ -437,23 +477,30 @@ const COLLAPSED_COLLECTIONS_STATE_KEY = 'mocks-collapsed';
           <ng-icon name="lucideCheck" size="0.6rem" />
           }
         </span>
-        <ui-badge [tone]="methodTone(ep.method)" class="w-[42px] shrink-0">{{ ep.method }}</ui-badge>
+        <!-- Da spenta la riga perde il colore, non l'opacita': ogni testo eredita il grigio di
+             .mx-muted, che resta sopra il contrasto AA anche sulla riga selezionata. Il solo
+             grigio pero' si nota poco, su un tema gia' grigio: il badge del metodo si svuota e
+             resta un contorno tratteggiato, un segnale di forma nella colonna che si scorre. -->
+        <ui-badge [tone]="methodTone(ep.method)" [class]="ep.enabled ? 'w-[42px] shrink-0' : DISABLED_BADGE_CLASS">{{ ep.method }}</ui-badge>
         <div class="min-w-0 flex-1">
-          <span class="block truncate font-mono text-[12px] leading-tight" [class]="ep.id === store.selectedId() ? 'text-foreground' : 'text-foreground/80'" [title]="ep.path">{{ ep.path }}</span>
+          <!-- Di un path conta la coda: e' li' che due endpoint della stessa collection si
+               distinguono. La riga e' quindi rtl, cosi' l'ellissi cade in testa, e il testo sta
+               in un <bdi> ltr che lo tiene nel suo verso (slash iniziale compreso). -->
+          <span class="block truncate text-left font-mono text-[12px] leading-tight" dir="rtl" [class]="pathClass(ep)" [title]="ep.path"><bdi dir="ltr">{{ ep.path }}</bdi></span>
           <div class="mt-0.5 flex items-center gap-2 text-[10px]">
-            <span class="flex items-center gap-1" [class]="typeTextClass(ep.type)">
-              <span class="h-1.5 w-1.5 rounded-full" [class]="typeDotClass(ep.type)"></span>
+            <span class="flex items-center gap-1" [class]="typeTextClass(ep)">
+              <span class="h-1.5 w-1.5 rounded-full" [class]="typeDotClass(ep)"></span>
               {{ ep.type }}
             </span>
             @if (ep.status !== null) {
-            <span class="font-mono font-semibold tabular-nums" [class]="statusTextClass(ep.status)">{{ ep.status }}</span>
+            <span class="font-mono font-semibold tabular-nums" [class]="statusTextClass(ep)">{{ ep.status }}</span>
             }
-            <span class="flex items-center gap-0.5 text-muted-foreground">
+            <span class="flex items-center gap-0.5" [class.text-muted-foreground]="ep.enabled">
               <ng-icon name="lucideMessageSquare" size="0.7rem" />
               {{ ep.responses }}
             </span>
             @if (ep.sequenceActive) {
-            <span class="rounded bg-[color-mix(in_srgb,var(--sequence)_16%,transparent)] px-1 font-bold tracking-wide text-sequence" [uiTooltip]="'catalog.sequenceBadgeTip' | transloco">SEQ</span>
+            <span class="rounded px-1 font-bold tracking-wide" [class]="ep.enabled ? 'bg-[color-mix(in_srgb,var(--sequence)_16%,transparent)] text-sequence' : 'bg-white/[0.06]'" [uiTooltip]="'catalog.sequenceBadgeTip' | transloco">SEQ</span>
             }
           </div>
         </div>
@@ -466,6 +513,7 @@ const COLLAPSED_COLLECTIONS_STATE_KEY = 'mocks-collapsed';
           [cdkMenuTriggerFor]="moveMenu"
           [cdkMenuTriggerData]="{ ep: ep }"
           [uiTooltip]="'catalog.moveToCollectionTip' | transloco"
+          [attr.aria-label]="'catalog.moveToCollectionTip' | transloco"
         >
           <ng-icon name="lucideEllipsisVertical" size="0.9rem" />
         </button>
@@ -635,6 +683,7 @@ export class MocksNextCatalog {
   protected readonly store = inject(MocksStore);
   private readonly transloco = inject(TranslocoService);
   private readonly viewState = inject(ViewStateService);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
   /**
    * "/" porta al filtro del catalogo, come in git, less e nella maggior parte dei tool a lista.
@@ -792,8 +841,101 @@ export class MocksNextCatalog {
     buildCatalogRows(this.store.unsortedNode(), this.store.catalogTree(), this.collapsed()),
   );
 
+  /** Badge del metodo su una riga spenta: niente fondo, contorno tratteggiato nel grigio della riga. */
+  protected readonly DISABLED_BADGE_CLASS =
+    'w-[42px] shrink-0 bg-transparent text-inherit ring-0 outline-1 -outline-offset-1 outline-dashed outline-current/70';
+
   protected rowKey(row: CatalogRow): string {
     return row.kind === 'collection' ? `c:${row.node.collection.id}` : `e:${row.endpoint.id}`;
+  }
+
+  // --- navigazione da tastiera (pattern ARIA "tree") ---
+  // Frecce su/giu' fra le righe visibili, destra/sinistra per aprire, chiudere e risalire, Invio o
+  // Spazio per aprire l'endpoint o la cartella. Spunta, menu e switch di una riga restano controlli
+  // a se', raggiunti col Tab come prima.
+
+  /** Righe dell'albero nell'ordine in cui si vedono: l'intestazione di Unsorted, poi la lista piatta. */
+  private readonly navRows = computed<readonly NavRow[]>(() => {
+    const rows: NavRow[] = this.flatRows().map((row) =>
+      row.kind === 'collection'
+        ? { key: this.rowKey(row), collectionId: row.node.collection.id, depth: row.depth }
+        : { key: this.rowKey(row), endpointId: row.endpoint.id, depth: row.depth },
+    );
+    return this.store.unsortedNode()
+      ? [{ key: `c:${UNSORTED_COLLECTION_ID}`, collectionId: UNSORTED_COLLECTION_ID, depth: 0 }, ...rows]
+      : rows;
+  });
+
+  /** Ultima riga che ha avuto il fuoco. */
+  protected readonly activeRowKey = signal<string | null>(null);
+
+  /**
+   * L'unica riga raggiungibile col Tab: l'ultima che ha avuto il fuoco, se si vede ancora;
+   * altrimenti l'endpoint aperto, altrimenti la prima riga.
+   */
+  protected readonly tabbableKey = computed<string | null>(() => {
+    const rows = this.navRows();
+    const active = this.activeRowKey();
+    if (active != null && rows.some((row) => row.key === active)) return active;
+    const selected = `e:${this.store.selectedId()}`;
+    return rows.some((row) => row.key === selected) ? selected : (rows[0]?.key ?? null);
+  });
+
+  /** Freccia giu' dal campo di ricerca: il fuoco entra nell'albero. */
+  protected focusTree(event: Event): void {
+    const key = this.tabbableKey();
+    if (key == null) return;
+    event.preventDefault();
+    this.focusRow(key);
+  }
+
+  protected onRowKeydown(event: KeyboardEvent): void {
+    // I tasti premuti su spunta, menu o switch risalgono fin qui, ma sono loro.
+    if (event.target !== event.currentTarget || event.ctrlKey || event.metaKey || event.altKey) return;
+    const rows = this.navRows();
+    const index = rows.findIndex((row) => row.key === (event.currentTarget as HTMLElement).dataset['rowKey']);
+    const row = rows[index];
+    if (!row) return;
+    const expanded = row.collectionId != null && !this.collapsed().has(row.collectionId);
+
+    switch (event.key) {
+      case 'ArrowDown':
+        this.focusRow(rows[index + 1]?.key);
+        break;
+      case 'ArrowUp':
+        this.focusRow(rows[index - 1]?.key);
+        break;
+      case 'Home':
+        this.focusRow(rows[0].key);
+        break;
+      case 'End':
+        this.focusRow(rows[rows.length - 1].key);
+        break;
+      case 'ArrowRight':
+        if (row.collectionId == null) break;
+        if (!expanded) this.toggleCollapse(row.collectionId);
+        else if (rows[index + 1]?.depth > row.depth) this.focusRow(rows[index + 1].key);
+        break;
+      case 'ArrowLeft':
+        if (expanded) this.toggleCollapse(row.collectionId!);
+        else this.focusRow(rows.slice(0, index).reverse().find((candidate) => candidate.depth < row.depth)?.key);
+        break;
+      case 'Enter':
+      case ' ':
+        if (row.collectionId != null) this.toggleCollapse(row.collectionId);
+        else this.store.selectMock(row.endpointId!);
+        break;
+      default:
+        return;
+    }
+    // Anche quando non c'e' dove andare: le frecce non devono far scorrere il pannello.
+    event.preventDefault();
+  }
+
+  private focusRow(key: string | undefined): void {
+    if (key == null) return;
+    const rows = this.host.nativeElement.querySelectorAll<HTMLElement>('[data-row-key]');
+    Array.from(rows).find((element) => element.dataset['rowKey'] === key)?.focus();
   }
 
   protected isUnsorted(col: CatalogCollectionVM): boolean {
@@ -1018,7 +1160,18 @@ export class MocksNextCatalog {
     return (METHOD_TONES.has(m) ? m : 'neutral') as BadgeTone;
   }
 
-  protected statusTextClass(status: number | null): string {
+  /**
+   * Colore del path: pieno sulla riga aperta, appena attenuato sulle altre. Su una riga spenta non
+   * ne mette nessuno, come gli altri helper qui sotto: il testo eredita il grigio di .mx-muted.
+   */
+  protected pathClass(ep: CatalogEndpointVM): string {
+    if (!ep.enabled) return '';
+    return ep.id === this.store.selectedId() ? 'text-foreground' : 'text-foreground/80';
+  }
+
+  protected statusTextClass(ep: CatalogEndpointVM): string {
+    if (!ep.enabled) return '';
+    const status = ep.status;
     if (status == null) return 'text-muted-foreground';
     if (status >= 500) return 'text-status-5xx/80';
     if (status >= 400) return 'text-status-4xx/80';
@@ -1027,11 +1180,15 @@ export class MocksNextCatalog {
     return 'text-muted-foreground';
   }
 
-  protected typeDotClass(type: MockType): string {
+  protected typeDotClass(ep: CatalogEndpointVM): string {
+    if (!ep.enabled) return 'bg-current';
+    const type = ep.type;
     return type === 'handler' ? 'bg-type-handler/55' : type === 'middleware' ? 'bg-type-middleware/55' : type === 'sequence' ? 'bg-sequence/55' : type === 'sse' || type === 'ws' ? 'bg-brand/55' : 'bg-type-mock/55';
   }
 
-  protected typeTextClass(type: MockType): string {
+  protected typeTextClass(ep: CatalogEndpointVM): string {
+    if (!ep.enabled) return '';
+    const type = ep.type;
     return type === 'handler' ? 'text-type-handler/75' : type === 'middleware' ? 'text-type-middleware/75' : type === 'sequence' ? 'text-sequence/75' : type === 'sse' || type === 'ws' ? 'text-brand/75' : 'text-type-mock/75';
   }
 }

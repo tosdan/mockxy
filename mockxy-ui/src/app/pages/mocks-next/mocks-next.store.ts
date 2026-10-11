@@ -56,6 +56,7 @@ export interface CatalogEndpointVM {
 export interface CatalogCollectionVM {
   readonly id: string;
   readonly name: string;
+  /** Endpoint visibili nell'intero sottoalbero: propri e delle sotto-collection, a ogni livello. */
   readonly count: number;
   readonly depth: number;
   readonly parentId?: string;
@@ -166,9 +167,13 @@ export class MocksStore {
     });
   });
 
-  /** Foresta del catalogo (radici reali + Unsorted) costruita sui mock filtrati e su childOrder. */
+  /**
+   * Foresta del catalogo (radici reali + Unsorted) costruita sui mock filtrati e su childOrder.
+   * Sotto filtro le collection senza risultati spariscono; senza filtro restano anche le vuote,
+   * che altrimenti non si potrebbero riempire.
+   */
   private readonly catalogForest = computed(() =>
-    buildCatalogForest(this.filteredMocks(), this.collections(), this.childOrder()),
+    buildCatalogForest(this.filteredMocks(), this.collections(), this.childOrder(), this.hasActiveFilter()),
   );
   /** Collection di primo livello (Unsorted escluso), come albero annidato con figli misti ordinati. */
   readonly catalogTree = computed(() => this.catalogForest().roots);
@@ -1128,12 +1133,14 @@ export class MocksStore {
  * Costruisce la foresta del catalogo (radici reali + nodo Unsorted) ordinando i figli di ogni nodo
  * secondo `childOrder` (endpoint e sotto-collection intercalati). Gli endpoint nascosti dai filtri
  * vengono esclusi; i ref non ancora presenti in childOrder sono accodati (endpoint, poi collection)
- * per restare robusti durante gli update ottimistici.
+ * per restare robusti durante gli update ottimistici. Con `pruneEmpty` cadono anche le collection
+ * il cui sottoalbero non contiene endpoint.
  */
 function buildCatalogForest(
   items: readonly MockSummary[],
   collections: readonly CollectionSummary[],
   childOrder: Readonly<Record<string, readonly string[]>>,
+  pruneEmpty: boolean,
 ): { roots: CatalogTreeNode[]; unsorted: CatalogTreeNode | null } {
   const itemById = new Map(items.map((item) => [item.id, item]));
   const collectionById = new Map(collections.map((collection) => [collection.id, collection]));
@@ -1177,10 +1184,15 @@ function buildCatalogForest(
   const buildNode = (collection: CollectionSummary, depth: number): CatalogTreeNode => {
     const children: CatalogChild[] = [];
     const endpoints: CatalogEndpointVM[] = [];
+    let nestedCount = 0;
     for (const ref of orderedRefsFor(collection.id)) {
       const childCollection = collectionById.get(ref);
       if (childCollection) {
-        children.push({ kind: 'collection', node: buildNode(childCollection, depth + 1) });
+        const node = buildNode(childCollection, depth + 1);
+        if (!pruneEmpty || node.collection.count > 0) {
+          nestedCount += node.collection.count;
+          children.push({ kind: 'collection', node });
+        }
         continue;
       }
       const item = itemById.get(ref);
@@ -1194,7 +1206,7 @@ function buildCatalogForest(
       collection: {
         id: collection.id,
         name: collection.label,
-        count: endpoints.length,
+        count: endpoints.length + nestedCount,
         depth,
         parentId: collection.parentId || undefined,
         endpoints,
@@ -1207,7 +1219,10 @@ function buildCatalogForest(
   for (const ref of orderedRefsFor(ROOT_ORDER_KEY)) {
     const collection = collectionById.get(ref);
     if (collection) {
-      roots.push(buildNode(collection, 0));
+      const node = buildNode(collection, 0);
+      if (!pruneEmpty || node.collection.count > 0) {
+        roots.push(node);
+      }
     }
   }
 

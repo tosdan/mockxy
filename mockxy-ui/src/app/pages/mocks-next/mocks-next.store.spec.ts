@@ -153,7 +153,7 @@ describe('MocksStore', () => {
       expect(roots.map((r) => r.collection.id)).toEqual(['c1']);
       expect(roots[0].children.map((c) => (c.kind === 'endpoint' ? c.endpoint.id : c.node.collection.id)))
         .toEqual(['e2', 'c2', 'e1']);
-      // il conteggio della collection sono i SOLI endpoint propri (non delle sotto-collection)
+      // la sotto-collection c2 è vuota: al conteggio non aggiunge nulla
       expect(roots[0].collection.count).toBe(2);
       const nested = roots[0].children.find((c) => c.kind === 'collection');
       expect(nested?.kind === 'collection' && nested.node.collection.depth).toBe(1);
@@ -164,6 +164,70 @@ describe('MocksStore', () => {
       expect(store.collectionEndpointCount(UNSORTED_COLLECTION_ID)).toBe(1);
       expect(store.collectionEndpointCount('c1')).toBe(2);
       expect(store.catalogIsEmpty()).toBe(false);
+    });
+
+    // Una collection che ha solo sotto-collection mostrava 0 pur contenendo endpoint a ogni livello.
+    it('conta gli endpoint dell’intero sottoalbero, non solo quelli propri', () => {
+      const store = create();
+      store.mocks.set([
+        summary('e1', { collectionId: 'figlia' }),
+        summary('e2', { collectionId: 'nipote' }),
+        summary('e3', { collectionId: 'nipote' }),
+      ]);
+      store.collections.set([
+        coll('madre'),
+        coll('figlia', { parentId: 'madre' }),
+        coll('nipote', { parentId: 'figlia' }),
+      ]);
+
+      const madre = store.catalogTree()[0];
+      const figlia = madre.children.find((c) => c.kind === 'collection');
+      expect(madre.collection.count).toBe(3);
+      expect(madre.collection.endpoints).toEqual([]);
+      expect(figlia?.kind === 'collection' && figlia.node.collection.count).toBe(3);
+    });
+
+    describe('sotto filtro', () => {
+      function seed(store: MocksStore): void {
+        store.mocks.set([
+          summary('ordine', { collectionId: 'ordini', path: '/api/orders' }),
+          summary('utente', { collectionId: 'utenti', path: '/api/users' }),
+        ]);
+        store.collections.set([
+          coll('negozio'),
+          coll('ordini', { parentId: 'negozio' }),
+          coll('utenti'),
+          coll('vuota'),
+        ]);
+      }
+      const rootIds = (store: MocksStore) => store.catalogTree().map((r) => r.collection.id);
+
+      it('senza filtro restano anche le collection vuote, che altrimenti non si potrebbero riempire', () => {
+        const store = create();
+        seed(store);
+        expect(rootIds(store)).toEqual(['negozio', 'utenti', 'vuota']);
+      });
+
+      it('nasconde le collection senza risultati e tiene gli antenati di quelle che ne hanno', () => {
+        const store = create();
+        seed(store);
+        store.searchTerm.set('orders');
+
+        expect(rootIds(store)).toEqual(['negozio']);
+        const negozio = store.catalogTree()[0];
+        expect(negozio.collection.count).toBe(1);
+        expect(negozio.children.map((c) => c.kind === 'collection' && c.node.collection.id)).toEqual(['ordini']);
+      });
+
+      // Prima restavano le cartelle vuote e il messaggio "nessun risultato" non compariva mai.
+      it('se nulla corrisponde il catalogo risulta vuoto', () => {
+        const store = create();
+        seed(store);
+        store.searchTerm.set('inesistente');
+
+        expect(store.catalogTree()).toEqual([]);
+        expect(store.catalogIsEmpty()).toBe(true);
+      });
     });
 
     it('accoda i ref assenti da childOrder (prima endpoint, poi collection) e ignora i ref orfani', () => {

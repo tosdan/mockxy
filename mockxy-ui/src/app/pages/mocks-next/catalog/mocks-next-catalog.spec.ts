@@ -168,6 +168,21 @@ describe('MocksNextCatalog', () => {
       expect(bulkBarText(fixture)).toContain('2 selezionati');
     });
 
+    // A larghezza minima "2 selezionati" andava a capo dentro la propria etichetta.
+    it('il conteggio non va a capo, e lo spostamento ha un’etichetta corta', () => {
+      const { fixture, store } = create();
+      seedCatalog(store);
+      fixture.detectChanges();
+      boxes(fixture)[0].click();
+      fixture.detectChanges();
+
+      const label = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('span')).find(
+        (span) => span.textContent?.trim() === '1 selezionato',
+      );
+      expect(label?.classList).toContain('whitespace-nowrap');
+      expect(headerButton(fixture, 'Sposta').textContent?.trim()).toBe('Sposta');
+    });
+
     it('shift-click estende dall ultimo spuntato', () => {
       const { fixture, store } = create();
       seedCatalog(store);
@@ -386,6 +401,216 @@ describe('MocksNextCatalog', () => {
 
       const input = (fixture.nativeElement as HTMLElement).querySelector('label input');
       expect(document.activeElement).toBe(input);
+    });
+  });
+
+  /** Catalogo a due livelli: Unsorted con un endpoint spento, e una collection con una figlia. */
+  function seedTree(store: ReturnType<typeof create>['store']) {
+    store.mocks.set([
+      { id: 'sciolto', type: 'mock', method: 'GET', path: '/sciolto', status: 200, disabled: true, configFilePath: 'sciolto' },
+      { id: 'uno', type: 'mock', method: 'GET', path: '/uno', status: 200, disabled: false, configFilePath: 'uno', collectionId: 'madre' },
+      { id: 'due', type: 'mock', method: 'POST', path: '/due', status: 201, disabled: false, configFilePath: 'due', collectionId: 'figlia' },
+    ] as never);
+    store.collections.set([
+      { id: 'madre', label: 'Madre' },
+      { id: 'figlia', label: 'Figlia', parentId: 'madre' },
+    ] as never);
+    store.childOrder.set({ root: ['madre'], madre: ['uno', 'figlia'], figlia: ['due'], unsorted: ['sciolto'] });
+  }
+
+  function treeRows(fixture: ReturnType<typeof create>['fixture']): HTMLElement[] {
+    return Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('[role="treeitem"]'));
+  }
+  function rowOf(fixture: ReturnType<typeof create>['fixture'], key: string): HTMLElement {
+    const found = treeRows(fixture).find((row) => row.dataset['rowKey'] === key);
+    if (!found) throw new Error('riga non trovata: ' + key);
+    return found;
+  }
+
+  // Le righe erano div cliccabili: da tastiera non si apriva un endpoint ne' si chiudeva una
+  // cartella. Ora il catalogo e' un albero ARIA: una sola riga raggiungibile col Tab e le frecce
+  // per muoversi fra le righe. I controlli interni alle righe restano fermate del Tab.
+  describe('navigazione da tastiera', () => {
+    function setup() {
+      const created = create();
+      seedTree(created.store);
+      created.fixture.detectChanges();
+      return created;
+    }
+    function press(fixture: ReturnType<typeof create>['fixture'], key: string, target = document.activeElement!) {
+      const event = new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true });
+      target.dispatchEvent(event);
+      fixture.detectChanges();
+      return event;
+    }
+    const focusedKey = () => (document.activeElement as HTMLElement | null)?.dataset['rowKey'];
+
+    it('espone le righe come albero, con livello e stato di apertura', () => {
+      const { fixture } = setup();
+      const tree = (fixture.nativeElement as HTMLElement).querySelector('[role="tree"]');
+
+      expect(tree?.getAttribute('aria-label')).toBe('Catalogo');
+      expect(treeRows(fixture).map((row) => [row.dataset['rowKey'], row.getAttribute('aria-level')])).toEqual([
+        ['c:unsorted', '1'],
+        ['e:sciolto', '2'],
+        ['c:madre', '1'],
+        ['e:uno', '2'],
+        ['c:figlia', '2'],
+        ['e:due', '3'],
+      ]);
+      expect(rowOf(fixture, 'c:madre').getAttribute('aria-expanded')).toBe('true');
+    });
+
+    it('lascia al Tab una sola riga: la prima, poi quella che ha avuto il fuoco', () => {
+      const { fixture } = setup();
+      const tabbable = () => treeRows(fixture).filter((row) => row.getAttribute('tabindex') === '0');
+
+      expect(tabbable().map((row) => row.dataset['rowKey'])).toEqual(['c:unsorted']);
+
+      rowOf(fixture, 'e:uno').focus();
+      fixture.detectChanges();
+
+      expect(tabbable().map((row) => row.dataset['rowKey'])).toEqual(['e:uno']);
+    });
+
+    it('le frecce su e giù scorrono le righe visibili, Home ed End vanno agli estremi', () => {
+      const { fixture } = setup();
+      rowOf(fixture, 'c:unsorted').focus();
+
+      press(fixture, 'ArrowDown');
+      expect(focusedKey()).toBe('e:sciolto');
+      press(fixture, 'ArrowDown');
+      expect(focusedKey()).toBe('c:madre');
+      press(fixture, 'ArrowUp');
+      expect(focusedKey()).toBe('e:sciolto');
+      press(fixture, 'End');
+      expect(focusedKey()).toBe('e:due');
+      press(fixture, 'Home');
+      expect(focusedKey()).toBe('c:unsorted');
+    });
+
+    it('sinistra chiude la cartella e destra la riapre; da aperta, destra scende al primo figlio', () => {
+      const { fixture } = setup();
+      rowOf(fixture, 'c:madre').focus();
+
+      press(fixture, 'ArrowLeft');
+      expect(rowOf(fixture, 'c:madre').getAttribute('aria-expanded')).toBe('false');
+      expect(treeRows(fixture).map((row) => row.dataset['rowKey'])).not.toContain('e:uno');
+      expect(focusedKey()).toBe('c:madre');
+
+      press(fixture, 'ArrowRight');
+      expect(rowOf(fixture, 'c:madre').getAttribute('aria-expanded')).toBe('true');
+
+      press(fixture, 'ArrowRight');
+      expect(focusedKey()).toBe('e:uno');
+    });
+
+    it('sinistra da un endpoint, o da una cartella chiusa, risale alla cartella che lo contiene', () => {
+      const { fixture } = setup();
+      rowOf(fixture, 'e:due').focus();
+
+      press(fixture, 'ArrowLeft');
+      expect(focusedKey()).toBe('c:figlia');
+      press(fixture, 'ArrowLeft'); // chiude figlia
+      press(fixture, 'ArrowLeft'); // già chiusa: risale
+      expect(focusedKey()).toBe('c:madre');
+    });
+
+    it('Invio apre l’endpoint a fuoco, Spazio chiude la cartella a fuoco', () => {
+      const { fixture, store } = setup();
+      const select = vi.spyOn(store, 'selectMock').mockImplementation(() => undefined);
+
+      rowOf(fixture, 'e:uno').focus();
+      const invio = press(fixture, 'Enter');
+      expect(select).toHaveBeenCalledWith('uno');
+      expect(invio.defaultPrevented).toBe(true);
+
+      rowOf(fixture, 'c:figlia').focus();
+      press(fixture, ' ');
+      expect(rowOf(fixture, 'c:figlia').getAttribute('aria-expanded')).toBe('false');
+    });
+
+    // Spunta, menu e switch stanno dentro la riga: i loro tasti non devono muovere l'albero.
+    it('ignora i tasti premuti sui controlli interni alla riga', () => {
+      const { fixture, store } = setup();
+      const select = vi.spyOn(store, 'selectMock').mockImplementation(() => undefined);
+      const menuButton = rowOf(fixture, 'e:uno').querySelector('button')!;
+      menuButton.focus();
+
+      const event = press(fixture, 'ArrowDown', menuButton);
+      press(fixture, 'Enter', menuButton);
+
+      expect(document.activeElement).toBe(menuButton);
+      expect(event.defaultPrevented).toBe(false);
+      expect(select).not.toHaveBeenCalled();
+    });
+
+    it('freccia giù dal campo di ricerca porta il fuoco nell’albero', () => {
+      const { fixture } = setup();
+      const input = (fixture.nativeElement as HTMLElement).querySelector<HTMLInputElement>('label input')!;
+      input.focus();
+
+      press(fixture, 'ArrowDown', input);
+
+      expect(focusedKey()).toBe('c:unsorted');
+    });
+  });
+
+  describe('riga endpoint', () => {
+    function setup() {
+      const created = create();
+      seedTree(created.store);
+      created.fixture.detectChanges();
+      return created;
+    }
+
+    // L'opacita' portava il testo sotto il contrasto AA: da spenta la riga perde solo il colore.
+    it('da spenta non tiene i colori di metodo, tipo e status: eredita il grigio della riga', () => {
+      const { fixture } = setup();
+      const colored = (row: HTMLElement) =>
+        Array.from(row.querySelectorAll<HTMLElement>('ui-badge, bdi, span'))
+          .flatMap((element) => [element, element.parentElement!])
+          .some((element) => /text-(method|status|type|foreground)/.test(element.className));
+
+      expect(rowOf(fixture, 'e:sciolto').classList).toContain('mx-muted');
+      expect(colored(rowOf(fixture, 'e:sciolto'))).toBe(false);
+      expect(rowOf(fixture, 'e:uno').classList).not.toContain('mx-muted');
+      expect(colored(rowOf(fixture, 'e:uno'))).toBe(true);
+    });
+
+    // Il solo grigio si notava poco: da spenta il badge del metodo resta un contorno tratteggiato.
+    it('da spenta svuota il badge del metodo, da accesa lo lascia pieno', () => {
+      const { fixture } = setup();
+      const badge = (key: string) => rowOf(fixture, key).querySelector('ui-badge')!.classList;
+
+      expect(badge('e:sciolto')).toContain('outline-dashed');
+      expect(badge('e:sciolto')).toContain('bg-transparent');
+      expect(badge('e:sciolto')).not.toContain('ring-1');
+      expect(badge('e:uno')).not.toContain('outline-dashed');
+      expect(badge('e:uno')).toContain('ring-1');
+    });
+
+    // I menu "⋮" di riga e di cartella avevano solo il tooltip: per uno screen reader, "pulsante".
+    it('i pulsanti a sola icona hanno un nome accessibile', () => {
+      const { fixture } = setup();
+      const unnamed = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('button')).filter(
+        (button) => button.textContent?.trim() === '' && !button.getAttribute('aria-label'),
+      );
+
+      expect(unnamed).toEqual([]);
+      expect(rowOf(fixture, 'e:uno').querySelector('button')?.getAttribute('aria-label')).toBe('Sposta in collection');
+      expect(rowOf(fixture, 'c:madre').querySelector('button')?.getAttribute('aria-label')).toBe('Azioni collection');
+    });
+
+    // Troncato in coda, due path della stessa collection diventavano indistinguibili.
+    it('tronca il path in testa: riga rtl, testo in un <bdi> ltr, path intero nel title', () => {
+      const { fixture } = setup();
+      const path = rowOf(fixture, 'e:uno').querySelector<HTMLElement>('[title="/uno"]')!;
+
+      expect(path.getAttribute('dir')).toBe('rtl');
+      expect(path.classList).toContain('truncate');
+      expect(path.querySelector('bdi')?.getAttribute('dir')).toBe('ltr');
+      expect(path.textContent).toBe('/uno');
     });
   });
 

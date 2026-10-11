@@ -83,6 +83,9 @@
   --popover-foreground: #e3e3e6;
   --muted-foreground: #a3a3a3;
   --foreground-faint: #737373;
+  /* Testo di cio' che e' spento ma resta leggibile e cliccabile: almeno 4.5:1 (WCAG AA) su card,
+     hover e riga selezionata. */
+  --foreground-disabled: #96969a;
 
   /* bordi / input / focus */
   --border: rgba(255, 255, 255, 0.09);
@@ -188,12 +191,16 @@
   background: linear-gradient(90deg, rgba(255, 255, 255, 0.085), rgba(255, 255, 255, 0.032) 64%, transparent);
   box-shadow: inset 2px 0 0 0 var(--brand-soft);
 }
-/* Endpoint disabilitato: muted. */
+/* Endpoint disabilitato: perde il colore, non l'opacita'. L'opacita' portava il path sotto il
+   contrasto AA; cosi' la riga resta leggibile e lo stato lo dicono il grigio, il badge del metodo
+   svuotato e lo switch. */
 .mx-muted {
-  opacity: 0.42;
+  color: var(--foreground-disabled);
 }
-.mx-muted:hover {
-  opacity: 0.6;
+/* Il pomello bianco dello switch spento era il punto piu' luminoso di una riga che deve
+   arretrare: prende il grigio del testo (3:1 sulla traccia, quanto serve a un controllo). */
+.mx-muted brn-switch-thumb {
+  background-color: var(--foreground-disabled);
 }
 /* Glow d'angolo dietro l'header del dettaglio. */
 .mx-glow {
