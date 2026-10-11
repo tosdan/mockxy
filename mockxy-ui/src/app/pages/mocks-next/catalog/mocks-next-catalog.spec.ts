@@ -577,6 +577,18 @@ describe('MocksNextCatalog', () => {
       expect(colored(rowOf(fixture, 'e:uno'))).toBe(true);
     });
 
+    // I menu "⋮" di riga e di cartella avevano solo il tooltip: per uno screen reader, "pulsante".
+    it('i pulsanti a sola icona hanno un nome accessibile', () => {
+      const { fixture } = setup();
+      const unnamed = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('button')).filter(
+        (button) => button.textContent?.trim() === '' && !button.getAttribute('aria-label'),
+      );
+
+      expect(unnamed).toEqual([]);
+      expect(rowOf(fixture, 'e:uno').querySelector('button')?.getAttribute('aria-label')).toBe('Sposta in collection');
+      expect(rowOf(fixture, 'c:madre').querySelector('button')?.getAttribute('aria-label')).toBe('Azioni collection');
+    });
+
     // Troncato in coda, due path della stessa collection diventavano indistinguibili.
     it('tronca il path in testa: riga rtl, testo in un <bdi> ltr, path intero nel title', () => {
       const { fixture } = setup();

@@ -255,8 +255,8 @@ interface NavRow {
           (keydown.enter)="saveCreateCollection()"
           (keydown.escape)="cancelCreateCollection()"
         />
-        <button ui-button size="icon" (click)="saveCreateCollection()" [uiTooltip]="'catalog.createTip' | transloco"><ng-icon name="lucideCheck" size="0.85rem" /></button>
-        <button ui-button variant="outline" size="icon" (click)="cancelCreateCollection()" [uiTooltip]="'catalog.cancelTip' | transloco"><ng-icon name="lucideX" size="0.85rem" /></button>
+        <button ui-button size="icon" (click)="saveCreateCollection()" [uiTooltip]="'catalog.createTip' | transloco" [attr.aria-label]="'catalog.createTip' | transloco"><ng-icon name="lucideCheck" size="0.85rem" /></button>
+        <button ui-button variant="outline" size="icon" (click)="cancelCreateCollection()" [uiTooltip]="'catalog.cancelTip' | transloco" [attr.aria-label]="'catalog.cancelTip' | transloco"><ng-icon name="lucideX" size="0.85rem" /></button>
       </div>
       }
     </div>
@@ -323,8 +323,8 @@ interface NavRow {
             (keydown.enter)="saveCreateCollection()"
             (keydown.escape)="cancelCreateCollection()"
           />
-          <button ui-button size="icon" (click)="saveCreateCollection()" [uiTooltip]="'catalog.createTip' | transloco"><ng-icon name="lucideCheck" size="0.85rem" /></button>
-          <button ui-button variant="outline" size="icon" (click)="cancelCreateCollection()" [uiTooltip]="'catalog.cancelTip' | transloco"><ng-icon name="lucideX" size="0.85rem" /></button>
+          <button ui-button size="icon" (click)="saveCreateCollection()" [uiTooltip]="'catalog.createTip' | transloco" [attr.aria-label]="'catalog.createTip' | transloco"><ng-icon name="lucideCheck" size="0.85rem" /></button>
+          <button ui-button variant="outline" size="icon" (click)="cancelCreateCollection()" [uiTooltip]="'catalog.cancelTip' | transloco" [attr.aria-label]="'catalog.cancelTip' | transloco"><ng-icon name="lucideX" size="0.85rem" /></button>
         </div>
         }
         } @else {
@@ -432,7 +432,7 @@ interface NavRow {
           <button ui-button variant="outline" size="sm" [disabled]="store.erasingCollectionId() != null" (click)="cancelCollectionAction()">{{ 'catalog.cancel' | transloco }}</button>
         </span>
         } @else {
-        <button ui-button variant="ghost" size="icon" class="shrink-0 opacity-0 transition focus-visible:opacity-100 group-hover/folder:opacity-100" (click)="$event.stopPropagation()" [cdkMenuTriggerFor]="isUnsorted(col) ? unsortedMenu : folderMenu" [cdkMenuTriggerData]="{ col: col }" [uiTooltip]="'catalog.collectionActionsTip' | transloco">
+        <button ui-button variant="ghost" size="icon" class="shrink-0 opacity-0 transition focus-visible:opacity-100 group-hover/folder:opacity-100" (click)="$event.stopPropagation()" [cdkMenuTriggerFor]="isUnsorted(col) ? unsortedMenu : folderMenu" [cdkMenuTriggerData]="{ col: col }" [uiTooltip]="'catalog.collectionActionsTip' | transloco" [attr.aria-label]="'catalog.collectionActionsTip' | transloco">
           <ng-icon name="lucideEllipsisVertical" size="0.9rem" />
         </button>
         }
@@ -510,6 +510,7 @@ interface NavRow {
           [cdkMenuTriggerFor]="moveMenu"
           [cdkMenuTriggerData]="{ ep: ep }"
           [uiTooltip]="'catalog.moveToCollectionTip' | transloco"
+          [attr.aria-label]="'catalog.moveToCollectionTip' | transloco"
         >
           <ng-icon name="lucideEllipsisVertical" size="0.9rem" />
         </button>
