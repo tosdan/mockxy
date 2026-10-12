@@ -405,7 +405,7 @@ interface NavRow {
         [attr.aria-expanded]="!collapsed().has(col.id)"
         [attr.data-row-key]="'c:' + col.id"
         [attr.tabindex]="tabbableKey() === 'c:' + col.id ? 0 : -1"
-        class="group/folder relative flex w-full cursor-pointer items-center gap-1.5 rounded-lg py-1.5 pr-1 text-left transition hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/70"
+        class="group/folder relative flex w-full cursor-pointer select-none items-center gap-1.5 rounded-lg py-1.5 pr-1 text-left transition hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/70"
         [class.mx-drop-into]="dropIntoId() === col.id"
         [style.padding-left.px]="8 + depth * 14"
         (click)="toggleCollapse(col.id)"
@@ -455,7 +455,7 @@ interface NavRow {
         (click)="store.selectMock(ep.id)"
         (focus)="activeRowKey.set('e:' + ep.id)"
         (keydown)="onRowKeydown($event)"
-        class="group relative flex cursor-pointer items-center gap-2 rounded-lg py-1.5 pr-2 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/70"
+        class="group relative flex cursor-pointer select-none items-center gap-2 rounded-lg py-1.5 pr-2 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/70"
         [style.padding-left.px]="8 + depth * 14"
         [class]="ep.id === store.selectedId() ? 'mx-selected' : 'hover:bg-accent'"
         [class.mx-muted]="!ep.enabled"
@@ -1091,6 +1091,9 @@ export class MocksNextCatalog {
    * Sotto filtro il riordino è sospeso (cdkDragDisabled) e il CDK non emette nulla. Lo si dice a
    * chi prova a trascinare, nel momento in cui serve, invece di tenere un avviso fisso in testata
    * per tutto il tempo del filtro. Il movimento si ascolta solo a pulsante premuto.
+   *
+   * Le righe sono select-none per lo stesso gesto: a trascinamento spento il browser, invece di
+   * spostare la riga, ne selezionerebbe il testo.
    */
   protected onListPointerDown(event: PointerEvent): void {
     if (!this.store.hasActiveFilter() || event.button !== 0) return;
