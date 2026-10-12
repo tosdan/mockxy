@@ -44,6 +44,7 @@ import { UiInput } from '../../../ui/ui-input/ui-input';
 import { UiKbd } from '../../../ui/ui-kbd/ui-kbd';
 import { UiMenu, UiMenuItem } from '../../../ui/ui-menu/ui-menu';
 import { UiSwitch } from '../../../ui/ui-switch/ui-switch';
+import { ToastService } from '../../../ui/ui-toast/ui-toast';
 import { UiTooltip } from '../../../ui/ui-tooltip/ui-tooltip';
 import {
   MocksStore,
@@ -63,6 +64,7 @@ import {
   type CatalogRow,
   type RowRect,
 } from './catalog-dnd';
+import { highlightParts, type TextPart } from './path-highlight';
 
 const METHOD_TONES: ReadonlySet<string> = new Set(['get', 'post', 'put', 'delete', 'patch']);
 
@@ -71,6 +73,9 @@ const MAX_GUIDE_DEPTH = 12;
 
 /** Chiave (ViewStateService) delle collection collassate, ritrovate tornando sulla view. */
 const COLLAPSED_COLLECTIONS_STATE_KEY = 'mocks-collapsed';
+
+/** Spostamento del puntatore (px) oltre il quale una pressione è un tentativo di trascinare. */
+const DRAG_ATTEMPT_PX = 8;
 
 /** Riga dell'albero vista dalla tastiera: una collection (intestazione) o un endpoint. */
 interface NavRow {
@@ -156,7 +161,13 @@ interface NavRow {
       <div class="flex items-center justify-between gap-2">
         <div class="flex items-center gap-2">
           <h2 class="text-[11px] font-bold uppercase tracking-[0.16em] text-muted-foreground">{{ 'catalog.title' | transloco }}</h2>
+          <!-- Sotto filtro dice quanti endpoint restano sul totale. Sta qui e non nella riga dei
+               filtri perche' li' lo spazio finisce appena compare il reset: andrebbe a capo. -->
+          @if (store.hasActiveFilter()) {
+          <ui-badge tone="brand" class="whitespace-nowrap" aria-live="polite">{{ 'catalog.filterCount' | transloco: { shown: store.filteredCount(), total: store.totalEndpoints() } }}</ui-badge>
+          } @else {
           <ui-badge tone="neutral">{{ store.totalEndpoints() }}</ui-badge>
+          }
         </div>
         <div class="flex items-center gap-1.5">
           <!-- Un solo punto di creazione: qui nasce tutto quello che comparira' nell'albero
@@ -233,14 +244,6 @@ interface NavRow {
         }
       </div>
 
-      <!-- Sotto filtro il riordino e' sospeso (cdkDragDisabled): prima spariva in silenzio. -->
-      @if (store.hasActiveFilter()) {
-      <p class="mt-2 flex items-center gap-1.5 rounded-md bg-muted px-2 py-1 text-[11px] text-muted-foreground">
-        <ng-icon name="lucideInfo" size="0.75rem" class="shrink-0" />
-        {{ 'catalog.reorderSuspended' | transloco }}
-      </p>
-      }
-
       @if (creatingCollection() && creatingParentId() === undefined) {
       <div class="mt-2 flex items-center gap-1.5">
         <ng-icon name="lucideFolderPlus" size="0.85rem" class="shrink-0 text-brand" />
@@ -283,7 +286,7 @@ interface NavRow {
       <ng-container *ngTemplateOutlet="folderHeaderTpl; context: { $implicit: u.collection, depth: 0 }" />
       }
       <!-- lista unica: ordine e genitore dei figli dedotti dal rilascio (vedi onDrop) -->
-      <div #listEl cdkDropList cdkDropListSortingDisabled (cdkDropListDropped)="onDrop($event)" class="flex flex-col">
+      <div #listEl cdkDropList cdkDropListSortingDisabled (cdkDropListDropped)="onDrop($event)" (pointerdown)="onListPointerDown($event)" class="flex flex-col">
         @for (row of flatRows(); track rowKey(row)) {
         @if (row.kind === 'collection') {
         <div
@@ -412,7 +415,7 @@ interface NavRow {
         @for (guide of guides(depth); track guide) {
         <span class="mx-tree-line" [style.left.px]="guide"></span>
         }
-        @if (!isUnsorted(col)) {
+        @if (!isUnsorted(col) && !store.hasActiveFilter()) {
         <span class="shrink-0 cursor-grab text-muted-foreground/40 opacity-0 transition group-hover/folder:opacity-100">
           <ng-icon name="lucideGripVertical" size="0.85rem" />
         </span>
@@ -486,7 +489,7 @@ interface NavRow {
           <!-- Di un path conta la coda: e' li' che due endpoint della stessa collection si
                distinguono. La riga e' quindi rtl, cosi' l'ellissi cade in testa, e il testo sta
                in un <bdi> ltr che lo tiene nel suo verso (slash iniziale compreso). -->
-          <span class="block truncate text-left font-mono text-[12px] leading-tight" dir="rtl" [class]="pathClass(ep)" [title]="ep.path"><bdi dir="ltr">{{ ep.path }}</bdi></span>
+          <span class="block truncate text-left font-mono text-[12px] leading-tight" dir="rtl" [class]="pathClass(ep)" [title]="ep.path"><bdi dir="ltr">@for (part of pathParts(ep.path); track $index) {@if (part.match) {<mark class="rounded-[3px] bg-highlight/25" [class]="ep.enabled ? 'text-foreground' : 'text-inherit'">{{ part.text }}</mark>} @else {<span>{{ part.text }}</span>}}</bdi></span>
           <div class="mt-0.5 flex items-center gap-2 text-[10px]">
             <span class="flex items-center gap-1" [class]="typeTextClass(ep)">
               <span class="h-1.5 w-1.5 rounded-full" [class]="typeDotClass(ep)"></span>
@@ -684,6 +687,7 @@ export class MocksNextCatalog {
   private readonly transloco = inject(TranslocoService);
   private readonly viewState = inject(ViewStateService);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+  private readonly toast = inject(ToastService);
 
   /**
    * "/" porta al filtro del catalogo, come in git, less e nella maggior parte dei tool a lista.
@@ -840,6 +844,11 @@ export class MocksNextCatalog {
   protected readonly flatRows = computed<readonly CatalogRow[]>(() =>
     buildCatalogRows(this.store.unsortedNode(), this.store.catalogTree(), this.collapsed()),
   );
+
+  /** Il path a pezzi, con quelli che corrispondono alla ricerca marcati per l'evidenziazione. */
+  protected pathParts(path: string): readonly TextPart[] {
+    return highlightParts(path, this.store.searchTerm());
+  }
 
   /** Badge del metodo su una riga spenta: niente fondo, contorno tratteggiato nel grigio della riga. */
   protected readonly DISABLED_BADGE_CLASS =
@@ -1073,6 +1082,36 @@ export class MocksNextCatalog {
       const targetParentId = targetParentKey === ROOT_ORDER_KEY ? undefined : targetParentKey;
       this.store.reparentCollection(draggedRef, targetParentId, insertAt);
     }
+  }
+
+  /** Avviso "riordino sospeso" ancora a schermo, per non impilarne un altro a ogni tentativo. */
+  private reorderNoticeId: number | null = null;
+
+  /**
+   * Sotto filtro il riordino è sospeso (cdkDragDisabled) e il CDK non emette nulla. Lo si dice a
+   * chi prova a trascinare, nel momento in cui serve, invece di tenere un avviso fisso in testata
+   * per tutto il tempo del filtro. Il movimento si ascolta solo a pulsante premuto.
+   */
+  protected onListPointerDown(event: PointerEvent): void {
+    if (!this.store.hasActiveFilter() || event.button !== 0) return;
+    // Spunta, menu e switch si premono, non si trascinano.
+    if ((event.target as HTMLElement).closest('button, input, [role="checkbox"]')) return;
+
+    const { clientX, clientY } = event;
+    const stop = () => {
+      document.removeEventListener('pointermove', onMove);
+      document.removeEventListener('pointerup', stop);
+      document.removeEventListener('pointercancel', stop);
+    };
+    const onMove = (move: PointerEvent) => {
+      if (Math.hypot(move.clientX - clientX, move.clientY - clientY) < DRAG_ATTEMPT_PX) return;
+      stop();
+      if (this.toast.toasts().some((item) => item.id === this.reorderNoticeId)) return;
+      this.reorderNoticeId = this.toast.show({ title: this.transloco.translate('catalog.reorderSuspended') });
+    };
+    document.addEventListener('pointermove', onMove);
+    document.addEventListener('pointerup', stop);
+    document.addEventListener('pointercancel', stop);
   }
 
   protected onDragStarted(): void {

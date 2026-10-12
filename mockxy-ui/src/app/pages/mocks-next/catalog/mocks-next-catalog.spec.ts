@@ -6,6 +6,7 @@ import { MocksNextCatalog } from './mocks-next-catalog';
 import { MocksStore } from '../mocks-next.store';
 import { MockAdminApiService } from '../../../mock-admin-api.service';
 import { ViewStateService } from '../../../shared/view-state.service';
+import { ToastService } from '../../../ui/ui-toast/ui-toast';
 import { translocoTesting } from '../../../testing/transloco-testing';
 
 describe('MocksNextCatalog', () => {
@@ -313,20 +314,127 @@ describe('MocksNextCatalog', () => {
       expect(resetButton(fixture)).toBeNull();
     });
 
-    // Il riordino e' davvero sospeso sotto filtro (cdkDragDisabled): prima lo era in silenzio.
-    it('dichiara il riordino sospeso quando un filtro è acceso, ricerca inclusa', () => {
-      const { fixture, store } = create();
-      const text = () => (fixture.nativeElement as HTMLElement).textContent ?? '';
-      expect(text()).not.toContain('Riordino sospeso');
+  });
 
-      store.searchTerm.set('utenti');
+  // Sotto filtro il riordino e' sospeso (cdkDragDisabled). Lo diceva un avviso fisso in testata
+  // per tutto il tempo del filtro; ora lo si dice a chi prova a trascinare, quando serve.
+  describe('riordino sospeso sotto filtro', () => {
+    function setup() {
+      const created = create();
+      seedTree(created.store);
+      created.fixture.detectChanges();
+      return { ...created, toast: TestBed.inject(ToastService) };
+    }
+    /** Preme su una riga e sposta il puntatore di `distance` px, come chi inizia a trascinare. */
+    function dragFrom(target: Element, distance: number) {
+      target.dispatchEvent(new MouseEvent('pointerdown', { button: 0, clientX: 10, clientY: 10, bubbles: true }));
+      document.dispatchEvent(new MouseEvent('pointermove', { clientX: 10, clientY: 10 + distance, bubbles: true }));
+      document.dispatchEvent(new MouseEvent('pointerup', { bubbles: true }));
+    }
+    const titles = (toast: ToastService) => toast.toasts().map((item) => item.title);
+
+    it('non tiene più un avviso fisso in testata', () => {
+      const { fixture, store } = setup();
+      store.searchTerm.set('uno');
       fixture.detectChanges();
-      expect(text()).toContain('Riordino sospeso');
 
+      expect((fixture.nativeElement as HTMLElement).textContent).not.toContain('Riordino sospeso');
+    });
+
+    it('avvisa chi prova a trascinare una riga, con la ricerca o con un filtro del menu', () => {
+      const { fixture, store, toast } = setup();
+      store.searchTerm.set('uno');
+      fixture.detectChanges();
+      dragFrom(rowOf(fixture, 'e:uno'), 20);
+      expect(titles(toast)).toEqual(['Riordino sospeso mentre filtri']);
+
+      toast.toasts.set([]);
       store.searchTerm.set('');
       store.typeFilter.set('mock');
       fixture.detectChanges();
-      expect(text()).toContain('Riordino sospeso');
+      dragFrom(rowOf(fixture, 'c:madre'), 20);
+      expect(titles(toast)).toEqual(['Riordino sospeso mentre filtri']);
+    });
+
+    it('non impila un secondo avviso finché il primo è a schermo', () => {
+      const { fixture, store, toast } = setup();
+      store.searchTerm.set('uno');
+      fixture.detectChanges();
+
+      dragFrom(rowOf(fixture, 'e:uno'), 20);
+      dragFrom(rowOf(fixture, 'e:uno'), 20);
+
+      expect(toast.toasts().length).toBe(1);
+    });
+
+    it('tace senza filtro, per un click senza spostamento e sui controlli della riga', () => {
+      const { fixture, store, toast } = setup();
+      dragFrom(rowOf(fixture, 'e:uno'), 20); // nessun filtro: il trascinamento è quello vero
+      store.searchTerm.set('uno');
+      fixture.detectChanges();
+      dragFrom(rowOf(fixture, 'e:uno'), 3); // un click che trema
+      dragFrom(rowOf(fixture, 'e:uno').querySelector('button')!, 20); // il menu della riga
+
+      expect(toast.toasts()).toEqual([]);
+    });
+
+    it('sotto filtro nasconde la maniglia di trascinamento delle cartelle', () => {
+      const { fixture, store } = setup();
+      const grips = () => (fixture.nativeElement as HTMLElement).querySelectorAll('.cursor-grab').length;
+      expect(grips()).toBe(2);
+
+      store.searchTerm.set('uno');
+      fixture.detectChanges();
+
+      expect(grips()).toBe(0);
+    });
+  });
+
+  describe('riscontro del filtro', () => {
+    function setup() {
+      const created = create();
+      seedTree(created.store);
+      created.fixture.detectChanges();
+      return created;
+    }
+    const headerBadge = (fixture: ReturnType<typeof create>['fixture']) =>
+      (fixture.nativeElement as HTMLElement).querySelector('h2 + ui-badge')!;
+
+    it('la testata conta il totale, e sotto filtro quanti endpoint restano sul totale', () => {
+      const { fixture, store } = setup();
+      expect(headerBadge(fixture).textContent?.trim()).toBe('3');
+
+      store.searchTerm.set('uno');
+      fixture.detectChanges();
+      expect(headerBadge(fixture).textContent?.trim()).toBe('1 di 3');
+      expect(headerBadge(fixture).getAttribute('aria-live')).toBe('polite');
+
+      store.searchTerm.set('');
+      store.statusFilter.set('on');
+      fixture.detectChanges();
+      expect(headerBadge(fixture).textContent?.trim()).toBe('2 di 3');
+    });
+
+    it('evidenzia nel path il testo cercato, lasciando intero il testo della riga', () => {
+      const { fixture, store } = setup();
+      const marks = () => Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('mark')).map((m) => m.textContent);
+      expect(marks()).toEqual([]);
+
+      store.searchTerm.set('UN');
+      fixture.detectChanges();
+
+      expect(marks()).toEqual(['un']);
+      expect(rowOf(fixture, 'e:uno').querySelector('bdi')?.textContent).toBe('/uno');
+    });
+
+    // La ricerca guarda anche metodo e tipo: una riga può corrispondere senza che il path c'entri.
+    it('non evidenzia nulla quando a corrispondere è il metodo', () => {
+      const { fixture, store } = setup();
+      store.searchTerm.set('post');
+      fixture.detectChanges();
+
+      expect(rowOf(fixture, 'e:due').querySelector('bdi')?.textContent).toBe('/due');
+      expect((fixture.nativeElement as HTMLElement).querySelectorAll('mark').length).toBe(0);
     });
   });
 

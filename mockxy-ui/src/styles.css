@@ -35,6 +35,7 @@
   --color-brand-soft: var(--brand-soft);
   --color-positive: var(--positive);
   --color-sequence: var(--sequence);
+  --color-highlight: var(--highlight);
   --color-method-get: var(--method-get);
   --color-method-post: var(--method-post);
   --color-method-put: var(--method-put);
@@ -116,6 +117,7 @@
   --sequence: #6ee7b7; /* sequenza di varianti attiva (badge/chip SEQ): il verde acceso dei badge GET/2xx */
   --type-sequence: var(--sequence);
   --switch-off: rgba(120, 120, 128, 0.5);
+  --highlight: #fcd34d; /* evidenziatore del testo cercato: si usa come velo, non pieno */
   --destructive: #fb7185; /* rose-400: bordo/fondo dei controlli distruttivi */
   --destructive-foreground: #ffffff;
   --destructive-soft: #fecdd3; /* rose-200: testo distruttivo soft (come "Elimina" di aurora-2) */

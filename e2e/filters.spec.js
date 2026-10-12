@@ -69,12 +69,39 @@ test.describe("E2 · ricerca e filtri", () => {
     await expect(catalog.getByRole("button", { name: "Reimposta filtri" })).toHaveCount(0);
   });
 
-  test("sotto filtro il catalogo dichiara che il riordino è sospeso", async () => {
-    await expect(catalog.getByText(/Riordino sospeso/)).toHaveCount(0);
+  test("sotto filtro il riordino è sospeso: lo dice a chi prova a trascinare, non con un avviso fisso", async ({ page }) => {
+    const notice = page.locator("ui-toaster").getByText("Riordino sospeso mentre filtri");
+    const dragRow = async (p) => {
+      const box = await path(p).boundingBox();
+      await page.mouse.move(box.x + 10, box.y + box.height / 2);
+      await page.mouse.down();
+      await page.mouse.move(box.x + 10, box.y + box.height / 2 + 40, { steps: 4 });
+      await page.mouse.up();
+    };
+
     await search.fill("users");
-    await expect(catalog.getByText(/Riordino sospeso/)).toBeVisible();
-    await search.fill("");
     await expect(catalog.getByText(/Riordino sospeso/)).toHaveCount(0);
+    await expect(notice).toHaveCount(0);
+
+    await dragRow("/api/users");
+    await expect(notice).toBeVisible();
+    // Il catalogo non è cambiato: l'ordine resta quello delle fixture.
+    await expect(path("/api/users")).toBeVisible();
+  });
+
+  test("la testata conta i risultati sul totale e il path evidenzia il testo cercato", async () => {
+    const count = catalog.locator("h2 + ui-badge");
+    await expect(count).toHaveText("8");
+
+    await search.fill("users");
+    await expect(count).toHaveText("2 di 8");
+    await expect(catalog.locator("mark")).toHaveText(["users", "users"]);
+    // Il testo della riga resta intero: si trova ancora per path esatto.
+    await expect(path("/api/users/:id")).toBeVisible();
+
+    await search.fill("");
+    await expect(count).toHaveText("8");
+    await expect(catalog.locator("mark")).toHaveCount(0);
   });
 
   test("il filtro per tipo Handler mostra solo gli handler, e il pulsante lo dice", async ({ page }) => {
