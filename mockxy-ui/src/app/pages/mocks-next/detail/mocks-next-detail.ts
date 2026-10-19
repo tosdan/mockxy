@@ -88,7 +88,7 @@ const METHOD_TONES: ReadonlySet<string> = new Set(['get', 'post', 'put', 'delete
             [attr.aria-label]="'detail.collectionOf' | transloco"
           >
             <ng-icon name="lucideFolder" size="0.75rem" class="text-brand" />
-            <span class="font-semibold text-foreground/85">{{ collectionLabel() }}</span>
+            <span class="font-semibold text-foreground/85">{{ collectionLabel() ?? ('catalog.unsorted' | transloco) }}</span>
             <ng-icon name="lucideChevronDown" size="0.7rem" />
           </button>
           <div class="flex flex-wrap items-center gap-3">
@@ -293,7 +293,7 @@ const METHOD_TONES: ReadonlySet<string> = new Set(['get', 'post', 'put', 'delete
           <div ui-menu class="min-w-[14rem]">
             <div class="px-2 pb-1 pt-0.5 text-[10px] font-bold uppercase tracking-[0.14em] text-muted-foreground">{{ 'catalog.moveToLabel' | transloco }}</div>
             <button ui-menu-item (click)="moveToCollection(undefined)">
-              <span class="flex-1">Unsorted</span>
+              <span class="flex-1">{{ 'catalog.unsorted' | transloco }}</span>
               @if (!detail()?.collectionId) { <ng-icon name="lucideCheck" size="0.85rem" class="text-brand" /> }
             </button>
             @for (c of store.collections(); track c.id) {
@@ -617,13 +617,16 @@ export class MocksNextDetail {
   /** Lo stesso percorso accorciato dal centro: il file e la sua cartella restano leggibili. */
   protected readonly displayedFilePath = computed(() => shortenWorkspacePath(this.filePath()));
 
-  /** Collection in cui vive l'endpoint, per il breadcrumb. */
+  /**
+   * Collection in cui vive l'endpoint, per il breadcrumb; null per gli endpoint non assegnati, il
+   * cui nome lo traduce il template (cosi' segue il cambio di lingua).
+   */
   protected readonly collectionLabel = computed(() => {
     const collectionId = this.detail()?.collectionId;
     if (collectionId == null) {
-      return 'Unsorted';
+      return null;
     }
-    return this.store.collections().find((c) => c.id === collectionId)?.label ?? 'Unsorted';
+    return this.store.collections().find((c) => c.id === collectionId)?.label ?? null;
   });
 
   /**

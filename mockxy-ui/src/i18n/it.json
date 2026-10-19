@@ -436,11 +436,11 @@
     "moveDown": "Sposta giù",
     "moveUnder": "Sposta sotto",
     "dissolveCollection": "Dissolvi collection",
-    "dissolveCollectionTip": "Rimuove la collection e le sotto-collection, spostando tutti gli endpoint in Unsorted.",
+    "dissolveCollectionTip": "Rimuove la collection e le sotto-collection: i loro endpoint tornano fra i non assegnati.",
     "eraseCollection": "Elimina collection",
     "eraseCollectionTip": "Elimina definitivamente la collection, le sotto-collection e tutti gli endpoint contenuti.",
     "eraseUnsorted": "Elimina tutti gli endpoint",
-    "eraseUnsortedTip": "Elimina definitivamente tutti gli endpoint di Unsorted, inclusi quelli nascosti dai filtri correnti.",
+    "eraseUnsortedTip": "Elimina definitivamente tutti gli endpoint non assegnati, inclusi quelli nascosti dai filtri correnti.",
     "confirmDissolve": "Dissolvi {{count}}",
     "confirmErase": "Elimina {{count}}",
     "moveToLabel": "Sposta in",
@@ -453,6 +453,8 @@
     "confirmBulkDelete": "Elimina {{count}}",
     "deleteSelectedTip": "Elimina i selezionati",
     "clearSelectionTip": "Annulla la selezione",
+    "unsorted": "Non assegnati",
+    "collectionLabelReserved": "Questo nome è riservato agli endpoint non assegnati: scegline un altro.",
     "rootLevel": "Livello principale"
   },
   "detail": {

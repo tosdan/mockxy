@@ -93,7 +93,7 @@ test.describe("E2 · ricerca e filtri", () => {
     await expect(catalog.getByText("Core API")).toBeVisible();
     await expect(catalog.getByText("Admin", { exact: true })).toBeVisible();
     await expect(catalog.getByText("Dynamic")).toHaveCount(0);
-    await expect(catalog.getByText("Unsorted")).toHaveCount(0);
+    await expect(catalog.getByText("Non assegnati")).toHaveCount(0);
 
     await search.fill("");
     await expect(catalog.getByText("Dynamic")).toBeVisible();

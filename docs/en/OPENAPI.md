@@ -23,9 +23,9 @@ For every path+method pair in the spec (imported methods: `get`, `post`, `put`,
   schema** deterministically (same spec → same values);
 - the **collection** in the catalog: from the spec's **tags**, reusing by name the collections
   already present (the comparison ignores case and accents, like manual creation). A tag named
-  like the default collection `Unsorted` doesn't create one: those mocks stay unassigned. A
-  tag whose collection can't be created doesn't block the import: its mocks are created
-  anyway, without a collection.
+  like the default collection, `Unsorted` or `Non assegnati` (its name in the Italian
+  interface), doesn't create one: those mocks stay unassigned. A tag whose collection can't be
+  created doesn't block the import: its mocks are created anyway, without a collection.
 
 Endpoints **already existing** in the workspace (same method+path pair) are not touched: the
 import only creates the new ones. Re-running the import after a spec update adds what's

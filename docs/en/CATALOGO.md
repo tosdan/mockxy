@@ -12,7 +12,8 @@ the catalog thanks to hot reload.
 Endpoints are organized into **collections**, nested too, reorderable and movable with drag &
 drop. The organization is UI metadata (the `.collections.json` file in the mocks folder,
 shared in git like the rest): it touches neither the served paths nor the position of the
-folders on disk. Unassigned endpoints live in the virtual collection of the *unsorted* ones.
+folders on disk. Unassigned endpoints live in the virtual collection **Unsorted** (*Non
+assegnati* in the Italian interface): no collection can take either name.
 
 Three semantics to know:
 

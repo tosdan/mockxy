@@ -39,6 +39,19 @@ export function readRevisionConflict(error: unknown): RevisionConflict | undefin
   return details['code'] === 'REVISION_CONFLICT' ? (details as unknown as RevisionConflict) : undefined;
 }
 
+/**
+ * Un `409 COLLECTION_LABEL_RESERVED`: il nome chiesto per una collection è uno di quelli con cui
+ * la GUI mostra la collection virtuale degli endpoint non assegnati, in una delle sue lingue.
+ */
+export function isReservedCollectionLabelError(error: unknown): boolean {
+  return (
+    isObject(error) &&
+    isObject(error['error']) &&
+    isObject(error['error']['details']) &&
+    error['error']['details']['code'] === 'COLLECTION_LABEL_RESERVED'
+  );
+}
+
 /** Un 404 su un salvataggio: la risorsa della bozza non esiste più. */
 export function isNotFoundError(error: unknown): boolean {
   return isObject(error) && error['status'] === 404;

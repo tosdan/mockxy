@@ -1119,6 +1119,27 @@ describe('MocksStore', () => {
       expect(onSuccess).toHaveBeenCalledTimes(1);
     });
 
+    // Il server rifiuta i nomi della collection virtuale con un messaggio inglese: la GUI lo spiega
+    // nella lingua dell'utente, e non chiama onSuccess (il campo resta aperto per correggere).
+    it('createCollection traduce il rifiuto di un nome riservato', () => {
+      const store = create();
+      const onSuccess = vi.fn();
+      api.createCollection.mockReturnValueOnce(
+        throwError(() => ({
+          status: 409,
+          error: {
+            message: 'Collection label is reserved.',
+            details: { code: 'COLLECTION_LABEL_RESERVED', reservedLabels: ['Unsorted', 'Non assegnati'] },
+          },
+        })),
+      );
+
+      store.createCollection('Non assegnati', undefined, onSuccess);
+
+      expect(store.error()).toBe('Questo nome è riservato agli endpoint non assegnati: scegline un altro.');
+      expect(onSuccess).not.toHaveBeenCalled();
+    });
+
     it('setCollectionEnabled riallinea anche il flag disabled del dettaglio aperto', () => {
       const store = create();
       store.selected.set(detail('e1'));

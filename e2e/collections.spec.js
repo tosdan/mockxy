@@ -43,8 +43,20 @@ test.describe("E9 · collection", () => {
     await kebab("/api/health").click();
     await page.getByRole("menuitem", { name: "Core API" }).click();
 
-    // ora Core API ne ha 4, e health non è più fra i non categorizzati (Unsorted).
+    // ora Core API ne ha 4, e health non è più fra i non assegnati.
     await expect(folderBadge("Core API")).toHaveText("4");
+  });
+
+  test("rifiuta, spiegandolo in italiano, una collection col nome dei non assegnati", async ({ page }) => {
+    await catalog.getByRole("button", { name: "Nuovo", exact: true }).click();
+    await page.getByRole("menuitem", { name: "Nuova collection" }).click();
+    await catalog.getByPlaceholder(/Nome collection/).fill("non assegnati");
+    await catalog.getByPlaceholder(/Nome collection/).press("Enter");
+
+    await expect(page.locator("ui-toaster").getByText("Questo nome è riservato agli endpoint non assegnati: scegline un altro.")).toBeVisible();
+    // Il campo resta aperto per correggere, e nessuna collection è stata creata.
+    await expect(catalog.getByPlaceholder(/Nome collection/)).toBeVisible();
+    await expect(statusBar.getByText(/3\s+collection/)).toBeVisible();
   });
 
   test("crea una sotto-collection annidata sotto una collection", async ({ page }) => {

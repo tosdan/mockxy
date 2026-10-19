@@ -13,14 +13,15 @@ Gli endpoint si organizzano in **collezioni**, anche annidate, riordinabili e sp
 trascinamento. L'organizzazione è un metadato dell'interfaccia (il file `.collections.json`
 nella cartella dei mock, condiviso in git come il resto): non tocca né i percorsi serviti né la
 posizione delle cartelle su disco. Gli endpoint non assegnati vivono nella collezione virtuale
-dei *non ordinati*.
+**Non assegnati** (*Unsorted* nell'interfaccia inglese): nessuna collezione può chiamarsi con
+uno di questi due nomi.
 
 Tre semantiche da conoscere:
 
 - **Dissolvi collection** rimuove il raggruppamento senza eliminare i mock: l'intero sottoalbero
-  di collezioni sparisce e gli endpoint contenuti tornano in Unsorted;
+  di collezioni sparisce e gli endpoint contenuti tornano fra i **Non assegnati**;
 - **Elimina collection** elimina definitivamente l'intero sottoalbero, gli endpoint contenuti e
-  tutte le relative varianti. La stessa azione su Unsorted elimina tutti gli endpoint non assegnati,
+  tutte le relative varianti. La stessa azione su **Non assegnati** elimina tutti gli endpoint non assegnati,
   anche se alcuni sono nascosti dai filtri correnti;
 - **l'interruttore di abilitazione a livello di collezione è un'azione in massa**: scrive lo
   stesso stato `enabled` su *tutti* gli endpoint del sottoalbero, file per file. È il modo

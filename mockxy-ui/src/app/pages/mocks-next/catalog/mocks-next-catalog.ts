@@ -380,7 +380,7 @@ interface NavRow {
     <ng-template #bulkMoveMenu>
       <div ui-menu>
         <button ui-menu-item (click)="bulkAssign(undefined)">
-          <span class="flex-1">Unsorted</span>
+          <span class="flex-1">{{ 'catalog.unsorted' | transloco }}</span>
         </button>
         @for (c of store.collections(); track c.id) {
         <button ui-menu-item (click)="bulkAssign(c.id)">
@@ -422,7 +422,7 @@ interface NavRow {
         }
         <ng-icon name="lucideChevronRight" size="0.85rem" class="shrink-0 text-muted-foreground transition-transform" [class.rotate-90]="!collapsed().has(col.id)" />
         <ng-icon name="lucideFolder" size="0.95rem" class="shrink-0 text-brand" />
-        <span class="min-w-0 flex-1 truncate text-[13px] font-semibold tracking-tight" [class]="depth >= 1 ? 'text-foreground/90' : 'text-foreground'">{{ col.name }}</span>
+        <span class="min-w-0 flex-1 truncate text-[13px] font-semibold tracking-tight" [class]="depth >= 1 ? 'text-foreground/90' : 'text-foreground'">{{ isUnsorted(col) ? ('catalog.unsorted' | transloco) : col.name }}</span>
         @if (confirmingDissolveCollectionId() === col.id) {
         <span class="flex shrink-0 items-center gap-1" (click)="$event.stopPropagation()">
           <button ui-button variant="outline" size="sm" (click)="confirmDissolveCollection(col.id)" [uiTooltip]="'catalog.dissolveCollectionTip' | transloco" [showDelay]="250">{{ 'catalog.confirmDissolve' | transloco: { count: store.collectionEndpointCount(col.id) } }}</button>
@@ -670,7 +670,7 @@ interface NavRow {
       <div ui-menu>
         <div class="px-2 pb-1 pt-0.5 text-[10px] font-bold uppercase tracking-[0.14em] text-muted-foreground">{{ 'catalog.moveToLabel' | transloco }}</div>
         <button ui-menu-item (click)="store.assignCollection(ep.id, undefined)">
-          <span class="flex-1">Unsorted</span>
+          <span class="flex-1">{{ 'catalog.unsorted' | transloco }}</span>
           @if (!ep.collectionId) {
           <ng-icon name="lucideCheck" size="0.85rem" class="text-brand" />
           }

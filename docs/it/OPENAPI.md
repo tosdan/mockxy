@@ -23,8 +23,8 @@ Per ogni coppia percorso+metodo della specifica (metodi importati: `get`, `post`
   schema** in modo deterministico (stessa specifica → stessi valori);
 - la **collezione** nel catalogo: dai **tag** della specifica, riusando per nome le collezioni
   già presenti (il confronto ignora maiuscole e accenti, come la creazione manuale). Un tag
-  chiamato come la collezione di default `Unsorted` non ne crea una: quei mock restano non
-  assegnati. Un tag la cui collezione non si riesce a creare non blocca l'import: i suoi mock
+  chiamato come la collezione dei non assegnati, `Non assegnati` o `Unsorted` (il suo nome
+  nell'interfaccia inglese), non ne crea una: quei mock restano non assegnati. Un tag la cui collezione non si riesce a creare non blocca l'import: i suoi mock
   vengono creati comunque, senza collezione.
 
 Gli endpoint **già esistenti** nel workspace (stessa coppia metodo+percorso) non vengono

@@ -453,6 +453,8 @@
     "confirmBulkDelete": "Delete {{count}}",
     "deleteSelectedTip": "Delete the selected ones",
     "clearSelectionTip": "Clear the selection",
+    "unsorted": "Unsorted",
+    "collectionLabelReserved": "This name is reserved for unassigned endpoints. Choose another one.",
     "rootLevel": "Top level"
   },
   "detail": {

@@ -735,6 +735,18 @@ describe('MocksNextCatalog', () => {
       expect(badge('e:uno')).toContain('ring-1');
     });
 
+    // "Unsorted" era scritto in inglese fisso, anche nell'interfaccia italiana.
+    it('chiama "Non assegnati" il gruppo degli endpoint senza collection, nell’albero e nei menu', () => {
+      const { fixture } = setup();
+      expect(rowOf(fixture, 'c:unsorted').textContent).toContain('Non assegnati');
+      expect(rowOf(fixture, 'c:unsorted').textContent).not.toContain('Unsorted');
+
+      rowOf(fixture, 'e:uno').querySelector<HTMLButtonElement>('button[aria-label="Sposta in collection"]')!.click();
+      fixture.detectChanges();
+
+      expect(menuItems().map((b) => b.textContent?.trim())).toEqual(['Non assegnati', 'Madre', 'Figlia']);
+    });
+
     // I menu "⋮" di riga e di cartella avevano solo il tooltip: per uno screen reader, "pulsante".
     it('i pulsanti a sola icona hanno un nome accessibile', () => {
       const { fixture } = setup();
