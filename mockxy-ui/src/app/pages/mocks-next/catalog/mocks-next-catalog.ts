@@ -30,6 +30,7 @@ import {
   lucidePower,
   lucidePowerOff,
   lucideRefreshCw,
+  lucideRows3,
   lucideSearch,
   lucideShrink,
   lucideTrash2,
@@ -42,7 +43,7 @@ import { UiBadge, type BadgeTone } from '../../../ui/ui-badge/ui-badge';
 import { UiButton } from '../../../ui/ui-button/ui-button';
 import { UiInput } from '../../../ui/ui-input/ui-input';
 import { UiKbd } from '../../../ui/ui-kbd/ui-kbd';
-import { UiMenu, UiMenuItem } from '../../../ui/ui-menu/ui-menu';
+import { UiMenu, UiMenuItem, UiMenuItemCheckbox } from '../../../ui/ui-menu/ui-menu';
 import { UiSwitch } from '../../../ui/ui-switch/ui-switch';
 import { ToastService } from '../../../ui/ui-toast/ui-toast';
 import { UiTooltip } from '../../../ui/ui-tooltip/ui-tooltip';
@@ -73,6 +74,9 @@ const MAX_GUIDE_DEPTH = 12;
 
 /** Chiave (ViewStateService) delle collection collassate, ritrovate tornando sulla view. */
 const COLLAPSED_COLLECTIONS_STATE_KEY = 'mocks-collapsed';
+
+/** Chiave (ViewStateService) della densita' del catalogo: 'compact', o assente per quella normale. */
+const DENSITY_STATE_KEY = 'catalog-density';
 
 /** Spostamento del puntatore (px) oltre il quale una pressione è un tentativo di trascinare. */
 const DRAG_ATTEMPT_PX = 8;
@@ -106,6 +110,7 @@ interface NavRow {
     UiKbd,
     UiMenu,
     UiMenuItem,
+    UiMenuItemCheckbox,
     UiSwitch,
     UiTooltip,
     TranslocoPipe,
@@ -132,6 +137,7 @@ interface NavRow {
       lucidePower,
       lucidePowerOff,
       lucideRefreshCw,
+      lucideRows3,
       lucideSearch,
       lucideShrink,
       lucideTrash2,
@@ -143,6 +149,8 @@ interface NavRow {
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: {
     class: 'flex min-w-0 flex-col border-r border-border bg-card',
+    // Densita' compatta: le righe la leggono con la variante in-[.mx-compact] di Tailwind.
+    '[class.mx-compact]': 'compact()',
     '(document:keydown)': 'onDocumentKeydown($event)',
   },
   styles: [
@@ -403,7 +411,7 @@ interface NavRow {
         [attr.aria-expanded]="!collapsed().has(col.id)"
         [attr.data-row-key]="'c:' + col.id"
         [attr.tabindex]="tabbableKey() === 'c:' + col.id ? 0 : -1"
-        class="group/folder relative flex w-full cursor-pointer select-none items-center gap-1.5 rounded-lg py-1.5 pr-1 text-left transition hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/70"
+        class="group/folder relative flex w-full cursor-pointer select-none items-center gap-1.5 rounded-lg py-1.5 pr-1 text-left transition hover:bg-accent in-[.mx-compact]:py-[3px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/70"
         [class.mx-drop-into]="dropIntoId() === col.id"
         [style.padding-left.px]="8 + depth * 14"
         (click)="toggleCollapse(col.id)"
@@ -434,7 +442,7 @@ interface NavRow {
           <button ui-button variant="outline" size="sm" [disabled]="store.erasingCollectionId() != null" (click)="cancelCollectionAction()">{{ 'catalog.cancel' | transloco }}</button>
         </span>
         } @else {
-        <button ui-button variant="ghost" size="icon" class="shrink-0 opacity-0 transition focus-visible:opacity-100 group-hover/folder:opacity-100" (click)="$event.stopPropagation()" [cdkMenuTriggerFor]="isUnsorted(col) ? unsortedMenu : folderMenu" [cdkMenuTriggerData]="{ col: col }" [uiTooltip]="'catalog.collectionActionsTip' | transloco" [attr.aria-label]="'catalog.collectionActionsTip' | transloco">
+        <button ui-button variant="ghost" size="icon" class="shrink-0 opacity-0 transition focus-visible:opacity-100 group-hover/folder:opacity-100 in-[.mx-compact]:size-6" (click)="$event.stopPropagation()" [cdkMenuTriggerFor]="isUnsorted(col) ? unsortedMenu : folderMenu" [cdkMenuTriggerData]="{ col: col }" [uiTooltip]="'catalog.collectionActionsTip' | transloco" [attr.aria-label]="'catalog.collectionActionsTip' | transloco">
           <ng-icon name="lucideEllipsisVertical" size="0.9rem" />
         </button>
         }
@@ -453,7 +461,7 @@ interface NavRow {
         (click)="store.selectMock(ep.id)"
         (focus)="activeRowKey.set('e:' + ep.id)"
         (keydown)="onRowKeydown($event)"
-        class="group relative flex min-h-11 cursor-pointer select-none items-center gap-2 rounded-lg py-1.5 pr-2 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/70"
+        class="group relative flex min-h-11 cursor-pointer select-none items-center gap-2 rounded-lg py-1.5 pr-2 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/70 in-[.mx-compact]:min-h-[30px] in-[.mx-compact]:py-[3px]"
         [style.padding-left.px]="8 + depth * 14"
         [class]="ep.id === store.selectedId() ? 'mx-selected' : 'hover:bg-accent'"
         [class.mx-muted]="!ep.enabled"
@@ -489,27 +497,36 @@ interface NavRow {
         <ui-badge [tone]="methodTone(ep.method)" [class]="ep.enabled ? 'w-[42px] shrink-0' : DISABLED_BADGE_CLASS">{{ ep.method }}</ui-badge>
         <!-- Il path fa spazio al menu (pr-10, la sua larghezza piu' lo stacco) solo quando il menu
              e' visibile: in hover, col fuoco da tastiera sulla riga o su un suo controllo, a menu
-             aperto. Il fuoco lasciato da un click (sulla spunta, per esempio) non lo mostra. Su un dispositivo a tocco,
-             dove l'hover non c'e', il menu resta sempre visibile e lo spazio sempre riservato. -->
-        <div class="min-w-0 flex-1 group-hover:pr-10 group-focus-visible:pr-10 group-has-[:focus-visible]:pr-10 group-has-[[aria-expanded=true]]:pr-10 pointer-coarse:pr-10">
+             aperto. Il fuoco lasciato da un click (sulla spunta, per esempio) non lo mostra. Su un
+             dispositivo a tocco, dove l'hover non c'e', il menu resta sempre visibile e lo spazio
+             sempre riservato.
+             In densita' compatta path e dettagli stanno su una riga sola, i dettagli a destra. -->
+        <div class="min-w-0 flex-1 group-hover:pr-10 group-focus-visible:pr-10 group-has-[:focus-visible]:pr-10 group-has-[[aria-expanded=true]]:pr-10 pointer-coarse:pr-10 in-[.mx-compact]:flex in-[.mx-compact]:items-center in-[.mx-compact]:gap-2">
           <!-- Il testo evidenziato e' sempre chiaro, anche su una riga spenta: il grigio della riga
                sul velo giallo scendeva a 3:1, sotto AA. -->
           <!-- Di un path conta la coda: e' li' che due endpoint della stessa collection si
                distinguono. La riga e' quindi rtl, cosi' l'ellissi cade in testa, e il testo sta
                in un <bdi> ltr che lo tiene nel suo verso (slash iniziale compreso). -->
-          <span class="block truncate text-left font-mono text-[12px] leading-tight" dir="rtl" [class]="pathClass(ep)" [title]="ep.path"><bdi dir="ltr">@for (part of pathParts(ep.path); track $index) {@if (part.match) {<mark class="rounded-[3px] bg-highlight/25 text-foreground">{{ part.text }}</mark>} @else {<span>{{ part.text }}</span>}}</bdi></span>
-          <div class="mt-0.5 flex items-center gap-2 text-[10px]">
+          <span class="block truncate text-left font-mono text-[12px] leading-tight in-[.mx-compact]:min-w-0 in-[.mx-compact]:flex-1" dir="rtl" [class]="pathClass(ep)" [title]="ep.path"><bdi dir="ltr">@for (part of pathParts(ep.path); track $index) {@if (part.match) {<mark class="rounded-[3px] bg-highlight/25 text-foreground">{{ part.text }}</mark>} @else {<span>{{ part.text }}</span>}}</bdi></span>
+          <!-- Compatta: dei dettagli resta solo cio' che distingue la riga. Il tipo "mock" e una
+               sola response sono il caso comune, quindi spariscono; lo status va in fondo, cosi'
+               gli status delle righe si allineano in colonna. -->
+          <div class="mt-0.5 flex items-center gap-2 text-[10px] in-[.mx-compact]:mt-0 in-[.mx-compact]:shrink-0 in-[.mx-compact]:text-[11px]">
+            @if (!compact() || ep.type !== 'mock') {
             <span class="flex items-center gap-1" [class]="typeTextClass(ep)">
               <span class="h-1.5 w-1.5 rounded-full" [class]="typeDotClass(ep)"></span>
               {{ ep.type }}
             </span>
-            @if (ep.status !== null) {
-            <span class="font-mono font-semibold tabular-nums" [class]="statusTextClass(ep)">{{ ep.status }}</span>
             }
+            @if (ep.status !== null) {
+            <span class="font-mono font-semibold tabular-nums in-[.mx-compact]:order-last" [class]="statusTextClass(ep)">{{ ep.status }}</span>
+            }
+            @if (!compact() || ep.responses !== 1) {
             <span class="flex items-center gap-0.5" [class.text-muted-foreground]="ep.enabled">
               <ng-icon name="lucideMessageSquare" size="0.7rem" />
               {{ ep.responses }}
             </span>
+            }
             @if (ep.sequenceActive) {
             <span class="rounded px-1 font-bold tracking-wide" [class]="ep.enabled ? 'bg-[color-mix(in_srgb,var(--sequence)_16%,transparent)] text-sequence' : 'bg-white/[0.06]'" [uiTooltip]="'catalog.sequenceBadgeTip' | transloco">SEQ</span>
             }
@@ -522,7 +539,7 @@ interface NavRow {
             ui-button
             variant="ghost"
             size="icon"
-            class="pointer-events-none absolute right-full top-1/2 mr-2 -translate-y-1/2 opacity-0 transition group-hover:pointer-events-auto group-hover:opacity-100 group-focus-visible:pointer-events-auto group-focus-visible:opacity-100 group-has-[:focus-visible]:pointer-events-auto group-has-[:focus-visible]:opacity-100 aria-expanded:pointer-events-auto aria-expanded:opacity-100 pointer-coarse:pointer-events-auto pointer-coarse:opacity-100"
+            class="pointer-events-none absolute right-full top-1/2 mr-2 -translate-y-1/2 opacity-0 transition in-[.mx-compact]:size-6 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-visible:pointer-events-auto group-focus-visible:opacity-100 group-has-[:focus-visible]:pointer-events-auto group-has-[:focus-visible]:opacity-100 aria-expanded:pointer-events-auto aria-expanded:opacity-100 pointer-coarse:pointer-events-auto pointer-coarse:opacity-100"
             (click)="$event.stopPropagation()"
             [cdkMenuTriggerFor]="moveMenu"
             [cdkMenuTriggerData]="{ ep: ep }"
@@ -587,6 +604,14 @@ interface NavRow {
         <button ui-menu-item (click)="collapseAll()">
           <ng-icon name="lucideShrink" size="0.9rem" class="text-muted-foreground" />
           <span class="flex-1">{{ 'catalog.collapseAllTip' | transloco }}</span>
+        </button>
+        <div class="my-1 h-px bg-border"></div>
+        <button ui-menu-item-checkbox [checked]="compact()" (triggered)="toggleCompact()">
+          <ng-icon name="lucideRows3" size="0.9rem" class="text-muted-foreground" />
+          <span class="flex-1">{{ 'catalog.compactDensity' | transloco }}</span>
+          @if (compact()) {
+          <ng-icon name="lucideCheck" size="0.85rem" class="text-brand" />
+          }
         </button>
       </div>
     </ng-template>
@@ -836,6 +861,17 @@ export class MocksNextCatalog {
     { value: 'on', labelKey: 'catalog.filterActive' },
     { value: 'off', labelKey: 'catalog.filterInactive' },
   ];
+
+  // --- densita' ---
+  // Persistita come le cartelle (ViewStateService): e' una preferenza di vista, ritrovata tornando
+  // sul catalogo. Nell'app desktop vale per workspace, come la larghezza del pannello.
+  protected readonly compact = signal(this.viewState.read<string>(DENSITY_STATE_KEY) === 'compact');
+
+  protected toggleCompact(): void {
+    const next = !this.compact();
+    this.compact.set(next);
+    this.viewState.write(DENSITY_STATE_KEY, next ? 'compact' : null);
+  }
 
   // --- espandi/collassa cartelle ---
   // Persistite (ViewStateService): tornando sulla view le cartelle sono come lasciate. Id di
