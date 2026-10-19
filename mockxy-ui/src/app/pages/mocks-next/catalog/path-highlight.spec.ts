@@ -36,6 +36,32 @@ describe('highlightParts', () => {
     ]);
   });
 
+  // "İ".toLowerCase() e' lungo due unita': gli indici del testo in minuscolo non valgono
+  // sull'originale, e si evidenziava "oo" al posto di "foo".
+  it('tiene i confini giusti quando la minuscola di un carattere cambia lunghezza', () => {
+    expect(highlightParts('/İ/foo', 'foo')).toEqual([
+      { text: '/İ/', match: false },
+      { text: 'foo', match: true },
+    ]);
+    expect(highlightParts('/İ/foo', 'İ')).toEqual([
+      { text: '/', match: false },
+      { text: 'İ', match: true },
+      { text: '/foo', match: false },
+    ]);
+  });
+
+  it('tratta alla lettera i caratteri speciali delle regex', () => {
+    expect(highlightParts('/api/users/{id}', '{id}')).toEqual([
+      { text: '/api/users/', match: false },
+      { text: '{id}', match: true },
+    ]);
+    expect(highlightParts('/a.b/axb', 'a.b')).toEqual([
+      { text: '/', match: false },
+      { text: 'a.b', match: true },
+      { text: '/axb', match: false },
+    ]);
+  });
+
   it('ignora gli spazi attorno al termine, come la ricerca', () => {
     expect(highlightParts('/api/orders', ' orders ')).toEqual([
       { text: '/api/', match: false },

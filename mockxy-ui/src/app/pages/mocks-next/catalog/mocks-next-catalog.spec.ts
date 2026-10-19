@@ -356,6 +356,20 @@ describe('MocksNextCatalog', () => {
       expect(titles(toast)).toEqual(['Riordino sospeso mentre filtri']);
     });
 
+    it('tace allo scorrimento con un dito: è uno scroll, non un tentativo di riordino', () => {
+      const { fixture, store, toast } = setup();
+      store.searchTerm.set('uno');
+      fixture.detectChanges();
+      const down = new MouseEvent('pointerdown', { button: 0, clientX: 10, clientY: 10, bubbles: true });
+      Object.defineProperty(down, 'pointerType', { value: 'touch' });
+
+      rowOf(fixture, 'e:uno').dispatchEvent(down);
+      document.dispatchEvent(new MouseEvent('pointermove', { clientX: 10, clientY: 60, bubbles: true }));
+      document.dispatchEvent(new MouseEvent('pointercancel', { bubbles: true }));
+
+      expect(toast.toasts()).toEqual([]);
+    });
+
     it('non impila un secondo avviso finché il primo è a schermo', () => {
       const { fixture, store, toast } = setup();
       store.searchTerm.set('uno');
@@ -425,6 +439,29 @@ describe('MocksNextCatalog', () => {
 
       expect(marks()).toEqual(['un']);
       expect(rowOf(fixture, 'e:uno').querySelector('bdi')?.textContent).toBe('/uno');
+    });
+
+    // Su una riga spenta il testo eredita il grigio: sul velo giallo scendeva a 3:1.
+    it('il testo evidenziato resta chiaro anche su una riga spenta', () => {
+      const { fixture, store } = setup();
+      store.searchTerm.set('sciolto');
+      fixture.detectChanges();
+
+      const mark = rowOf(fixture, 'e:sciolto').querySelector('mark')!;
+      expect(mark.classList).toContain('text-foreground');
+      expect(mark.classList).not.toContain('text-inherit');
+    });
+
+    // Una live region che nasce già piena di solito non viene annunciata: deve esistere prima.
+    it('il conteggio vive in un solo elemento, che resta lo stesso accendendo il filtro', () => {
+      const { fixture, store } = setup();
+      const before = headerBadge(fixture);
+      expect(before.getAttribute('aria-live')).toBe('polite');
+
+      store.searchTerm.set('uno');
+      fixture.detectChanges();
+
+      expect(headerBadge(fixture)).toBe(before);
     });
 
     // La ricerca guarda anche metodo e tipo: una riga può corrispondere senza che il path c'entri.

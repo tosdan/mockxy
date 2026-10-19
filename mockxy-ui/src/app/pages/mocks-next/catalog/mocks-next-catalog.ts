@@ -163,11 +163,9 @@ interface NavRow {
           <h2 class="text-[11px] font-bold uppercase tracking-[0.16em] text-muted-foreground">{{ 'catalog.title' | transloco }}</h2>
           <!-- Sotto filtro dice quanti endpoint restano sul totale. Sta qui e non nella riga dei
                filtri perche' li' lo spazio finisce appena compare il reset: andrebbe a capo. -->
-          @if (store.hasActiveFilter()) {
-          <ui-badge tone="brand" class="whitespace-nowrap" aria-live="polite">{{ 'catalog.filterCount' | transloco: { shown: store.filteredCount(), total: store.totalEndpoints() } }}</ui-badge>
-          } @else {
-          <ui-badge tone="neutral">{{ store.totalEndpoints() }}</ui-badge>
-          }
+          <!-- Un solo elemento, sempre presente: una live region creata gia' piena (come faceva
+               un @if) di solito non viene letta, e il primo conteggio andava perso. -->
+          <ui-badge [tone]="store.hasActiveFilter() ? 'brand' : 'neutral'" class="whitespace-nowrap" aria-live="polite">{{ store.hasActiveFilter() ? ('catalog.filterCount' | transloco: { shown: store.filteredCount(), total: store.totalEndpoints() }) : store.totalEndpoints() }}</ui-badge>
         </div>
         <div class="flex items-center gap-1.5">
           <!-- Un solo punto di creazione: qui nasce tutto quello che comparira' nell'albero
@@ -486,10 +484,12 @@ interface NavRow {
              resta un contorno tratteggiato, un segnale di forma nella colonna che si scorre. -->
         <ui-badge [tone]="methodTone(ep.method)" [class]="ep.enabled ? 'w-[42px] shrink-0' : DISABLED_BADGE_CLASS">{{ ep.method }}</ui-badge>
         <div class="min-w-0 flex-1">
+          <!-- Il testo evidenziato e' sempre chiaro, anche su una riga spenta: il grigio della riga
+               sul velo giallo scendeva a 3:1, sotto AA. -->
           <!-- Di un path conta la coda: e' li' che due endpoint della stessa collection si
                distinguono. La riga e' quindi rtl, cosi' l'ellissi cade in testa, e il testo sta
                in un <bdi> ltr che lo tiene nel suo verso (slash iniziale compreso). -->
-          <span class="block truncate text-left font-mono text-[12px] leading-tight" dir="rtl" [class]="pathClass(ep)" [title]="ep.path"><bdi dir="ltr">@for (part of pathParts(ep.path); track $index) {@if (part.match) {<mark class="rounded-[3px] bg-highlight/25" [class]="ep.enabled ? 'text-foreground' : 'text-inherit'">{{ part.text }}</mark>} @else {<span>{{ part.text }}</span>}}</bdi></span>
+          <span class="block truncate text-left font-mono text-[12px] leading-tight" dir="rtl" [class]="pathClass(ep)" [title]="ep.path"><bdi dir="ltr">@for (part of pathParts(ep.path); track $index) {@if (part.match) {<mark class="rounded-[3px] bg-highlight/25 text-foreground">{{ part.text }}</mark>} @else {<span>{{ part.text }}</span>}}</bdi></span>
           <div class="mt-0.5 flex items-center gap-2 text-[10px]">
             <span class="flex items-center gap-1" [class]="typeTextClass(ep)">
               <span class="h-1.5 w-1.5 rounded-full" [class]="typeDotClass(ep)"></span>
@@ -1097,6 +1097,10 @@ export class MocksNextCatalog {
    */
   protected onListPointerDown(event: PointerEvent): void {
     if (!this.store.hasActiveFilter() || event.button !== 0) return;
+    // Al tocco un dito che si muove sulla lista e' uno scorrimento: il browser lo riconosce solo
+    // dopo qualche pixel (pointercancel), e l'avviso partiva prima. Il riordino a tocco, del
+    // resto, sotto filtro non e' mai un gesto possibile da distinguere dallo scroll.
+    if (event.pointerType === 'touch') return;
     // Spunta, menu e switch si premono, non si trascinano.
     if ((event.target as HTMLElement).closest('button, input, [role="checkbox"]')) return;
 

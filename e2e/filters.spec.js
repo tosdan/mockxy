@@ -4,6 +4,46 @@ const { gotoMocks } = require("./helpers");
 // E2 — ricerca e filtri: sola lettura (lo stato è tutto UI-locale, ripristinato da gotoMocks a ogni
 // test). Stato e reset sono controlli in chiaro nella testata; il tipo resta un menu, overlay CDK a
 // livello page, quindi le sue voci si cercano fuori dallo scope del catalogo.
+/**
+ * Contrasto fra il colore del testo di un elemento e il fondo che ci sta davvero sotto: gli strati
+ * semitrasparenti degli antenati, dal primo opaco in su, composti su un canvas come li compone il
+ * browser (anche i colori oklab/color-mix che getComputedStyle restituisce). Di un gradiente di
+ * fondo conta il primo colore, il più coprente: per testo chiaro è la stima prudente.
+ */
+function contrastOf(locator) {
+  return locator.evaluate((element) => {
+    const canvas = document.createElement("canvas");
+    canvas.width = canvas.height = 1;
+    const context = canvas.getContext("2d", { willReadFrequently: true });
+    const paint = (colors) => {
+      context.clearRect(0, 0, 1, 1);
+      for (const color of colors) {
+        context.fillStyle = color;
+        context.fillRect(0, 0, 1, 1);
+      }
+      return [...context.getImageData(0, 0, 1, 1).data];
+    };
+    const layers = [];
+    for (let node = element; node; node = node.parentElement) {
+      const style = getComputedStyle(node);
+      const gradient = style.backgroundImage.match(/(?:rgba?|oklab|oklch|color)\([^)]*\)/);
+      if (gradient) layers.unshift(gradient[0]);
+      layers.unshift(style.backgroundColor);
+      if (paint([style.backgroundColor])[3] === 255) break;
+    }
+    const luminance = ([r, g, b]) => {
+      const [lr, lg, lb] = [r, g, b].map((v) => {
+        const c = v / 255;
+        return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+      });
+      return 0.2126 * lr + 0.7152 * lg + 0.0722 * lb;
+    };
+    const background = luminance(paint(layers));
+    const text = luminance(paint([...layers, getComputedStyle(element).color]));
+    return (Math.max(text, background) + 0.05) / (Math.min(text, background) + 0.05);
+  });
+}
+
 test.describe("E2 · ricerca e filtri", () => {
   let catalog;
   let search;
@@ -87,6 +127,52 @@ test.describe("E2 · ricerca e filtri", () => {
     await expect(notice).toBeVisible();
     // Il catalogo non è cambiato: l'ordine resta quello delle fixture.
     await expect(path("/api/users")).toBeVisible();
+  });
+
+  test("scorrere il catalogo filtrato con un dito non fa comparire l'avviso di riordino", async ({ page }) => {
+    // Un vero pan touch via CDP: Chromium emette pointerdown e qualche pointermove, poi
+    // pointercancel quando riconosce lo scroll. L'avviso partiva su quei primi pointermove.
+    await page.setViewportSize({ width: 1280, height: 480 });
+    await search.fill("api");
+    const scroller = catalog.locator(".mx-scroll");
+    // L'avviso dura pochi secondi: si registra se compare in qualunque momento del gesto, invece
+    // di guardare dopo, quando potrebbe essere già sparito.
+    await page.evaluate(() => {
+      window.__reorderNoticeSeen = false;
+      new MutationObserver(() => {
+        if (document.querySelector("ui-toaster")?.textContent.includes("Riordino sospeso")) window.__reorderNoticeSeen = true;
+      }).observe(document.body, { childList: true, subtree: true, characterData: true });
+    });
+    const box = await path("/api/health").boundingBox();
+    const [x, y] = [box.x + 10, box.y + box.height / 2];
+    const session = await page.context().newCDPSession(page);
+    await session.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ x, y }] });
+    // Passi brevi e distanziati, come un dito: è il ritmo che fa arrivare i pointermove prima
+    // del pointercancel. A passi lunghi e ravvicinati Chromium annulla subito e il difetto non si vede.
+    for (let offset = 12; offset <= 84; offset += 12) {
+      await session.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: [{ x, y: y - offset }] });
+      await page.waitForTimeout(25);
+    }
+    await session.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+
+    // Il gesto è stato davvero uno scroll, e nessun avviso.
+    await expect.poll(() => scroller.evaluate((el) => el.scrollTop)).toBeGreaterThan(0);
+    expect(await page.evaluate(() => window.__reorderNoticeSeen)).toBe(false);
+  });
+
+  test("il testo evidenziato resta sopra AA, anche su una riga spenta, in hover e selezionata", async ({ page }) => {
+    const mark = (p) => catalog.locator(".cdk-drag", { hasText: p }).locator("mark");
+
+    await search.fill("legacy");
+    expect(await contrastOf(mark("/api/legacy")), "spenta").toBeGreaterThanOrEqual(4.5);
+    await mark("/api/legacy").hover();
+    expect(await contrastOf(mark("/api/legacy")), "spenta, in hover").toBeGreaterThanOrEqual(4.5);
+    await mark("/api/legacy").click();
+    await page.mouse.move(1000, 600);
+    expect(await contrastOf(mark("/api/legacy")), "spenta, selezionata").toBeGreaterThanOrEqual(4.5);
+
+    await search.fill("health");
+    expect(await contrastOf(mark("/api/health")), "accesa").toBeGreaterThanOrEqual(4.5);
   });
 
   test("la testata conta i risultati sul totale e il path evidenzia il testo cercato", async () => {
