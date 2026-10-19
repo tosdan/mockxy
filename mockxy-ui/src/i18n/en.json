@@ -419,6 +419,7 @@
     "filterSequence": "Sequence",
     "enableEndpointAria": "Enable endpoint",
     "resetFilters": "Reset filters",
+    "filterCount": "{{shown}} of {{total}}",
     "reorderSuspended": "Reordering paused while filtering",
     "filterTypeLabel": "Type",
     "filterStatusLabel": "Status",

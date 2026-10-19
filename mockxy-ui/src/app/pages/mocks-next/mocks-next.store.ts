@@ -187,6 +187,8 @@ export class MocksStore {
     UNSORTED_COLLECTION_ID,
   ]);
   readonly totalEndpoints = computed(() => this.mocks().length);
+  /** Endpoint che passano ricerca e filtri: sotto filtro, quanti ne restano sul totale. */
+  readonly filteredCount = computed(() => this.filteredMocks().length);
   readonly totalCollections = computed(() => this.collections().length);
 
   /** Numero ricorsivo di endpoint interessati da un'azione massiva sulla collection. */
