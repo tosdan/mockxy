@@ -278,8 +278,10 @@ paths:
       summary: Create a collection
       description: |
         Creates a collection, optionally nested under another one. Labels are compared
-        case- and accent-insensitively among siblings, and the reserved label of the virtual
-        `Unsorted` bucket is rejected. New sub-collections land at the top of their parent;
+        case- and accent-insensitively among siblings. The names the GUI gives the virtual
+        `Unsorted` bucket, `Unsorted` and its Italian `Non assegnati`, are reserved: they are
+        rejected with `409` and `details.code: COLLECTION_LABEL_RESERVED`, with the reserved
+        names in `details.reservedLabels`. New sub-collections land at the top of their parent;
         new top-level collections are appended.
       requestBody:
         required: true

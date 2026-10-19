@@ -26,6 +26,7 @@ describe("importAdminOpenapi: tag insidiosi non abortiscono l'import", () => {
     info: { title: "t", version: "1" },
     paths: {
       "/riservato": { get: operation("Unsorted") },
+      "/riservato-it": { get: operation("non assegnati") },
       "/caffe-accentato": { get: operation("Café") },
       "/caffe-piano": { get: operation("Cafe") },
     },
@@ -42,11 +43,11 @@ describe("importAdminOpenapi: tag insidiosi non abortiscono l'import", () => {
   test("label riservata e coppia accentata: tutti i mock creati, una sola collection", async () => {
     const result = await importAdminOpenapi(mocksDir, document, jest.fn());
 
-    expect(result.created).toBe(3);
+    expect(result.created).toBe(4);
     expect(result.failed).toBe(0);
 
     const items = await listAdminMocks(mocksDir);
-    expect(items).toHaveLength(3);
+    expect(items).toHaveLength(4);
 
     // "Café" e "Cafe" convergono sulla stessa collection; il tag "Unsorted" non ne crea una.
     const collections = (await listAdminCollections(mocksDir, items)).filter((collection) => collection.id);
@@ -56,8 +57,10 @@ describe("importAdminOpenapi: tag insidiosi non abortiscono l'import", () => {
     const byPath = new Map(items.map((item) => [item.path, item]));
     expect(byPath.get("/caffe-accentato").collectionId).toBe(collectionId);
     expect(byPath.get("/caffe-piano").collectionId).toBe(collectionId);
-    // Il mock col tag riservato resta non assegnato (collection virtuale Unsorted).
+    // I mock coi tag riservati restano non assegnati (collection virtuale Unsorted), anche col
+    // nome italiano con cui la GUI la mostra, scritto con altre maiuscole.
     expect(byPath.get("/riservato").collectionId ?? null).toBeNull();
+    expect(byPath.get("/riservato-it").collectionId ?? null).toBeNull();
   });
 });
 
