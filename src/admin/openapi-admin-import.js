@@ -2,7 +2,7 @@ const { planFromDocument } = require("../mocks/openapi-import");
 const { finalizeBatch } = require("./admin-fs");
 const { resolveAdminFilePath } = require("./mock-ids");
 const { createAdminCollection, assignAdminCollection } = require("./collection-operations");
-const { DEFAULT_COLLECTION_LABEL, compareCollectionLabels } = require("./collections-state");
+const { compareCollectionLabels, isReservedCollectionLabel } = require("./collections-state");
 const { listAdminMocks, listAdminCollections } = require("./mock-catalog");
 const { createAdminMock } = require("./endpoint-operations");
 
@@ -33,9 +33,9 @@ async function importAdminOpenapi(mocksDir, document, reloadRuntime, options = {
     knownCollections.find((collection) => compareCollectionLabels(collection.label, label) === 0)?.id;
   const collectionIdByTag = {};
   for (const tag of [...new Set(toCreate.map((item) => item.collection).filter(Boolean))]) {
-    // La label della collection virtuale di default e' riservata (la create la rifiuta con
-    // 409): un tag con quel nome lascia semplicemente i suoi mock non assegnati.
-    if (compareCollectionLabels(tag, DEFAULT_COLLECTION_LABEL) === 0) {
+    // I nomi della collection virtuale sono riservati (la create li rifiuta con 409): un tag
+    // che si chiama cosi', in una qualunque lingua della GUI, lascia i suoi mock non assegnati.
+    if (isReservedCollectionLabel(tag)) {
       continue;
     }
     const existingId = findCollectionIdByLabel(tag);

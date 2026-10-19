@@ -95,6 +95,26 @@ describe('MocksNextDetail', () => {
   // Il flag templated cambia il significato del body che si sta guardando: senza, i segnaposto
   // sono testo letterale. Viveva solo dentro il form di modifica, quindi in vista il body era
   // ambiguo. Il backend lo cancella sulle varianti file-backed: li' il controllo non va mostrato.
+  // "Unsorted" era scritto in inglese fisso, anche nell'interfaccia italiana.
+  describe('collection dell’endpoint nella testata', () => {
+    const crumb = (fixture: ReturnType<typeof create>) =>
+      (fixture.nativeElement as HTMLElement).querySelector('button[aria-label="Collection dell’endpoint"]')!.textContent?.trim();
+
+    it('senza collection dice "Non assegnati"', () => {
+      const fixture = create();
+      expect(crumb(fixture)).toBe('Non assegnati');
+    });
+
+    it('con una collection ne mostra il nome', () => {
+      const fixture = create();
+      store.collections.set([{ id: 'c1', label: 'Pagamenti' }]);
+      store.selected.set(detail({ collectionId: 'c1' }));
+      fixture.detectChanges();
+
+      expect(crumb(fixture)).toBe('Pagamenti');
+    });
+  });
+
   describe('stato Template nella testata del body', () => {
     function chip(fixture: ReturnType<typeof create>): HTMLElement | null {
       return Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('span')).find(

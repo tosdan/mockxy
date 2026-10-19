@@ -13,10 +13,17 @@ const COLLECTIONS_METADATA_FILE = ".collections.json";
 const UNSORTED_COLLECTION_ID = "unsorted";
 // Parent key, in childOrder, that holds the ordered ids of the top-level collections.
 const ROOT_ORDER_KEY = "root";
-const DEFAULT_COLLECTION_LABEL = "Unsorted";
+// I nomi con cui la GUI mostra la collection virtuale degli endpoint non assegnati, uno per
+// lingua: "Unsorted" in inglese, "Non assegnati" in italiano. Nessuna collection reale puo'
+// chiamarsi cosi', altrimenti nei menu comparirebbe un doppione della collection virtuale.
+const RESERVED_COLLECTION_LABELS = Object.freeze(["Unsorted", "Non assegnati"]);
 
 function compareCollectionLabels(leftLabel, rightLabel) {
   return leftLabel.localeCompare(rightLabel, "it", { sensitivity: "base" });
+}
+
+function isReservedCollectionLabel(label) {
+  return RESERVED_COLLECTION_LABELS.some((reserved) => compareCollectionLabels(label, reserved) === 0);
 }
 
 function createEmptyCollectionState() {
@@ -705,8 +712,9 @@ async function listCollectionSummaries(mocksDir, items) {
 module.exports = {
   UNSORTED_COLLECTION_ID,
   ROOT_ORDER_KEY,
-  DEFAULT_COLLECTION_LABEL,
+  RESERVED_COLLECTION_LABELS,
   compareCollectionLabels,
+  isReservedCollectionLabel,
   readCollectionOrderKey,
   readCollectionParentId,
   isCollectionInSubtree,

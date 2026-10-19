@@ -1,7 +1,7 @@
 const { test, expect } = require("@playwright/test");
 const { gotoMocks } = require("./helpers");
 
-// E1 — catalogo: lista completa, conteggi, collezioni, Unsorted in cima, endpoint disabilitato
+// E1 — catalogo: lista completa, conteggi, collezioni, "Non assegnati" in cima, endpoint disabilitato
 // muted. Sola lettura: non tocca lo stato, nessun ripristino necessario.
 // Scope sul componente <mocks-next-catalog> così ogni percorso appare una sola volta (il
 // selezionato compare anche nel dettaglio, fuori scope).
@@ -35,24 +35,25 @@ test.describe("E1 · catalogo", () => {
     await expect(page.locator("app-status-bar").getByText(/7\s+attivi/)).toBeVisible();
   });
 
-  test("mostra le tre collezioni e il gruppo Unsorted", async ({ page }) => {
+  test("mostra le tre collezioni e il gruppo dei non assegnati, col nome italiano", async ({ page }) => {
     const catalog = page.locator("mocks-next-catalog");
-    await expect(catalog.getByText("Unsorted")).toBeVisible();
+    await expect(catalog.getByText("Non assegnati")).toBeVisible();
+    await expect(catalog.getByText("Unsorted")).toHaveCount(0);
     await expect(catalog.getByText("Core API")).toBeVisible();
     await expect(catalog.getByText("Admin", { exact: true })).toBeVisible();
     await expect(catalog.getByText("Dynamic")).toBeVisible();
   });
 
-  test("Unsorted è in cima, poi le collezioni root nell'ordine di childOrder", async ({ page }) => {
+  test("i non assegnati sono in cima, poi le collezioni root nell'ordine di childOrder", async ({ page }) => {
     const catalog = page.locator("mocks-next-catalog");
     const topOf = async (text) => {
       const box = await catalog.getByText(text, { exact: true }).first().boundingBox();
       return box.y;
     };
-    const unsorted = await topOf("Unsorted");
+    const unsorted = await topOf("Non assegnati");
     const core = await topOf("Core API");
     const dynamic = await topOf("Dynamic");
-    expect(unsorted).toBeLessThan(core); // Unsorted sempre per primo
+    expect(unsorted).toBeLessThan(core); // i non assegnati sempre per primi
     expect(core).toBeLessThan(dynamic); // root: [Core API, Dynamic]
   });
 
@@ -72,9 +73,9 @@ test.describe("E1 · catalogo", () => {
     await page.keyboard.press("/");
     await page.keyboard.press("ArrowDown");
     await page.keyboard.press("Home");
-    await expect(focused).toContainText("Unsorted");
+    await expect(focused).toContainText("Non assegnati");
 
-    // Unsorted: health, legacy, status.
+    // Non assegnati: health, legacy, status.
     await page.keyboard.press("ArrowDown");
     await page.keyboard.press("ArrowDown");
     await expect(focused).toContainText("/api/legacy");
@@ -84,7 +85,7 @@ test.describe("E1 · catalogo", () => {
 
     // Da un endpoint, sinistra risale alla cartella; una seconda volta la chiude.
     await page.keyboard.press("ArrowLeft");
-    await expect(focused).toContainText("Unsorted");
+    await expect(focused).toContainText("Non assegnati");
     await page.keyboard.press("ArrowLeft");
     await expect(focused).toHaveAttribute("aria-expanded", "false");
     await expect(catalog.getByText("/api/health", { exact: true })).toHaveCount(0);

@@ -672,6 +672,27 @@ describe("admin API", () => {
     );
   });
 
+  // Sono i nomi con cui la GUI mostra la collection virtuale, in inglese e in italiano: una
+  // collection reale con lo stesso nome sembrerebbe un suo doppione.
+  test("rejects the names of the virtual Unsorted bucket, in every GUI language", async () => {
+    const app = await buildApp();
+
+    for (const label of ["Unsorted", "unsorted", "Non assegnati", "NON ASSEGNATI", "Non assegnàti"]) {
+      const response = await request(app).post("/_admin/api/mocks/collections").send({ label });
+
+      expect({ label, status: response.status }).toEqual({ label, status: 409 });
+      expect(response.body.message).toBe("Collection label is reserved.");
+      expect(response.body.details).toEqual({
+        code: "COLLECTION_LABEL_RESERVED",
+        reservedLabels: ["Unsorted", "Non assegnati"],
+      });
+    }
+    expect(fs.existsSync(path.join(mocksDir, ".collections.json"))).toBe(false);
+
+    const allowed = await request(app).post("/_admin/api/mocks/collections").send({ label: "Assegnati" });
+    expect(allowed.status).toBe(201);
+  });
+
   test("creates a persisted collection and exposes it in the admin catalog", async () => {
     const app = await buildApp();
 

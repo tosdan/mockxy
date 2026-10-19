@@ -3,7 +3,7 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { EMPTY, Observable, catchError, concatMap, defer, filter, finalize, from, map, of, switchMap, throwError, toArray, type MonoTypeOperatorFunction } from 'rxjs';
 import { TranslocoService } from '@jsverse/transloco';
 import { MockAdminApiService } from '../../mock-admin-api.service';
-import { isNotFoundError, isReadInconsistentError, readRevisionConflict } from '../../shared/read-error-message';
+import { isNotFoundError, isReadInconsistentError, isReservedCollectionLabelError, readRevisionConflict } from '../../shared/read-error-message';
 import { ViewStateService } from '../../shared/view-state.service';
 import { RuntimeSyncStore, affects, type RuntimeSyncEvent } from '../../shared/runtime-sync.store';
 import {
@@ -678,7 +678,13 @@ export class MocksStore {
           this.applyCatalogResponse(res);
           onSuccess?.();
         },
-        error: (e) => this.error.set(readErrorMessage(e) ?? this.transloco.translate('common.unexpectedError')),
+        error: (e) =>
+          this.error.set(
+            // Il server lo dice in inglese; e' un caso che la GUI sa spiegare nella lingua dell'utente.
+            isReservedCollectionLabelError(e)
+              ? this.transloco.translate('catalog.collectionLabelReserved')
+              : (readErrorMessage(e) ?? this.transloco.translate('common.unexpectedError')),
+          ),
       });
   }
 
@@ -1239,6 +1245,7 @@ function buildCatalogForest(
     ? {
         collection: {
           id: UNSORTED_COLLECTION_ID,
+          // Nome interno: quello mostrato lo traduce il template (catalog.unsorted).
           name: 'Unsorted',
           count: unsortedEndpoints.length,
           depth: 0,

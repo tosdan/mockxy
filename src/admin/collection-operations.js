@@ -8,8 +8,9 @@ const { isEndpointFileName, readEndpointConfig } = require("./endpoint-files");
 const {
   UNSORTED_COLLECTION_ID,
   ROOT_ORDER_KEY,
-  DEFAULT_COLLECTION_LABEL,
+  RESERVED_COLLECTION_LABELS,
   compareCollectionLabels,
+  isReservedCollectionLabel,
   readCollectionOrderKey,
   readCollectionParentId,
   isCollectionInSubtree,
@@ -45,9 +46,12 @@ const eraseAdminCollection = serializedByWorkspace(eraseAdminCollectionUnlocked)
 
 async function createAdminCollectionUnlocked(mocksDir, payload) {
   const label = normalizeCollectionLabel(payload?.label);
-  const isReservedLabel = compareCollectionLabels(label, DEFAULT_COLLECTION_LABEL) === 0;
-  if (isReservedLabel) {
-    throw createAdminError(409, "Collection label is reserved.");
+  if (isReservedCollectionLabel(label)) {
+    // Il codice permette alla GUI di spiegarlo nella lingua dell'utente.
+    throw createAdminError(409, "Collection label is reserved.", {
+      code: "COLLECTION_LABEL_RESERVED",
+      reservedLabels: RESERVED_COLLECTION_LABELS,
+    });
   }
 
   const collectionState = await readCollectionsState(mocksDir);
