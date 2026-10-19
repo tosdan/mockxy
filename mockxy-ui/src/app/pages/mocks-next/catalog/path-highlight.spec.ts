@@ -50,6 +50,39 @@ describe('highlightParts', () => {
     ]);
   });
 
+  // Il filtro trova "/İ/foo" cercando "i" (la minuscola di "İ" comincia con "i"): l'evidenziazione
+  // deve dirlo, marcando la lettera intera.
+  it('evidenzia ciò che il filtro trova, anche dentro la minuscola di un carattere', () => {
+    expect('/İ/foo'.toLowerCase().includes('i')).toBe(true);
+    expect(highlightParts('/İ/foo', 'i')).toEqual([
+      { text: '/', match: false },
+      { text: 'İ', match: true },
+      { text: '/foo', match: false },
+    ]);
+    expect(highlightParts('/İ/foo', 'i̇/f')).toEqual([
+      { text: '/', match: false },
+      { text: 'İ/f', match: true },
+      { text: 'oo', match: false },
+    ]);
+  });
+
+  // La sigma finale cambia solo in minuscolo a fine parola: il filtro la vede come "ς".
+  it('vede le minuscole che dipendono dal contesto come le vede il filtro', () => {
+    expect('/ΟΔΟΣ'.toLowerCase().includes('ς')).toBe(true);
+    expect(highlightParts('/ΟΔΟΣ', 'ς')).toEqual([
+      { text: '/ΟΔΟ', match: false },
+      { text: 'Σ', match: true },
+    ]);
+  });
+
+    it('tiene interi i caratteri fuori dal piano base', () => {
+    expect(highlightParts('/a/😀/b', '😀')).toEqual([
+      { text: '/a/', match: false },
+      { text: '😀', match: true },
+      { text: '/b', match: false },
+    ]);
+  });
+
   it('tratta alla lettera i caratteri speciali delle regex', () => {
     expect(highlightParts('/api/users/{id}', '{id}')).toEqual([
       { text: '/api/users/', match: false },
