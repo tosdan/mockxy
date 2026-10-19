@@ -453,7 +453,7 @@ interface NavRow {
         (click)="store.selectMock(ep.id)"
         (focus)="activeRowKey.set('e:' + ep.id)"
         (keydown)="onRowKeydown($event)"
-        class="group relative flex cursor-pointer select-none items-center gap-2 rounded-lg py-1.5 pr-2 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/70"
+        class="group relative flex min-h-11 cursor-pointer select-none items-center gap-2 rounded-lg py-1.5 pr-2 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/70"
         [style.padding-left.px]="8 + depth * 14"
         [class]="ep.id === store.selectedId() ? 'mx-selected' : 'hover:bg-accent'"
         [class.mx-muted]="!ep.enabled"
@@ -461,14 +461,18 @@ interface NavRow {
         @for (guide of guides(depth); track guide) {
         <span class="mx-tree-line" [style.left.px]="guide"></span>
         }
-        <!-- La spunta ha un bersaglio suo: cliccare la riga apre l'endpoint, come prima. -->
+        <!-- La spunta ha un bersaglio suo: cliccare la riga apre l'endpoint, come prima. Non tiene
+             posto nella riga: sta nel margine dell'indentazione, a sinistra del metodo, e il fondo
+             copre la linea guida che le passa sotto. Compare in hover, al fuoco e, a selezione
+             iniziata, su tutte le righe; spuntare non sposta nulla. -->
         <span
           role="checkbox"
           tabindex="0"
           [attr.aria-checked]="selection().has(ep.id)"
           [attr.aria-label]="'catalog.selectEndpointAria' | transloco: { path: ep.path }"
-          class="grid size-3.5 shrink-0 place-items-center rounded transition"
-          [class]="selection().has(ep.id) ? 'bg-brand text-background' : 'shadow-[inset_0_0_0_1px_var(--input)] opacity-0 group-hover:opacity-100 focus-visible:opacity-100'"
+          class="absolute top-1/2 z-10 grid size-3.5 -translate-y-1/2 place-items-center rounded transition"
+          [style.left.px]="checkboxLeft(depth)"
+          [class]="selection().has(ep.id) ? 'bg-brand text-background' : 'bg-card shadow-[inset_0_0_0_1px_var(--input)] opacity-0 group-hover:bg-accent group-hover:opacity-100 focus-visible:opacity-100'"
           [class.opacity-100]="selection().size > 0"
           (click)="$event.stopPropagation(); onSelectionClick(ep.id, $event)"
           (keydown.enter)="$event.stopPropagation(); onSelectionClick(ep.id, $event)"
@@ -483,7 +487,11 @@ interface NavRow {
              grigio pero' si nota poco, su un tema gia' grigio: il badge del metodo si svuota e
              resta un contorno tratteggiato, un segnale di forma nella colonna che si scorre. -->
         <ui-badge [tone]="methodTone(ep.method)" [class]="ep.enabled ? 'w-[42px] shrink-0' : DISABLED_BADGE_CLASS">{{ ep.method }}</ui-badge>
-        <div class="min-w-0 flex-1">
+        <!-- Il path fa spazio al menu (pr-10, la sua larghezza piu' lo stacco) solo quando il menu
+             e' visibile: in hover, col fuoco da tastiera sulla riga o su un suo controllo, a menu
+             aperto. Il fuoco lasciato da un click (sulla spunta, per esempio) non lo mostra. Su un dispositivo a tocco,
+             dove l'hover non c'e', il menu resta sempre visibile e lo spazio sempre riservato. -->
+        <div class="min-w-0 flex-1 group-hover:pr-10 group-focus-visible:pr-10 group-has-[:focus-visible]:pr-10 group-has-[[aria-expanded=true]]:pr-10 pointer-coarse:pr-10">
           <!-- Il testo evidenziato e' sempre chiaro, anche su una riga spenta: il grigio della riga
                sul velo giallo scendeva a 3:1, sotto AA. -->
           <!-- Di un path conta la coda: e' li' che due endpoint della stessa collection si
@@ -507,28 +515,32 @@ interface NavRow {
             }
           </div>
         </div>
-        <button
-          ui-button
-          variant="ghost"
-          size="icon"
-          class="shrink-0 opacity-0 transition focus-visible:opacity-100 group-hover:opacity-100"
-          (click)="$event.stopPropagation()"
-          [cdkMenuTriggerFor]="moveMenu"
-          [cdkMenuTriggerData]="{ ep: ep }"
-          [uiTooltip]="'catalog.moveToCollectionTip' | transloco"
-          [attr.aria-label]="'catalog.moveToCollectionTip' | transloco"
-        >
-          <ng-icon name="lucideEllipsisVertical" size="0.9rem" />
-        </button>
-        <span (click)="$event.stopPropagation()">
-          <ui-switch
-            [checked]="ep.enabled"
-            [disabled]="store.savingId() === ep.id"
-            size="sm"
-            (checkedChange)="store.toggleEnabled(ep.id, $event)"
-            [ariaLabel]="'catalog.enableEndpointAria' | transloco"
-          />
-        </span>
+        <!-- Il menu non tiene posto nella riga: si appoggia allo switch, a sinistra, sopra lo spazio
+             che il path gli libera. Finche' e' invisibile non intercetta i click, che vanno alla riga. -->
+        <div class="relative flex shrink-0 items-center">
+          <button
+            ui-button
+            variant="ghost"
+            size="icon"
+            class="pointer-events-none absolute right-full top-1/2 mr-2 -translate-y-1/2 opacity-0 transition group-hover:pointer-events-auto group-hover:opacity-100 group-focus-visible:pointer-events-auto group-focus-visible:opacity-100 group-has-[:focus-visible]:pointer-events-auto group-has-[:focus-visible]:opacity-100 aria-expanded:pointer-events-auto aria-expanded:opacity-100 pointer-coarse:pointer-events-auto pointer-coarse:opacity-100"
+            (click)="$event.stopPropagation()"
+            [cdkMenuTriggerFor]="moveMenu"
+            [cdkMenuTriggerData]="{ ep: ep }"
+            [uiTooltip]="'catalog.moveToCollectionTip' | transloco"
+            [attr.aria-label]="'catalog.moveToCollectionTip' | transloco"
+          >
+            <ng-icon name="lucideEllipsisVertical" size="0.9rem" />
+          </button>
+          <span (click)="$event.stopPropagation()">
+            <ui-switch
+              [checked]="ep.enabled"
+              [disabled]="store.savingId() === ep.id"
+              size="sm"
+              (checkedChange)="store.toggleEnabled(ep.id, $event)"
+              [ariaLabel]="'catalog.enableEndpointAria' | transloco"
+            />
+          </span>
+        </div>
       </div>
     </ng-template>
 
@@ -1191,6 +1203,14 @@ export class MocksNextCatalog {
     { length: MAX_GUIDE_DEPTH + 1 },
     (_unused, depth) => Array.from({ length: depth }, (_u, level) => 8 + level * 14 + 7),
   );
+
+  /**
+   * Ascissa della spunta di un endpoint: nel margine dell'indentazione, 5 px prima del metodo
+   * (che comincia a 8 + depth*14). A profondita' 1, la minima di un endpoint, sta a 3 px dal bordo.
+   */
+  protected checkboxLeft(depth: number): number {
+    return 8 + depth * 14 - 19;
+  }
 
   protected guides(depth: number): readonly number[] {
     return MocksNextCatalog.GUIDE_OFFSETS[Math.min(depth, MAX_GUIDE_DEPTH)];

@@ -38,6 +38,8 @@ test.describe("E9 · collection", () => {
     // Core API conta l'intero sottoalbero: 2 endpoint propri (users, users/:id) più quello di Admin.
     await expect(folderBadge("Core API")).toHaveText("3");
 
+    // Il menu di un endpoint resta fuori dai click finché la riga non è in hover, come per chi usa il mouse.
+    await row("/api/health").first().hover();
     await kebab("/api/health").click();
     await page.getByRole("menuitem", { name: "Core API" }).click();
 
