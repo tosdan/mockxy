@@ -747,6 +747,28 @@ describe('MocksNextCatalog', () => {
       expect(rowOf(fixture, 'c:madre').querySelector('button')?.getAttribute('aria-label')).toBe('Azioni collection');
     });
 
+    // Spunta e menu tenevano posto anche invisibili, circa 60 px tolti al path.
+    it('la spunta sta nel margine dell’indentazione, prima del metodo, a ogni profondità', () => {
+      const { fixture } = setup();
+      const box = (key: string) => rowOf(fixture, key).querySelector<HTMLElement>('[role="checkbox"]')!;
+
+      expect(box('e:uno').classList).toContain('absolute');
+      expect(box('e:uno').style.left).toBe('3px'); // profondità 1: metodo a 22 px
+      expect(box('e:due').style.left).toBe('17px'); // profondità 2: metodo a 36 px
+    });
+
+    it('il menu non tiene posto: invisibile non riceve click, e la riga resta alta come prima', () => {
+      const { fixture } = setup();
+      const row = rowOf(fixture, 'e:uno');
+      const menu = row.querySelector<HTMLElement>('button[aria-label="Sposta in collection"]')!;
+
+      expect(row.classList).toContain('min-h-11');
+      expect(menu.classList).toContain('absolute');
+      expect(menu.classList).toContain('pointer-events-none');
+      expect(menu.classList).toContain('group-hover:pointer-events-auto');
+      expect(menu.classList).toContain('aria-expanded:pointer-events-auto');
+    });
+
     // Troncato in coda, due path della stessa collection diventavano indistinguibili.
     it('tronca il path in testa: riga rtl, testo in un <bdi> ltr, path intero nel title', () => {
       const { fixture } = setup();

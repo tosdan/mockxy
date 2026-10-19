@@ -103,6 +103,61 @@ test.describe("E1 · catalogo", () => {
     expect(Math.abs(labelBox.y + labelBox.height / 2 - (moveBox.y + moveBox.height / 2))).toBeLessThan(4);
   });
 
+  test("spunta e menu non tolgono spazio al path: lo cede il path quando il menu compare", async ({ page }) => {
+    const catalog = page.locator("mocks-next-catalog");
+    const row = catalog.locator('[role="treeitem"]').filter({ hasText: "/api/users/:id" });
+    const path = row.locator('[dir="rtl"]');
+    const menu = row.getByRole("button", { name: "Sposta in collection" });
+    const toggle = row.getByRole("switch");
+    await page.mouse.move(1000, 600);
+
+    // A riposo il path arriva allo switch, separato solo dallo stacco della riga.
+    const rest = { path: await path.boundingBox(), toggle: await toggle.boundingBox(), row: await row.boundingBox() };
+    expect(rest.toggle.x - (rest.path.x + rest.path.width)).toBeLessThanOrEqual(12);
+    await expect(menu).toHaveCSS("opacity", "0");
+
+    // In hover il menu compare accanto allo switch e il path si ritira per lasciarlo libero.
+    await row.hover();
+    await expect(menu).toHaveCSS("opacity", "1");
+    const hover = { path: await path.boundingBox(), menu: await menu.boundingBox(), row: await row.boundingBox() };
+    expect(hover.path.x + hover.path.width).toBeLessThanOrEqual(hover.menu.x);
+    expect(hover.menu.x + hover.menu.width).toBeLessThanOrEqual(rest.toggle.x);
+    // Nessun salto in verticale fra riposo e hover.
+    expect(hover.row.height).toBe(rest.row.height);
+  });
+
+  test("spuntare un endpoint non sposta la riga, e il click non lascia il menu acceso", async ({ page }) => {
+    const catalog = page.locator("mocks-next-catalog");
+    const row = catalog.locator('[role="treeitem"]').filter({ hasText: "/api/health" });
+    const badge = row.locator("ui-badge");
+    const before = await badge.boundingBox();
+
+    await row.getByRole("checkbox").click();
+    await page.mouse.move(1000, 600);
+
+    await expect(row.getByRole("checkbox")).toHaveAttribute("aria-checked", "true");
+    expect((await badge.boundingBox()).x).toBe(before.x);
+    await expect(row.getByRole("button", { name: "Sposta in collection" })).toHaveCSS("opacity", "0");
+  });
+
+  test("col fuoco da tastiera sulla riga il menu compare, e col Tab ci si arriva", async ({ page }) => {
+    const catalog = page.locator("mocks-next-catalog");
+    await page.keyboard.press("/");
+    await page.keyboard.press("ArrowDown");
+    await page.keyboard.press("Home");
+    await page.keyboard.press("ArrowDown"); // /api/health
+    await expect(catalog.locator('[role="treeitem"]:focus')).toContainText("/api/health");
+    const row = catalog.locator('[role="treeitem"]').filter({ hasText: "/api/health" });
+    const menu = row.getByRole("button", { name: "Sposta in collection" });
+    await expect(menu).toHaveCSS("opacity", "1");
+
+    await page.keyboard.press("Tab"); // la spunta
+    await page.keyboard.press("Tab"); // il menu
+    await expect(menu).toBeFocused();
+    await page.keyboard.press("Enter");
+    await expect(page.getByRole("menuitem", { name: "Core API" })).toBeVisible();
+  });
+
   test("un path lungo si tronca in testa: la coda resta visibile", async ({ page }) => {
     const catalog = page.locator("mocks-next-catalog");
     // Si allunga un path direttamente nel DOM: le fixture non ne hanno di abbastanza lunghi.
