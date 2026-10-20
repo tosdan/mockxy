@@ -22,10 +22,12 @@ test.describe("E16 · monitor → crea mock", () => {
     const monitor = page.locator("app-monitor-next");
     await expect(monitor.getByText("/api/catturato-e2e").first()).toBeVisible();
 
-    // Modalità selezione → spunta la richiesta → crea mock.
-    await monitor.getByRole("button", { name: "Seleziona" }).click();
-    await monitor.getByText("/api/catturato-e2e").first().click();
-    await monitor.getByRole("button", { name: "Crea mock" }).first().click();
+    // Spunta la richiesta dalla sua casella → crea mock dalla barra in fondo alla lista.
+    const row = monitor.getByRole("option").filter({ hasText: "/api/catturato-e2e" });
+    await row.hover();
+    await row.locator("[data-check]").click();
+    await expect(monitor.getByText("1 selezionate")).toBeVisible();
+    await monitor.getByRole("button", { name: "Crea mock", exact: true }).click();
 
     // Feedback di successo.
     await expect(page.locator("ui-toaster").getByText("Mock creati")).toBeVisible();
@@ -36,6 +38,34 @@ test.describe("E16 · monitor → crea mock", () => {
     const catalog = page.locator("mocks-next-catalog");
     await expect(catalog.getByText("/api/catturato-e2e", { exact: true })).toBeVisible();
     await expect(page.locator("app-status-bar").getByText(/9\s+endpoint/)).toBeVisible();
+  });
+
+  // Come nel catalogo: il clic sulla riga apre, la casella spunta, la tastiera fa entrambe le cose.
+  test("il clic sulla riga apre senza spuntare; da tastiera le frecce aprono e Spazio spunta", async ({ page, request }) => {
+    for (const p of ["/api/uno-e2e", "/api/due-e2e", "/api/tre-e2e"]) await request.get(`${E2E_BACKEND}${p}`);
+
+    await gotoMonitor(page);
+    const monitor = page.locator("app-monitor-next");
+    const rows = monitor.getByRole("option");
+    await expect(rows).toHaveCount(3);
+    const detail = monitor.locator(".font-mono.text-\\[17px\\]");
+
+    await rows.filter({ hasText: "/api/due-e2e" }).click();
+    await expect(detail).toHaveText("/api/due-e2e");
+    await expect(monitor.getByRole("option", { selected: true })).toHaveCount(0);
+
+    // Le voci sono dalla piu' recente: giu' dalla seconda si arriva a /api/uno-e2e.
+    await page.keyboard.press("ArrowDown");
+    await expect(detail).toHaveText("/api/uno-e2e");
+    await expect(rows.filter({ hasText: "/api/uno-e2e" })).toBeFocused();
+    await page.keyboard.press("Space");
+    await page.keyboard.press("Home");
+    await page.keyboard.press("Shift+Space");
+    await expect(monitor.getByRole("option", { selected: true })).toHaveCount(3);
+    await expect(monitor.getByText("3 selezionate")).toBeVisible();
+
+    await monitor.getByRole("button", { name: "Annulla la selezione" }).click();
+    await expect(monitor.getByRole("option", { selected: true })).toHaveCount(0);
   });
 
   // Piano agent/API, §13 C7: la creazione la fa il server, e l'attivazione va dichiarata.

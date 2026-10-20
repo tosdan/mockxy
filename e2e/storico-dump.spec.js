@@ -47,7 +47,7 @@ test.describe("E17 · storico dump → crea mock", () => {
 
     await gotoStorico(page);
     const storico = page.locator("app-storico-dump");
-    const rows = storico.locator("cdk-virtual-scroll-viewport button");
+    const rows = storico.getByRole("option");
     await expect(rows).toHaveCount(3);
 
     const health = rows.filter({ hasText: "/api/health" });
@@ -69,6 +69,38 @@ test.describe("E17 · storico dump → crea mock", () => {
     await expect(rows).toHaveCount(3);
   });
 
+  // Prima ogni clic sulla riga la apriva e insieme la spuntava.
+  test("il clic sulla riga apre senza spuntare; la casella spunta; da tastiera frecce e Spazio", async ({ page, request }) => {
+    await setDumpEnabled(request, true);
+    for (const p of ["/api/uno-e2e", "/api/due-e2e", "/api/tre-e2e"]) await request.get(`${E2E_BACKEND}${p}`);
+    await expect.poll(async () => await flushDump(request), { timeout: 8000 }).toBeGreaterThanOrEqual(3);
+    await setDumpEnabled(request, false);
+
+    await gotoStorico(page);
+    const storico = page.locator("app-storico-dump");
+    const rows = storico.getByRole("option");
+    await expect(rows).toHaveCount(3);
+    const current = storico.locator('[role="option"][aria-current="true"]');
+
+    await rows.filter({ hasText: "/api/due-e2e" }).click();
+    await expect(current).toContainText("/api/due-e2e");
+    await expect(storico.getByRole("option", { selected: true })).toHaveCount(0);
+
+    await rows.filter({ hasText: "/api/tre-e2e" }).locator("[data-check]").click();
+    await expect(storico.getByRole("option", { selected: true })).toHaveCount(1);
+    await expect(current).toContainText("/api/due-e2e"); // spuntare non apre
+
+    // Il fuoco resta sulla lista: la voce attiva la dice aria-activedescendant.
+    await expect(storico.getByRole("listbox")).toBeFocused();
+    await page.keyboard.press("ArrowUp");
+    await expect(current).toContainText("/api/uno-e2e");
+    await page.keyboard.press("Space");
+    await expect(storico.getByRole("option", { selected: true })).toHaveCount(2);
+    await expect(storico.getByText("2 selezionate")).toBeVisible();
+    const activeId = await storico.getByRole("listbox").getAttribute("aria-activedescendant");
+    await expect(storico.locator(`[id="${activeId}"]`)).toContainText("/api/uno-e2e");
+  });
+
   test("una entry selezionata nello storico diventa un mock nel catalogo", async ({ page, request }) => {
     await seedDump(request);
 
@@ -77,9 +109,9 @@ test.describe("E17 · storico dump → crea mock", () => {
     // .first(): il path compare nella riga della lista e nel pannello dettaglio (auto-focus).
     await expect(storico.getByText("/api/dump-e2e").first()).toBeVisible();
 
-    // Seleziona tutte le entry caricate → crea mock dalla selezione.
+    // Seleziona tutte le entry caricate → crea mock dalla barra in fondo alla lista.
     await storico.getByRole("button", { name: "Seleziona caricate" }).click();
-    await storico.getByRole("button", { name: /Crea mock \(/ }).click();
+    await storico.getByRole("button", { name: "Crea mock", exact: true }).click();
     await expect(page.locator("ui-toaster").getByText("Mock creati")).toBeVisible();
 
     // Il mock compare nel catalogo (8 → 9).

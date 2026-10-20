@@ -27,6 +27,7 @@ import { ToastService } from '../../ui/ui-toast/ui-toast';
 import { MockAdminApiService } from '../../mock-admin-api.service';
 import { summarizeBatchAttention, type DumpCreateMocksResult, type DumpEntry, type DumpReadCursor, type DumpReadFilters, type DumpSelection, type MonitorDumpFile } from '../../mock-admin-api.types';
 import { MOCK_METHODS } from '../../mock-admin-ui.constants';
+import { listNavigationTarget, toggleListSelection } from '../../shared/list-selection';
 import { readBatchPartialResult } from '../../shared/read-error-message';
 
 const PAGE_SIZE = 300;
@@ -76,11 +77,9 @@ const ROW_HEIGHT = 56;
 
         <div class="ml-auto flex items-center gap-2">
           <button ui-button variant="outline" size="sm" [cdkMenuTriggerFor]="filesMenu" [disabled]="creating()"><ng-icon name="lucideLayers" size="0.9rem" /> {{ 'storico.files' | transloco: { count: files().length } }}</button>
+          <!-- "Crea mock" e "Annulla" stanno nella barra in fondo alla lista, che compare con una
+               selezione, come nel catalogo e nel Monitor. Qui resta il modo di spuntare tutto. -->
           <button ui-button variant="outline" size="sm" [disabled]="entries().length === 0" (click)="selectAllLoaded()"><ng-icon name="lucideCheck" size="0.9rem" /> {{ 'storico.selectLoaded' | transloco }}</button>
-          @if (selectedCount() > 0) {
-          <button ui-button variant="outline" size="sm" (click)="clearSelection()"><ng-icon name="lucideX" size="0.9rem" /> {{ 'storico.deselect' | transloco }}</button>
-          }
-          <button ui-button size="sm" [disabled]="selectedCount() === 0 || creating()" (click)="createFromSelected()"><ng-icon name="lucidePlus" size="0.9rem" /> {{ 'storico.createMock' | transloco: { count: selectedCount() } }}</button>
         </div>
       </header>
 
@@ -118,16 +117,32 @@ const ROW_HEIGHT = 56;
 
       <!-- BODY: lista virtualizzata + dettaglio -->
       <div class="relative z-10 flex min-h-0 flex-1">
-        <cdk-virtual-scroll-viewport #viewport [itemSize]="rowHeight" class="mx-scroll min-h-0 shrink-0 border-r border-border" [style.width.px]="listWidth()" (scrolledIndexChange)="onScroll()">
-          <button
+        <!-- Lista a selezione multipla, come il Monitor: le frecce spostano la voce attiva e la
+             mostrano nel dettaglio, Spazio la spunta (Maiuscole+Spazio l'intervallo). Il clic sulla
+             riga la apre e basta; spunta solo il clic sulla casella.
+             A differenza del Monitor il fuoco resta sulla lista e la voce attiva la dice
+             aria-activedescendant: la lista e' virtualizzata, e una riga a fuoco che esce dalla zona
+             disegnata viene riciclata, portandosi via il fuoco e i tasti successivi. -->
+        <div class="flex min-h-0 shrink-0 flex-col border-r border-border" [style.width.px]="listWidth()">
+        <cdk-virtual-scroll-viewport #viewport [itemSize]="rowHeight" class="group/list mx-scroll min-h-0 flex-1 focus-visible:outline-none" (scrolledIndexChange)="onScroll()"
+                                     role="listbox" aria-multiselectable="true" tabindex="0" [attr.aria-label]="'storico.listLabel' | transloco"
+                                     [attr.aria-activedescendant]="activeOptionId()" (keydown)="onListKeydown($event)">
+          <div
             *cdkVirtualFor="let row of entries(); let i = index; trackBy: trackKey"
-            type="button"
-            (click)="onRowClick(row, i, $event)"
-            class="flex w-full items-center gap-2.5 border-b border-border-soft px-4 text-left transition hover:bg-white/[0.03]"
+            role="option"
+            [id]="optionId(i)"
+            [attr.data-dump-key]="row.dumpKey"
+            [attr.aria-posinset]="i + 1"
+            [attr.aria-setsize]="done() ? entries().length : -1"
+            [attr.aria-selected]="selectedKeys().has(row.dumpKey)"
+            [attr.aria-current]="row.dumpKey === focusedKey() ? 'true' : null"
+            (click)="onRowClick(row, $event)"
+            class="group flex w-full cursor-pointer select-none items-center gap-2.5 border-b border-border-soft px-4 text-left transition hover:bg-white/[0.03]"
+            [class]="row.dumpKey === focusedKey() ? 'mx-selected group-focus-visible/list:ring-2 group-focus-visible/list:ring-inset group-focus-visible/list:ring-ring/70' : ''"
             [style.height.px]="rowHeight"
-            [class.mx-selected]="row.dumpKey === focusedKey()"
           >
-            <span class="grid size-4 shrink-0 place-items-center rounded border transition"
+            <span data-check aria-hidden="true" class="grid size-4 shrink-0 place-items-center rounded border transition"
+                  [class]="selectedKeys().has(row.dumpKey) || selectedCount() > 0 ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'"
                   [style.borderColor]="selectedKeys().has(row.dumpKey) ? 'var(--brand)' : 'var(--input)'"
                   [style.background]="selectedKeys().has(row.dumpKey) ? 'var(--brand)' : 'transparent'">
               @if (selectedKeys().has(row.dumpKey)) { <ng-icon name="lucideCheck" size="0.7rem" class="text-white" /> }
@@ -147,11 +162,21 @@ const ROW_HEIGHT = 56;
               <span class="rounded-md px-1.5 py-0.5 font-mono text-[11px] font-bold tabular-nums" [style.color]="statusColor(row.status)" [style.background]="tint(statusColor(row.status), 12)">{{ row.status }}</span>
               <span class="font-mono text-[10.5px] tabular-nums text-muted-foreground">{{ row.timestamp | date: 'dd/MM HH:mm:ss' }}</span>
             </span>
-          </button>
+          </div>
           @if (loading()) {
           <div class="px-4 py-3 text-center text-[12px] text-muted-foreground">{{ 'storico.loading' | transloco }}</div>
           }
         </cdk-virtual-scroll-viewport>
+        @if (selectedCount() > 0) {
+        <div class="flex shrink-0 flex-wrap items-center gap-x-2 gap-y-1.5 border-t border-border bg-[color-mix(in_srgb,var(--brand)_12%,transparent)] px-3 py-2">
+          <span class="whitespace-nowrap text-[11.5px] font-bold text-foreground">{{ 'storico.selectedCount' | transloco: { count: selectedCount() } }}</span>
+          <div class="ml-auto flex items-center gap-2">
+            <button ui-button size="xs" [disabled]="creating()" (click)="createFromSelected()"><ng-icon name="lucidePlus" size="0.8rem" /> {{ 'storico.createMockShort' | transloco }}</button>
+            <button ui-button variant="ghost" size="xs" (click)="clearSelection()" [uiTooltip]="'storico.deselect' | transloco" [attr.aria-label]="'storico.deselect' | transloco"><ng-icon name="lucideX" size="0.8rem" /></button>
+          </div>
+        </div>
+        }
+        </div>
 
         <!-- divisore trascinabile: ridimensiona la lista (largh. persistita) -->
         <div
@@ -301,7 +326,8 @@ export class StoricoDumpPage implements OnInit {
   protected readonly listWidth = signal(clampListWidth(readStoredListWidth()));
   /** Apertura della sezione Response · body: quando aperta riempie lo spazio residuo e scrolla internamente. */
   protected readonly responseBodyOpen = signal(true);
-  private lastIndex = -1;
+  /** Ultima voce spuntata: l'ancora degli intervalli (shift-click, Maiuscole+Spazio). */
+  private selectionAnchor: string | null = null;
 
   protected readonly rowHeight = ROW_HEIGHT;
 
@@ -416,24 +442,66 @@ export class StoricoDumpPage implements OnInit {
     }
   }
 
-  protected onRowClick(entry: DumpEntry, index: number, event: MouseEvent): void {
-    this.focusedKey.set(entry.dumpKey);
-    if (event.shiftKey && this.lastIndex >= 0) {
-      const from = Math.min(this.lastIndex, index);
-      const to = Math.max(this.lastIndex, index);
-      const next = new Set(this.selectedKeys());
-      for (let i = from; i <= to; i += 1) {
-        const row = this.entries()[i];
-        if (row) next.add(row.dumpKey);
-      }
-      this.selectedKeys.set(next);
+  /**
+   * Clic su una riga: sulla casella la spunta (con shift l'intervallo dall'ultima spuntata),
+   * altrove la apre nel dettaglio. Prima ogni clic faceva entrambe le cose.
+   */
+  protected onRowClick(entry: DumpEntry, event: MouseEvent): void {
+    if ((event.target as HTMLElement).closest('[data-check]')) {
+      this.toggleSelection(entry.dumpKey, event.shiftKey);
     } else {
-      const next = new Set(this.selectedKeys());
-      if (next.has(entry.dumpKey)) next.delete(entry.dumpKey);
-      else next.add(entry.dumpKey);
-      this.selectedKeys.set(next);
-      this.lastIndex = index;
+      this.focusedKey.set(entry.dumpKey);
     }
+  }
+
+  /** Spunta o toglie una voce; con `range` l'intervallo dall'ultima spuntata, fra le voci caricate. */
+  protected toggleSelection(key: string, range = false): void {
+    const ordered = this.entries().map((entry) => entry.dumpKey);
+    const change = toggleListSelection(this.selectedKeys(), ordered, key, this.selectionAnchor, range);
+    this.selectionAnchor = change.anchor;
+    this.selectedKeys.set(change.selected);
+  }
+
+  /** Id dell'elemento della voce in posizione `index`, per aria-activedescendant. */
+  protected optionId(index: number): string {
+    return `storico-entry-${index}`;
+  }
+
+  /** La voce attiva della lista, se e' fra quelle caricate. */
+  protected readonly activeOptionId = computed(() => {
+    const index = this.entries().findIndex((entry) => entry.dumpKey === this.focusedKey());
+    return index < 0 ? null : this.optionId(index);
+  });
+
+  /** Tastiera sulla lista: frecce, Home ed End aprono la voce di arrivo; Spazio spunta quella attiva. */
+  protected onListKeydown(event: KeyboardEvent): void {
+    if (event.ctrlKey || event.metaKey || event.altKey) return;
+    const current = this.focusedKey();
+    if (event.key === ' ') {
+      event.preventDefault();
+      if (current != null) this.toggleSelection(current, event.shiftKey);
+      return;
+    }
+    const ordered = this.entries().map((entry) => entry.dumpKey);
+    const target = listNavigationTarget(event.key, ordered, current);
+    if (target == null) return;
+    event.preventDefault();
+    this.focusedKey.set(target);
+    this.scrollIntoView(target);
+    // In fondo a quanto caricato si legge la pagina dopo, come scorrendo.
+    if (ordered.indexOf(target) >= ordered.length - 10) this.loadMore();
+  }
+
+  /** Scorre la lista quanto basta perche' la riga di una voce sia in vista. */
+  private scrollIntoView(key: string): void {
+    const index = this.entries().findIndex((entry) => entry.dumpKey === key);
+    if (index < 0) return;
+    const viewport = this.viewport();
+    const top = index * ROW_HEIGHT;
+    const offset = viewport.measureScrollOffset();
+    const size = viewport.getViewportSize();
+    if (top < offset) viewport.scrollToOffset(top);
+    else if (top + ROW_HEIGHT > offset + size) viewport.scrollToOffset(top + ROW_HEIGHT - size);
   }
 
   protected selectAllLoaded(): void {
@@ -498,7 +566,7 @@ export class StoricoDumpPage implements OnInit {
     this.done.set(false);
     this.selectedKeys.set(new Set());
     this.focusedKey.set(null);
-    this.lastIndex = -1;
+    this.selectionAnchor = null;
     if (reloadFiles) this.loadFiles();
     this.loadMore();
   }
