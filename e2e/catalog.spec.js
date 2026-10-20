@@ -93,8 +93,10 @@ test.describe("E1 · catalogo", () => {
 
   test("la barra delle azioni di massa sta su una riga alla larghezza minima del catalogo", async ({ page }) => {
     const catalog = page.locator("mocks-next-catalog");
-    await catalog.getByRole("checkbox").nth(0).click({ force: true });
-    await catalog.getByRole("checkbox").nth(1).click({ force: true });
+    // Le spunte degli endpoint: anche le cartelle hanno la loro casella.
+    const endpointBoxes = catalog.locator('[data-row-key^="e:"] [role="checkbox"]');
+    await endpointBoxes.nth(0).click({ force: true });
+    await endpointBoxes.nth(1).click({ force: true });
 
     const label = catalog.getByText("2 selezionati");
     const move = catalog.getByRole("button", { name: "Sposta", exact: true });

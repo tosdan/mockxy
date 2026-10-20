@@ -59,6 +59,46 @@ test.describe("E9 · collection", () => {
     await expect(statusBar.getByText(/3\s+collection/)).toBeVisible();
   });
 
+  test("spunta una collection chiusa con le sue sotto-collection e la disabilita in blocco", async ({ page }) => {
+    const folderRow = catalog.locator('[role="treeitem"][data-row-key^="c:"]').filter({ hasText: "Core API" });
+    const folderBox = folderRow.getByRole("checkbox");
+
+    // Chiusa: i suoi endpoint (users, users/:id e quello di Admin) non si vedono.
+    await folderRow.click();
+    await expect(catalog.getByText("/api/users", { exact: true })).toHaveCount(0);
+    await folderRow.hover();
+    await folderBox.click();
+    await expect(folderBox).toHaveAttribute("aria-checked", "true");
+    await expect(catalog.getByText("3 selezionati")).toBeVisible();
+
+    await catalog.getByRole("button", { name: "Disabilita", exact: true }).click();
+    await expect(page.locator("app-status-bar").getByText(/4\s+attivi/)).toBeVisible();
+
+    await folderRow.click(); // riapre: i tre ora sono spenti
+    for (const p of ["/api/users", "/api/users/:id", "/api/admin/config"]) {
+      await expect(catalog.locator(".mx-muted").filter({ has: page.getByText(p, { exact: true }) })).toHaveCount(1);
+    }
+  });
+
+  test("da tastiera Spazio su una cartella ne spunta il sottoalbero, Invio la chiude", async ({ page }) => {
+    await page.keyboard.press("/");
+    await page.keyboard.press("ArrowDown");
+    await page.keyboard.press("End");
+    // L'ultima riga è un endpoint di Dynamic: sinistra risale alla cartella.
+    await page.keyboard.press("ArrowLeft");
+    const focused = catalog.locator('[role="treeitem"]:focus');
+    await expect(focused).toContainText("Dynamic");
+
+    await page.keyboard.press("Space");
+    await expect(catalog.getByText("2 selezionati")).toBeVisible();
+    await expect(focused).toHaveAttribute("aria-expanded", "true");
+
+    await page.keyboard.press("Enter");
+    await expect(focused).toHaveAttribute("aria-expanded", "false");
+    // Chiuderla non toglie le spunte.
+    await expect(catalog.getByText("2 selezionati")).toBeVisible();
+  });
+
   test("crea una sotto-collection annidata sotto una collection", async ({ page }) => {
     await kebab("Core API").click();
     await page.getByRole("menuitem", { name: "Nuova sotto-collection" }).click();

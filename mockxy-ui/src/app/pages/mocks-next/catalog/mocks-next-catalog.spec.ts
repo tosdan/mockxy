@@ -149,7 +149,8 @@ describe('MocksNextCatalog', () => {
       ] as never);
     }
     function boxes(fixture: ReturnType<typeof create>['fixture']): HTMLElement[] {
-      return Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('[role="checkbox"]'));
+      // Solo le spunte degli endpoint: anche le cartelle hanno la loro casella.
+      return Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('[data-row-key^="e:"] [role="checkbox"]'));
     }
     function bulkBarText(fixture: ReturnType<typeof create>['fixture']): string {
       return (fixture.nativeElement as HTMLElement).textContent ?? '';
@@ -394,15 +395,16 @@ describe('MocksNextCatalog', () => {
       expect(toast.toasts()).toEqual([]);
     });
 
-    it('sotto filtro nasconde la maniglia di trascinamento delle cartelle', () => {
+    // La maniglia delle cartelle ha lasciato il posto alla casella: la riga si trascina tutta.
+    it('le cartelle non hanno più la maniglia, ma la casella resta anche sotto filtro', () => {
       const { fixture, store } = setup();
       const grips = () => (fixture.nativeElement as HTMLElement).querySelectorAll('.cursor-grab').length;
-      expect(grips()).toBe(2);
+      expect(grips()).toBe(0);
 
       store.searchTerm.set('uno');
       fixture.detectChanges();
 
-      expect(grips()).toBe(0);
+      expect(rowOf(fixture, 'c:madre').querySelector('[role="checkbox"]')).not.toBeNull();
     });
   });
 
@@ -686,7 +688,7 @@ describe('MocksNextCatalog', () => {
       const { fixture } = setup();
       const checkedKeys = () =>
         treeRows(fixture)
-          .filter((row) => row.getAttribute('aria-selected') === 'true')
+          .filter((row) => row.dataset['rowKey']!.startsWith('e:') && row.getAttribute('aria-selected') === 'true')
           .map((row) => row.dataset['rowKey']);
 
       rowOf(fixture, 'e:sciolto').focus();
@@ -709,10 +711,11 @@ describe('MocksNextCatalog', () => {
       expect(rowOf(fixture, 'e:uno').getAttribute('aria-current')).toBe('true');
       expect(rowOf(fixture, 'e:uno').getAttribute('aria-selected')).toBe('false');
       expect(rowOf(fixture, 'e:due').hasAttribute('aria-current')).toBe(false);
-      expect(rowOf(fixture, 'c:madre').hasAttribute('aria-selected')).toBe(false);
+      // Una cartella è selezionata quando lo sono tutti i suoi endpoint.
+      expect(rowOf(fixture, 'c:madre').getAttribute('aria-selected')).toBe('false');
     });
 
-    it('Invio apre l’endpoint a fuoco, Spazio chiude la cartella a fuoco', () => {
+    it('Invio apre l’endpoint a fuoco, e sulla cartella a fuoco la chiude', () => {
       const { fixture, store } = setup();
       const select = vi.spyOn(store, 'selectMock').mockImplementation(() => undefined);
 
@@ -722,8 +725,25 @@ describe('MocksNextCatalog', () => {
       expect(invio.defaultPrevented).toBe(true);
 
       rowOf(fixture, 'c:figlia').focus();
-      press(fixture, ' ');
+      press(fixture, 'Enter');
       expect(rowOf(fixture, 'c:figlia').getAttribute('aria-expanded')).toBe('false');
+    });
+
+    // Spazio seleziona ovunque: su una cartella, tutto il suo sottoalbero.
+    it('Spazio sulla cartella a fuoco ne spunta il sottoalbero, e una seconda volta lo libera', () => {
+      const { fixture } = setup();
+      const checked = () =>
+        treeRows(fixture)
+          .filter((row) => row.dataset['rowKey']!.startsWith('e:') && row.getAttribute('aria-selected') === 'true')
+          .map((row) => row.dataset['rowKey']);
+
+      rowOf(fixture, 'c:madre').focus();
+      press(fixture, ' ');
+      expect(checked()).toEqual(['e:uno', 'e:due']);
+      expect(rowOf(fixture, 'c:madre').getAttribute('aria-expanded')).toBe('true');
+
+      press(fixture, ' ');
+      expect(checked()).toEqual([]);
     });
 
     // Spunta, menu e switch stanno dentro la riga: i loro tasti non devono muovere l'albero.
@@ -753,6 +773,92 @@ describe('MocksNextCatalog', () => {
   });
 
   // Una riga per endpoint, per vedere più catalogo: un'opzione del menu di vista, ricordata.
+  // Spuntare una collection intera, sotto-collection comprese, per usare su tutto le azioni di massa.
+  describe('casella della cartella', () => {
+    function setup() {
+      const created = create();
+      seedTree(created.store);
+      created.store.collections.update((list) => [...list, { id: 'vuota', label: 'Vuota' }] as never);
+      created.store.childOrder.update((order) => ({ ...order, root: ['madre', 'vuota'] }));
+      created.fixture.detectChanges();
+      return created;
+    }
+    const box = (fixture: ReturnType<typeof create>['fixture'], key: string) =>
+      rowOf(fixture, key).querySelector<HTMLElement>('[role="checkbox"]')!;
+    const endpointChecked = (fixture: ReturnType<typeof create>['fixture']) =>
+      treeRows(fixture)
+        .filter((row) => row.dataset['rowKey']!.startsWith('e:') && row.getAttribute('aria-selected') === 'true')
+        .map((row) => row.dataset['rowKey']);
+    function click(fixture: ReturnType<typeof create>['fixture'], element: HTMLElement) {
+      element.click();
+      fixture.detectChanges();
+    }
+
+    it('spunta tutto il sottoalbero, sotto-collection comprese, senza aprire o chiudere la cartella', () => {
+      const { fixture } = setup();
+      click(fixture, box(fixture, 'c:madre'));
+
+      expect(endpointChecked(fixture)).toEqual(['e:uno', 'e:due']);
+      expect(box(fixture, 'c:madre').getAttribute('aria-checked')).toBe('true');
+      expect(box(fixture, 'c:figlia').getAttribute('aria-checked')).toBe('true');
+      expect(rowOf(fixture, 'c:madre').getAttribute('aria-selected')).toBe('true');
+      expect(rowOf(fixture, 'c:madre').getAttribute('aria-expanded')).toBe('true');
+    });
+
+    it('è "mista" se solo una parte è spuntata, e un clic la completa; un altro la libera', () => {
+      const { fixture } = setup();
+      click(fixture, rowOf(fixture, 'e:due').querySelector<HTMLElement>('[role="checkbox"]')!);
+
+      expect(box(fixture, 'c:madre').getAttribute('aria-checked')).toBe('mixed');
+      expect(box(fixture, 'c:figlia').getAttribute('aria-checked')).toBe('true');
+
+      click(fixture, box(fixture, 'c:madre'));
+      expect(endpointChecked(fixture)).toEqual(['e:uno', 'e:due']);
+
+      click(fixture, box(fixture, 'c:madre'));
+      expect(endpointChecked(fixture)).toEqual([]);
+      expect(box(fixture, 'c:madre').getAttribute('aria-checked')).toBe('false');
+    });
+
+    it('una cartella senza endpoint non ha casella', () => {
+      const { fixture } = setup();
+      expect(rowOf(fixture, 'c:vuota').querySelector('[role="checkbox"]')).toBeNull();
+      expect(rowOf(fixture, 'c:vuota').hasAttribute('aria-selected')).toBe(false);
+    });
+
+    it('anche i non assegnati si spuntano tutti insieme', () => {
+      const { fixture } = setup();
+      click(fixture, box(fixture, 'c:unsorted'));
+      expect(endpointChecked(fixture)).toEqual(['e:sciolto']);
+    });
+
+    // La regola delle azioni di massa: conta il filtro, non la cartella chiusa.
+    it('a cartella chiusa le azioni di massa agiscono anche sugli endpoint che non si vedono', () => {
+      const { fixture, store } = setup();
+      const spy = vi.spyOn(store, 'setEndpointsEnabled').mockImplementation(() => {});
+      rowOf(fixture, 'c:madre').click(); // chiude
+      fixture.detectChanges();
+      click(fixture, box(fixture, 'c:madre'));
+
+      Array.from((fixture.nativeElement as HTMLElement).querySelectorAll<HTMLButtonElement>('button'))
+        .find((b) => b.textContent?.trim() === 'Disabilita')!
+        .click();
+
+      expect(spy).toHaveBeenCalledWith(['uno', 'due'], false);
+    });
+
+    it('sotto filtro spunta solo gli endpoint che il filtro lascia vedere', () => {
+      const { fixture, store } = setup();
+      store.searchTerm.set('due');
+      fixture.detectChanges();
+
+      click(fixture, box(fixture, 'c:madre'));
+
+      expect(endpointChecked(fixture)).toEqual(['e:due']);
+      expect(box(fixture, 'c:madre').getAttribute('aria-checked')).toBe('true');
+    });
+  });
+
   describe('densità compatta', () => {
     function setup(stored: Record<string, unknown> = {}) {
       const created = create(stored);
