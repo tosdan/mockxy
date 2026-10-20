@@ -635,9 +635,22 @@ export interface MonitorDumpFilesResponse {
   files: MonitorDumpFile[];
 }
 
+/** Filtri della lettura dello storico, gli stessi della pagina Monitor; vuoti = tutto. */
+export interface DumpReadFilters {
+  /** Testo contenuto nell'URL o nel metodo, senza distinguere maiuscole. */
+  q?: string;
+  method?: string;
+  /** Provenienza, oppure 'real-backend' per tutto cio' che non e' uscito da una response locale. */
+  source?: string;
+  /** Classi di status: 2 per 2xx, 4 per 4xx... */
+  statusClasses?: readonly number[];
+}
+
 export interface DumpReadCursor {
   fileIndex: number;
   lineIndex: number;
+  /** Byte da cui riprendere nel file: con lui il server non rilegge le righe gia' lette. */
+  byteOffset?: number;
 }
 
 /** Una entry del dump = una RequestMonitorEntry con la chiave stabile assegnata dalla lettura. */

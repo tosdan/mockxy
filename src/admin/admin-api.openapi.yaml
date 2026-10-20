@@ -1834,6 +1834,18 @@ paths:
 
         Each item is a monitor entry plus a `dumpKey` (`<file>#<lineIndex>`), stable because the
         files are append-only — that key is what `create-mocks` selects on.
+
+        The optional filters are the History page's, the same as the Monitor's: they combine in
+        AND and apply while reading, so they search the whole archive. `limit` then counts
+        matches. A call reads at most 20,000 lines past the cursor: when a rare filter reaches
+        that cap, the page comes back short, possibly empty, with `done: false` and the cursor to
+        continue from.
+
+        The cursor carries `byteOffset`, the byte to resume from in the file, so a call starts
+        where the previous one stopped instead of re-reading the file up to `lineIndex`. Pass the
+        cursor back as received. Without `byteOffset`, or with one that is not the start of a
+        line, the call re-reads the file from its start up to `lineIndex`, as before; the cursor
+        it returns carries the byte again.
       parameters:
         - name: fileIndex
           in: query
@@ -1843,10 +1855,32 @@ paths:
           in: query
           description: Cursor — line to resume from inside that file.
           schema: { type: integer, minimum: 0, default: 0 }
+        - name: byteOffset
+          in: query
+          description: Cursor — byte of that line in the file, to resume without re-reading what comes before.
+          schema: { type: integer, minimum: 0 }
         - name: limit
           in: query
           description: Page size.
           schema: { type: integer, minimum: 1, default: 300 }
+        - name: q
+          in: query
+          description: Text contained in the URL or the method, case-insensitive.
+          schema: { type: string }
+        - name: method
+          in: query
+          description: HTTP method, case-insensitive.
+          schema: { type: string }
+        - name: status
+          in: query
+          description: Status classes, comma-separated (`2,4` is 2xx or 4xx).
+          schema: { type: string, example: "2,4" }
+        - name: source
+          in: query
+          description: |
+            The entry's `source`, or `real-backend` for everything not answered by a local
+            response (anything but `mock`, `handler` and `sse`).
+          schema: { type: string }
       responses:
         "200":
           description: One page
@@ -1862,10 +1896,11 @@ paths:
                   nextCursor:
                     oneOf:
                       - type: object
-                        required: [fileIndex, lineIndex]
+                        required: [fileIndex, lineIndex, byteOffset]
                         properties:
                           fileIndex: { type: integer }
                           lineIndex: { type: integer }
+                          byteOffset: { type: integer }
                       - { type: "null" }
                   done:
                     type: boolean

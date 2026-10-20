@@ -38,7 +38,10 @@ turn it into mocks (or copy the file). With the cap at `0` pruning is disabled.
 ## The History page
 
 Besides the capture switch and the manual flush, the page lists the dump files and browses
-them with continuous scrolling (reading is paginated, even on very large archives). From a
+them with continuous scrolling (reading is paginated, even on very large archives). Each entry
+says when it arrived, what served it and how long it took. The filters are the monitor's (text
+in the path or URL, method, status classes, source) and search the whole archive, not only the
+entries already loaded. From a
 file — whole, or from a selection of entries — you **create mocks in bulk**, with the same
 carry-over rules as the live view ([monitor](MONITOR.md)): masked and recomputable headers
 excluded, skeletons to complete for bodies that can't be reconstructed. Files are deleted
