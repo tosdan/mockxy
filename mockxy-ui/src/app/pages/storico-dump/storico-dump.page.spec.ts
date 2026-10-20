@@ -2,7 +2,7 @@ import '@angular/compiler';
 import { TestBed } from '@angular/core/testing';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { provideRouter } from '@angular/router';
-import { of, throwError } from 'rxjs';
+import { Subject, of, throwError } from 'rxjs';
 import { StoricoDumpPage } from './storico-dump.page';
 import { translocoTesting } from '../../testing/transloco-testing';
 import { MockAdminApiService } from '../../mock-admin-api.service';
@@ -176,6 +176,39 @@ describe('StoricoDumpPage', () => {
       expect(api.readMonitorDumps).toHaveBeenCalledTimes(2);
       expect(c.entries().map((e: DumpEntry) => e.dumpKey)).toEqual(['f#0', 'f#1', 'f#2']);
       expect(c.done()).toBe(true);
+    });
+
+    // Lasciando lo Storico una ricerca rara continuava a scorrere l'archivio, anche dal Catalogo.
+    it('lasciata la pagina, né la risposta in corso né una continuazione avviano altre letture', async () => {
+      const responses = new Subject<DumpReadPage>();
+      const { fixture, c } = create();
+      api.readMonitorDumps.mockClear();
+      api.readMonitorDumps.mockReturnValue(responses);
+
+      c.toggleStatusClass(5);
+      settle(fixture);
+      expect(api.readMonitorDumps).toHaveBeenCalledTimes(1);
+
+      fixture.destroy();
+      responses.next(page([], { fileIndex: 0, lineIndex: 20000, byteOffset: 1 }, false));
+      await Promise.resolve();
+      c.loadMore();
+
+      expect(api.readMonitorDumps).toHaveBeenCalledTimes(1);
+      expect(responses.observed).toBe(false);
+    });
+
+    it('una continuazione già accodata non riparte se la pagina viene distrutta prima', async () => {
+      const { fixture, c } = create();
+      api.readMonitorDumps.mockClear();
+      api.readMonitorDumps.mockReturnValueOnce(of(page([], { fileIndex: 0, lineIndex: 20000, byteOffset: 1 }, false)));
+
+      c.toggleStatusClass(5);
+      settle(fixture); // la pagina vuota accoda la continuazione in un microtask
+      fixture.destroy();
+      await Promise.resolve();
+
+      expect(api.readMonitorDumps).toHaveBeenCalledTimes(1);
     });
 
     it('a filtro acceso la testata conta i risultati, e l’archivio vuoto lo dice', () => {

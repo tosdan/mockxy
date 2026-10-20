@@ -1,5 +1,5 @@
 import { DatePipe } from '@angular/common';
-import { ChangeDetectionStrategy, Component, OnInit, computed, effect, inject, signal, untracked, viewChild } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, computed, effect, inject, signal, untracked, viewChild } from '@angular/core';
 import { CdkFixedSizeVirtualScroll, CdkVirtualForOf, CdkVirtualScrollViewport } from '@angular/cdk/scrolling';
 import { CdkMenuTrigger } from '@angular/cdk/menu';
 import { finalize, type Subscription } from 'rxjs';
@@ -339,8 +339,17 @@ export class StoricoDumpPage implements OnInit {
   /** Lettura in corso, da annullare se i filtri cambiano prima che risponda. */
   private pending?: Subscription;
   private searchTimer?: ReturnType<typeof setTimeout>;
+  /** Pagina distrutta: nessuna lettura riparte, nemmeno una continuazione gia' accodata. */
+  private destroyed = false;
 
   constructor() {
+    // Lasciando lo Storico la lettura si ferma: senza, una ricerca rara continuava a scorrere
+    // l'archivio, una pagina dopo l'altra, anche dal Catalogo.
+    inject(DestroyRef).onDestroy(() => {
+      this.destroyed = true;
+      this.pending?.unsubscribe();
+      clearTimeout(this.searchTimer);
+    });
     effect(() => {
       const value = this.search();
       clearTimeout(this.searchTimer);
@@ -377,7 +386,7 @@ export class StoricoDumpPage implements OnInit {
   }
 
   protected loadMore(): void {
-    if (this.loading() || this.done()) return;
+    if (this.destroyed || this.loading() || this.done()) return;
     this.loading.set(true);
     this.pending = this.api
       .readMonitorDumps(this.cursor(), PAGE_SIZE, this.filters())
