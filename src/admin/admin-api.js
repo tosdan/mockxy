@@ -466,6 +466,23 @@ function createAdminApiRouter({ config, runtimeConfig = new RuntimeConfigStore(c
     sendJson(res, 200, { files });
   });
 
+  // Filtri facoltativi della lettura dello storico: q, method, source, status (classi "2,4").
+  function readDumpFilters(query) {
+    const q = typeof query.q === 'string' ? query.q.trim().toLowerCase() : '';
+    const method = typeof query.method === 'string' ? query.method.trim().toUpperCase() : '';
+    const source = typeof query.source === 'string' ? query.source.trim() : '';
+    const statusClasses = new Set(
+      String(query.status ?? '')
+        .split(',')
+        .map((part) => Number.parseInt(part, 10))
+        .filter((klass) => klass >= 1 && klass <= 5),
+    );
+    if (!q && !method && !source && statusClasses.size === 0) {
+      return null;
+    }
+    return { q, method, source, statusClasses };
+  }
+
   // Lettura paginata a cursore in avanti per il virtual scroll dello storico.
   router.get('/monitoring/dumps/read', async (req, res) => {
     const fileIndex = Number.parseInt(req.query.fileIndex, 10);
@@ -475,7 +492,7 @@ function createAdminApiRouter({ config, runtimeConfig = new RuntimeConfigStore(c
       fileIndex: Number.isInteger(fileIndex) ? fileIndex : 0,
       lineIndex: Number.isInteger(lineIndex) ? lineIndex : 0,
     };
-    const page = await readDumpPage(config.monitorDumpDir, cursor, Number.isInteger(limit) ? limit : undefined);
+    const page = await readDumpPage(config.monitorDumpDir, cursor, Number.isInteger(limit) ? limit : undefined, readDumpFilters(req.query));
     sendJson(res, 200, page);
   });
 

@@ -1834,6 +1834,11 @@ paths:
 
         Each item is a monitor entry plus a `dumpKey` (`<file>#<lineIndex>`), stable because the
         files are append-only — that key is what `create-mocks` selects on.
+
+        The optional filters are the History page's, the same as the Monitor's: they combine in
+        AND and apply while reading, so they search the whole archive. `limit` then counts
+        matches. A call reads at most 20,000 lines: when a rare filter reaches that cap, the page
+        comes back short, possibly empty, with `done: false` and the cursor to continue from.
       parameters:
         - name: fileIndex
           in: query
@@ -1847,6 +1852,24 @@ paths:
           in: query
           description: Page size.
           schema: { type: integer, minimum: 1, default: 300 }
+        - name: q
+          in: query
+          description: Text contained in the URL or the method, case-insensitive.
+          schema: { type: string }
+        - name: method
+          in: query
+          description: HTTP method, case-insensitive.
+          schema: { type: string }
+        - name: status
+          in: query
+          description: Status classes, comma-separated (`2,4` is 2xx or 4xx).
+          schema: { type: string, example: "2,4" }
+        - name: source
+          in: query
+          description: |
+            The entry's `source`, or `real-backend` for everything not answered by a local
+            response (anything but `mock`, `handler` and `sse`).
+          schema: { type: string }
       responses:
         "200":
           description: One page

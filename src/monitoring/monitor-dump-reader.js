@@ -4,6 +4,41 @@ const readline = require("readline");
 
 const DUMP_FILE_PATTERN = /^dump-[A-Za-z0-9._-]+\.ndjson$/;
 const DEFAULT_PAGE_LIMIT = 300;
+// Righe lette al massimo per chiamata quando un filtro scarta voci: una ricerca rara non deve
+// scorrere l'intero archivio in una risposta sola. La pagina torna anche incompleta, col cursore
+// da cui ripartire, e il client continua.
+const MAX_SCANNED_LINES = 20000;
+// Provenienze servite da una response locale: le altre ("dal backend reale") sono proxy,
+// middleware e miss. Stessa partizione del filtro "Backend reale" del Monitor.
+const LOCAL_SOURCES = new Set(["mock", "handler", "sse"]);
+
+/**
+ * Filtri dello storico, gli stessi del Monitor: testo contenuto nell'URL o nel metodo (senza
+ * distinguere maiuscole), metodo esatto, classi di status (2 = 2xx...) e provenienza, dove
+ * "real-backend" vale per tutto cio' che non e' uscito da una response locale. In AND.
+ */
+function matchesDumpFilters(entry, filters) {
+  if (!filters) {
+    return true;
+  }
+  if (filters.q && !`${entry.originalUrl ?? entry.path} ${entry.method}`.toLowerCase().includes(filters.q)) {
+    return false;
+  }
+  if (filters.method && entry.method !== filters.method) {
+    return false;
+  }
+  if (filters.source === "real-backend") {
+    if (LOCAL_SOURCES.has(entry.source)) {
+      return false;
+    }
+  } else if (filters.source && entry.source !== filters.source) {
+    return false;
+  }
+  if (filters.statusClasses && filters.statusClasses.size > 0 && !filters.statusClasses.has(Math.floor(entry.status / 100))) {
+    return false;
+  }
+  return true;
+}
 
 // Vero solo per i nomi di file di dump leciti (niente slash, niente "..", solo il pattern atteso):
 // guardia anti path-traversal per le rotte che accettano un nome file.
@@ -106,7 +141,7 @@ function parseDumpKey(key) {
  * `cursor` = { fileIndex, lineIndex }; ogni item riceve `dumpKey`. Niente totale: si carica finché `done`.
  * La lettura è in streaming e si ferma a pagina piena: il file non viene mai caricato intero in RAM.
  */
-async function readDumpPage(dumpDir, cursor, limit) {
+async function readDumpPage(dumpDir, cursor, limit, filters, maxScannedLines = MAX_SCANNED_LINES) {
   const files = await listDumpFiles(dumpDir);
   const names = files.map((file) => file.name);
   const max = Number.isFinite(limit) && limit > 0 ? Math.floor(limit) : DEFAULT_PAGE_LIMIT;
@@ -115,7 +150,8 @@ async function readDumpPage(dumpDir, cursor, limit) {
   let lineIndex = cursor && Number.isInteger(cursor.lineIndex) && cursor.lineIndex >= 0 ? cursor.lineIndex : 0;
 
   const items = [];
-  while (fileIndex < names.length && items.length < max) {
+  let scanned = 0;
+  while (fileIndex < names.length && items.length < max && scanned < maxScannedLines) {
     const name = names[fileIndex];
     const startLine = lineIndex;
     let pageFull = false;
@@ -124,11 +160,12 @@ async function readDumpPage(dumpDir, cursor, limit) {
         return;
       }
       const entry = parseLine(line);
-      if (entry != null) {
+      if (entry != null && matchesDumpFilters(entry, filters)) {
         items.push({ ...entry, dumpKey: dumpKeyFor(name, index) });
       }
       lineIndex = index + 1;
-      if (items.length >= max) {
+      scanned += 1;
+      if (items.length >= max || scanned >= maxScannedLines) {
         pageFull = true;
         return false;
       }

@@ -211,6 +211,28 @@ describe("admin API", () => {
       expect(page2.body.done).toBe(true);
     });
 
+    test("legge lo storico filtrato per testo, metodo, status e provenienza", async () => {
+      const entries = [
+        { id: "1", method: "GET", path: "/api/orders", originalUrl: "/api/orders", status: 200, source: "mock" },
+        { id: "2", method: "POST", path: "/api/orders", originalUrl: "/api/orders", status: 201, source: "backend" },
+        { id: "3", method: "GET", path: "/api/users", originalUrl: "/api/users", status: 503, source: "backend" },
+      ];
+      await fs.promises.writeFile(
+        path.join(monitorDumpDir, "dump-2026-01-01T00-00-00-000Z.ndjson"),
+        `${entries.map((e) => JSON.stringify(e)).join("\n")}\n`,
+        "utf8",
+      );
+      const app = await buildApp();
+      const read = async (query) =>
+        (await request(app).get("/_admin/api/monitoring/dumps/read").query(query)).body.items.map((item) => item.id);
+
+      expect(await read({ q: "ORDERS" })).toEqual(["1", "2"]);
+      expect(await read({ method: "post" })).toEqual(["2"]);
+      expect(await read({ status: "2,5", source: "backend" })).toEqual(["2", "3"]);
+      expect(await read({ source: "real-backend" })).toEqual(["2", "3"]);
+      expect(await read({})).toEqual(["1", "2", "3"]);
+    });
+
     test("elimina un file di dump", async () => {
       await fs.promises.writeFile(path.join(monitorDumpDir, "dump-del.ndjson"), "{}\n", "utf8");
       const app = await buildApp();
