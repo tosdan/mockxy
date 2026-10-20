@@ -421,6 +421,7 @@ export class MockAdminApiService {
     if (cursor) {
       params['fileIndex'] = String(cursor.fileIndex);
       params['lineIndex'] = String(cursor.lineIndex);
+      if (cursor.byteOffset != null) params['byteOffset'] = String(cursor.byteOffset);
     }
     if (filters?.q) params['q'] = filters.q;
     if (filters?.method) params['method'] = filters.method;

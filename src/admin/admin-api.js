@@ -488,9 +488,11 @@ function createAdminApiRouter({ config, runtimeConfig = new RuntimeConfigStore(c
     const fileIndex = Number.parseInt(req.query.fileIndex, 10);
     const lineIndex = Number.parseInt(req.query.lineIndex, 10);
     const limit = Number.parseInt(req.query.limit, 10);
+    const byteOffset = Number.parseInt(req.query.byteOffset, 10);
     const cursor = {
       fileIndex: Number.isInteger(fileIndex) ? fileIndex : 0,
       lineIndex: Number.isInteger(lineIndex) ? lineIndex : 0,
+      byteOffset: Number.isInteger(byteOffset) ? byteOffset : undefined,
     };
     const page = await readDumpPage(config.monitorDumpDir, cursor, Number.isInteger(limit) ? limit : undefined, readDumpFilters(req.query));
     sendJson(res, 200, page);

@@ -117,6 +117,65 @@ async function scanFileLines(filePath, onLine) {
   }
 }
 
+/**
+ * Come scanFileLines, ma parte da un byte del file (l'inizio di una riga) e passa a onLine anche
+ * il byte subito dopo la riga, a capo compreso: e' il punto da cui una lettura successiva riprende
+ * senza ripercorrere le righe gia' lette. `startIndex` e' l'indice della prima riga letta.
+ * onLine(rigaGrezza, indice, byteDopoLaRiga); un ritorno false interrompe la lettura. Come
+ * readline, toglie un \r finale e passa anche un'ultima riga senza a capo.
+ */
+async function scanFileLinesFrom(filePath, startByte, startIndex, onLine) {
+  const stream = fs.createReadStream(filePath, { start: startByte });
+  // `base` e' il byte del file da cui comincia `buffer`.
+  let base = startByte;
+  let rest = Buffer.alloc(0);
+  let index = startIndex;
+  const emit = (buffer, from, to, endByte) => {
+    const end = to > from && buffer[to - 1] === 0x0d ? to - 1 : to;
+    const keepGoing = onLine(buffer.toString("utf8", from, end), index, endByte) !== false;
+    index += 1;
+    return keepGoing;
+  };
+  try {
+    for await (const chunk of stream) {
+      const buffer = rest.length > 0 ? Buffer.concat([rest, chunk]) : chunk;
+      let lineStart = 0;
+      let newline = buffer.indexOf(0x0a, lineStart);
+      while (newline !== -1) {
+        if (!emit(buffer, lineStart, newline, base + newline + 1)) {
+          return;
+        }
+        lineStart = newline + 1;
+        newline = buffer.indexOf(0x0a, lineStart);
+      }
+      rest = buffer.subarray(lineStart);
+      base += lineStart;
+    }
+    if (rest.length > 0) {
+      emit(rest, 0, rest.length, base + rest.length);
+    }
+  } finally {
+    stream.destroy();
+  }
+}
+
+// Vero se `byteOffset` e' l'inizio di una riga del file: 0, oppure subito dopo un a capo.
+async function isLineStart(filePath, byteOffset) {
+  if (byteOffset === 0) {
+    return true;
+  }
+  let handle;
+  try {
+    handle = await fs.promises.open(filePath, "r");
+    const { bytesRead, buffer } = await handle.read(Buffer.alloc(1), 0, 1, byteOffset - 1);
+    return bytesRead === 1 && buffer[0] === 0x0a;
+  } catch {
+    return false;
+  } finally {
+    await handle?.close();
+  }
+}
+
 // Chiave stabile di una entry nel dump: `<file>#<indiceRigaGrezza>`. Stabile perché i file sono append-only.
 function dumpKeyFor(fileName, lineIndex) {
   return `${fileName}#${lineIndex}`;
@@ -138,8 +197,15 @@ function parseDumpKey(key) {
 
 /**
  * Lettura paginata a cursore in avanti su tutti i file di dump, in ordine cronologico.
- * `cursor` = { fileIndex, lineIndex }; ogni item riceve `dumpKey`. Niente totale: si carica finché `done`.
- * La lettura è in streaming e si ferma a pagina piena: il file non viene mai caricato intero in RAM.
+ * `cursor` = { fileIndex, lineIndex, byteOffset }; ogni item riceve `dumpKey`. Niente totale: si
+ * carica finché `done`. La lettura è in streaming e si ferma a pagina piena: il file non viene mai
+ * caricato intero in RAM.
+ *
+ * `byteOffset` e' il byte da cui riprendere nel file: con lui la lettura parte da li', senza
+ * ripercorrere le righe gia' lette, e il tetto `maxScannedLines` limita davvero il lavoro della
+ * chiamata. Senza (un client che non lo rimanda), o se non cade all'inizio di una riga, si riparte
+ * dall'inizio del file contando le righe fino a `lineIndex`, come prima: il cursore restituito
+ * porta comunque il byte, e dalla pagina dopo la ripresa e' diretta.
  */
 async function readDumpPage(dumpDir, cursor, limit, filters, maxScannedLines = MAX_SCANNED_LINES) {
   const files = await listDumpFiles(dumpDir);
@@ -148,15 +214,22 @@ async function readDumpPage(dumpDir, cursor, limit, filters, maxScannedLines = M
 
   let fileIndex = cursor && Number.isInteger(cursor.fileIndex) && cursor.fileIndex >= 0 ? cursor.fileIndex : 0;
   let lineIndex = cursor && Number.isInteger(cursor.lineIndex) && cursor.lineIndex >= 0 ? cursor.lineIndex : 0;
+  let byteOffset = cursor && Number.isInteger(cursor.byteOffset) && cursor.byteOffset >= 0 ? cursor.byteOffset : null;
+  if (lineIndex === 0) {
+    byteOffset = 0;
+  }
 
   const items = [];
   let scanned = 0;
   while (fileIndex < names.length && items.length < max && scanned < maxScannedLines) {
     const name = names[fileIndex];
-    const startLine = lineIndex;
+    const filePath = path.join(dumpDir, name);
+    const direct = byteOffset != null && (await isLineStart(filePath, byteOffset));
+    // Ripresa diretta dal byte; altrimenti dall'inizio del file, saltando le prime `lineIndex` righe.
+    const skipBelow = direct ? 0 : lineIndex;
     let pageFull = false;
-    await scanFileLines(path.join(dumpDir, name), (line, index) => {
-      if (index < startLine) {
+    await scanFileLinesFrom(filePath, direct ? byteOffset : 0, direct ? lineIndex : 0, (line, index, endByte) => {
+      if (index < skipBelow) {
         return;
       }
       const entry = parseLine(line);
@@ -164,6 +237,7 @@ async function readDumpPage(dumpDir, cursor, limit, filters, maxScannedLines = M
         items.push({ ...entry, dumpKey: dumpKeyFor(name, index) });
       }
       lineIndex = index + 1;
+      byteOffset = endByte;
       scanned += 1;
       if (items.length >= max || scanned >= maxScannedLines) {
         pageFull = true;
@@ -173,11 +247,12 @@ async function readDumpPage(dumpDir, cursor, limit, filters, maxScannedLines = M
     if (!pageFull) {
       fileIndex += 1;
       lineIndex = 0;
+      byteOffset = 0;
     }
   }
 
   const done = fileIndex >= names.length;
-  return { items, nextCursor: done ? null : { fileIndex, lineIndex }, done };
+  return { items, nextCursor: done ? null : { fileIndex, lineIndex, byteOffset }, done };
 }
 
 // Tutte le entry di un singolo file di dump (per il criterio "tutto il file" del batch).

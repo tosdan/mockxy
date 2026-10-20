@@ -649,6 +649,8 @@ export interface DumpReadFilters {
 export interface DumpReadCursor {
   fileIndex: number;
   lineIndex: number;
+  /** Byte da cui riprendere nel file: con lui il server non rilegge le righe gia' lette. */
+  byteOffset?: number;
 }
 
 /** Una entry del dump = una RequestMonitorEntry con la chiave stabile assegnata dalla lettura. */

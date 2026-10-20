@@ -142,6 +142,76 @@ describe("monitor dump reader", () => {
     });
   });
 
+  // La ripresa dentro un file riapriva il file dall'inizio e ripercorreva le righe gia' lette:
+  // il lavoro di una chiamata cresceva col cursore. Ora il cursore porta il byte da cui ripartire.
+  describe("ripresa dal byte", () => {
+    const lineOf = (i) => JSON.stringify({ id: String(i), method: "GET", path: `/città/${i}`, originalUrl: `/città/${i}`, status: 200, source: "mock" });
+    let starts;
+
+    beforeEach(async () => {
+      const lines = Array.from({ length: 50 }, (_, i) => lineOf(i));
+      await fs.promises.writeFile(path.join(dir, F1), `${lines.join("\n")}\n`, "utf8");
+      const original = fs.createReadStream;
+      starts = [];
+      jest.spyOn(fs, "createReadStream").mockImplementation((file, options) => {
+        starts.push(options?.start ?? 0);
+        return original(file, options);
+      });
+    });
+
+    afterEach(() => jest.restoreAllMocks());
+
+    const bytesBefore = (line) =>
+      Array.from({ length: line }, (_, i) => Buffer.byteLength(`${lineOf(i)}\n`)).reduce((a, b) => a + b, 0);
+
+    test("il cursore porta il byte dopo l'ultima riga letta, anche con caratteri multibyte", async () => {
+      const page = await readDumpPage(dir, undefined, 3);
+      expect(page.nextCursor).toEqual({ fileIndex: 0, lineIndex: 3, byteOffset: bytesBefore(3) });
+    });
+
+    test("con un cursore avanzato la lettura parte dal suo byte, senza ripercorrere il prefisso", async () => {
+      const page = await readDumpPage(dir, { fileIndex: 0, lineIndex: 40, byteOffset: bytesBefore(40) }, 5);
+
+      expect(starts).toEqual([bytesBefore(40)]);
+      expect(page.items.map((item) => item.dumpKey)).toEqual([40, 41, 42, 43, 44].map((i) => `${F1}#${i}`));
+      expect(page.items[0].originalUrl).toBe("/città/40");
+    });
+
+    test("il tetto di righe vale dal cursore in poi: una ricerca rara avanza a passi uguali", async () => {
+      let cursor = { fileIndex: 0, lineIndex: 30, byteOffset: bytesBefore(30) };
+      const page = await readDumpPage(dir, cursor, 10, { q: "nessuna" }, 5);
+
+      expect(starts).toEqual([bytesBefore(30)]);
+      expect(page.items).toEqual([]);
+      expect(page.nextCursor).toEqual({ fileIndex: 0, lineIndex: 35, byteOffset: bytesBefore(35) });
+      cursor = page.nextCursor;
+      await readDumpPage(dir, cursor, 10, { q: "nessuna" }, 5);
+      expect(starts[1]).toBe(bytesBefore(35));
+    });
+
+    // Un client che non rimanda il byte (o ne manda uno che non cade a inizio riga) funziona come prima.
+    test("senza byte, o con un byte a meta' riga, riparte dall'inizio del file e conta le righe", async () => {
+      for (const cursor of [{ fileIndex: 0, lineIndex: 10 }, { fileIndex: 0, lineIndex: 10, byteOffset: bytesBefore(10) + 3 }]) {
+        starts.length = 0;
+        const page = await readDumpPage(dir, cursor, 2);
+        expect(starts).toEqual([0]);
+        expect(page.items.map((item) => item.id)).toEqual(["10", "11"]);
+        expect(page.nextCursor).toEqual({ fileIndex: 0, lineIndex: 12, byteOffset: bytesBefore(12) });
+      }
+    });
+
+    test("gestisce righe con \\r\\n e un'ultima riga senza a capo", async () => {
+      await fs.promises.writeFile(path.join(dir, F2), `${lineOf(100)}\r\n${lineOf(101)}\r\n${lineOf(102)}`, "utf8");
+      const first = await readDumpPage(dir, { fileIndex: 1, lineIndex: 0 }, 1);
+      expect(first.items.map((item) => item.id)).toEqual(["100"]);
+      expect(first.nextCursor.byteOffset).toBe(Buffer.byteLength(`${lineOf(100)}\r\n`));
+
+      const rest = await readDumpPage(dir, first.nextCursor, 10);
+      expect(rest.items.map((item) => item.id)).toEqual(["101", "102"]);
+      expect(rest.done).toBe(true);
+    });
+  });
+
   test("readDumpPage riprende dal cursore dentro lo stesso file (#35)", async () => {
     await writeNdjson(dir, F1, 5, 0);
 
