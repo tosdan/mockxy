@@ -10,13 +10,14 @@ import { ToastService } from '../../../ui/ui-toast/ui-toast';
 import { translocoTesting } from '../../../testing/transloco-testing';
 
 describe('MocksNextCatalog', () => {
-  function create() {
+  /** `stored`: lo stato di vista già salvato, come lo troverebbe ViewStateService. */
+  function create(stored: Record<string, unknown> = {}) {
     const api = {
       listMocks: vi.fn(() => of({ items: [], collections: [], childOrder: {} })),
       getMock: vi.fn(),
     };
     const viewState = {
-      read: vi.fn(() => null),
+      read: vi.fn((key: string) => stored[key] ?? null),
       write: vi.fn(),
     };
     TestBed.configureTestingModule({
@@ -31,7 +32,7 @@ describe('MocksNextCatalog', () => {
     const fixture = TestBed.createComponent(MocksNextCatalog);
     const store = TestBed.inject(MocksStore);
     fixture.detectChanges();
-    return { fixture, store };
+    return { fixture, store, viewState };
   }
 
   /** Voci del menu CDK aperto (vivono nell'overlay, fuori dal fixture). */
@@ -110,7 +111,7 @@ describe('MocksNextCatalog', () => {
   // Ricarica/espandi/collassa sono rare: scendono nel menu "…" invece di stare in barra con lo
   // stesso peso visivo dei filtri, che si usano di continuo.
   describe('menu delle azioni di vista', () => {
-    it('offre ricarica, espandi e collassa', () => {
+    it('offre ricarica, espandi, collassa e la densità compatta', () => {
       const { fixture } = create();
       headerButton(fixture, 'Azioni di vista').click();
       fixture.detectChanges();
@@ -119,6 +120,7 @@ describe('MocksNextCatalog', () => {
         'Ricarica dal disco',
         'Espandi tutte le cartelle',
         'Collassa tutte le cartelle',
+        'Densità compatta',
       ]);
     });
 
@@ -698,6 +700,75 @@ describe('MocksNextCatalog', () => {
       press(fixture, 'ArrowDown', input);
 
       expect(focusedKey()).toBe('c:unsorted');
+    });
+  });
+
+  // Una riga per endpoint, per vedere più catalogo: un'opzione del menu di vista, ricordata.
+  describe('densità compatta', () => {
+    function setup(stored: Record<string, unknown> = {}) {
+      const created = create(stored);
+      created.store.mocks.set([
+        { id: 'uno', type: 'mock', method: 'GET', path: '/uno', status: 200, disabled: false, configFilePath: 'uno', responseCount: 1 },
+        { id: 'due', type: 'handler', method: 'POST', path: '/due', status: 201, disabled: false, configFilePath: 'due', responseCount: 3 },
+      ] as never);
+      created.fixture.detectChanges();
+      return created;
+    }
+    const host = (fixture: ReturnType<typeof create>['fixture']) => fixture.nativeElement as HTMLElement;
+    const toggle = () =>
+      document.querySelector<HTMLButtonElement>('.cdk-overlay-container [role="menuitemcheckbox"]')!;
+    function openViewMenu(fixture: ReturnType<typeof create>['fixture']) {
+      headerButton(fixture, 'Azioni di vista').click();
+      fixture.detectChanges();
+    }
+
+    it('è un’opzione a spunta del menu di vista, spenta di partenza', () => {
+      const { fixture } = setup();
+      openViewMenu(fixture);
+
+      expect(toggle().textContent?.trim()).toBe('Densità compatta');
+      expect(toggle().getAttribute('aria-checked')).toBe('false');
+      expect(host(fixture).classList).not.toContain('mx-compact');
+    });
+
+    it('accenderla compatta il catalogo e la ricorda; spegnerla la dimentica', () => {
+      const { fixture, viewState } = setup();
+      openViewMenu(fixture);
+      toggle().click();
+      fixture.detectChanges();
+
+      expect(host(fixture).classList).toContain('mx-compact');
+      expect(viewState.write).toHaveBeenLastCalledWith('catalog-density', 'compact');
+
+      openViewMenu(fixture);
+      expect(toggle().getAttribute('aria-checked')).toBe('true');
+      toggle().click();
+      fixture.detectChanges();
+
+      expect(host(fixture).classList).not.toContain('mx-compact');
+      expect(viewState.write).toHaveBeenLastCalledWith('catalog-density', null);
+    });
+
+    it('riparte compatta se l’ultima volta lo era', () => {
+      const { fixture } = setup({ 'catalog-density': 'compact' });
+      expect(host(fixture).classList).toContain('mx-compact');
+    });
+
+    // Il tipo "mock" e una sola response sono il caso comune: in una riga sola tolgono spazio al path.
+    it('da compatta tace il tipo "mock" e la response unica, e mostra il resto', () => {
+      const { fixture } = setup({ 'catalog-density': 'compact' });
+      const text = (key: string) => rowOf(fixture, key).textContent!.replace(/\s+/g, ' ');
+
+      expect(text('e:uno')).not.toContain('mock');
+      expect(rowOf(fixture, 'e:uno').querySelector('ng-icon[name="lucideMessageSquare"]')).toBeNull();
+      expect(text('e:due')).toContain('handler');
+      expect(text('e:due')).toContain('3');
+    });
+
+    it('a densità normale i dettagli ci sono tutti, come prima', () => {
+      const { fixture } = setup();
+      expect(rowOf(fixture, 'e:uno').textContent).toContain('mock');
+      expect(rowOf(fixture, 'e:uno').querySelector('ng-icon[name="lucideMessageSquare"]')).not.toBeNull();
     });
   });
 

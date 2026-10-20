@@ -400,6 +400,7 @@
     "newCollectionTip": "New collection",
     "expandAllTip": "Expand all folders",
     "collapseAllTip": "Collapse all folders",
+    "compactDensity": "Compact density",
     "filtersTip": "Filters",
     "searchPlaceholder": "Filter the catalog…",
     "collectionNamePlaceholder": "Collection name…",

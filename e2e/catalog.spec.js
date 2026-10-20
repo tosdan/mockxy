@@ -159,6 +159,32 @@ test.describe("E1 · catalogo", () => {
     await expect(page.getByRole("menuitem", { name: "Core API" })).toBeVisible();
   });
 
+  test("la densità compatta mette ogni endpoint su una riga, e resta dopo un ricaricamento", async ({ page }) => {
+    const catalog = page.locator("mocks-next-catalog");
+    const row = (p) => catalog.locator('[role="treeitem"]').filter({ hasText: p }).first();
+    const toggle = page.getByRole("menuitemcheckbox", { name: "Densità compatta" });
+    expect((await row("/api/health").boundingBox()).height).toBe(44);
+
+    await catalog.getByRole("button", { name: "Azioni di vista" }).click();
+    await expect(toggle).toHaveAttribute("aria-checked", "false");
+    await toggle.click();
+
+    // Una riga sola: più basse, e senza i dettagli che sono il caso comune.
+    await expect.poll(async () => (await row("/api/health").boundingBox()).height).toBe(30);
+    await expect(row("/api/health")).not.toContainText("mock");
+    await expect(row("/api/echo")).toContainText("handler");
+
+    await page.reload();
+    await expect(page.locator("app-status-bar").getByText(/8\s+endpoint/)).toBeVisible();
+    expect((await row("/api/health").boundingBox()).height).toBe(30);
+
+    // Si torna indietro dallo stesso posto.
+    await catalog.getByRole("button", { name: "Azioni di vista" }).click();
+    await expect(toggle).toHaveAttribute("aria-checked", "true");
+    await toggle.click();
+    await expect.poll(async () => (await row("/api/health").boundingBox()).height).toBe(44);
+  });
+
   test("un path lungo si tronca in testa: la coda resta visibile", async ({ page }) => {
     const catalog = page.locator("mocks-next-catalog");
     // Si allunga un path direttamente nel DOM: le fixture non ne hanno di abbastanza lunghi.
