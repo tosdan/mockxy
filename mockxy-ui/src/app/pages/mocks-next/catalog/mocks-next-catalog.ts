@@ -22,10 +22,10 @@ import {
   lucideFileCode,
   lucideFolder,
   lucideFolderPlus,
-  lucideGripVertical,
   lucideInfo,
   lucideLayers,
   lucideMessageSquare,
+  lucideMinus,
   lucidePlus,
   lucidePower,
   lucidePowerOff,
@@ -51,6 +51,7 @@ import {
   MocksStore,
   type CatalogCollectionVM,
   type CatalogEndpointVM,
+  type CatalogTreeNode,
   type StatusFilter,
   type TypeFilter,
 } from '../mocks-next.store';
@@ -80,6 +81,13 @@ const DENSITY_STATE_KEY = 'catalog-density';
 
 /** Spostamento del puntatore (px) oltre il quale una pressione è un tentativo di trascinare. */
 const DRAG_ATTEMPT_PX = 8;
+
+/** Endpoint di un nodo e di tutte le sue sotto-collection, nell'ordine del catalogo. */
+function subtreeEndpointIds(node: CatalogTreeNode): string[] {
+  return node.children.flatMap((child) =>
+    child.kind === 'endpoint' ? [child.endpoint.id] : subtreeEndpointIds(child.node),
+  );
+}
 
 /** Riga dell'albero vista dalla tastiera: una collection (intestazione) o un endpoint. */
 interface NavRow {
@@ -129,10 +137,10 @@ interface NavRow {
       lucideFileCode,
       lucideFolder,
       lucideFolderPlus,
-      lucideGripVertical,
       lucideInfo,
       lucideLayers,
       lucideMessageSquare,
+      lucideMinus,
       lucidePlus,
       lucidePower,
       lucidePowerOff,
@@ -411,6 +419,7 @@ interface NavRow {
         role="treeitem"
         [attr.aria-level]="depth + 1"
         [attr.aria-expanded]="!collapsed().has(col.id)"
+        [attr.aria-selected]="folderCheckState(col.id) === 'empty' ? null : folderCheckState(col.id) === 'all'"
         [attr.data-row-key]="'c:' + col.id"
         [attr.tabindex]="tabbableKey() === 'c:' + col.id ? 0 : -1"
         class="group/folder relative flex w-full cursor-pointer select-none items-center gap-1.5 rounded-lg py-1.5 pr-1 text-left transition hover:bg-accent in-[.mx-compact]:py-[3px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/70"
@@ -423,12 +432,32 @@ interface NavRow {
         @for (guide of guides(depth); track guide) {
         <span class="mx-tree-line" [style.left.px]="guide"></span>
         }
-        @if (!isUnsorted(col) && !store.hasActiveFilter()) {
-        <span class="shrink-0 cursor-grab text-muted-foreground/40 opacity-0 transition group-hover/folder:opacity-100">
-          <ng-icon name="lucideGripVertical" size="0.85rem" />
+        <!-- Casella a tre stati: spunta (o toglie) tutti gli endpoint del sottoalbero che il filtro
+             lascia vedere, anche a cartella chiusa. Sta dove c'era la maniglia: la riga si trascina
+             comunque tutta, come quella di un endpoint, che la maniglia non l'ha mai avuta. -->
+        @if (folderCheckState(col.id); as state) {
+        @if (state !== 'empty') {
+        <span
+          role="checkbox"
+          tabindex="0"
+          [attr.aria-checked]="state === 'all' ? 'true' : state === 'some' ? 'mixed' : 'false'"
+          [attr.aria-label]="'catalog.selectCollectionAria' | transloco: { name: isUnsorted(col) ? ('catalog.unsorted' | transloco) : col.name }"
+          class="grid size-3.5 shrink-0 place-items-center rounded transition"
+          [class]="state === 'none' ? 'shadow-[inset_0_0_0_1px_var(--input)] opacity-0 group-hover/folder:opacity-100 focus-visible:opacity-100' : 'bg-brand text-background'"
+          [class.opacity-100]="selection().size > 0"
+          (click)="$event.stopPropagation(); toggleCollectionSelection(col.id)"
+          (keydown.enter)="$event.stopPropagation(); toggleCollectionSelection(col.id)"
+          (keydown.space)="$event.preventDefault(); $event.stopPropagation(); toggleCollectionSelection(col.id)"
+        >
+          @if (state === 'all') {
+          <ng-icon name="lucideCheck" size="0.6rem" />
+          } @else if (state === 'some') {
+          <ng-icon name="lucideMinus" size="0.6rem" />
+          }
         </span>
         } @else {
-        <span class="w-[0.85rem] shrink-0"></span>
+        <span class="w-3.5 shrink-0"></span>
+        }
         }
         <ng-icon name="lucideChevronRight" size="0.85rem" class="shrink-0 text-muted-foreground transition-transform" [class.rotate-90]="!collapsed().has(col.id)" />
         <ng-icon name="lucideFolder" size="0.95rem" class="shrink-0 text-brand" />
@@ -809,12 +838,61 @@ export class MocksNextCatalog {
     this.confirmingBulkDelete.set(false);
   }
 
-  /** Id spuntati che sono ancora visibili: un'azione di massa non tocca ciò che il filtro nasconde. */
+  /**
+   * Id spuntati che il filtro lascia vedere: un'azione di massa non tocca ciò che il filtro
+   * nasconde. Una cartella chiusa invece non nasconde nulla: spuntare una collection chiusa e poi
+   * disabilitare deve disabilitarne gli endpoint, anche se in quel momento non si vedono.
+   */
   private selectedVisibleIds(): string[] {
     const selected = this.selection();
-    return this.flatRows()
-      .filter((row) => row.kind === 'endpoint' && selected.has(row.endpoint.id))
-      .map((row) => (row as { endpoint: { id: string } }).endpoint.id);
+    return this.filteredEndpointIds().filter((id) => selected.has(id));
+  }
+
+  /** Endpoint che passano il filtro, nell'ordine del catalogo, a cartelle aperte o chiuse. */
+  private readonly filteredEndpointIds = computed(() => [
+    ...(this.store.unsortedNode()?.collection.endpoints.map((endpoint) => endpoint.id) ?? []),
+    ...this.store.catalogTree().flatMap((root) => subtreeEndpointIds(root)),
+  ]);
+
+  /** Per ogni collection (e per i non assegnati) gli endpoint del suo sottoalbero che il filtro lascia vedere. */
+  private readonly collectionEndpointIds = computed(() => {
+    const byCollection = new Map<string, readonly string[]>();
+    const unsorted = this.store.unsortedNode();
+    if (unsorted) {
+      byCollection.set(UNSORTED_COLLECTION_ID, unsorted.collection.endpoints.map((endpoint) => endpoint.id));
+    }
+    const visit = (node: CatalogTreeNode): void => {
+      byCollection.set(node.collection.id, subtreeEndpointIds(node));
+      for (const child of node.children) {
+        if (child.kind === 'collection') visit(child.node);
+      }
+    };
+    this.store.catalogTree().forEach(visit);
+    return byCollection;
+  });
+
+  /** Stato della casella di una cartella: tutti, alcuni o nessuno dei suoi endpoint spuntati, o niente da spuntare. */
+  protected folderCheckState(collectionId: string): 'all' | 'some' | 'none' | 'empty' {
+    const ids = this.collectionEndpointIds().get(collectionId) ?? [];
+    if (ids.length === 0) return 'empty';
+    const selected = this.selection();
+    const checked = ids.filter((id) => selected.has(id)).length;
+    return checked === ids.length ? 'all' : checked === 0 ? 'none' : 'some';
+  }
+
+  /** Spunta tutto il sottoalbero, o toglie tutte le spunte se era già tutto spuntato. */
+  protected toggleCollectionSelection(collectionId: string): void {
+    const ids = this.collectionEndpointIds().get(collectionId) ?? [];
+    if (ids.length === 0) return;
+    const next = new Set(this.selection());
+    const allChecked = ids.every((id) => next.has(id));
+    for (const id of ids) {
+      if (allChecked) next.delete(id);
+      else next.add(id);
+    }
+    this.selection.set(next);
+    this.lastSelectedId = allChecked ? null : ids[ids.length - 1];
+    this.confirmingBulkDelete.set(false);
   }
 
   protected bulkEnabled(enabled: boolean): void {
@@ -912,9 +990,9 @@ export class MocksNextCatalog {
   // --- navigazione da tastiera (pattern ARIA "tree") ---
   // Frecce su/giu' fra le righe visibili, destra/sinistra per aprire, chiudere e risalire. Invio
   // apre l'endpoint nel dettaglio; Spazio lo spunta, e con Maiuscole spunta l'intervallo dall'ultimo
-  // spuntato, come lo shift-click. Su una cartella Invio e Spazio la aprono e la chiudono: le
-  // cartelle non si spuntano. Spunta, menu e switch di una riga restano controlli a se', raggiunti
-  // col Tab come prima.
+  // spuntato, come lo shift-click. Su una cartella Invio la apre e la chiude, Spazio ne spunta (o
+  // toglie) tutto il sottoalbero. Spunta, menu e switch di una riga restano controlli a se',
+  // raggiunti col Tab come prima.
 
   /** Righe dell'albero nell'ordine in cui si vedono: l'intestazione di Unsorted, poi la lista piatta. */
   private readonly navRows = computed<readonly NavRow[]>(() => {
@@ -987,7 +1065,7 @@ export class MocksNextCatalog {
         else this.store.selectMock(row.endpointId!);
         break;
       case ' ':
-        if (row.collectionId != null) this.toggleCollapse(row.collectionId);
+        if (row.collectionId != null) this.toggleCollectionSelection(row.collectionId);
         else this.onSelectionClick(row.endpointId!, event);
         break;
       default:

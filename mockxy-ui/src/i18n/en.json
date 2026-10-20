@@ -446,6 +446,7 @@
     "confirmErase": "Erase {{count}}",
     "moveToLabel": "Move to",
     "selectEndpointAria": "Select {{path}}",
+    "selectCollectionAria": "Select every endpoint in {{name}}",
     "selectedCount": "{{count}} selected",
     "selectedOne": "1 selected",
     "bulkEnable": "Enable",
