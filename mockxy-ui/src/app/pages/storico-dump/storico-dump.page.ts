@@ -1,7 +1,8 @@
-import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal, viewChild } from '@angular/core';
+import { DatePipe } from '@angular/common';
+import { ChangeDetectionStrategy, Component, OnInit, computed, effect, inject, signal, untracked, viewChild } from '@angular/core';
 import { CdkFixedSizeVirtualScroll, CdkVirtualForOf, CdkVirtualScrollViewport } from '@angular/cdk/scrolling';
 import { CdkMenuTrigger } from '@angular/cdk/menu';
-import { finalize } from 'rxjs';
+import { finalize, type Subscription } from 'rxjs';
 import { NgIcon, provideIcons } from '@ng-icons/core';
 import {
   lucideArrowLeft,
@@ -9,6 +10,7 @@ import {
   lucideDatabase,
   lucideLayers,
   lucidePlus,
+  lucideSearch,
   lucideTrash2,
   lucideX,
 } from '@ng-icons/lucide';
@@ -18,14 +20,22 @@ import { UiButton } from '../../ui/ui-button/ui-button';
 import { UiCode } from '../../ui/ui-code/ui-code';
 import { UiCollapsible } from '../../ui/ui-collapsible/ui-collapsible';
 import { UiMenu } from '../../ui/ui-menu/ui-menu';
+import { UiSelect, type UiSelectOption } from '../../ui/ui-select/ui-select';
 import { UiTable } from '../../ui/ui-table/ui-table';
 import { UiTooltip } from '../../ui/ui-tooltip/ui-tooltip';
 import { ToastService } from '../../ui/ui-toast/ui-toast';
 import { MockAdminApiService } from '../../mock-admin-api.service';
-import { summarizeBatchAttention, type DumpCreateMocksResult, type DumpEntry, type DumpReadCursor, type DumpSelection, type MonitorDumpFile } from '../../mock-admin-api.types';
+import { summarizeBatchAttention, type DumpCreateMocksResult, type DumpEntry, type DumpReadCursor, type DumpReadFilters, type DumpSelection, type MonitorDumpFile } from '../../mock-admin-api.types';
+import { MOCK_METHODS } from '../../mock-admin-ui.constants';
 import { readBatchPartialResult } from '../../shared/read-error-message';
 
 const PAGE_SIZE = 300;
+/** Sotto questo numero di voci, a filtro acceso, si continua a leggere: la lista va riempita. */
+const FILL_THRESHOLD = 40;
+/** Attesa dopo l'ultima battuta nella ricerca prima di rileggere l'archivio. */
+const SEARCH_DEBOUNCE_MS = 250;
+/** Altezza di una riga della lista (px), per lo scroll virtuale. */
+const ROW_HEIGHT = 56;
 
 /**
  * Pagina "Storico dump": browse READ-ONLY (non live) dei dump su disco con virtual scroll a cursore.
@@ -35,6 +45,7 @@ const PAGE_SIZE = 300;
 @Component({
   selector: 'app-storico-dump',
   imports: [
+    DatePipe,
     CdkVirtualScrollViewport,
     CdkFixedSizeVirtualScroll,
     CdkVirtualForOf,
@@ -46,10 +57,11 @@ const PAGE_SIZE = 300;
     UiCode,
     UiCollapsible,
     UiMenu,
+    UiSelect,
     UiTable,
     UiTooltip,
   ],
-  providers: [provideIcons({ lucideArrowLeft, lucideCheck, lucideDatabase, lucideLayers, lucidePlus, lucideTrash2, lucideX })],
+  providers: [provideIcons({ lucideArrowLeft, lucideCheck, lucideDatabase, lucideLayers, lucidePlus, lucideSearch, lucideTrash2, lucideX })],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="absolute inset-0 flex flex-col overflow-hidden bg-background text-foreground">
@@ -60,7 +72,7 @@ const PAGE_SIZE = 300;
           <div class="text-sm font-bold tracking-tight">{{ 'storico.title' | transloco }}</div>
           <div class="text-[10px] font-bold uppercase tracking-[0.18em] text-[var(--status-4xx)]">{{ 'storico.subtitle' | transloco }}</div>
         </div>
-        <span class="text-[12px] text-muted-foreground">{{ 'storico.loaded' | transloco: { count: entries().length } }}{{ done() ? '' : '…' }}</span>
+        <span class="text-[12px] text-muted-foreground">{{ (hasFilter() ? 'storico.matches' : 'storico.loaded') | transloco: { count: entries().length } }}{{ done() ? '' : '…' }}</span>
 
         <div class="ml-auto flex items-center gap-2">
           <button ui-button variant="outline" size="sm" [cdkMenuTriggerFor]="filesMenu" [disabled]="creating()"><ng-icon name="lucideLayers" size="0.9rem" /> {{ 'storico.files' | transloco: { count: files().length } }}</button>
@@ -72,15 +84,47 @@ const PAGE_SIZE = 300;
         </div>
       </header>
 
+      <!-- FILTRI: gli stessi del Monitor. Li applica il server mentre legge l'archivio, cosi' la
+           ricerca guarda tutte le voci su disco e non solo le pagine gia' caricate. -->
+      <div class="relative z-20 flex shrink-0 flex-wrap items-center gap-2 border-b border-border bg-card/30 px-5 py-2">
+        <label class="relative">
+          <ng-icon name="lucideSearch" size="0.9rem" class="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+          <input #searchInput type="text" [placeholder]="'monitor.filterPlaceholder' | transloco" [value]="search()" (input)="search.set($any($event.target).value)"
+                 class="h-8 w-64 rounded-lg border border-input bg-black/30 pl-8 pr-8 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-ring/50 focus:ring-2 focus:ring-ring/20" />
+          @if (search() !== '') {
+          <button
+            type="button"
+            class="absolute right-1.5 top-1/2 grid h-5 w-5 -translate-y-1/2 place-items-center rounded text-muted-foreground transition hover:bg-accent hover:text-foreground"
+            [attr.aria-label]="'common.clearFilter' | transloco"
+            (click)="search.set(''); searchInput.focus()"
+          >
+            <ng-icon name="lucideX" size="0.7rem" />
+          </button>
+          }
+        </label>
+        <ui-select class="w-40" [options]="methodOptions" [value]="methodFilter()" (valueChange)="methodFilter.set($any($event))" [ariaLabel]="'storico.methodFilterAria' | transloco" />
+        @for (n of statusChips; track n) {
+        <button type="button" (click)="toggleStatusClass(n)" [attr.aria-pressed]="statusClasses().has(n)"
+                class="inline-flex h-8 items-center rounded-lg border px-3 text-[12.5px] font-medium transition"
+                [style.color]="statusClasses().has(n) ? statusColorClass(n) : 'var(--muted-foreground)'"
+                [style.borderColor]="statusClasses().has(n) ? tint(statusColorClass(n), 40) : 'var(--input)'"
+                [style.background]="statusClasses().has(n) ? tint(statusColorClass(n), 10) : 'transparent'">{{ n }}xx</button>
+        }
+        <label class="inline-flex items-center gap-2">
+          <span class="text-[11.5px] text-muted-foreground">{{ 'monitor.servedBy' | transloco }}</span>
+          <ui-select class="w-40" [options]="sourceOptions" [value]="sourceFilter()" (valueChange)="sourceFilter.set($any($event))" />
+        </label>
+      </div>
+
       <!-- BODY: lista virtualizzata + dettaglio -->
       <div class="relative z-10 flex min-h-0 flex-1">
-        <cdk-virtual-scroll-viewport #viewport itemSize="48" class="mx-scroll min-h-0 shrink-0 border-r border-border" [style.width.px]="listWidth()" (scrolledIndexChange)="onScroll()">
+        <cdk-virtual-scroll-viewport #viewport [itemSize]="rowHeight" class="mx-scroll min-h-0 shrink-0 border-r border-border" [style.width.px]="listWidth()" (scrolledIndexChange)="onScroll()">
           <button
             *cdkVirtualFor="let row of entries(); let i = index; trackBy: trackKey"
             type="button"
             (click)="onRowClick(row, i, $event)"
             class="flex w-full items-center gap-2.5 border-b border-border-soft px-4 text-left transition hover:bg-white/[0.03]"
-            style="height: 48px"
+            [style.height.px]="rowHeight"
             [class.mx-selected]="row.dumpKey === focusedKey()"
           >
             <span class="grid size-4 shrink-0 place-items-center rounded border transition"
@@ -89,8 +133,20 @@ const PAGE_SIZE = 300;
               @if (selectedKeys().has(row.dumpKey)) { <ng-icon name="lucideCheck" size="0.7rem" class="text-white" /> }
             </span>
             <span class="w-12 shrink-0 font-mono text-[12px] font-bold" [style.color]="methodColor(row.method)">{{ row.method }}</span>
-            <span class="min-w-0 flex-1 truncate font-mono text-[12.5px]">{{ row.originalUrl }}</span>
-            <span class="shrink-0 rounded-md px-1.5 py-0.5 font-mono text-[11px] font-bold tabular-nums" [style.color]="statusColor(row.status)" [style.background]="tint(statusColor(row.status), 12)">{{ row.status }}</span>
+            <!-- Quando e da chi: in uno storico l'ora e' il dato principale, e la provenienza dice
+                 cosa e' gia' un mock. Il path si tronca in testa, come nel catalogo. -->
+            <span class="min-w-0 flex-1">
+              <span class="block truncate text-left font-mono text-[12.5px]" dir="rtl" [title]="row.originalUrl"><bdi dir="ltr">{{ row.originalUrl }}</bdi></span>
+              <span class="mt-0.5 flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                <span class="size-1.5 rounded-full" [style.background]="sourceColor(row.source)"></span>{{ sourceLabel(row.source) }}
+                <span aria-hidden="true">·</span>
+                <span class="tabular-nums">{{ row.latencyMs }} ms</span>
+              </span>
+            </span>
+            <span class="flex shrink-0 flex-col items-end gap-1">
+              <span class="rounded-md px-1.5 py-0.5 font-mono text-[11px] font-bold tabular-nums" [style.color]="statusColor(row.status)" [style.background]="tint(statusColor(row.status), 12)">{{ row.status }}</span>
+              <span class="font-mono text-[10.5px] tabular-nums text-muted-foreground">{{ row.timestamp | date: 'dd/MM HH:mm:ss' }}</span>
+            </span>
           </button>
           @if (loading()) {
           <div class="px-4 py-3 text-center text-[12px] text-muted-foreground">{{ 'storico.loading' | transloco }}</div>
@@ -115,7 +171,10 @@ const PAGE_SIZE = 300;
               <span class="font-mono text-[15px] font-bold" [style.color]="methodColor(sel.method)">{{ sel.method }}</span>
               <span class="font-mono text-[16px] font-semibold">{{ sel.originalUrl }}</span>
               <span class="rounded-md px-2 py-0.5 font-mono text-[13px] font-bold tabular-nums" [style.color]="statusColor(sel.status)" [style.background]="tint(statusColor(sel.status), 14)">{{ sel.status }}</span>
-              <span class="text-[12px] text-muted-foreground">{{ sourceLabel(sel.source) }} · {{ sel.dumpKey }}</span>
+              <!-- La chiave del dump (file#riga) resta nel tooltip: a chi legge serve quando, non dove. -->
+              <span class="inline-flex items-center gap-1.5 text-[12px] text-muted-foreground" [title]="sel.dumpKey">
+                <span class="size-1.5 rounded-full" [style.background]="sourceColor(sel.source)"></span>{{ sourceLabel(sel.source) }} · {{ sel.latencyMs }} ms · {{ sel.timestamp | date: 'dd/MM/yyyy HH:mm:ss.SSS' }}
+              </span>
             </div>
             <div class="flex min-h-0 flex-1 flex-col overflow-y-auto mx-scroll">
               <!-- Request · headers -->
@@ -196,7 +255,7 @@ const PAGE_SIZE = 300;
           } @else {
           <div class="grid h-full place-items-center px-6 text-center text-sm text-muted-foreground">
             @if (entries().length === 0 && done()) {
-            {{ 'storico.emptyDisk' | transloco }}
+            {{ (hasFilter() ? 'storico.emptyFiltered' : 'storico.emptyDisk') | transloco }}
             } @else {
             {{ 'storico.selectRow' | transloco }}
             }
@@ -244,6 +303,63 @@ export class StoricoDumpPage implements OnInit {
   protected readonly responseBodyOpen = signal(true);
   private lastIndex = -1;
 
+  protected readonly rowHeight = ROW_HEIGHT;
+
+  // --- filtri (stessi del Monitor) ---
+  protected readonly search = signal('');
+  /** La ricerca dopo la pausa di battitura: e' lei, non ogni tasto, a far rileggere l'archivio. */
+  private readonly settledSearch = signal('');
+  protected readonly methodFilter = signal('all');
+  protected readonly sourceFilter = signal('all');
+  protected readonly statusClasses = signal<ReadonlySet<number>>(new Set());
+  protected readonly statusChips = [2, 3, 4, 5];
+  protected readonly methodOptions: readonly UiSelectOption<string>[] = [
+    { value: 'all', label: this.transloco.translate('monitor.allMethods') },
+    ...MOCK_METHODS.map((m) => ({ value: m, label: m })),
+  ];
+  protected readonly sourceOptions: readonly UiSelectOption<string>[] = [
+    { value: 'all', label: this.transloco.translate('monitor.allSources') },
+    { value: 'real-backend', label: this.transloco.translate('monitor.sourceRealBackend') },
+    { value: 'mock', label: 'Mock' },
+    { value: 'backend', label: 'Proxy' },
+    { value: 'handler', label: 'Handler' },
+    { value: 'middleware', label: 'Middleware' },
+    { value: 'mock-only-miss', label: 'Miss' },
+  ];
+  private readonly filters = computed<DumpReadFilters>(() => ({
+    q: this.settledSearch().trim() || undefined,
+    method: this.methodFilter() === 'all' ? undefined : this.methodFilter(),
+    source: this.sourceFilter() === 'all' ? undefined : this.sourceFilter(),
+    statusClasses: [...this.statusClasses()].sort(),
+  }));
+  protected readonly hasFilter = computed(() => {
+    const f = this.filters();
+    return !!(f.q || f.method || f.source || f.statusClasses?.length);
+  });
+  /** Lettura in corso, da annullare se i filtri cambiano prima che risponda. */
+  private pending?: Subscription;
+  private searchTimer?: ReturnType<typeof setTimeout>;
+
+  constructor() {
+    effect(() => {
+      const value = this.search();
+      clearTimeout(this.searchTimer);
+      this.searchTimer = setTimeout(() => this.settledSearch.set(value), value === '' ? 0 : SEARCH_DEBOUNCE_MS);
+    });
+    // Ogni cambio di filtro rilegge l'archivio dall'inizio; la prima esecuzione e' il caricamento.
+    effect(() => {
+      this.filters();
+      untracked(() => this.resetAndReload(false));
+    });
+  }
+
+  protected toggleStatusClass(klass: number): void {
+    const next = new Set(this.statusClasses());
+    if (next.has(klass)) next.delete(klass);
+    else next.add(klass);
+    this.statusClasses.set(next);
+  }
+
   protected readonly selectedCount = computed(() => this.selectedKeys().size);
   protected readonly focused = computed<DumpEntry | null>(
     () => this.entries().find((entry) => entry.dumpKey === this.focusedKey()) ?? null,
@@ -251,7 +367,6 @@ export class StoricoDumpPage implements OnInit {
 
   ngOnInit(): void {
     this.loadFiles();
-    this.loadMore();
   }
 
   private loadFiles(): void {
@@ -264,8 +379,8 @@ export class StoricoDumpPage implements OnInit {
   protected loadMore(): void {
     if (this.loading() || this.done()) return;
     this.loading.set(true);
-    this.api
-      .readMonitorDumps(this.cursor(), PAGE_SIZE)
+    this.pending = this.api
+      .readMonitorDumps(this.cursor(), PAGE_SIZE, this.filters())
       .pipe(finalize(() => this.loading.set(false)))
       .subscribe({
         next: (page) => {
@@ -274,6 +389,11 @@ export class StoricoDumpPage implements OnInit {
           this.done.set(page.done);
           if (this.focusedKey() == null && this.entries().length > 0) {
             this.focusedKey.set(this.entries()[0].dumpKey);
+          }
+          // Un filtro selettivo puo' tornare pagine quasi vuote: si continua finche' la lista non
+          // si riempie o l'archivio non finisce, senza aspettare uno scroll che non puo' arrivare.
+          if (this.hasFilter() && !page.done && this.entries().length < FILL_THRESHOLD) {
+            queueMicrotask(() => this.loadMore());
           }
         },
         error: (error: unknown) => this.toast.show({ title: this.transloco.translate('common.error'), description: this.readError(error), tone: 'error' }),
@@ -361,14 +481,16 @@ export class StoricoDumpPage implements OnInit {
     });
   }
 
-  private resetAndReload(): void {
+  private resetAndReload(reloadFiles = true): void {
+    this.pending?.unsubscribe();
+    this.loading.set(false);
     this.entries.set([]);
     this.cursor.set(null);
     this.done.set(false);
     this.selectedKeys.set(new Set());
     this.focusedKey.set(null);
     this.lastIndex = -1;
-    this.loadFiles();
+    if (reloadFiles) this.loadFiles();
     this.loadMore();
   }
 
@@ -412,8 +534,25 @@ export class StoricoDumpPage implements OnInit {
   }
 
   protected statusColor(status: number): string {
-    const klass = Math.floor(status / 100);
+    return this.statusColorClass(Math.floor(status / 100));
+  }
+
+  protected statusColorClass(klass: number): string {
     return klass >= 2 && klass <= 5 ? `var(--status-${klass}xx)` : 'var(--muted-foreground)';
+  }
+
+  /** Colore della provenienza, lo stesso del Monitor. */
+  protected sourceColor(source: string): string {
+    switch (source) {
+      case 'mock': return 'var(--type-mock)';
+      case 'handler': return 'var(--type-handler)';
+      case 'middleware': return 'var(--type-middleware)';
+      case 'sse': return 'var(--brand)';
+      case 'backend': return 'var(--brand-soft)';
+      case 'mock-only':
+      case 'mock-only-miss': return 'var(--foreground-faint)';
+      default: return 'var(--muted-foreground)';
+    }
   }
 
   protected tint(color: string, pct: number): string {

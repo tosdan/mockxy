@@ -36,6 +36,39 @@ test.describe("E17 · storico dump → crea mock", () => {
     await setDumpEnabled(request, false);
   }
 
+  // Righe con quando e da chi, e filtri applicati dal server su tutto l'archivio.
+  test("le righe dicono provenienza, latenza e ora; i filtri trovano le voci in tutto l'archivio", async ({ page, request }) => {
+    await setDumpEnabled(request, true);
+    await request.get(`${E2E_BACKEND}/api/health`); // mock, 200
+    await request.get(`${E2E_BACKEND}/api/dump-e2e`); // non mockata
+    await request.get(`${E2E_BACKEND}/api/users`); // mock, 200
+    await expect.poll(async () => await flushDump(request), { timeout: 8000 }).toBeGreaterThanOrEqual(3);
+    await setDumpEnabled(request, false);
+
+    await gotoStorico(page);
+    const storico = page.locator("app-storico-dump");
+    const rows = storico.locator("cdk-virtual-scroll-viewport button");
+    await expect(rows).toHaveCount(3);
+
+    const health = rows.filter({ hasText: "/api/health" });
+    await expect(health).toContainText("Mock");
+    await expect(health).toContainText(/\d+ ms/);
+    await expect(health).toContainText(/\d\d\/\d\d \d\d:\d\d:\d\d/);
+    // Il path si tronca in testa: riga rtl, testo intero nel tooltip.
+    await expect(health.locator('[dir="rtl"]')).toHaveAttribute("title", "/api/health");
+
+    await storico.getByPlaceholder(/Filtra path/).fill("dump-e2e");
+    await expect(rows).toHaveCount(1);
+    await expect(rows.first()).toContainText("/api/dump-e2e");
+    await expect(storico.getByText("1 risultati")).toBeVisible();
+
+    await storico.getByPlaceholder(/Filtra path/).fill("");
+    await storico.getByRole("button", { name: "2xx" }).click();
+    await expect(rows).toHaveCount(2);
+    await storico.getByRole("button", { name: "2xx" }).click();
+    await expect(rows).toHaveCount(3);
+  });
+
   test("una entry selezionata nello storico diventa un mock nel catalogo", async ({ page, request }) => {
     await seedDump(request);
 

@@ -32,6 +32,8 @@ function page(items: DumpEntry[], nextCursor: DumpReadCursor | null, done: boole
 }
 
 const FILE1 = { name: 'dump-2026-01-01T00-00-00-000Z.ndjson', size: 2048, mtime: 1 };
+/** I filtri di una lettura senza filtri accesi. */
+const NO_FILTERS = { statusClasses: [] };
 
 describe('StoricoDumpPage', () => {
   let api: ReturnType<typeof makeApiStub>;
@@ -73,7 +75,7 @@ describe('StoricoDumpPage', () => {
   describe('paginazione a cursore', () => {
     it('all’avvio carica file e prima pagina, mettendo a fuoco la prima entry', () => {
       const { c } = create();
-      expect(api.readMonitorDumps).toHaveBeenCalledWith(null, 300);
+      expect(api.readMonitorDumps).toHaveBeenCalledWith(null, 300, NO_FILTERS);
       expect(c.entries().map((e: DumpEntry) => e.dumpKey)).toEqual(['f#0', 'f#1']);
       expect(c.files()).toEqual([FILE1]);
       expect(c.focusedKey()).toBe('f#0');
@@ -83,7 +85,7 @@ describe('StoricoDumpPage', () => {
     it('loadMore rimanda il cursore ricevuto e ACCUMULA le pagine; a done non chiama più', () => {
       const { c } = create();
       c.loadMore();
-      expect(api.readMonitorDumps).toHaveBeenLastCalledWith({ fileIndex: 0, lineIndex: 2 }, 300);
+      expect(api.readMonitorDumps).toHaveBeenLastCalledWith({ fileIndex: 0, lineIndex: 2 }, 300, NO_FILTERS);
       expect(c.entries().map((e: DumpEntry) => e.dumpKey)).toEqual(['f#0', 'f#1', 'f#2']);
       expect(c.done()).toBe(true);
 
@@ -103,6 +105,88 @@ describe('StoricoDumpPage', () => {
       api.readMonitorDumps.mockReturnValueOnce(throwError(() => ({ error: { message: 'dump illeggibile' } })));
       create();
       expect(toast.show).toHaveBeenCalledWith(expect.objectContaining({ tone: 'error', description: 'dump illeggibile' }));
+    });
+  });
+
+  // Il dettaglio non mostra piu' la chiave tecnica del dump. Le righe stanno in uno scroll
+  // virtuale, che qui non disegna nulla (niente layout): le verificano gli e2e dello Storico.
+  describe('dettaglio', () => {
+    const text = (fixture: ReturnType<typeof create>['fixture']) =>
+      ((fixture.nativeElement as HTMLElement).textContent ?? '').replace(/\s+/g, ' ');
+
+    it('il dettaglio dice provenienza, latenza e quando; la chiave del dump resta nel tooltip', () => {
+      const { fixture } = create();
+      const header = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll<HTMLElement>('[title="f#0"]'))
+        .find((el) => el.tagName === 'SPAN' && !el.hasAttribute('dir'))!;
+      expect((header.textContent ?? '').replace(/\s+/g, ' ')).toMatch(/Proxy · 5 ms · 05\/07\/2026 \d\d:\d\d:\d\d\.000/);
+      expect(text(fixture)).not.toContain('f#0 ');
+    });
+  });
+
+  // I filtri sono quelli del Monitor; li applica il server mentre legge, su tutto l'archivio.
+  describe('filtri', () => {
+    beforeEach(() => vi.useFakeTimers());
+    afterEach(() => vi.useRealTimers());
+
+    function settle(fixture: ReturnType<typeof create>['fixture']) {
+      fixture.detectChanges();
+      vi.runOnlyPendingTimers();
+      fixture.detectChanges();
+    }
+
+    it('metodo, classi di status e provenienza rileggono l’archivio dall’inizio con i filtri', () => {
+      const { fixture, c } = create();
+      c.loadMore(); // tre voci caricate
+      api.readMonitorDumps.mockClear();
+
+      c.methodFilter.set('POST');
+      c.toggleStatusClass(5);
+      c.toggleStatusClass(4);
+      c.sourceFilter.set('real-backend');
+      settle(fixture);
+
+      expect(api.readMonitorDumps).toHaveBeenLastCalledWith(null, 300, { method: 'POST', source: 'real-backend', statusClasses: [4, 5] });
+      expect(c.cursor()).toEqual({ fileIndex: 0, lineIndex: 2 }); // ripartita dalla prima pagina
+    });
+
+    it('la ricerca rilegge solo dopo una pausa di battitura', () => {
+      const { fixture, c } = create();
+      api.readMonitorDumps.mockClear();
+
+      c.search.set('or');
+      fixture.detectChanges();
+      c.search.set('ord');
+      fixture.detectChanges();
+      expect(api.readMonitorDumps).not.toHaveBeenCalled();
+
+      vi.advanceTimersByTime(250);
+      fixture.detectChanges();
+      expect(api.readMonitorDumps).toHaveBeenCalledTimes(1);
+      expect(api.readMonitorDumps).toHaveBeenLastCalledWith(null, 300, { q: 'ord', statusClasses: [] });
+    });
+
+    it('a filtro acceso continua a leggere finché la lista non si riempie o l’archivio non finisce', async () => {
+      const { fixture, c } = create();
+      api.readMonitorDumps.mockClear();
+
+      c.toggleStatusClass(2);
+      settle(fixture);
+      await Promise.resolve(); // la pagina successiva parte in un microtask
+
+      expect(api.readMonitorDumps).toHaveBeenCalledTimes(2);
+      expect(c.entries().map((e: DumpEntry) => e.dumpKey)).toEqual(['f#0', 'f#1', 'f#2']);
+      expect(c.done()).toBe(true);
+    });
+
+    it('a filtro acceso la testata conta i risultati, e l’archivio vuoto lo dice', () => {
+      api.readMonitorDumps.mockReturnValue(of(page([], null, true)));
+      const { fixture, c } = create();
+      c.toggleStatusClass(5);
+      settle(fixture);
+
+      const content = ((fixture.nativeElement as HTMLElement).textContent ?? '').replace(/\s+/g, ' ');
+      expect(content).toContain('0 risultati');
+      expect(content).toContain('Nessuna voce dello storico corrisponde ai filtri.');
     });
   });
 
@@ -255,7 +339,7 @@ describe('StoricoDumpPage', () => {
       c.deleteFile(FILE1);
 
       expect(api.deleteMonitorDump).toHaveBeenCalledWith(FILE1.name);
-      expect(api.readMonitorDumps).toHaveBeenCalledWith(null, 300); // riparte dal cursore nullo
+      expect(api.readMonitorDumps).toHaveBeenCalledWith(null, 300, NO_FILTERS); // riparte dal cursore nullo
       expect(c.entries().map((e: DumpEntry) => e.dumpKey)).toEqual(['f#0', 'f#1']);
       expect(c.selectedCount()).toBe(0);
       expect(toast.show).toHaveBeenCalledWith(expect.objectContaining({ tone: 'success' }));

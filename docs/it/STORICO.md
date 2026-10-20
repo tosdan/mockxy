@@ -39,7 +39,10 @@ la si trasforma in mock (o si copia il file). Con il tetto a `0` il pruning è d
 ## La pagina Storico
 
 Oltre all'interruttore di cattura e al flush manuale, la pagina elenca i file di dump e li
-sfoglia con scorrimento continuo (la lettura è paginata, anche su archivi molto grandi). Da un
+sfoglia con scorrimento continuo (la lettura è paginata, anche su archivi molto grandi). Ogni
+voce dice quando è arrivata, chi l'ha servita e in quanto tempo. I filtri sono quelli del
+monitor (testo nel percorso o nell'URL, metodo, classi di status, provenienza) e cercano in tutto
+l'archivio, non solo nelle voci già caricate. Da un
 file — intero, o da una selezione di voci — si **creano mock in blocco**, con le stesse regole
 di travaso della vista live ([monitor](MONITOR.md)): header mascherati e ricalcolabili esclusi,
 scheletri da completare per i body non ricostruibili. I file si eliminano singolarmente dalla
