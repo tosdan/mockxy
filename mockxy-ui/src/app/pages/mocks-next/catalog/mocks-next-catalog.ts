@@ -285,8 +285,10 @@ interface NavRow {
       } @else {
       <!-- Un albero ARIA piatto: le righe sono sorelle nel DOM e il livello lo dichiara aria-level.
            Col Tab si raggiunge una sola riga alla volta (roving tabindex) e fra le righe ci si
-           sposta con le frecce; spunta, menu e switch di ogni riga restano fermate del Tab. -->
-      <div role="tree" [attr.aria-label]="'catalog.title' | transloco">
+           sposta con le frecce; spunta, menu e switch di ogni riga restano fermate del Tab.
+           A selezione multipla: aria-selected di un endpoint e' la sua spunta, mentre quello
+           aperto nel dettaglio lo dice aria-current. -->
+      <div role="tree" aria-multiselectable="true" [attr.aria-label]="'catalog.title' | transloco">
       <!-- Unsorted: intestazione fissa, non trascinabile (i suoi endpoint sono le prime righe della lista) -->
       @if (store.unsortedNode(); as u) {
       <ng-container *ngTemplateOutlet="folderHeaderTpl; context: { $implicit: u.collection, depth: 0 }" />
@@ -455,7 +457,8 @@ interface NavRow {
       <div
         role="treeitem"
         [attr.aria-level]="depth + 1"
-        [attr.aria-selected]="ep.id === store.selectedId()"
+        [attr.aria-selected]="selection().has(ep.id)"
+        [attr.aria-current]="ep.id === store.selectedId() ? 'true' : null"
         [attr.data-row-key]="'e:' + ep.id"
         [attr.tabindex]="tabbableKey() === 'e:' + ep.id ? 0 : -1"
         (click)="store.selectMock(ep.id)"
@@ -907,9 +910,11 @@ export class MocksNextCatalog {
   }
 
   // --- navigazione da tastiera (pattern ARIA "tree") ---
-  // Frecce su/giu' fra le righe visibili, destra/sinistra per aprire, chiudere e risalire, Invio o
-  // Spazio per aprire l'endpoint o la cartella. Spunta, menu e switch di una riga restano controlli
-  // a se', raggiunti col Tab come prima.
+  // Frecce su/giu' fra le righe visibili, destra/sinistra per aprire, chiudere e risalire. Invio
+  // apre l'endpoint nel dettaglio; Spazio lo spunta, e con Maiuscole spunta l'intervallo dall'ultimo
+  // spuntato, come lo shift-click. Su una cartella Invio e Spazio la aprono e la chiudono: le
+  // cartelle non si spuntano. Spunta, menu e switch di una riga restano controlli a se', raggiunti
+  // col Tab come prima.
 
   /** Righe dell'albero nell'ordine in cui si vedono: l'intestazione di Unsorted, poi la lista piatta. */
   private readonly navRows = computed<readonly NavRow[]>(() => {
@@ -978,9 +983,12 @@ export class MocksNextCatalog {
         else this.focusRow(rows.slice(0, index).reverse().find((candidate) => candidate.depth < row.depth)?.key);
         break;
       case 'Enter':
-      case ' ':
         if (row.collectionId != null) this.toggleCollapse(row.collectionId);
         else this.store.selectMock(row.endpointId!);
+        break;
+      case ' ':
+        if (row.collectionId != null) this.toggleCollapse(row.collectionId);
+        else this.onSelectionClick(row.endpointId!, event);
         break;
       default:
         return;

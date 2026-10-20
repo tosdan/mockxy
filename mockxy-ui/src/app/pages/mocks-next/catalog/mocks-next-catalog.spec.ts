@@ -584,8 +584,8 @@ describe('MocksNextCatalog', () => {
       created.fixture.detectChanges();
       return created;
     }
-    function press(fixture: ReturnType<typeof create>['fixture'], key: string, target = document.activeElement!) {
-      const event = new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true });
+    function press(fixture: ReturnType<typeof create>['fixture'], key: string, target = document.activeElement!, shiftKey = false) {
+      const event = new KeyboardEvent('keydown', { key, shiftKey, bubbles: true, cancelable: true });
       target.dispatchEvent(event);
       fixture.detectChanges();
       return event;
@@ -661,6 +661,55 @@ describe('MocksNextCatalog', () => {
       press(fixture, 'ArrowLeft'); // chiude figlia
       press(fixture, 'ArrowLeft'); // già chiusa: risale
       expect(focusedKey()).toBe('c:madre');
+    });
+
+    // Spazio spunta, Invio apre: prima facevano entrambi la stessa cosa, aprire.
+    it('Spazio spunta l’endpoint a fuoco senza aprirlo, e una seconda volta toglie la spunta', () => {
+      const { fixture, store } = setup();
+      const select = vi.spyOn(store, 'selectMock').mockImplementation(() => undefined);
+      const checked = () => rowOf(fixture, 'e:uno').querySelector('[role="checkbox"]')!.getAttribute('aria-checked');
+
+      rowOf(fixture, 'e:uno').focus();
+      const spazio = press(fixture, ' ');
+      expect(checked()).toBe('true');
+      expect(rowOf(fixture, 'e:uno').getAttribute('aria-selected')).toBe('true');
+      expect(spazio.defaultPrevented).toBe(true);
+      expect(select).not.toHaveBeenCalled();
+      expect(document.activeElement).toBe(rowOf(fixture, 'e:uno'));
+
+      press(fixture, ' ');
+      expect(checked()).toBe('false');
+      expect(rowOf(fixture, 'e:uno').getAttribute('aria-selected')).toBe('false');
+    });
+
+    it('Maiuscole+Spazio spunta l’intervallo dall’ultimo spuntato, come lo shift-click', () => {
+      const { fixture } = setup();
+      const checkedKeys = () =>
+        treeRows(fixture)
+          .filter((row) => row.getAttribute('aria-selected') === 'true')
+          .map((row) => row.dataset['rowKey']);
+
+      rowOf(fixture, 'e:sciolto').focus();
+      press(fixture, ' ');
+      rowOf(fixture, 'e:due').focus();
+      press(fixture, ' ', document.activeElement!, true);
+
+      expect(checkedKeys()).toEqual(['e:sciolto', 'e:uno', 'e:due']);
+    });
+
+    // Con la selezione multipla aria-selected dice le spunte: l'endpoint aperto lo dice aria-current.
+    it('l’albero è a selezione multipla, e l’endpoint aperto è marcato come corrente', () => {
+      const { fixture, store } = setup();
+      const tree = (fixture.nativeElement as HTMLElement).querySelector('[role="tree"]')!;
+      expect(tree.getAttribute('aria-multiselectable')).toBe('true');
+
+      store.selected.set({ id: 'uno' } as never); // l'endpoint aperto nel dettaglio
+      fixture.detectChanges();
+
+      expect(rowOf(fixture, 'e:uno').getAttribute('aria-current')).toBe('true');
+      expect(rowOf(fixture, 'e:uno').getAttribute('aria-selected')).toBe('false');
+      expect(rowOf(fixture, 'e:due').hasAttribute('aria-current')).toBe(false);
+      expect(rowOf(fixture, 'c:madre').hasAttribute('aria-selected')).toBe(false);
     });
 
     it('Invio apre l’endpoint a fuoco, Spazio chiude la cartella a fuoco', () => {

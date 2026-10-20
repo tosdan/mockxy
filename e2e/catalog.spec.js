@@ -81,7 +81,7 @@ test.describe("E1 · catalogo", () => {
     await expect(focused).toContainText("/api/legacy");
     await page.keyboard.press("Enter");
     await expect(page.locator("mocks-next-detail").getByRole("heading", { name: "/api/legacy", exact: true })).toBeVisible();
-    await expect(focused).toHaveAttribute("aria-selected", "true");
+    await expect(focused).toHaveAttribute("aria-current", "true");
 
     // Da un endpoint, sinistra risale alla cartella; una seconda volta la chiude.
     await page.keyboard.press("ArrowLeft");
@@ -157,6 +157,32 @@ test.describe("E1 · catalogo", () => {
     await expect(menu).toBeFocused();
     await page.keyboard.press("Enter");
     await expect(page.getByRole("menuitem", { name: "Core API" })).toBeVisible();
+  });
+
+  test("da tastiera Spazio spunta e Maiuscole+Spazio spunta l'intervallo; le azioni di massa partono", async ({ page }) => {
+    const catalog = page.locator("mocks-next-catalog");
+    const row = (p) => catalog.locator('[role="treeitem"]').filter({ hasText: p }).first();
+    await page.keyboard.press("/");
+    await page.keyboard.press("ArrowDown");
+    await page.keyboard.press("Home");
+    await page.keyboard.press("ArrowDown"); // /api/health
+    await page.keyboard.press("Space");
+    await expect(row("/api/health")).toHaveAttribute("aria-selected", "true");
+    // Spuntare non apre: il dettaglio resta sull'endpoint aperto di partenza.
+    await expect(row("/api/health").getByRole("checkbox")).toHaveAttribute("aria-checked", "true");
+
+    await page.keyboard.press("ArrowDown"); // /api/legacy
+    await page.keyboard.press("ArrowDown"); // /api/status
+    await page.keyboard.press("Shift+Space");
+    for (const p of ["/api/health", "/api/legacy", "/api/status"]) {
+      await expect(row(p)).toHaveAttribute("aria-selected", "true");
+    }
+    await expect(catalog.getByText("3 selezionati")).toBeVisible();
+
+    // Invio, invece, apre.
+    await page.keyboard.press("Enter");
+    await expect(page.locator("mocks-next-detail").getByRole("heading", { name: "/api/status", exact: true })).toBeVisible();
+    await expect(row("/api/status")).toHaveAttribute("aria-current", "true");
   });
 
   test("la densità compatta mette ogni endpoint su una riga, e resta dopo un ricaricamento", async ({ page }) => {
