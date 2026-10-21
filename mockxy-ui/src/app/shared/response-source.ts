@@ -41,6 +41,18 @@ export const RESPONSE_SOURCE_ICONS = {
 /** Icona della sequenza: per i passi SEQ del Monitor e per il tipo "sequence" del catalogo. */
 export const SEQUENCE_ICON = 'lucideListOrdered';
 
+/**
+ * Provenienze servite da una response locale (un mock, un handler, uno stream SSE o WS):
+ * le altre sono "non mockate", passate dal backend vero o rimaste senza risposta. Stessa
+ * partizione del filtro "backend reale" che lo Storico applica sul server (monitor-dump-reader).
+ */
+const LOCAL_SOURCES: ReadonlySet<string> = new Set(['mock', 'handler', 'sse', 'ws']);
+
+/** "Non mockata": non servita da una response locale. */
+export function isUnmockedSource(source: string): boolean {
+  return !LOCAL_SOURCES.has(source);
+}
+
 /** Provenienza di una voce del Monitor o dello Storico (il campo `source` della voce). */
 export function responseSourceMeta(source: string): ResponseSourceMeta {
   switch (source) {
@@ -53,8 +65,8 @@ export function responseSourceMeta(source: string): ResponseSourceMeta {
     case 'mock-only-miss': return { label: 'Miss', color: 'var(--foreground-faint)', icon: 'lucideSearchX' };
     case 'backend-unconfigured': return { label: 'No backend', color: 'var(--foreground-faint)', icon: 'lucideServerOff' };
     case 'cors-preflight': return { label: 'CORS', color: 'var(--foreground-faint)', icon: 'lucidePlaneTakeoff' };
-    case 'ws': return { label: 'WebSocket', color: 'var(--brand)', icon: 'lucideArrowLeftRight' };
-    case 'ws-upgrade-required': return { label: 'WebSocket', color: 'var(--foreground-faint)', icon: 'lucideArrowLeftRight' };
+    case 'ws': return { label: 'WS', color: 'var(--brand)', icon: 'lucideArrowLeftRight' };
+    case 'ws-upgrade-required': return { label: 'WS', color: 'var(--foreground-faint)', icon: 'lucideArrowLeftRight' };
     default: return { label: source, color: 'var(--muted-foreground)', icon: 'lucideCircleDashed' };
   }
 }

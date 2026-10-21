@@ -1,5 +1,5 @@
 const { test, expect } = require("@playwright/test");
-const { gotoMonitor, clearMonitor, E2E_BACKEND } = require("./helpers");
+const { gotoMonitor, clearMonitor, resetWorkspace, E2E_BACKEND } = require("./helpers");
 
 // E15 — Monitor del traffico live. Il monitor cattura le richieste che passano dal server (solo
 // /api/*, non /_admin/*). Genero traffico con richieste dirette al backend (fixture context), poi
@@ -70,6 +70,29 @@ test.describe("E15 · monitor", () => {
     await expect(monitor.getByRole("listbox")).toHaveClass(/mx-compact/);
     await page.reload();
     await expect(page.locator("app-monitor-next").getByRole("listbox")).toHaveClass(/mx-compact/);
+  });
+
+  // La GET a un endpoint WebSocket la serve l'endpoint (426): non e' una richiesta non mockata.
+  test("la risposta di un endpoint WebSocket non e' fra le non mockate", async ({ page, request }) => {
+    try {
+      const created = await request.post(`${E2E_BACKEND}/_admin/api/mocks`, {
+        data: { config: { method: "GET", path: "/api/live", status: 200, headers: {} }, body: {} },
+      });
+      const id = (await created.json()).id;
+      const added = await request.post(`${E2E_BACKEND}/_admin/api/mocks/${id}/responses`, { data: { type: "ws", title: "Canale live", script: [] } });
+      const wsFile = (await added.json()).responses.find((entry) => entry.type === "ws").fileName;
+      await request.put(`${E2E_BACKEND}/_admin/api/mocks/${id}`, { data: { selectedResponseFile: wsFile } });
+      expect((await request.get(`${E2E_BACKEND}/api/live`)).status()).toBe(426);
+      await request.get(`${E2E_BACKEND}/api/percorso-inesistente`);
+
+      await gotoMonitor(page);
+      monitor = page.locator("app-monitor-next");
+      await expect(monitor.getByRole("option")).toHaveCount(2);
+      await expect(monitor.getByRole("option", { name: /\/api\/live/ })).toContainText("WS");
+      await expect(monitor.getByRole("button", { name: /non mockate/ })).toHaveText(/1\s*non mockate/);
+    } finally {
+      await resetWorkspace(request, page);
+    }
   });
 
   test("Pulisci svuota il monitor", async ({ page, request }) => {

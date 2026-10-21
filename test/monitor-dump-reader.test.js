@@ -119,6 +119,12 @@ describe("monitor dump reader", () => {
       expect(ids(await readDumpPage(dir, undefined, 10, { source: "real-backend" }))).toEqual(["2", "3", "4", "6"]);
     });
 
+    // La richiesta a un endpoint WebSocket la serve l'endpoint stesso: non viene dal backend.
+    test("'real-backend' esclude anche le risposte di un endpoint WebSocket", async () => {
+      await writeEntries(dir, "dump-2026-01-01T00-02-00-000Z.ndjson", [captured("7", "GET", "/api/chat", 426, "ws")]);
+      expect(ids(await readDumpPage(dir, undefined, 10, { source: "real-backend" }))).toEqual(["2", "3", "4", "6"]);
+    });
+
     test("la pagina conta le corrispondenze, e il cursore riprende da dove si era fermata", async () => {
       const first = await readDumpPage(dir, undefined, 2, { q: "orders" });
       expect(ids(first)).toEqual(["1", "2"]);

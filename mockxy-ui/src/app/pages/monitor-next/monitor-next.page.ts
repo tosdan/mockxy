@@ -35,7 +35,7 @@ import { UiDialog } from '../../ui/ui-dialog/ui-dialog';
 import { MockAdminApiService } from '../../mock-admin-api.service';
 import { MonitorStreamStore } from '../../shared/monitor-stream.store';
 import { ViewStateService } from '../../shared/view-state.service';
-import { RESPONSE_SOURCE_ICONS, SEQUENCE_ICON, responseSourceMeta } from '../../shared/response-source';
+import { RESPONSE_SOURCE_ICONS, SEQUENCE_ICON, isUnmockedSource, responseSourceMeta } from '../../shared/response-source';
 import { summarizeBatchAttention, type CaptureBatchOptions, type CaptureItemOutcome, type MockSummary, type MonitorCreateMocksResult, type RequestMonitorEntry } from '../../mock-admin-api.types';
 import { readBatchPartialResult } from '../../shared/read-error-message';
 import { MOCK_METHODS } from '../../mock-admin-ui.constants';
@@ -189,7 +189,7 @@ const DENSITY_STATE_KEY = 'monitor-density';
                   <span class="mt-0.5 flex items-center gap-1.5 text-[11px] text-muted-foreground in-[.mx-compact]:hidden">
                     <ng-icon [name]="sourceIcon(row.source)" size="0.75rem" [style.color]="sourceColor(row.source)" />{{ sourceLabel(row.source) }}
                     @if (row.sequenceStep; as seq) {
-                    <span class="inline-flex items-center gap-1 rounded bg-[color-mix(in_srgb,var(--brand)_16%,transparent)] px-1 text-[10px] font-bold tracking-wide text-brand" [uiTooltip]="'monitor.sequenceStepTip' | transloco"><ng-icon [name]="sequenceIcon" size="0.65rem" />SEQ {{ seq.index + 1 }}/{{ seq.count }}</span>
+                    <span class="inline-flex items-center gap-1 rounded bg-[color-mix(in_srgb,var(--brand)_16%,transparent)] px-1 text-[10px] font-bold tracking-wide text-brand-soft" [uiTooltip]="'monitor.sequenceStepTip' | transloco"><ng-icon [name]="sequenceIcon" size="0.65rem" />SEQ {{ seq.index + 1 }}/{{ seq.count }}</span>
                     }
                   </span>
                 </span>
@@ -254,7 +254,7 @@ const DENSITY_STATE_KEY = 'monitor-density';
               @if (sel.sequenceStep; as seq) {
               <!-- Endpoint con sequenza: quale step ha risposto, con la variante — la progressione si legge da qui. -->
               <span class="inline-flex items-center gap-1.5 text-[12.5px] text-muted-foreground" [uiTooltip]="'monitor.sequenceStepTip' | transloco">
-                <span class="inline-flex items-center gap-1 rounded bg-[color-mix(in_srgb,var(--brand)_16%,transparent)] px-1 text-[10.5px] font-bold tracking-wide text-brand"><ng-icon [name]="sequenceIcon" size="0.7rem" />SEQ {{ seq.index + 1 }}/{{ seq.count }}</span>
+                <span class="inline-flex items-center gap-1 rounded bg-[color-mix(in_srgb,var(--brand)_16%,transparent)] px-1 text-[10.5px] font-bold tracking-wide text-brand-soft"><ng-icon [name]="sequenceIcon" size="0.7rem" />SEQ {{ seq.index + 1 }}/{{ seq.count }}</span>
                 <span class="font-mono text-[11.5px]">{{ seq.responseTitle ? seq.responseTitle + ' — ' : '' }}{{ seq.responseFile }}</span>
               </span>
               }
@@ -1027,12 +1027,12 @@ export class MonitorNextPage {
   }
 
   /**
-   * "Non mockata": non servita da una response locale (mock/handler/sse). Sono proxy e middleware,
-   * ma anche i miss rimasti senza mock ne' backend a cui girarli (mock-only-miss,
+   * "Non mockata": non servita da una response locale (mock/handler/sse/ws). Sono proxy e
+   * middleware, ma anche i miss rimasti senza mock ne' backend a cui girarli (mock-only-miss,
    * backend-unconfigured), che rispondono in locale con un errore.
    */
   protected isUnmocked(source: string): boolean {
-    return source !== 'mock' && source !== 'handler' && source !== 'sse';
+    return isUnmockedSource(source);
   }
 
   /** Tinta trasparente di un colore (per fondi/bordi tenui), via color-mix. */

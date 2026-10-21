@@ -1378,6 +1378,6 @@ export class MocksNextCatalog {
   protected typeTextClass(ep: CatalogEndpointVM): string {
     if (!ep.enabled) return '';
     const type = ep.type;
-    return type === 'handler' ? 'text-type-handler/75' : type === 'middleware' ? 'text-type-middleware/75' : type === 'sequence' ? 'text-sequence/75' : type === 'sse' || type === 'ws' ? 'text-brand/75' : 'text-type-mock/75';
+    return type === 'handler' ? 'text-type-handler/75' : type === 'middleware' ? 'text-type-middleware/75' : type === 'sequence' ? 'text-sequence/75' : type === 'sse' || type === 'ws' ? 'text-brand-soft' : 'text-type-mock/75';
   }
 }

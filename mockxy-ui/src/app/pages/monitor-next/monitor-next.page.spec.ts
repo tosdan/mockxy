@@ -658,4 +658,30 @@ describe('MonitorNextPage', () => {
       expect(header()).toContain('In pausa');
     });
   });
+
+  describe('icone di provenienza', () => {
+    it('ogni riga ha l\'icona della provenienza; in compatta il nome resta per lo screen reader', () => {
+      const { fixture, c } = create();
+      const host = fixture.nativeElement as HTMLElement;
+      const mockRow = () => host.querySelector('[role="option"][data-entry-id="1"]') as HTMLElement; // la voce mock
+      expect(c.sourceIcon('mock')).toBe('lucideFileText');
+      expect(mockRow().querySelectorAll('ng-icon svg').length).toBeGreaterThan(0);
+      c.toggleCompact();
+      fixture.detectChanges();
+      expect(mockRow().querySelector('.sr-only')?.textContent?.trim()).toBe('Mock');
+    });
+
+    it('il passo di una sequenza: nome e passo dietro l\'icona SEQ', () => {
+      const { c } = create();
+      const row = { ...ENTRIES[0], sequenceStep: { index: 1, count: 3, responseFile: '002.response.json' } };
+      expect(c.compactSourceText(row)).toBe('Mock · SEQ 2/3');
+      expect(c.compactSourceText(ENTRIES[1])).toBe('Proxy');
+    });
+
+    it('la risposta di un endpoint WebSocket non e\' fra le non mockate', () => {
+      const { c } = create();
+      expect(c.isUnmocked('ws')).toBe(false);
+      expect(c.isUnmocked('backend')).toBe(true);
+    });
+  });
 });

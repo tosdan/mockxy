@@ -313,7 +313,7 @@
     "clear": "Pulisci",
     "export": "Esporta",
     "unmocked": "non mockate",
-    "unmockedTip": "Non servite da un mock, un handler o SSE: passate dal backend (proxy, middleware) o rimaste senza mock né backend a cui girarle. In lista le segna la barra ambra a sinistra. Clic per vedere solo queste.",
+    "unmockedTip": "Non servite da un mock, un handler, SSE o WebSocket: passate dal backend (proxy, middleware) o rimaste senza mock né backend a cui girarle. In lista le segna la barra ambra a sinistra. Clic per vedere solo queste.",
     "viewActionsTip": "Opzioni di vista",
     "compactDensity": "Densità compatta",
     "avgMs": "ms medi",
