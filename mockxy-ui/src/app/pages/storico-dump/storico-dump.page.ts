@@ -1,5 +1,5 @@
 import { DatePipe } from '@angular/common';
-import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, afterNextRender, computed, effect, inject, signal, untracked, viewChild } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, Injector, OnInit, afterNextRender, computed, effect, inject, signal, untracked, viewChild } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CdkFixedSizeVirtualScroll, CdkVirtualForOf, CdkVirtualScrollViewport } from '@angular/cdk/scrolling';
 import { CdkMenuTrigger } from '@angular/cdk/menu';
@@ -317,6 +317,7 @@ export class StoricoDumpPage implements OnInit {
   private readonly api = inject(MockAdminApiService);
   private readonly toast = inject(ToastService);
   private readonly transloco = inject(TranslocoService);
+  private readonly injector = inject(Injector);
   private readonly viewport = viewChild.required(CdkVirtualScrollViewport);
 
   protected readonly entries = signal<readonly DumpEntry[]>([]);
@@ -517,9 +518,10 @@ export class StoricoDumpPage implements OnInit {
     if (event.key === ' ') {
       event.preventDefault();
       if (current != null) {
-        // Se la voce attiva era fuori vista, la si mostra spuntata invece di spuntarla al buio.
-        this.scrollIntoView(current);
         this.toggleSelection(current, event.shiftKey);
+        // La voce si mostra spuntata, anche se era fuori vista. A disegno fatto: la prima spunta fa
+        // comparire la barra delle azioni, che accorcia la lista e coprirebbe l'ultima riga.
+        afterNextRender(() => this.scrollIntoView(current), { injector: this.injector });
       }
       return;
     }
@@ -540,7 +542,8 @@ export class StoricoDumpPage implements OnInit {
     const viewport = this.viewport();
     const top = index * ROW_HEIGHT;
     const offset = viewport.measureScrollOffset();
-    const size = viewport.getViewportSize();
+    // L'altezza del momento, non quella memorizzata dallo scroll virtuale: la barra la cambia.
+    const size = viewport.elementRef.nativeElement.clientHeight;
     if (top < offset) viewport.scrollToOffset(top);
     else if (top + ROW_HEIGHT > offset + size) viewport.scrollToOffset(top + ROW_HEIGHT - size);
   }

@@ -103,7 +103,7 @@ test.describe("E17 · storico dump → crea mock", () => {
 
   // Lista virtualizzata: scorrendo lontano la riga attiva esce dal DOM. La lista non deve indicare
   // un elemento che non c'e', e i tasti devono riportare in vista la voce su cui agiscono.
-  test("scorrendo lontano dalla voce attiva, rientro da tastiera e Spazio la riportano in vista", async ({ page, request }) => {
+  test("la voce attiva resta in vista: End e Spazio con la barra che compare, scroll lontano, rientro da tastiera", async ({ page, request }) => {
     await setDumpEnabled(request, true);
     for (let i = 0; i < 40; i += 1) await request.get(`${E2E_BACKEND}/api/riga-${i}`);
     await expect.poll(async () => await flushDump(request), { timeout: 8000 }).toBeGreaterThanOrEqual(40);
@@ -119,6 +119,19 @@ test.describe("E17 · storico dump → crea mock", () => {
     };
     const first = storico.getByRole("option").first();
     const firstPath = (await first.locator('[dir="rtl"]').getAttribute("title")) ?? "";
+
+    // End e Spazio da selezione vuota: la barra delle azioni che compare accorcia la lista, e
+    // l'ultima riga, appena spuntata, deve restare tutta in vista.
+    await first.click();
+    await page.keyboard.press("End");
+    await page.keyboard.press("Space");
+    await expect(storico.getByRole("option", { selected: true })).toHaveCount(1);
+    await expect(await active()).toHaveAttribute("aria-selected", "true");
+    await expect(await active()).toBeInViewport({ ratio: 1 });
+    await page.keyboard.press("Space");
+    await expect(storico.getByRole("option", { selected: true })).toHaveCount(0);
+    await page.keyboard.press("Home");
+
     await first.click();
     await expect(list).toBeFocused();
     await expect(await active()).toContainText(firstPath);
