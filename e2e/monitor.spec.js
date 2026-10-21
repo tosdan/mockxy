@@ -41,6 +41,37 @@ test.describe("E15 · monitor", () => {
     await expect(monitor.getByText("/api/percorso-inesistente").first()).toBeVisible();
   });
 
+  // La barra ambra delle righe non mockate ha un chip che la spiega e le filtra; gli errori si
+  // contano sui chip di stato, divisi in 4xx e 5xx.
+  test("chip delle non mockate, conteggi sui chip di stato e densita' compatta", async ({ page, request }) => {
+    await request.get(`${E2E_BACKEND}/api/health`);
+    await request.get(`${E2E_BACKEND}/api/users`);
+    await request.get(`${E2E_BACKEND}/api/percorso-inesistente`);
+
+    await gotoMonitor(page);
+    monitor = page.locator("app-monitor-next");
+    const rows = monitor.getByRole("option");
+    await expect(rows).toHaveCount(3);
+    await expect(monitor.getByRole("button", { name: /^2xx/ })).toHaveText(/2xx\s*2/);
+
+    const unmocked = monitor.getByRole("button", { name: /non mockate/ });
+    await expect(unmocked).toHaveText(/1\s*non mockate/);
+    await unmocked.click();
+    await expect(unmocked).toHaveAttribute("aria-pressed", "true");
+    await expect(rows).toHaveCount(1);
+    await expect(rows.first()).toContainText("/api/percorso-inesistente");
+    await expect(monitor.locator("ui-page-header ui-badge")).toHaveText("1 di 3");
+    await unmocked.click();
+    await expect(rows).toHaveCount(3);
+
+    // Densita' compatta dal menu della testata; resta dopo un ricaricamento.
+    await monitor.getByRole("button", { name: "Opzioni di vista" }).click();
+    await page.getByRole("menuitemcheckbox", { name: "Densità compatta" }).click();
+    await expect(monitor.getByRole("listbox")).toHaveClass(/mx-compact/);
+    await page.reload();
+    await expect(page.locator("app-monitor-next").getByRole("listbox")).toHaveClass(/mx-compact/);
+  });
+
   test("Pulisci svuota il monitor", async ({ page, request }) => {
     await request.get(`${E2E_BACKEND}/api/health`);
     await gotoMonitor(page);
