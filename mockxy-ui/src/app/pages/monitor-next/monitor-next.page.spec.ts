@@ -551,4 +551,31 @@ describe('MonitorNextPage', () => {
       expect(host.querySelector('[aria-label="Filtra per metodo"]')).not.toBeNull();
     });
   });
+
+  // Testata come il catalogo: nome della vista e conteggio; "Live" non si ripete, la pausa si'.
+  describe('testata', () => {
+    it('conta le richieste, e sotto filtro le mostrate sul totale', () => {
+      const { fixture, c } = create();
+      const host = fixture.nativeElement as HTMLElement;
+      const badge = () => host.querySelector('ui-page-header ui-badge')?.textContent?.trim();
+      expect(host.querySelector('h1')?.textContent?.trim()).toBe('Monitor');
+      expect(badge()).toBe('3');
+      c.search.set('payments');
+      fixture.detectChanges();
+      expect(badge()).toBe('1 di 3');
+    });
+
+    it('niente badge "Live"; "In pausa" solo a monitor fermo', () => {
+      const { fixture } = create();
+      const stream = TestBed.inject(MonitorStreamStore);
+      const header = () => (fixture.nativeElement as HTMLElement).querySelector('ui-page-header')?.textContent ?? '';
+      stream.setStreaming(true);
+      fixture.detectChanges();
+      expect(header()).not.toContain('Live');
+      expect(header()).not.toContain('In pausa');
+      stream.setStreaming(false);
+      fixture.detectChanges();
+      expect(header()).toContain('In pausa');
+    });
+  });
 });

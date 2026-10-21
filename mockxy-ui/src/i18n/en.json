@@ -13,14 +13,12 @@
     "selectPlaceholder": "Select…",
     "noOptions": "No options",
     "clearFilter": "Clear the filter",
-    "cancel": "Cancel"
+    "cancel": "Cancel",
+    "shownOfTotal": "{{shown}} of {{total}}"
   },
   "storico": {
-    "title": "Dump history",
     "subtitle": "not live · read-only",
-    "loaded": "{{count}} loaded",
     "files": "Files ({{count}})",
-    "matches": "{{count}} matches",
     "emptyFiltered": "No history entry matches the filters.",
     "methodFilterAria": "Filter by method",
     "listLabel": "History entries",
@@ -56,8 +54,6 @@
   },
   "dati": {
     "title": "Data",
-    "subtitle": "json files reusable in handlers",
-    "count": "{{count}} files",
     "upload": "Upload",
     "empty": "No data files.",
     "emptyHint": "Upload a JSON file to reference it in handlers with data('name').",
@@ -97,7 +93,6 @@
     "tabsAria": "Data type",
     "filesTab": "Data files",
     "runtimeTab": "Runtime state",
-    "runtimeCount": "{{count}} resources · {{size}}",
     "runtimeRefresh": "Refresh",
     "runtimeResetAll": "Reset all",
     "runtimeResetAllConfirm": "Reset {{count}} resources",
@@ -317,7 +312,6 @@
     "createMock": "Create mock",
     "clear": "Clear",
     "export": "Export",
-    "requests": "requests",
     "errors": "errors",
     "avgMs": "avg ms",
     "noTraffic": "no traffic",

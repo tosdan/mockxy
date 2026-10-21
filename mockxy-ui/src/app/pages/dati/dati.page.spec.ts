@@ -330,4 +330,18 @@ describe('DatiPage', () => {
       expect(writeText).toHaveBeenCalledWith("const utenti = await data('utenti');");
     });
   });
+
+  describe('testata', () => {
+    it('conta il contenuto della scheda aperta; per il runtime anche la dimensione', () => {
+      const { fixture, c } = create();
+      const host = fixture.nativeElement as HTMLElement;
+      const header = () => host.querySelector('ui-page-header') as HTMLElement;
+      expect(host.querySelector('h1')?.textContent?.trim()).toBe('Dati');
+      expect(header().querySelector('ui-badge')?.textContent?.trim()).toBe('2');
+      c.switchTab('runtime');
+      fixture.detectChanges();
+      expect(header().querySelector('ui-badge')?.textContent?.trim()).toBe('1');
+      expect(header().textContent).toContain(c.formatSize(128));
+    });
+  });
 });

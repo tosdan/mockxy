@@ -60,7 +60,8 @@ test.describe("E17 · storico dump → crea mock", () => {
     await storico.getByPlaceholder(/Filtra path/).fill("dump-e2e");
     await expect(rows).toHaveCount(1);
     await expect(rows.first()).toContainText("/api/dump-e2e");
-    await expect(storico.getByText("1 risultati")).toBeVisible();
+    // Il conteggio della testata e' dei risultati, nel colore del filtro.
+    await expect(storico.locator("ui-page-header ui-badge")).toHaveText("1");
 
     await storico.getByPlaceholder(/Filtra path/).fill("");
     await storico.getByRole("button", { name: "2xx" }).click();
@@ -131,6 +132,9 @@ test.describe("E17 · storico dump → crea mock", () => {
     await page.keyboard.press("Space");
     await expect(storico.getByRole("option", { selected: true })).toHaveCount(0);
     await page.keyboard.press("Home");
+    // Home riporta in cima, ma le righe si ridisegnano un attimo dopo: cliccando prima, "la prima
+    // riga" sarebbe ancora una delle ultime, e Playwright la scorrerebbe in vista cliccando altro.
+    await expect(first).toContainText(firstPath);
 
     await first.click();
     await expect(list).toBeFocused();

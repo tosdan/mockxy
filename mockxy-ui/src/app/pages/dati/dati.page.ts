@@ -146,11 +146,11 @@ const SELECTED_FILE_STATE_KEY = 'dati-selected';
                 (keydown.escape)="cancelRename()"
                 [attr.aria-label]="'dati.renameAria' | transloco"
               />
-              <button ui-button variant="outline" size="icon" [disabled]="busy()" (click)="confirmRename()" [uiTooltip]="'dati.renameConfirmTip' | transloco"><ng-icon name="lucideCheck" size="0.9rem" /></button>
-              <button ui-button variant="ghost" size="icon" (click)="cancelRename()" [uiTooltip]="'dati.renameCancelTip' | transloco"><ng-icon name="lucideX" size="0.9rem" /></button>
+              <button ui-button variant="outline" size="icon" [disabled]="busy()" (click)="confirmRename()" [uiTooltip]="'dati.renameConfirmTip' | transloco" [attr.aria-label]="'dati.renameConfirmTip' | transloco"><ng-icon name="lucideCheck" size="0.9rem" /></button>
+              <button ui-button variant="ghost" size="icon" (click)="cancelRename()" [uiTooltip]="'dati.renameCancelTip' | transloco" [attr.aria-label]="'dati.renameCancelTip' | transloco"><ng-icon name="lucideX" size="0.9rem" /></button>
               } @else {
               <span class="font-mono text-[15px] font-bold">{{ sel.name }}<span class="text-muted-foreground">.json</span></span>
-              <button ui-button variant="ghost" size="icon" (click)="startRename()" [uiTooltip]="'dati.renameTip' | transloco"><ng-icon name="lucidePencil" size="0.9rem" /></button>
+              <button ui-button variant="ghost" size="icon" (click)="startRename()" [uiTooltip]="'dati.renameTip' | transloco" [attr.aria-label]="'dati.renameTip' | transloco"><ng-icon name="lucidePencil" size="0.9rem" /></button>
               }
               <span class="font-mono text-[11.5px] text-muted-foreground">{{ formatSize(sel.sizeBytes) }} · {{ formatDate(sel.updatedAt) }}</span>
 

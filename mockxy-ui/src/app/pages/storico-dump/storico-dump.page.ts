@@ -208,7 +208,7 @@ const ROW_HEIGHT = 56;
               <div class="shrink-0 border-b border-border">
                 <ui-collapsible [open]="false" triggerClass="bg-white/5 px-6 py-2.5 hover:bg-white/10">
                   <div uiCollapsibleHeader class="flex items-center gap-2">
-                    <h3 class="text-[12px] font-bold uppercase tracking-[0.14em] text-foreground/80">{{ 'storico.requestHeaders' | transloco }}</h3>
+                    <h2 class="text-[12px] font-bold uppercase tracking-[0.14em] text-foreground/80">{{ 'storico.requestHeaders' | transloco }}</h2>
                     <ui-badge tone="neutral">{{ headerCount(sel.requestHeaders) }}</ui-badge>
                   </div>
                   <div class="overflow-x-auto bg-[var(--code)] mx-scroll">
@@ -232,7 +232,7 @@ const ROW_HEIGHT = 56;
               <div class="shrink-0 border-b border-border">
                 <ui-collapsible [open]="false" triggerClass="bg-white/5 px-6 py-2.5 hover:bg-white/10">
                   <div uiCollapsibleHeader class="flex items-center gap-2">
-                    <h3 class="text-[12px] font-bold uppercase tracking-[0.14em] text-foreground/80">{{ 'storico.requestBody' | transloco }}</h3>
+                    <h2 class="text-[12px] font-bold uppercase tracking-[0.14em] text-foreground/80">{{ 'storico.requestBody' | transloco }}</h2>
                     <span class="font-mono text-[11px] text-muted-foreground">{{ sel.requestBodyBytes }} B@if (sel.requestBodyTruncated) { · {{ 'storico.truncated' | transloco }}}</span>
                   </div>
                   @if (sel.requestBody) { <div class="px-6 py-3"><ui-code [code]="sel.requestBody" [language]="bodyLang(sel.requestBody)" /></div> }
@@ -244,7 +244,7 @@ const ROW_HEIGHT = 56;
               <div class="shrink-0 border-b border-border">
                 <ui-collapsible [open]="false" triggerClass="bg-white/5 px-6 py-2.5 hover:bg-white/10">
                   <div uiCollapsibleHeader class="flex items-center gap-2">
-                    <h3 class="text-[12px] font-bold uppercase tracking-[0.14em] text-foreground/80">{{ 'storico.responseHeaders' | transloco }}</h3>
+                    <h2 class="text-[12px] font-bold uppercase tracking-[0.14em] text-foreground/80">{{ 'storico.responseHeaders' | transloco }}</h2>
                     <ui-badge tone="neutral">{{ headerCount(sel.responseHeaders) }}</ui-badge>
                   </div>
                   <div class="overflow-x-auto bg-[var(--code)] mx-scroll">
@@ -270,7 +270,7 @@ const ROW_HEIGHT = 56;
                 <ui-collapsible class="flex flex-col" [class.min-h-0]="responseBodyOpen()" [class.flex-1]="responseBodyOpen()"
                                 [open]="responseBodyOpen()" (openChange)="responseBodyOpen.set($event)" triggerClass="shrink-0 bg-white/5 px-6 py-2.5 hover:bg-white/10">
                   <div uiCollapsibleHeader class="flex items-center gap-2">
-                    <h3 class="text-[12px] font-bold uppercase tracking-[0.14em] text-foreground/80">{{ 'storico.responseBody' | transloco }}</h3>
+                    <h2 class="text-[12px] font-bold uppercase tracking-[0.14em] text-foreground/80">{{ 'storico.responseBody' | transloco }}</h2>
                     <span class="font-mono text-[11px] text-muted-foreground">{{ sel.responseBodyBytes ?? 0 }} B@if (sel.responseBodyTruncated) { · {{ 'storico.truncated' | transloco }}}</span>
                   </div>
                   @if (sel.responseBody) { <div class="min-h-0 flex-1 overflow-y-auto mx-scroll px-6 py-3"><ui-code [code]="sel.responseBody" [language]="bodyLang(sel.responseBody)" /></div> }

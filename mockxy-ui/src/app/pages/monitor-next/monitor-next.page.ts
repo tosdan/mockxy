@@ -266,7 +266,7 @@ interface SourceMeta {
               <div class="border-b border-border">
                 <ui-collapsible [open]="false" triggerClass="bg-white/5 px-6 py-2.5 hover:bg-white/10">
                   <div uiCollapsibleHeader class="flex items-center gap-2">
-                    <h3 class="text-[12px] font-bold uppercase tracking-[0.14em] text-foreground/80">Request · headers</h3>
+                    <h2 class="text-[12px] font-bold uppercase tracking-[0.14em] text-foreground/80">Request · headers</h2>
                     <ui-badge tone="neutral">{{ headerCount(sel.requestHeaders) }}</ui-badge>
                   </div>
                   <div class="overflow-x-auto bg-[var(--code)] mx-scroll">
@@ -290,7 +290,7 @@ interface SourceMeta {
               <div class="border-b border-border">
                 <ui-collapsible [open]="false" triggerClass="bg-white/5 px-6 py-2.5 hover:bg-white/10">
                   <div uiCollapsibleHeader class="flex items-center gap-2">
-                    <h3 class="text-[12px] font-bold uppercase tracking-[0.14em] text-foreground/80">Request · body</h3>
+                    <h2 class="text-[12px] font-bold uppercase tracking-[0.14em] text-foreground/80">Request · body</h2>
                     <span class="font-mono text-[11px] text-muted-foreground">{{ sel.requestBodyBytes }} B@if (sel.requestBodyTruncated) { · {{ 'monitor.truncated' | transloco }}}</span>
                   </div>
                   @if (sel.requestBody) {
@@ -305,7 +305,7 @@ interface SourceMeta {
               <div class="border-b border-border">
                 <ui-collapsible [open]="false" triggerClass="bg-white/5 px-6 py-2.5 hover:bg-white/10">
                   <div uiCollapsibleHeader class="flex items-center gap-2">
-                    <h3 class="text-[12px] font-bold uppercase tracking-[0.14em] text-foreground/80">Response · headers</h3>
+                    <h2 class="text-[12px] font-bold uppercase tracking-[0.14em] text-foreground/80">Response · headers</h2>
                     <ui-badge tone="neutral">{{ headerCount(sel.responseHeaders) }}</ui-badge>
                   </div>
                   <div class="overflow-x-auto bg-[var(--code)] mx-scroll">
@@ -329,7 +329,7 @@ interface SourceMeta {
               <div>
                 <ui-collapsible triggerClass="bg-white/5 px-6 py-2.5 hover:bg-white/10">
                   <div uiCollapsibleHeader class="flex items-center gap-2">
-                    <h3 class="text-[12px] font-bold uppercase tracking-[0.14em] text-foreground/80">Response · body</h3>
+                    <h2 class="text-[12px] font-bold uppercase tracking-[0.14em] text-foreground/80">Response · body</h2>
                     <span class="font-mono text-[11px] text-muted-foreground">{{ sel.responseBodyBytes ?? 0 }} B@if (sel.responseBodyTruncated) { · {{ 'monitor.truncated' | transloco }}}</span>
                   </div>
                   @if (sel.responseBody) {

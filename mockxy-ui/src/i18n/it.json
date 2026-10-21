@@ -13,14 +13,12 @@
     "selectPlaceholder": "Seleziona…",
     "noOptions": "Nessuna opzione",
     "clearFilter": "Svuota il filtro",
-    "cancel": "Annulla"
+    "cancel": "Annulla",
+    "shownOfTotal": "{{shown}} di {{total}}"
   },
   "storico": {
-    "title": "Storico dump",
     "subtitle": "non live · sola lettura",
-    "loaded": "{{count}} caricate",
     "files": "File ({{count}})",
-    "matches": "{{count}} risultati",
     "emptyFiltered": "Nessuna voce dello storico corrisponde ai filtri.",
     "methodFilterAria": "Filtra per metodo",
     "listLabel": "Voci dello storico",
@@ -56,8 +54,6 @@
   },
   "dati": {
     "title": "Dati",
-    "subtitle": "file json riusabili negli handler",
-    "count": "{{count}} file",
     "upload": "Carica",
     "empty": "Nessun file dati.",
     "emptyHint": "Carica un file JSON per referenziarlo negli handler con data('nome').",
@@ -97,7 +93,6 @@
     "tabsAria": "Tipo di dati",
     "filesTab": "File dati",
     "runtimeTab": "Stato runtime",
-    "runtimeCount": "{{count}} risorse · {{size}}",
     "runtimeRefresh": "Aggiorna",
     "runtimeResetAll": "Azzera tutto",
     "runtimeResetAllConfirm": "Azzera {{count}} risorse",
@@ -317,7 +312,6 @@
     "createMock": "Crea mock",
     "clear": "Pulisci",
     "export": "Esporta",
-    "requests": "richieste",
     "errors": "errori",
     "avgMs": "ms medi",
     "noTraffic": "nessun traffico",
