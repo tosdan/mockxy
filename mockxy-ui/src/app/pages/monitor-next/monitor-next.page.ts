@@ -196,8 +196,9 @@ interface SourceMeta {
                 <span class="shrink-0 rounded-md px-1.5 py-0.5 font-mono text-[11.5px] font-bold tabular-nums" [style.color]="statusColor(row.status)" [style.background]="tint(statusColor(row.status), 12)">{{ row.status }}</span>
               </span>
               <span class="text-right in-[.mx-compact]:flex in-[.mx-compact]:items-baseline in-[.mx-compact]:gap-2">
-                <!-- In riga la latenza ha larghezza fissa: "1503 ms" non deve spostare gli status. -->
-                <span class="block font-mono text-[12px] tabular-nums text-foreground/80 in-[.mx-compact]:w-[7ch] in-[.mx-compact]:text-[11.5px]">{{ row.latencyMs }} ms</span>
+                <!-- In riga la latenza ha larghezza fissa, e non va a capo: "1503 ms" non deve spostare gli
+                     status, e dai 10 secondi in su si scrive in secondi per starci. -->
+                <span class="block whitespace-nowrap font-mono text-[12px] tabular-nums text-foreground/80 in-[.mx-compact]:w-[7ch] in-[.mx-compact]:text-[11.5px]">{{ formatLatency(row.latencyMs) }}</span>
                 <span class="block font-mono text-[10.5px] tabular-nums text-muted-foreground">{{ row.timestamp | date: 'HH:mm:ss' }}</span>
               </span>
             </div>
@@ -1002,7 +1003,22 @@ export class MonitorNextPage {
     return this.sourceMeta(source).color;
   }
 
-  /** "Non mockata": servita dal backend (proxy / middleware / miss), senza una response locale (mock/handler/sse). */
+  /**
+   * Latenza per la lista: in millisecondi fino a 9999, poi in secondi con un decimale ("10,0 s"),
+   * e senza decimali dai 100 secondi. Sta sempre in 7 caratteri, la colonna della riga compatta.
+   */
+  protected formatLatency(ms: number): string {
+    if (ms < 10_000) return `${ms} ms`;
+    const decimals = ms < 100_000 ? 1 : 0;
+    const seconds = new Intl.NumberFormat(this.transloco.getActiveLang(), { minimumFractionDigits: decimals, maximumFractionDigits: decimals }).format(ms / 1000);
+    return `${seconds} s`;
+  }
+
+  /**
+   * "Non mockata": non servita da una response locale (mock/handler/sse). Sono proxy e middleware,
+   * ma anche i miss rimasti senza mock ne' backend a cui girarli (mock-only-miss,
+   * backend-unconfigured), che rispondono in locale con un errore.
+   */
   protected isUnmocked(source: string): boolean {
     return source !== 'mock' && source !== 'handler' && source !== 'sse';
   }

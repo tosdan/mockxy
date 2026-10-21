@@ -191,6 +191,20 @@ describe('MonitorNextPage', () => {
     expect(c.sourceFilter()).toBe('all');
   });
 
+  // La colonna della latenza nella riga compatta e' larga 7 caratteri: le richieste lente non
+  // devono andare a capo e raddoppiare l'altezza della riga.
+  it('latenze lunghe in secondi, sempre entro 7 caratteri e senza andare a capo', () => {
+    const { fixture, c } = create();
+    expect(c.formatLatency(1503)).toBe('1503 ms');
+    expect(c.formatLatency(9999)).toBe('9999 ms');
+    expect(c.formatLatency(10_000)).toBe('10,0 s');
+    expect(c.formatLatency(30_000)).toBe('30,0 s');
+    expect(c.formatLatency(125_000)).toBe('125 s');
+    for (const ms of [0, 1503, 9999, 10_000, 99_949, 100_000, 999_999]) expect(c.formatLatency(ms).length).toBeLessThanOrEqual(7);
+    const latency = (fixture.nativeElement as HTMLElement).querySelector('[role="option"] .text-right > span') as HTMLElement;
+    expect(latency.classList.contains('whitespace-nowrap')).toBe(true);
+  });
+
   it('densita\' compatta: la lista la legge dalla classe, e resta per la visita dopo', () => {
     const { fixture, c } = create();
     const list = () => (fixture.nativeElement as HTMLElement).querySelector('[role="listbox"]') as HTMLElement;

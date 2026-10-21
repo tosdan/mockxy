@@ -313,7 +313,7 @@
     "clear": "Clear",
     "export": "Export",
     "unmocked": "not mocked",
-    "unmockedTip": "Served by the real backend, with no mock: the amber bar on the left marks them in the list. Click to show only these.",
+    "unmockedTip": "Not served by a mock, a handler or SSE: passed to the backend (proxy, middleware), or left with neither a mock nor a backend to forward to. The amber bar on the left marks them in the list. Click to show only these.",
     "viewActionsTip": "View options",
     "compactDensity": "Compact density",
     "avgMs": "avg ms",
