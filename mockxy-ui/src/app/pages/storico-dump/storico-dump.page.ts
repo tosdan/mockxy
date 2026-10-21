@@ -29,6 +29,7 @@ import { MockAdminApiService } from '../../mock-admin-api.service';
 import { summarizeBatchAttention, type DumpCreateMocksResult, type DumpEntry, type DumpReadCursor, type DumpReadFilters, type DumpSelection, type MonitorDumpFile } from '../../mock-admin-api.types';
 import { MOCK_METHODS } from '../../mock-admin-ui.constants';
 import { listNavigationTarget, toggleListSelection } from '../../shared/list-selection';
+import { RESPONSE_SOURCE_ICONS, responseSourceMeta } from '../../shared/response-source';
 import { readBatchPartialResult } from '../../shared/read-error-message';
 
 const PAGE_SIZE = 300;
@@ -64,7 +65,7 @@ const ROW_HEIGHT = 56;
     UiTable,
     UiTooltip,
   ],
-  providers: [provideIcons({ lucideArrowLeft, lucideCheck, lucideLayers, lucidePlus, lucideSearch, lucideTrash2, lucideX })],
+  providers: [provideIcons({ lucideArrowLeft, lucideCheck, lucideLayers, lucidePlus, lucideSearch, lucideTrash2, lucideX, ...RESPONSE_SOURCE_ICONS })],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="absolute inset-0 flex flex-col overflow-hidden bg-background text-foreground">
@@ -155,7 +156,7 @@ const ROW_HEIGHT = 56;
             <span class="min-w-0 flex-1">
               <span class="block truncate text-left font-mono text-[12.5px]" dir="rtl" [title]="row.originalUrl"><bdi dir="ltr">{{ row.originalUrl }}</bdi></span>
               <span class="mt-0.5 flex items-center gap-1.5 text-[11px] text-muted-foreground">
-                <span class="size-1.5 rounded-full" [style.background]="sourceColor(row.source)"></span>{{ sourceLabel(row.source) }}
+                <ng-icon [name]="sourceIcon(row.source)" size="0.75rem" [style.color]="sourceColor(row.source)" />{{ sourceLabel(row.source) }}
                 <span aria-hidden="true">·</span>
                 <span class="tabular-nums">{{ row.latencyMs }} ms</span>
               </span>
@@ -200,7 +201,7 @@ const ROW_HEIGHT = 56;
               <span class="rounded-md px-2 py-0.5 font-mono text-[13px] font-bold tabular-nums" [style.color]="statusColor(sel.status)" [style.background]="tint(statusColor(sel.status), 14)">{{ sel.status }}</span>
               <!-- La chiave del dump (file#riga) resta nel tooltip: a chi legge serve quando, non dove. -->
               <span class="inline-flex items-center gap-1.5 text-[12px] text-muted-foreground" [title]="sel.dumpKey">
-                <span class="size-1.5 rounded-full" [style.background]="sourceColor(sel.source)"></span>{{ sourceLabel(sel.source) }} · {{ sel.latencyMs }} ms · {{ sel.timestamp | date: 'dd/MM/yyyy HH:mm:ss.SSS' }}
+                <ng-icon [name]="sourceIcon(sel.source)" size="0.8rem" [style.color]="sourceColor(sel.source)" />{{ sourceLabel(sel.source) }} · {{ sel.latencyMs }} ms · {{ sel.timestamp | date: 'dd/MM/yyyy HH:mm:ss.SSS' }}
               </span>
             </div>
             <div class="flex min-h-0 flex-1 flex-col overflow-y-auto mx-scroll">
@@ -659,18 +660,13 @@ export class StoricoDumpPage implements OnInit {
     return klass >= 2 && klass <= 5 ? `var(--status-${klass}xx)` : 'var(--muted-foreground)';
   }
 
-  /** Colore della provenienza, lo stesso del Monitor. */
+  /** Provenienza come nel Monitor: colore, etichetta e icona dallo stesso elenco. */
   protected sourceColor(source: string): string {
-    switch (source) {
-      case 'mock': return 'var(--type-mock)';
-      case 'handler': return 'var(--type-handler)';
-      case 'middleware': return 'var(--type-middleware)';
-      case 'sse': return 'var(--brand)';
-      case 'backend': return 'var(--brand-soft)';
-      case 'mock-only':
-      case 'mock-only-miss': return 'var(--foreground-faint)';
-      default: return 'var(--muted-foreground)';
-    }
+    return responseSourceMeta(source).color;
+  }
+
+  protected sourceIcon(source: string): string {
+    return responseSourceMeta(source).icon;
   }
 
   protected tint(color: string, pct: number): string {
@@ -678,15 +674,7 @@ export class StoricoDumpPage implements OnInit {
   }
 
   protected sourceLabel(source: string): string {
-    switch (source) {
-      case 'mock': return 'Mock';
-      case 'handler': return 'Handler';
-      case 'middleware': return 'Middleware';
-      case 'backend': return 'Proxy';
-      case 'mock-only':
-      case 'mock-only-miss': return 'Miss';
-      default: return source;
-    }
+    return responseSourceMeta(source).label;
   }
 
   protected bodyLang(text: string | undefined): 'json' | 'text' {

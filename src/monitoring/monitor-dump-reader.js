@@ -9,8 +9,9 @@ const DEFAULT_PAGE_LIMIT = 300;
 // da cui ripartire, e il client continua.
 const MAX_SCANNED_LINES = 20000;
 // Provenienze servite da una response locale: le altre ("dal backend reale") sono proxy,
-// middleware e miss. Stessa partizione del filtro "Backend reale" del Monitor.
-const LOCAL_SOURCES = new Set(["mock", "handler", "sse"]);
+// middleware e miss. Stessa partizione del filtro "Backend reale" del Monitor. Anche "ws": la
+// richiesta a un endpoint WebSocket la serve l'endpoint (426 senza upgrade), non il backend.
+const LOCAL_SOURCES = new Set(["mock", "handler", "sse", "ws"]);
 
 /**
  * Filtri dello storico, gli stessi del Monitor: testo contenuto nell'URL o nel metodo (senza

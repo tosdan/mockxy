@@ -35,6 +35,7 @@ import { UiDialog } from '../../ui/ui-dialog/ui-dialog';
 import { MockAdminApiService } from '../../mock-admin-api.service';
 import { MonitorStreamStore } from '../../shared/monitor-stream.store';
 import { ViewStateService } from '../../shared/view-state.service';
+import { RESPONSE_SOURCE_ICONS, SEQUENCE_ICON, isUnmockedSource, responseSourceMeta } from '../../shared/response-source';
 import { summarizeBatchAttention, type CaptureBatchOptions, type CaptureItemOutcome, type MockSummary, type MonitorCreateMocksResult, type RequestMonitorEntry } from '../../mock-admin-api.types';
 import { readBatchPartialResult } from '../../shared/read-error-message';
 import { MOCK_METHODS } from '../../mock-admin-ui.constants';
@@ -42,11 +43,6 @@ import { listNavigationTarget, toggleListSelection } from '../../shared/list-sel
 
 /** Chiave (ViewStateService) della densita' del Monitor: 'compact', o assente per quella normale. */
 const DENSITY_STATE_KEY = 'monitor-density';
-
-interface SourceMeta {
-  readonly label: string;
-  readonly color: string;
-}
 
 /**
  * Monitor live delle request intercettate, ridisegnato sui token del design system (gemello visivo di
@@ -62,7 +58,7 @@ interface SourceMeta {
   providers: [
     provideIcons({
       lucideActivity, lucideArrowLeft, lucideCheck, lucideCopy, lucideDatabase, lucideDownload, lucideEllipsisVertical, lucideListTree,
-      lucidePlus, lucideRows3, lucideSearch, lucideTrash2, lucideX,
+      lucidePlus, lucideRows3, lucideSearch, lucideTrash2, lucideX, ...RESPONSE_SOURCE_ICONS,
     }),
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -106,7 +102,7 @@ interface SourceMeta {
         </div>
         <span class="ml-1 inline-flex flex-wrap items-center gap-x-3 gap-y-1 text-[11.5px] text-muted-foreground">
           @for (s of sourceBreakdown(); track s.source) {
-          <span class="inline-flex items-center gap-1.5"><span class="size-1.5 rounded-full" [style.background]="s.color"></span>{{ s.label }} {{ s.count }}</span>
+          <span class="inline-flex items-center gap-1.5"><ng-icon [name]="s.icon" size="0.75rem" [style.color]="s.color" />{{ s.label }} {{ s.count }}</span>
           } @empty {
           <span class="text-foreground/40">{{ 'monitor.noTraffic' | transloco }}</span>
           }
@@ -181,15 +177,19 @@ interface SourceMeta {
                   @if (selectedIds().has(row.id)) { <ng-icon name="lucideCheck" size="0.7rem" class="text-white" /> }
                 </span>
                 <span class="w-12 shrink-0 font-mono text-[12px] font-bold" [style.color]="methodColor(row.method)">{{ row.method }}</span>
-                <!-- In densita' compatta la provenienza resta come punto colorato davanti al path. -->
-                <span class="hidden size-1.5 shrink-0 rounded-full in-[.mx-compact]:block" [style.background]="sourceColor(row.source)" [title]="sourceLabel(row.source)"></span>
+                <!-- In densita' compatta la provenienza resta come icona davanti al path; per un passo di
+                     sequenza l'icona SEQ, che dice di piu' di "mock". Il nome lo legge lo screen reader. -->
+                <span class="hidden shrink-0 in-[.mx-compact]:inline-flex" [title]="compactSourceText(row)">
+                  <ng-icon [name]="row.sequenceStep ? sequenceIcon : sourceIcon(row.source)" size="0.8rem" [style.color]="row.sequenceStep ? 'var(--brand)' : sourceColor(row.source)" />
+                  <span class="sr-only">{{ compactSourceText(row) }}</span>
+                </span>
                 <span class="min-w-0 flex-1">
                   <!-- Il path si tronca in testa, come nel catalogo: la coda e' cio' che distingue. -->
                   <span class="block truncate text-left font-mono text-[13px] text-foreground in-[.mx-compact]:text-[12.5px]" dir="rtl" [title]="row.originalUrl"><bdi dir="ltr">{{ row.originalUrl }}</bdi></span>
                   <span class="mt-0.5 flex items-center gap-1.5 text-[11px] text-muted-foreground in-[.mx-compact]:hidden">
-                    <span class="size-1.5 rounded-full" [style.background]="sourceColor(row.source)"></span>{{ sourceLabel(row.source) }}
+                    <ng-icon [name]="sourceIcon(row.source)" size="0.75rem" [style.color]="sourceColor(row.source)" />{{ sourceLabel(row.source) }}
                     @if (row.sequenceStep; as seq) {
-                    <span class="rounded bg-[color-mix(in_srgb,var(--brand)_16%,transparent)] px-1 text-[10px] font-bold tracking-wide text-brand" [uiTooltip]="'monitor.sequenceStepTip' | transloco">SEQ {{ seq.index + 1 }}/{{ seq.count }}</span>
+                    <span class="inline-flex items-center gap-1 rounded bg-[color-mix(in_srgb,var(--brand)_16%,transparent)] px-1 text-[10px] font-bold tracking-wide text-brand-soft" [uiTooltip]="'monitor.sequenceStepTip' | transloco"><ng-icon [name]="sequenceIcon" size="0.65rem" />SEQ {{ seq.index + 1 }}/{{ seq.count }}</span>
                     }
                   </span>
                 </span>
@@ -249,12 +249,12 @@ interface SourceMeta {
               <span class="font-mono text-[17px] font-semibold text-foreground">{{ sel.originalUrl }}</span>
               <span class="rounded-md px-2 py-0.5 font-mono text-[13px] font-bold tabular-nums" [style.color]="statusColor(sel.status)" [style.background]="tint(statusColor(sel.status), 14)">{{ sel.status }} {{ statusText(sel.status) }}</span>
               <span class="inline-flex items-center gap-1.5 text-[12.5px] text-muted-foreground">
-                <span class="size-1.5 rounded-full" [style.background]="sourceColor(sel.source)"></span>{{ sourceLabel(sel.source) }} · {{ sel.latencyMs }} ms · {{ sel.timestamp | date: 'HH:mm:ss.SSS' }}
+                <ng-icon [name]="sourceIcon(sel.source)" size="0.8rem" [style.color]="sourceColor(sel.source)" />{{ sourceLabel(sel.source) }} · {{ sel.latencyMs }} ms · {{ sel.timestamp | date: 'HH:mm:ss.SSS' }}
               </span>
               @if (sel.sequenceStep; as seq) {
               <!-- Endpoint con sequenza: quale step ha risposto, con la variante — la progressione si legge da qui. -->
               <span class="inline-flex items-center gap-1.5 text-[12.5px] text-muted-foreground" [uiTooltip]="'monitor.sequenceStepTip' | transloco">
-                <span class="rounded bg-[color-mix(in_srgb,var(--brand)_16%,transparent)] px-1 text-[10.5px] font-bold tracking-wide text-brand">SEQ {{ seq.index + 1 }}/{{ seq.count }}</span>
+                <span class="inline-flex items-center gap-1 rounded bg-[color-mix(in_srgb,var(--brand)_16%,transparent)] px-1 text-[10.5px] font-bold tracking-wide text-brand-soft"><ng-icon [name]="sequenceIcon" size="0.7rem" />SEQ {{ seq.index + 1 }}/{{ seq.count }}</span>
                 <span class="font-mono text-[11.5px]">{{ seq.responseTitle ? seq.responseTitle + ' — ' : '' }}{{ seq.responseFile }}</span>
               </span>
               }
@@ -603,7 +603,7 @@ export class MonitorNextPage {
   protected readonly sourceBreakdown = computed(() => {
     const counts = new Map<string, number>();
     for (const entry of this.entries()) counts.set(entry.source, (counts.get(entry.source) ?? 0) + 1);
-    return [...counts.entries()].map(([source, count]) => ({ source, count, ...this.sourceMeta(source) }));
+    return [...counts.entries()].map(([source, count]) => ({ source, count, ...responseSourceMeta(source) }));
   });
   protected selectEntry(id: string): void {
     this.selectedId.set(id);
@@ -996,11 +996,23 @@ export class MonitorNextPage {
   }
 
   protected sourceLabel(source: string): string {
-    return this.sourceMeta(source).label;
+    return responseSourceMeta(source).label;
   }
 
   protected sourceColor(source: string): string {
-    return this.sourceMeta(source).color;
+    return responseSourceMeta(source).color;
+  }
+
+  protected sourceIcon(source: string): string {
+    return responseSourceMeta(source).icon;
+  }
+
+  protected readonly sequenceIcon = SEQUENCE_ICON;
+
+  /** Il nome della provenienza dietro l'icona della riga compatta, col passo se e' una sequenza. */
+  protected compactSourceText(row: RequestMonitorEntry): string {
+    const label = this.sourceLabel(row.source);
+    return row.sequenceStep ? `${label} · SEQ ${row.sequenceStep.index + 1}/${row.sequenceStep.count}` : label;
   }
 
   /**
@@ -1015,25 +1027,12 @@ export class MonitorNextPage {
   }
 
   /**
-   * "Non mockata": non servita da una response locale (mock/handler/sse). Sono proxy e middleware,
-   * ma anche i miss rimasti senza mock ne' backend a cui girarli (mock-only-miss,
+   * "Non mockata": non servita da una response locale (mock/handler/sse/ws). Sono proxy e
+   * middleware, ma anche i miss rimasti senza mock ne' backend a cui girarli (mock-only-miss,
    * backend-unconfigured), che rispondono in locale con un errore.
    */
   protected isUnmocked(source: string): boolean {
-    return source !== 'mock' && source !== 'handler' && source !== 'sse';
-  }
-
-  private sourceMeta(source: string): SourceMeta {
-    switch (source) {
-      case 'mock': return { label: 'Mock', color: 'var(--type-mock)' };
-      case 'handler': return { label: 'Handler', color: 'var(--type-handler)' };
-      case 'middleware': return { label: 'Middleware', color: 'var(--type-middleware)' };
-      case 'sse': return { label: 'SSE', color: 'var(--brand)' };
-      case 'backend': return { label: 'Proxy', color: 'var(--brand-soft)' };
-      case 'mock-only':
-      case 'mock-only-miss': return { label: 'Miss', color: 'var(--foreground-faint)' };
-      default: return { label: source, color: 'var(--muted-foreground)' };
-    }
+    return isUnmockedSource(source);
   }
 
   /** Tinta trasparente di un colore (per fondi/bordi tenui), via color-mix. */

@@ -1879,7 +1879,7 @@ paths:
           in: query
           description: |
             The entry's `source`, or `real-backend` for everything not answered by a local
-            response (anything but `mock`, `handler` and `sse`).
+            response (anything but `mock`, `handler`, `sse` and `ws`).
           schema: { type: string }
       responses:
         "200":

@@ -57,6 +57,7 @@ import {
 } from '../mocks-next.store';
 import { UNSORTED_COLLECTION_ID, type EndpointCreateType } from '../../../mock-admin-api.types';
 import { ViewStateService } from '../../../shared/view-state.service';
+import { RESPONSE_SOURCE_ICONS, endpointTypeIcon } from '../../../shared/response-source';
 import {
   ROOT_ORDER_KEY,
   buildCatalogRows,
@@ -152,6 +153,7 @@ interface NavRow {
       lucideUngroup,
       lucideUpload,
       lucideX,
+      ...RESPONSE_SOURCE_ICONS,
     }),
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -545,8 +547,9 @@ interface NavRow {
                gli status delle righe si allineano in colonna. -->
           <div class="mt-0.5 flex items-center gap-2 text-[10px] in-[.mx-compact]:mt-0 in-[.mx-compact]:shrink-0 in-[.mx-compact]:text-[11px]">
             @if (!compact() || ep.type !== 'mock') {
+            <!-- Il tipo con la sua icona, la stessa della provenienza nel Monitor e nello Storico. -->
             <span class="flex items-center gap-1" [class]="typeTextClass(ep)">
-              <span class="h-1.5 w-1.5 rounded-full" [class]="typeDotClass(ep)"></span>
+              <ng-icon [name]="typeIcon(ep.type)" size="0.7rem" />
               {{ ep.type }}
             </span>
             }
@@ -1368,15 +1371,13 @@ export class MocksNextCatalog {
     return 'text-muted-foreground';
   }
 
-  protected typeDotClass(ep: CatalogEndpointVM): string {
-    if (!ep.enabled) return 'bg-current';
-    const type = ep.type;
-    return type === 'handler' ? 'bg-type-handler/55' : type === 'middleware' ? 'bg-type-middleware/55' : type === 'sequence' ? 'bg-sequence/55' : type === 'sse' || type === 'ws' ? 'bg-brand/55' : 'bg-type-mock/55';
+  protected typeIcon(type: string): string {
+    return endpointTypeIcon(type);
   }
 
   protected typeTextClass(ep: CatalogEndpointVM): string {
     if (!ep.enabled) return '';
     const type = ep.type;
-    return type === 'handler' ? 'text-type-handler/75' : type === 'middleware' ? 'text-type-middleware/75' : type === 'sequence' ? 'text-sequence/75' : type === 'sse' || type === 'ws' ? 'text-brand/75' : 'text-type-mock/75';
+    return type === 'handler' ? 'text-type-handler/75' : type === 'middleware' ? 'text-type-middleware/75' : type === 'sequence' ? 'text-sequence/75' : type === 'sse' || type === 'ws' ? 'text-brand-soft' : 'text-type-mock/75';
   }
 }
