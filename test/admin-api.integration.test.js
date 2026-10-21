@@ -256,6 +256,9 @@ describe("admin API", () => {
       expect((await get({ order: "desc", source: "mock" })).body.items.map((item) => item.id)).toEqual(["4", "2", "1"]);
       // Senza order resta la lettura in avanti.
       expect((await get({})).body.items.map((item) => item.id)).toEqual(["1", "2", "3", "4"]);
+      // E i campi mancanti del cursore valgono 0, come prima: lineIndex senza fileIndex riprende dal primo file.
+      expect((await get({ lineIndex: 1, limit: 1 })).body.items.map((item) => item.id)).toEqual(["2"]);
+      expect((await get({ fileIndex: 1, limit: 1 })).body.items.map((item) => item.id)).toEqual(["3"]);
     });
 
     test("elimina un file di dump", async () => {

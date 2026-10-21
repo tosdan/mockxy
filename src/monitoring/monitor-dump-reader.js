@@ -53,7 +53,31 @@ function isSafeDumpFileName(name) {
   );
 }
 
-// Elenca i file di dump (ordine cronologico per nome, che porta il timestamp di sessione).
+// Il numero di rotazione in fondo al nome: `dump-STAMP-002.ndjson` (il primo file non ce l'ha).
+const ROTATION_SUFFIX = /^(.*)-(\d{3,})\.ndjson$/;
+
+/**
+ * Ordine cronologico dei file di dump. Il nome porta il timestamp della sessione (ISO, in ordine anche
+ * come testo) e, dalla seconda rotazione, il numero del file: `dump-STAMP.ndjson`, poi
+ * `dump-STAMP-002.ndjson`, `-003`... In ordine alfabetico il trattino viene prima del punto, e il
+ * primo file finirebbe dopo i suoi successori: si confrontano la sessione e poi il numero, che per
+ * il primo file vale 1. Cosi' un file ruotato si aggiunge sempre in fondo, e gli indici dei file
+ * gia' elencati, che i cursori di lettura si portano dietro, non cambiano.
+ */
+function compareDumpFileNames(a, b) {
+  const order = (name) => {
+    const match = ROTATION_SUFFIX.exec(name);
+    return match ? { session: match[1], seq: Number(match[2]) } : { session: name.slice(0, -".ndjson".length), seq: 1 };
+  };
+  const left = order(a);
+  const right = order(b);
+  if (left.session !== right.session) {
+    return left.session < right.session ? -1 : 1;
+  }
+  return left.seq - right.seq;
+}
+
+// Elenca i file di dump in ordine cronologico (compareDumpFileNames).
 async function listDumpFiles(dumpDir) {
   if (!dumpDir) {
     return [];
@@ -67,7 +91,7 @@ async function listDumpFiles(dumpDir) {
     }
     throw error;
   }
-  names = names.filter(isSafeDumpFileName).sort();
+  names = names.filter(isSafeDumpFileName).sort(compareDumpFileNames);
   const files = [];
   for (const name of names) {
     const stat = await fs.promises.stat(path.join(dumpDir, name));
@@ -491,6 +515,7 @@ async function deleteDumpFile(dumpDir, fileName) {
 
 module.exports = {
   isSafeDumpFileName,
+  compareDumpFileNames,
   parseDumpKey,
   listDumpFiles,
   readDumpPage,

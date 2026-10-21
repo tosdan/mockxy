@@ -484,22 +484,26 @@ function createAdminApiRouter({ config, runtimeConfig = new RuntimeConfigStore(c
   }
 
   // Lettura paginata a cursore per il virtual scroll dello storico: in avanti, o con order=desc
-  // dalla voce piu' recente. Senza fileIndex si parte dall'inizio (o dalla fine) dell'archivio;
-  // i campi mancanti del cursore restano tali, perche' leggendo all'indietro "riga 0" vuol dire
-  // file finito.
+  // dalla voce piu' recente. In avanti i campi mancanti del cursore valgono 0, come da sempre (anche
+  // lineIndex senza fileIndex riprende dal primo file). All'indietro restano mancanti: senza
+  // fileIndex si parte dalla fine dell'archivio, e "riga 0" vorrebbe dire file finito.
   router.get('/monitoring/dumps/read', async (req, res) => {
     const fileIndex = Number.parseInt(req.query.fileIndex, 10);
     const lineIndex = Number.parseInt(req.query.lineIndex, 10);
     const limit = Number.parseInt(req.query.limit, 10);
     const byteOffset = Number.parseInt(req.query.byteOffset, 10);
     const order = req.query.order === 'desc' ? 'desc' : 'asc';
-    const cursor = Number.isInteger(fileIndex)
-      ? {
-        fileIndex,
-        lineIndex: Number.isInteger(lineIndex) ? lineIndex : undefined,
-        byteOffset: Number.isInteger(byteOffset) ? byteOffset : undefined,
-      }
-      : undefined;
+    const resumeByte = Number.isInteger(byteOffset) ? byteOffset : undefined;
+    let cursor;
+    if (order === 'asc') {
+      cursor = {
+        fileIndex: Number.isInteger(fileIndex) ? fileIndex : 0,
+        lineIndex: Number.isInteger(lineIndex) ? lineIndex : 0,
+        byteOffset: resumeByte,
+      };
+    } else if (Number.isInteger(fileIndex)) {
+      cursor = { fileIndex, lineIndex: Number.isInteger(lineIndex) ? lineIndex : undefined, byteOffset: resumeByte };
+    }
     const page = await readDumpPage(config.monitorDumpDir, cursor, Number.isInteger(limit) ? limit : undefined, readDumpFilters(req.query), undefined, order);
     sendJson(res, 200, page);
   });

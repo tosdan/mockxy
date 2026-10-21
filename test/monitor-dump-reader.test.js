@@ -2,13 +2,31 @@ const fs = require("fs");
 const path = require("path");
 const {
   isSafeDumpFileName,
+  compareDumpFileNames,
   parseDumpKey,
   listDumpFiles,
   readDumpPage,
   readDumpFileEntries,
   readDumpEntriesByKeys,
 } = require("../src/monitoring/monitor-dump-reader");
+const { MonitorDumpWriter } = require("../src/monitoring/monitor-dump");
+const { RequestMonitorStore } = require("../src/monitoring/request-monitor");
 const { createTempDir, removeDir } = require("./helpers");
+
+// Registra nel monitor una request per ogni path: il writer vero la scrivera' nel dump.
+function recordPaths(store, paths) {
+  for (const urlPath of paths) {
+    store.recordRequest({
+      req: { headers: {}, method: "GET", path: urlPath, url: urlPath },
+      res: { statusCode: 200, getHeaders: () => ({}) },
+      startedAt: 0,
+      completedAt: 1,
+      source: "backend",
+      capture: null,
+      responseCapture: null,
+    });
+  }
+}
 
 async function writeNdjson(dir, name, count, offset = 0) {
   const lines = [];
@@ -367,6 +385,74 @@ describe("monitor dump reader", () => {
       await fs.promises.writeFile(path.join(dir, F1), "", "utf8");
       await writeNdjson(dir, F2, 1, 0);
       expect((await readAll("desc", 1)).keys).toEqual([`${F2}#0`]);
+    });
+  });
+
+  // Il writer chiama i file ruotati `dump-STAMP-002.ndjson`, `-003`...: in ordine alfabetico il
+  // primo file, senza numero, finirebbe dopo i suoi successori.
+  describe("ordine dei file ruotati", () => {
+    test("per sessione e numero di rotazione, col primo file come numero 1", () => {
+      const names = [
+        "dump-2026-01-02T00-00-00-000Z.ndjson",
+        "dump-2026-01-01T00-00-00-000Z-1000.ndjson",
+        "dump-2026-01-01T00-00-00-000Z-002.ndjson",
+        "dump-2026-01-01T00-00-00-000Z.ndjson",
+        "dump-2026-01-01T00-00-00-000Z-999.ndjson",
+        "dump-2026-01-01T00-00-00-000Z-010.ndjson",
+      ];
+      expect([...names].sort(compareDumpFileNames)).toEqual([
+        "dump-2026-01-01T00-00-00-000Z.ndjson",
+        "dump-2026-01-01T00-00-00-000Z-002.ndjson",
+        "dump-2026-01-01T00-00-00-000Z-010.ndjson",
+        "dump-2026-01-01T00-00-00-000Z-999.ndjson",
+        "dump-2026-01-01T00-00-00-000Z-1000.ndjson",
+        "dump-2026-01-02T00-00-00-000Z.ndjson",
+      ]);
+    });
+
+    describe("col writer vero", () => {
+      let store;
+      let writer;
+
+      beforeEach(() => {
+        store = new RequestMonitorStore(100);
+        // Ogni scrittura dopo la prima supera i 50 byte del file e ne apre uno nuovo.
+        writer = new MonitorDumpWriter({ dumpDir: dir, threshold: 1000, maxFileBytes: 50 });
+        writer.start(store);
+      });
+
+      afterEach(async () => {
+        await writer.stop();
+      });
+
+      const paths = (page) => page.items.map((item) => item.path);
+
+      test("dalla voce piu' recente attraverso i file ruotati, e in avanti nell'ordine di scrittura", async () => {
+        for (const urlPath of ["/1", "/2", "/3"]) {
+          recordPaths(store, [urlPath]);
+          await writer.flush();
+        }
+        const names = (await listDumpFiles(dir)).map((file) => file.name);
+        expect(names).toHaveLength(3);
+        expect(names[1]).toMatch(/-002\.ndjson$/);
+        expect(paths(await readDumpPage(dir, undefined, 10, undefined, undefined, "desc"))).toEqual(["/3", "/2", "/1"]);
+        expect(paths(await readDumpPage(dir, undefined, 10))).toEqual(["/1", "/2", "/3"]);
+      });
+
+      test("una rotazione fra due pagine non sposta il file del cursore: la lettura resta quella di allora", async () => {
+        recordPaths(store, ["/1", "/2"]);
+        await writer.flush(); // tutte e due nel primo file
+        const first = await readDumpPage(dir, undefined, 1, undefined, undefined, "desc");
+        expect(paths(first)).toEqual(["/2"]);
+
+        recordPaths(store, ["/3"]);
+        await writer.flush(); // supera il tetto: nasce il file -002
+        expect(await listDumpFiles(dir)).toHaveLength(2);
+
+        const rest = await readDumpPage(dir, first.nextCursor, 10, undefined, undefined, "desc");
+        expect(paths(rest)).toEqual(["/1"]);
+        expect(rest.done).toBe(true);
+      });
     });
   });
 });

@@ -1828,7 +1828,8 @@ paths:
       operationId: readDumpPage
       summary: Read the archive, page by page
       description: |
-        Forward cursor pagination across **all** dump files in chronological order, built for
+        Forward cursor pagination across **all** dump files in chronological order (by session,
+        then by rotation number: `dump-STAMP.ndjson`, `dump-STAMP-002.ndjson`…), built for
         virtual scrolling. Reading is streamed, so a file is never loaded whole into memory, and
         no total is computed: keep requesting until `done` is `true`, passing back `nextCursor`.
 
@@ -1860,11 +1861,11 @@ paths:
           schema: { type: string, enum: [asc, desc], default: asc }
         - name: fileIndex
           in: query
-          description: Cursor — index of the file to resume from. Without it, the reading starts at the beginning (`asc`) or the end (`desc`) of the archive.
+          description: Cursor — index of the file to resume from. Reading forward it defaults to 0; reading newest first, without it the reading starts at the end of the archive.
           schema: { type: integer, minimum: 0 }
         - name: lineIndex
           in: query
-          description: Cursor — line to resume from inside that file (with `desc`, how many lines come before the resume point).
+          description: Cursor — line to resume from inside that file, defaulting to 0 when reading forward. With `desc`, how many lines come before the resume point.
           schema: { type: integer, minimum: 0 }
         - name: byteOffset
           in: query
