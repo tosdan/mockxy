@@ -1,6 +1,7 @@
 import { DatePipe } from '@angular/common';
 import { ChangeDetectionStrategy, Component, ElementRef, TemplateRef, computed, effect, inject, signal, viewChild } from '@angular/core';
 import { Router } from '@angular/router';
+import { CdkMenuTrigger } from '@angular/cdk/menu';
 import { finalize, type Observable } from 'rxjs';
 import { NgIcon, provideIcons } from '@ng-icons/core';
 import {
@@ -10,8 +11,10 @@ import {
   lucideCopy,
   lucideDatabase,
   lucideDownload,
+  lucideEllipsisVertical,
   lucideListTree,
   lucidePlus,
+  lucideRows3,
   lucideSearch,
   lucideTrash2,
   lucideX,
@@ -22,6 +25,7 @@ import { UiButton } from '../../ui/ui-button/ui-button';
 import { UiCheckbox } from '../../ui/ui-checkbox/ui-checkbox';
 import { UiCode } from '../../ui/ui-code/ui-code';
 import { UiCollapsible } from '../../ui/ui-collapsible/ui-collapsible';
+import { UiMenu, UiMenuItemCheckbox } from '../../ui/ui-menu/ui-menu';
 import { UiPageHeader } from '../../ui/ui-page-header/ui-page-header';
 import { UiSelect, type UiSelectOption } from '../../ui/ui-select/ui-select';
 import { UiTable } from '../../ui/ui-table/ui-table';
@@ -30,10 +34,14 @@ import { ToastService } from '../../ui/ui-toast/ui-toast';
 import { UiDialog } from '../../ui/ui-dialog/ui-dialog';
 import { MockAdminApiService } from '../../mock-admin-api.service';
 import { MonitorStreamStore } from '../../shared/monitor-stream.store';
+import { ViewStateService } from '../../shared/view-state.service';
 import { summarizeBatchAttention, type CaptureBatchOptions, type CaptureItemOutcome, type MockSummary, type MonitorCreateMocksResult, type RequestMonitorEntry } from '../../mock-admin-api.types';
 import { readBatchPartialResult } from '../../shared/read-error-message';
 import { MOCK_METHODS } from '../../mock-admin-ui.constants';
 import { listNavigationTarget, toggleListSelection } from '../../shared/list-selection';
+
+/** Chiave (ViewStateService) della densita' del Monitor: 'compact', o assente per quella normale. */
+const DENSITY_STATE_KEY = 'monitor-density';
 
 interface SourceMeta {
   readonly label: string;
@@ -50,11 +58,11 @@ interface SourceMeta {
  */
 @Component({
   selector: 'app-monitor-next',
-  imports: [DatePipe, NgIcon, TranslocoPipe, UiBadge, UiButton, UiCheckbox, UiCode, UiCollapsible, UiPageHeader, UiSelect, UiTable, UiTooltip],
+  imports: [CdkMenuTrigger, DatePipe, NgIcon, TranslocoPipe, UiBadge, UiButton, UiCheckbox, UiCode, UiCollapsible, UiMenu, UiMenuItemCheckbox, UiPageHeader, UiSelect, UiTable, UiTooltip],
   providers: [
     provideIcons({
-      lucideActivity, lucideArrowLeft, lucideCheck, lucideCopy, lucideDatabase, lucideDownload, lucideListTree,
-      lucidePlus, lucideSearch, lucideTrash2, lucideX,
+      lucideActivity, lucideArrowLeft, lucideCheck, lucideCopy, lucideDatabase, lucideDownload, lucideEllipsisVertical, lucideListTree,
+      lucidePlus, lucideRows3, lucideSearch, lucideTrash2, lucideX,
     }),
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -75,14 +83,24 @@ interface SourceMeta {
         <ng-container actions>
           <button ui-button variant="outline" size="sm" [disabled]="clearing()" (click)="clearLog()"><ng-icon name="lucideTrash2" size="0.9rem" /> {{ 'monitor.clear' | transloco }}</button>
           <button ui-button variant="outline" size="sm" [disabled]="filtered().length === 0" (click)="exportJson()"><ng-icon name="lucideDownload" size="0.9rem" /> {{ 'monitor.export' | transloco }}</button>
+          <!-- Opzioni di vista, come nel catalogo: per ora la densita'. -->
+          <button ui-button variant="outline" size="icon" class="size-8" [uiTooltip]="'monitor.viewActionsTip' | transloco" [attr.aria-label]="'monitor.viewActionsTip' | transloco" [cdkMenuTriggerFor]="viewMenu">
+            <ng-icon name="lucideEllipsisVertical" size="0.95rem" />
+          </button>
         </ng-container>
       </ui-page-header>
 
-      <!-- STATS STRIP -->
+      <!-- STATS STRIP. Gli errori non hanno piu' un conteggio a parte: 4xx e 5xx si contano sui
+           chip dei filtri, che dividono le due cose e con un clic le isolano. -->
       <div class="relative z-20 flex shrink-0 flex-wrap items-center gap-2.5 border-b border-border bg-card/60 px-5 py-2">
-        <div class="flex items-baseline gap-1.5 rounded-lg bg-muted/60 px-3 py-1 ring-1 ring-border">
-          <span class="text-[15px] font-bold tabular-nums" [style.color]="errorCount() > 0 ? 'var(--status-5xx)' : null">{{ errorCount() }}</span><span class="text-[11.5px] text-muted-foreground">{{ 'monitor.errors' | transloco }}</span>
-        </div>
+        <!-- Le non mockate, segnate in lista dalla barra ambra a sinistra: lo stesso segno qui ne
+             spiega il senso, e il clic mostra solo loro (il filtro "Servita da: backend reale"). -->
+        <button type="button" (click)="toggleUnmockedFilter()" [attr.aria-pressed]="sourceFilter() === 'real-backend'" [uiTooltip]="'monitor.unmockedTip' | transloco"
+                class="flex items-center gap-2 rounded-lg px-3 py-1 ring-1 transition hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70"
+                [class]="sourceFilter() === 'real-backend' ? 'bg-[color-mix(in_srgb,var(--status-4xx)_10%,transparent)] ring-[color-mix(in_srgb,var(--status-4xx)_40%,transparent)]' : 'bg-muted/60 ring-border'">
+          <span aria-hidden="true" class="h-4 w-0.5 rounded-full" [style.background]="tint('var(--status-4xx)', 45)"></span>
+          <span class="flex items-baseline gap-1.5"><span class="text-[15px] font-bold tabular-nums">{{ unmockedCount() }}</span><span class="text-[11.5px] text-muted-foreground">{{ 'monitor.unmocked' | transloco }}</span></span>
+        </button>
         <div class="flex items-baseline gap-1.5 rounded-lg bg-muted/60 px-3 py-1 ring-1 ring-border">
           <span class="text-[15px] font-bold tabular-nums">{{ avgLatency() }}</span><span class="text-[11.5px] text-muted-foreground">{{ 'monitor.avgMs' | transloco }}</span>
         </div>
@@ -114,20 +132,22 @@ interface SourceMeta {
           }
         </label>
         <ui-select class="w-40" [options]="methodOptions" [value]="methodFilter()" (valueChange)="methodFilter.set($any($event))" [ariaLabel]="'monitor.methodFilterAria' | transloco" />
+        <!-- Ogni chip conta le sue voci fra quelle che passano gli altri filtri: 4xx e 5xx sono il
+             conteggio degli errori, diviso fra chi ha sbagliato la richiesta e chi ha fallito. -->
         @for (n of statusChips; track n) {
-        <button (click)="toggleStatusClass(n)"
-                class="inline-flex h-8 items-center rounded-lg border px-3 text-[12.5px] font-medium transition"
+        <button type="button" (click)="toggleStatusClass(n)" [attr.aria-pressed]="statusClasses().has(n)"
+                class="inline-flex h-8 items-center gap-1.5 rounded-lg border px-3 text-[12.5px] font-medium transition"
                 [style.color]="statusClasses().has(n) ? statusColorClass(n) : 'var(--muted-foreground)'"
                 [style.borderColor]="statusClasses().has(n) ? tint(statusColorClass(n), 40) : 'var(--input)'"
-                [style.background]="statusClasses().has(n) ? tint(statusColorClass(n), 10) : 'transparent'">{{ n }}xx</button>
+                [style.background]="statusClasses().has(n) ? tint(statusColorClass(n), 10) : 'transparent'">
+          {{ n }}xx
+          <span class="font-mono text-[11.5px] font-bold tabular-nums" [style.color]="n >= 4 && statusCounts()[n] > 0 ? statusColorClass(n) : null">{{ statusCounts()[n] }}</span>
+        </button>
         }
         <label class="inline-flex items-center gap-2">
           <span class="text-[11.5px] text-muted-foreground">{{ 'monitor.servedBy' | transloco }}</span>
           <ui-select class="w-40" [options]="sourceOptions" [value]="sourceFilter()" (valueChange)="sourceFilter.set($any($event))" />
         </label>
-        @if (filtered().length !== total()) {
-        <span class="text-[11.5px] text-muted-foreground">{{ filtered().length }} / {{ total() }}</span>
-        }
       </div>
 
       <!-- BODY: lista + dettaglio -->
@@ -140,7 +160,8 @@ interface SourceMeta {
           <!-- Lista a selezione multipla, come il catalogo: un solo punto di Tab, le frecce spostano
                il fuoco e mostrano la voce nel dettaglio, Spazio la spunta (Maiuscole+Spazio spunta
                l'intervallo). La casella e' un'area di clic dentro la riga, non un controllo a se'. -->
-          <div class="min-h-0 flex-1 overflow-auto mx-scroll" role="listbox" aria-multiselectable="true" [attr.aria-label]="'monitor.listLabel' | transloco" (keydown)="onListKeydown($event)">
+          <!-- Densita' compatta: una riga sola per voce; le righe la leggono con in-[.mx-compact]. -->
+          <div class="min-h-0 flex-1 overflow-auto mx-scroll" [class.mx-compact]="compact()" role="listbox" aria-multiselectable="true" [attr.aria-label]="'monitor.listLabel' | transloco" (keydown)="onListKeydown($event)">
             @for (row of filtered(); track row.id) {
             <div
               role="option"
@@ -149,7 +170,7 @@ interface SourceMeta {
               [attr.aria-current]="row.id === selected()?.id ? 'true' : null"
               [attr.tabindex]="row.id === selected()?.id ? 0 : -1"
               (click)="onRowClick(row.id, $event)"
-              class="group grid w-full cursor-pointer select-none grid-cols-[1fr_auto] items-center gap-2 border-b border-border-soft px-4 py-2.5 text-left transition hover:bg-white/[0.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/70"
+              class="group grid w-full cursor-pointer select-none grid-cols-[1fr_auto] items-center gap-2 border-b border-border-soft px-4 py-2.5 text-left transition hover:bg-white/[0.03] in-[.mx-compact]:py-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/70"
               [class.mx-selected]="row.id === selected()?.id"
               [style.boxShadow]="row.id !== selected()?.id && isUnmocked(row.source) ? 'inset 2px 0 0 0 ' + tint('var(--status-4xx)', 45) : null"
             >
@@ -160,10 +181,12 @@ interface SourceMeta {
                   @if (selectedIds().has(row.id)) { <ng-icon name="lucideCheck" size="0.7rem" class="text-white" /> }
                 </span>
                 <span class="w-12 shrink-0 font-mono text-[12px] font-bold" [style.color]="methodColor(row.method)">{{ row.method }}</span>
+                <!-- In densita' compatta la provenienza resta come punto colorato davanti al path. -->
+                <span class="hidden size-1.5 shrink-0 rounded-full in-[.mx-compact]:block" [style.background]="sourceColor(row.source)" [title]="sourceLabel(row.source)"></span>
                 <span class="min-w-0 flex-1">
                   <!-- Il path si tronca in testa, come nel catalogo: la coda e' cio' che distingue. -->
-                  <span class="block truncate text-left font-mono text-[13px] text-foreground" dir="rtl" [title]="row.originalUrl"><bdi dir="ltr">{{ row.originalUrl }}</bdi></span>
-                  <span class="mt-0.5 flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                  <span class="block truncate text-left font-mono text-[13px] text-foreground in-[.mx-compact]:text-[12.5px]" dir="rtl" [title]="row.originalUrl"><bdi dir="ltr">{{ row.originalUrl }}</bdi></span>
+                  <span class="mt-0.5 flex items-center gap-1.5 text-[11px] text-muted-foreground in-[.mx-compact]:hidden">
                     <span class="size-1.5 rounded-full" [style.background]="sourceColor(row.source)"></span>{{ sourceLabel(row.source) }}
                     @if (row.sequenceStep; as seq) {
                     <span class="rounded bg-[color-mix(in_srgb,var(--brand)_16%,transparent)] px-1 text-[10px] font-bold tracking-wide text-brand" [uiTooltip]="'monitor.sequenceStepTip' | transloco">SEQ {{ seq.index + 1 }}/{{ seq.count }}</span>
@@ -172,8 +195,9 @@ interface SourceMeta {
                 </span>
                 <span class="shrink-0 rounded-md px-1.5 py-0.5 font-mono text-[11.5px] font-bold tabular-nums" [style.color]="statusColor(row.status)" [style.background]="tint(statusColor(row.status), 12)">{{ row.status }}</span>
               </span>
-              <span class="text-right">
-                <span class="block font-mono text-[12px] tabular-nums text-foreground/80">{{ row.latencyMs }} ms</span>
+              <span class="text-right in-[.mx-compact]:flex in-[.mx-compact]:items-baseline in-[.mx-compact]:gap-2">
+                <!-- In riga la latenza ha larghezza fissa: "1503 ms" non deve spostare gli status. -->
+                <span class="block font-mono text-[12px] tabular-nums text-foreground/80 in-[.mx-compact]:w-[7ch] in-[.mx-compact]:text-[11.5px]">{{ row.latencyMs }} ms</span>
                 <span class="block font-mono text-[10.5px] tabular-nums text-muted-foreground">{{ row.timestamp | date: 'HH:mm:ss' }}</span>
               </span>
             </div>
@@ -377,6 +401,19 @@ interface SourceMeta {
       </div>
       }
     </ng-template>
+
+    <!-- opzioni di vista, come quelle del catalogo -->
+    <ng-template #viewMenu>
+      <div ui-menu class="min-w-[14rem]">
+        <button ui-menu-item-checkbox [checked]="compact()" (triggered)="toggleCompact()">
+          <ng-icon name="lucideRows3" size="0.9rem" class="text-muted-foreground" />
+          <span class="flex-1">{{ 'monitor.compactDensity' | transloco }}</span>
+          @if (compact()) {
+          <ng-icon name="lucideCheck" size="0.85rem" class="text-brand" />
+          }
+        </button>
+      </div>
+    </ng-template>
   `,
 })
 export class MonitorNextPage {
@@ -387,6 +424,16 @@ export class MonitorNextPage {
   private readonly stream = inject(MonitorStreamStore);
   private readonly transloco = inject(TranslocoService);
   private readonly dialog = inject(UiDialog);
+  private readonly viewState = inject(ViewStateService);
+
+  /** Densita' compatta della lista, ricordata come quella del catalogo. */
+  protected readonly compact = signal(this.viewState.read<string>(DENSITY_STATE_KEY) === 'compact');
+
+  protected toggleCompact(): void {
+    const next = !this.compact();
+    this.compact.set(next);
+    this.viewState.write(DENSITY_STATE_KEY, next ? 'compact' : null);
+  }
 
   /**
    * Conflitto di creazione in sospeso: il server ha saltato la cattura perché l'endpoint esiste già
@@ -469,22 +516,42 @@ export class MonitorNextPage {
 
   /** Lista filtrata per ricerca + metodo + classe di status + provenienza della risposta. */
   protected readonly filtered = computed(() => {
-    const query = this.search().trim().toLowerCase();
-    const method = this.methodFilter();
-    const source = this.sourceFilter();
     const classes = this.statusClasses();
-    return this.entries().filter((entry) => {
-      if (query !== '' && !`${entry.originalUrl} ${entry.method}`.toLowerCase().includes(query)) return false;
-      if (method !== 'all' && entry.method !== method) return false;
-      if (source === 'real-backend') {
-        if (!this.isUnmocked(entry.source)) return false;
-      } else if (source !== 'all' && entry.source !== source) {
-        return false;
-      }
-      if (classes.size > 0 && !classes.has(Math.floor(entry.status / 100))) return false;
-      return true;
-    });
+    return this.entries().filter((entry) => this.matchesOtherFilters(entry) && (classes.size === 0 || classes.has(Math.floor(entry.status / 100))));
   });
+
+  /**
+   * Voci per classe di status (2 = 2xx...) fra quelle che passano gli altri filtri: il numero sul
+   * chip dice quante ne mostrerebbe accenderlo.
+   */
+  protected readonly statusCounts = computed(() => {
+    const counts: Record<number, number> = { 2: 0, 3: 0, 4: 0, 5: 0 };
+    for (const entry of this.entries()) {
+      if (!this.matchesOtherFilters(entry)) continue;
+      const klass = Math.floor(entry.status / 100);
+      if (klass in counts) counts[klass] += 1;
+    }
+    return counts;
+  });
+
+  /** Le voci servite dal backend reale, segnate in lista dalla barra ambra. */
+  protected readonly unmockedCount = computed(() => this.entries().filter((entry) => this.isUnmocked(entry.source)).length);
+
+  /** Il chip delle non mockate accende e spegne il filtro "Servita da: backend reale". */
+  protected toggleUnmockedFilter(): void {
+    this.sourceFilter.set(this.sourceFilter() === 'real-backend' ? 'all' : 'real-backend');
+  }
+
+  /** Ricerca, metodo e provenienza: tutti i filtri tranne la classe di status. */
+  private matchesOtherFilters(entry: RequestMonitorEntry): boolean {
+    const query = this.search().trim().toLowerCase();
+    if (query !== '' && !`${entry.originalUrl} ${entry.method}`.toLowerCase().includes(query)) return false;
+    const method = this.methodFilter();
+    if (method !== 'all' && entry.method !== method) return false;
+    const source = this.sourceFilter();
+    if (source === 'real-backend') return this.isUnmocked(entry.source);
+    return source === 'all' || entry.source === source;
+  }
 
   /** Entry selezionata (o la prima della lista filtrata; undefined se la lista è vuota). */
   protected readonly selected = computed<RequestMonitorEntry | undefined>(() => {
@@ -527,7 +594,6 @@ export class MonitorNextPage {
 
   // --- statistiche su TUTTE le entry (non filtrate) ---
   protected readonly total = computed(() => this.entries().length);
-  protected readonly errorCount = computed(() => this.entries().filter((entry) => entry.status >= 400).length);
   protected readonly avgLatency = computed(() => {
     const list = this.entries();
     if (list.length === 0) return 0;
