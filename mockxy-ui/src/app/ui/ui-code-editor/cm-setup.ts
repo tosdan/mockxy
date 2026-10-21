@@ -136,7 +136,7 @@ const appEditorTheme = EditorView.theme(
 // selezione e' disegnata in un livello dietro al testo, che da solo non sa di esserci sopra.
 const selectedTextMark = Decoration.mark({ class: 'cm-selectedText' });
 
-function selectedTextDecorations(state: EditorState): DecorationSet {
+export function selectedTextDecorations(state: EditorState): DecorationSet {
   return Decoration.set(state.selection.ranges.filter((range) => !range.empty).map((range) => selectedTextMark.range(range.from, range.to)));
 }
 

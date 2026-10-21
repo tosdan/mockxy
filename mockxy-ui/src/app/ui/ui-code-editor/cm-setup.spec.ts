@@ -1,6 +1,6 @@
-import { EditorState } from '@codemirror/state';
+import { EditorSelection, EditorState } from '@codemirror/state';
 import { CompletionContext } from '@codemirror/autocomplete';
-import { languageExtension, sizeTheme, jsonLinterExtension } from './cm-setup';
+import { languageExtension, selectedTextDecorations, sizeTheme, jsonLinterExtension } from './cm-setup';
 import { scriptCompletionSource } from './cm-script-completions';
 
 // Parti pure dell'editor di codice: sorgente di completamento del contratto script
@@ -54,5 +54,29 @@ describe('estensioni per linguaggio', () => {
       expect(state.doc.toString()).toBe('{}');
     }
     expect(jsonLinterExtension()).toBeTruthy();
+  });
+});
+
+describe('testo selezionato', () => {
+  // Il tema lo scrive col colore pieno: sotto il velo della selezione la sintassi spenta non regge 4.5:1.
+  it('segna ogni intervallo selezionato non vuoto, e nient\'altro', () => {
+    const state = EditorState.create({
+      doc: '{ "a": 1, "b": 2 }',
+      selection: EditorSelection.create([EditorSelection.range(2, 5), EditorSelection.cursor(8), EditorSelection.range(10, 13)]),
+      extensions: EditorState.allowMultipleSelections.of(true),
+    });
+    const marks: { from: number; to: number; className: unknown }[] = [];
+    selectedTextDecorations(state).between(0, state.doc.length, (from, to, deco) => {
+      marks.push({ from, to, className: deco.spec['class'] });
+    });
+    expect(marks).toEqual([
+      { from: 2, to: 5, className: 'cm-selectedText' },
+      { from: 10, to: 13, className: 'cm-selectedText' },
+    ]);
+  });
+
+  it('senza selezione nessun segno', () => {
+    const state = EditorState.create({ doc: 'abc' });
+    expect(selectedTextDecorations(state).size).toBe(0);
   });
 });
