@@ -72,10 +72,19 @@ describe('StoricoDumpPage', () => {
     return { fixture, c: fixture.componentInstance as any };
   }
 
+  // Lo Storico legge dalla voce piu' recente, e il menu File elenca i file nello stesso verso.
+  it('chiede le voci dalla piu\' recente, e mette per primo il file piu\' recente', () => {
+    const FILE2 = { name: 'dump-2026-01-02T00-00-00-000Z.ndjson', size: 10, mtime: 2 };
+    api.listMonitorDumps.mockReturnValue(of({ files: [FILE1, FILE2] }));
+    const { c } = create();
+    expect(api.readMonitorDumps).toHaveBeenCalledWith(null, 300, NO_FILTERS, 'desc');
+    expect(c.files().map((f: { name: string }) => f.name)).toEqual([FILE2.name, FILE1.name]);
+  });
+
   describe('paginazione a cursore', () => {
     it('all’avvio carica file e prima pagina, mettendo a fuoco la prima entry', () => {
       const { c } = create();
-      expect(api.readMonitorDumps).toHaveBeenCalledWith(null, 300, NO_FILTERS);
+      expect(api.readMonitorDumps).toHaveBeenCalledWith(null, 300, NO_FILTERS, 'desc');
       expect(c.entries().map((e: DumpEntry) => e.dumpKey)).toEqual(['f#0', 'f#1']);
       expect(c.files()).toEqual([FILE1]);
       expect(c.focusedKey()).toBe('f#0');
@@ -85,7 +94,7 @@ describe('StoricoDumpPage', () => {
     it('loadMore rimanda il cursore ricevuto e ACCUMULA le pagine; a done non chiama più', () => {
       const { c } = create();
       c.loadMore();
-      expect(api.readMonitorDumps).toHaveBeenLastCalledWith({ fileIndex: 0, lineIndex: 2 }, 300, NO_FILTERS);
+      expect(api.readMonitorDumps).toHaveBeenLastCalledWith({ fileIndex: 0, lineIndex: 2 }, 300, NO_FILTERS, 'desc');
       expect(c.entries().map((e: DumpEntry) => e.dumpKey)).toEqual(['f#0', 'f#1', 'f#2']);
       expect(c.done()).toBe(true);
 
@@ -145,7 +154,7 @@ describe('StoricoDumpPage', () => {
       c.sourceFilter.set('real-backend');
       settle(fixture);
 
-      expect(api.readMonitorDumps).toHaveBeenLastCalledWith(null, 300, { method: 'POST', source: 'real-backend', statusClasses: [4, 5] });
+      expect(api.readMonitorDumps).toHaveBeenLastCalledWith(null, 300, { method: 'POST', source: 'real-backend', statusClasses: [4, 5] }, 'desc');
       expect(c.cursor()).toEqual({ fileIndex: 0, lineIndex: 2 }); // ripartita dalla prima pagina
     });
 
@@ -162,7 +171,7 @@ describe('StoricoDumpPage', () => {
       vi.advanceTimersByTime(250);
       fixture.detectChanges();
       expect(api.readMonitorDumps).toHaveBeenCalledTimes(1);
-      expect(api.readMonitorDumps).toHaveBeenLastCalledWith(null, 300, { q: 'ord', statusClasses: [] });
+      expect(api.readMonitorDumps).toHaveBeenLastCalledWith(null, 300, { q: 'ord', statusClasses: [] }, 'desc');
     });
 
     it('a filtro acceso continua a leggere finché la lista non si riempie o l’archivio non finisce', async () => {
@@ -438,7 +447,7 @@ describe('StoricoDumpPage', () => {
       c.deleteFile(FILE1);
 
       expect(api.deleteMonitorDump).toHaveBeenCalledWith(FILE1.name);
-      expect(api.readMonitorDumps).toHaveBeenCalledWith(null, 300, NO_FILTERS); // riparte dal cursore nullo
+      expect(api.readMonitorDumps).toHaveBeenCalledWith(null, 300, NO_FILTERS, 'desc'); // riparte dal cursore nullo
       expect(c.entries().map((e: DumpEntry) => e.dumpKey)).toEqual(['f#0', 'f#1']);
       expect(c.selectedCount()).toBe(0);
       expect(toast.show).toHaveBeenCalledWith(expect.objectContaining({ tone: 'success' }));

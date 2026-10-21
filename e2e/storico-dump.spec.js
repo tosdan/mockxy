@@ -81,6 +81,9 @@ test.describe("E17 · storico dump → crea mock", () => {
     const storico = page.locator("app-storico-dump");
     const rows = storico.getByRole("option");
     await expect(rows).toHaveCount(3);
+    // Dalla voce piu' recente: l'ultima richiesta sta in cima.
+    await expect(rows.nth(0)).toContainText("/api/tre-e2e");
+    await expect(rows.nth(2)).toContainText("/api/uno-e2e");
     const current = storico.locator('[role="option"][aria-current="true"]');
 
     await rows.filter({ hasText: "/api/due-e2e" }).click();
@@ -93,7 +96,7 @@ test.describe("E17 · storico dump → crea mock", () => {
 
     // Il fuoco resta sulla lista: la voce attiva la dice aria-activedescendant.
     await expect(storico.getByRole("listbox")).toBeFocused();
-    await page.keyboard.press("ArrowUp");
+    await page.keyboard.press("ArrowDown");
     await expect(current).toContainText("/api/uno-e2e");
     await page.keyboard.press("Space");
     await expect(storico.getByRole("option", { selected: true })).toHaveCount(2);
