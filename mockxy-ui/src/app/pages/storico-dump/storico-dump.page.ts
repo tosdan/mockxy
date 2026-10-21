@@ -8,7 +8,6 @@ import { NgIcon, provideIcons } from '@ng-icons/core';
 import {
   lucideArrowLeft,
   lucideCheck,
-  lucideDatabase,
   lucideLayers,
   lucidePlus,
   lucideSearch,
@@ -21,6 +20,7 @@ import { UiButton } from '../../ui/ui-button/ui-button';
 import { UiCode } from '../../ui/ui-code/ui-code';
 import { UiCollapsible } from '../../ui/ui-collapsible/ui-collapsible';
 import { UiMenu } from '../../ui/ui-menu/ui-menu';
+import { UiPageHeader } from '../../ui/ui-page-header/ui-page-header';
 import { UiSelect, type UiSelectOption } from '../../ui/ui-select/ui-select';
 import { UiTable } from '../../ui/ui-table/ui-table';
 import { UiTooltip } from '../../ui/ui-tooltip/ui-tooltip';
@@ -59,30 +59,27 @@ const ROW_HEIGHT = 56;
     UiCode,
     UiCollapsible,
     UiMenu,
+    UiPageHeader,
     UiSelect,
     UiTable,
     UiTooltip,
   ],
-  providers: [provideIcons({ lucideArrowLeft, lucideCheck, lucideDatabase, lucideLayers, lucidePlus, lucideSearch, lucideTrash2, lucideX })],
+  providers: [provideIcons({ lucideArrowLeft, lucideCheck, lucideLayers, lucidePlus, lucideSearch, lucideTrash2, lucideX })],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="absolute inset-0 flex flex-col overflow-hidden bg-background text-foreground">
-      <!-- TOPBAR -->
-      <header class="relative z-30 flex h-14 shrink-0 items-center gap-3 border-b border-border bg-card px-5">
-        <span class="grid h-8 w-8 place-items-center rounded-lg bg-muted text-brand ring-1 ring-border"><ng-icon name="lucideDatabase" size="1rem" /></span>
-        <div class="leading-tight">
-          <div class="text-sm font-bold tracking-tight">{{ 'storico.title' | transloco }}</div>
-          <div class="text-[10px] font-bold uppercase tracking-[0.18em] text-[var(--status-4xx)]">{{ 'storico.subtitle' | transloco }}</div>
-        </div>
-        <span class="text-[12px] text-muted-foreground">{{ (hasFilter() ? 'storico.matches' : 'storico.loaded') | transloco: { count: entries().length } }}{{ done() ? '' : '…' }}</span>
-
-        <div class="ml-auto flex items-center gap-2">
+      <!-- TESTATA: come il catalogo, nome della vista e conteggio. Il "+" dice che scorrendo se ne
+           caricano altre; sotto filtro il conteggio e' dei risultati, e prende il colore. -->
+      <ui-page-header [title]="'viewRail.storico' | transloco">
+        <ui-badge [tone]="hasFilter() ? 'brand' : 'neutral'" class="whitespace-nowrap" aria-live="polite">{{ entries().length }}{{ done() ? '' : '+' }}</ui-badge>
+        <span class="text-[11.5px] text-muted-foreground">{{ 'storico.subtitle' | transloco }}</span>
+        <ng-container actions>
           <button ui-button variant="outline" size="sm" [cdkMenuTriggerFor]="filesMenu" [disabled]="creating()"><ng-icon name="lucideLayers" size="0.9rem" /> {{ 'storico.files' | transloco: { count: files().length } }}</button>
           <!-- "Crea mock" e "Annulla" stanno nella barra in fondo alla lista, che compare con una
                selezione, come nel catalogo e nel Monitor. Qui resta il modo di spuntare tutto. -->
           <button ui-button variant="outline" size="sm" [disabled]="entries().length === 0" (click)="selectAllLoaded()"><ng-icon name="lucideCheck" size="0.9rem" /> {{ 'storico.selectLoaded' | transloco }}</button>
-        </div>
-      </header>
+        </ng-container>
+      </ui-page-header>
 
       <!-- FILTRI: gli stessi del Monitor. Li applica il server mentre legge l'archivio, cosi' la
            ricerca guarda tutte le voci su disco e non solo le pagine gia' caricate. -->
