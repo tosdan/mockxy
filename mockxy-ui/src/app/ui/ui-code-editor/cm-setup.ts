@@ -5,10 +5,14 @@
 // attive, e i piccoli costruttori per le parti che cambiano a runtime (linguaggio, lint, dimensioni).
 // Il componente Angular monta tutto questo e gestisce il doppio legame col valore.
 
-import { type Extension } from '@codemirror/state';
+import { type EditorState, type Extension } from '@codemirror/state';
 import {
   type Command,
+  Decoration,
+  type DecorationSet,
   EditorView,
+  type ViewUpdate,
+  ViewPlugin,
   drawSelection,
   highlightActiveLine,
   highlightActiveLineGutter,
@@ -64,8 +68,32 @@ const appEditorTheme = EditorView.theme(
     '.cm-activeLine': { backgroundColor: 'color-mix(in srgb, var(--foreground) 4%, transparent)' },
     '.cm-activeLineGutter': { backgroundColor: 'transparent', color: 'var(--foreground)' },
     '.cm-cursor, .cm-dropCursor': { borderLeftColor: 'var(--foreground)' },
-    '&.cm-focused .cm-selectionBackground, .cm-selectionBackground, .cm-content ::selection': {
+    // Il primo selettore ricalca quello di CodeMirror per l'editor a fuoco: piu' specifico, vinceva
+    // e colorava la selezione col suo verde scuro.
+    '&.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground, .cm-selectionBackground, .cm-content ::selection': {
       backgroundColor: 'color-mix(in srgb, var(--brand) 28%, transparent)',
+    },
+    // Negli stati evidenziati il testo si scrive col colore pieno, come la ricerca del catalogo:
+    // sotto un velo i colori spenti della sintassi (commenti, punteggiatura) scendono sotto 4.5:1, e
+    // schiariti abbastanza diventerebbero tutti lo stesso grigio. Anche i discendenti: il segno puo'
+    // stare fuori o dentro lo span della sintassi.
+    [[
+      '.cm-selectedText',
+      '.cm-selectionMatch',
+      '.cm-matchingBracket',
+      '.cm-nonmatchingBracket',
+      '.cm-searchMatch',
+    ].flatMap((selector) => [selector, `${selector} *`]).join(', ')]: { color: 'var(--foreground)' },
+    // Risultati della ricerca col velo ambra della ricerca del catalogo, al posto del ciano e del
+    // magenta pieni di CodeMirror. Quello corrente e' anche selezionato, e i due veli si sommano:
+    // lo distingue soprattutto il bordo, e il velo resta leggero perche' il testo tenga 4.5:1.
+    '.cm-searchMatch': {
+      backgroundColor: 'color-mix(in srgb, var(--highlight) 20%, transparent)',
+      borderRadius: '2px',
+    },
+    '.cm-searchMatch-selected': {
+      backgroundColor: 'color-mix(in srgb, var(--highlight) 25%, transparent)',
+      outline: '1px solid color-mix(in srgb, var(--highlight) 70%, transparent)',
     },
     '.cm-selectionMatch': { backgroundColor: 'color-mix(in srgb, var(--brand) 16%, transparent)' },
     '.cm-matchingBracket, &.cm-focused .cm-matchingBracket': {
@@ -102,6 +130,27 @@ const appEditorTheme = EditorView.theme(
     },
   },
   { dark: true },
+);
+
+// Segna il testo selezionato con la classe cm-selectedText, per il colore pieno del tema: la
+// selezione e' disegnata in un livello dietro al testo, che da solo non sa di esserci sopra.
+const selectedTextMark = Decoration.mark({ class: 'cm-selectedText' });
+
+export function selectedTextDecorations(state: EditorState): DecorationSet {
+  return Decoration.set(state.selection.ranges.filter((range) => !range.empty).map((range) => selectedTextMark.range(range.from, range.to)));
+}
+
+const selectedText = ViewPlugin.fromClass(
+  class {
+    decorations: DecorationSet;
+    constructor(view: EditorView) {
+      this.decorations = selectedTextDecorations(view.state);
+    }
+    update(update: ViewUpdate) {
+      if (update.selectionSet || update.docChanged) this.decorations = selectedTextDecorations(update.state);
+    }
+  },
+  { decorations: (plugin) => plugin.decorations },
 );
 
 // Evidenziazione: mappa i tag di sintassi sui token --json-* (coerente con la vista read-only).
@@ -163,6 +212,7 @@ export const staticExtensions: Extension[] = [
   highlightSelectionMatches(),
   foldGutter(),
   drawSelection(),
+  selectedText,
   history(),
   indentOnInput(),
   bracketMatching(),
