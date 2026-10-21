@@ -233,6 +233,31 @@ describe("admin API", () => {
       expect(await read({})).toEqual(["1", "2", "3"]);
     });
 
+    // Lo Storico chiede le voci dalla piu' recente; il cursore restituito si ripassa cosi' com'e'.
+    test("con order=desc legge dalla voce piu' recente, a pagine, coi filtri", async () => {
+      const write = (name, ids) => fs.promises.writeFile(
+        path.join(monitorDumpDir, name),
+        `${ids.map((id) => JSON.stringify({ id, method: "GET", path: `/api/${id}`, originalUrl: `/api/${id}`, status: 200, source: id === "3" ? "backend" : "mock" })).join("\n")}\n`,
+        "utf8",
+      );
+      await write("dump-2026-01-01T00-00-00-000Z.ndjson", ["1", "2"]);
+      await write("dump-2026-01-01T00-01-00-000Z.ndjson", ["3", "4"]);
+      const app = await buildApp();
+      const get = (query) => request(app).get("/_admin/api/monitoring/dumps/read").query(query);
+
+      const page1 = await get({ order: "desc", limit: 3 });
+      expect(page1.status).toBe(200);
+      expect(page1.body.items.map((item) => item.id)).toEqual(["4", "3", "2"]);
+      expect(page1.body.done).toBe(false);
+      const page2 = await get({ order: "desc", limit: 3, ...page1.body.nextCursor });
+      expect(page2.body.items.map((item) => item.id)).toEqual(["1"]);
+      expect(page2.body.done).toBe(true);
+
+      expect((await get({ order: "desc", source: "mock" })).body.items.map((item) => item.id)).toEqual(["4", "2", "1"]);
+      // Senza order resta la lettura in avanti.
+      expect((await get({})).body.items.map((item) => item.id)).toEqual(["1", "2", "3", "4"]);
+    });
+
     test("elimina un file di dump", async () => {
       await fs.promises.writeFile(path.join(monitorDumpDir, "dump-del.ndjson"), "{}\n", "utf8");
       const app = await buildApp();

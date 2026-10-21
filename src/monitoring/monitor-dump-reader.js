@@ -177,6 +177,87 @@ async function isLineStart(filePath, byteOffset) {
   }
 }
 
+/**
+ * Righe del file nei primi `endByte` byte, contate come le conta la lettura in avanti: ogni a capo
+ * chiude una riga, e anche un'ultima riga senza a capo conta. In streaming, a blocchi.
+ */
+async function countLines(filePath, endByte) {
+  if (endByte <= 0) {
+    return 0;
+  }
+  const stream = fs.createReadStream(filePath, { start: 0, end: endByte - 1 });
+  let count = 0;
+  let last = 0x0a;
+  try {
+    for await (const chunk of stream) {
+      let at = chunk.indexOf(0x0a);
+      while (at !== -1) {
+        count += 1;
+        at = chunk.indexOf(0x0a, at + 1);
+      }
+      last = chunk[chunk.length - 1];
+    }
+  } finally {
+    stream.destroy();
+  }
+  return last === 0x0a ? count : count + 1;
+}
+
+const BACKWARD_CHUNK_BYTES = 64 * 1024;
+
+/**
+ * Scorre all'indietro le righe che finiscono entro `endByte`, dall'ultima alla prima.
+ * `lineCount` e' quante righe ci sono prima di `endByte` (countLines): l'ultima ha indice
+ * lineCount - 1, come nella lettura in avanti. onLine(rigaGrezza, indice, byteDiInizio); un
+ * ritorno false interrompe. Come readline, toglie un \r finale.
+ */
+async function scanFileLinesBackward(filePath, endByte, lineCount, onLine) {
+  if (endByte <= 0) {
+    return;
+  }
+  const handle = await fs.promises.open(filePath, "r");
+  try {
+    let pos = endByte;
+    let index = lineCount - 1;
+    // `rest` e' la parte gia' letta dopo `pos` e non ancora emessa: finisce dove finisce una riga.
+    let rest = Buffer.alloc(0);
+    let trimmedTail = false;
+    while (pos > 0) {
+      const size = Math.min(BACKWARD_CHUNK_BYTES, pos);
+      pos -= size;
+      const chunk = Buffer.alloc(size);
+      await handle.read(chunk, 0, size, pos);
+      let data = rest.length > 0 ? Buffer.concat([chunk, rest]) : chunk;
+      // L'a capo che chiude l'ultima riga non separa due righe: si toglie una volta sola.
+      if (!trimmedTail) {
+        trimmedTail = true;
+        if (data[data.length - 1] === 0x0a) {
+          data = data.subarray(0, data.length - 1);
+        }
+      }
+      let end = data.length;
+      let newline = data.lastIndexOf(0x0a, end - 1);
+      while (newline !== -1) {
+        const lineEnd = end > newline + 1 && data[end - 1] === 0x0d ? end - 1 : end;
+        if (onLine(data.toString("utf8", newline + 1, lineEnd), index, pos + newline + 1) === false) {
+          return;
+        }
+        index -= 1;
+        end = newline;
+        newline = end > 0 ? data.lastIndexOf(0x0a, end - 1) : -1;
+      }
+      rest = data.subarray(0, end);
+    }
+    // Quel che resta e' la prima riga del file (anche vuota).
+    if (index >= 0) {
+      const lineEnd = rest.length > 0 && rest[rest.length - 1] === 0x0d ? rest.length - 1 : rest.length;
+      onLine(rest.toString("utf8", 0, lineEnd), index, 0);
+    }
+  } finally {
+    await handle.close();
+  }
+}
+
 // Chiave stabile di una entry nel dump: `<file>#<indiceRigaGrezza>`. Stabile perché i file sono append-only.
 function dumpKeyFor(fileName, lineIndex) {
   return `${fileName}#${lineIndex}`;
@@ -208,7 +289,10 @@ function parseDumpKey(key) {
  * dall'inizio del file contando le righe fino a `lineIndex`, come prima: il cursore restituito
  * porta comunque il byte, e dalla pagina dopo la ripresa e' diretta.
  */
-async function readDumpPage(dumpDir, cursor, limit, filters, maxScannedLines = MAX_SCANNED_LINES) {
+async function readDumpPage(dumpDir, cursor, limit, filters, maxScannedLines = MAX_SCANNED_LINES, order = "asc") {
+  if (order === "desc") {
+    return readDumpPageNewestFirst(dumpDir, cursor, limit, filters, maxScannedLines);
+  }
   const files = await listDumpFiles(dumpDir);
   const names = files.map((file) => file.name);
   const max = Number.isFinite(limit) && limit > 0 ? Math.floor(limit) : DEFAULT_PAGE_LIMIT;
@@ -254,6 +338,84 @@ async function readDumpPage(dumpDir, cursor, limit, filters, maxScannedLines = M
 
   const done = fileIndex >= names.length;
   return { items, nextCursor: done ? null : { fileIndex, lineIndex, byteOffset }, done };
+}
+
+/**
+ * Come readDumpPage, ma dalla voce piu' recente: i file dall'ultimo al primo, e in ogni file le
+ * righe dalla fine. Le chiavi sono le stesse della lettura in avanti.
+ *
+ * Il cursore ha la stessa forma, letta al contrario: `byteOffset` e' dove finisce la parte ancora
+ * da leggere del file (l'inizio dell'ultima riga restituita) e `lineIndex` quante righe ci sono
+ * prima. Senza cursore si parte dalla fine dell'ultimo file, contandone le righe una volta; le
+ * righe aggiunte dopo la prima pagina non entrano, la lettura resta quella di quel momento. Se il
+ * byte non cade all'inizio di una riga, si ricava dal conteggio delle righe, come in avanti.
+ */
+async function readDumpPageNewestFirst(dumpDir, cursor, limit, filters, maxScannedLines) {
+  const files = await listDumpFiles(dumpDir);
+  const names = files.map((file) => file.name);
+  const max = Number.isFinite(limit) && limit > 0 ? Math.floor(limit) : DEFAULT_PAGE_LIMIT;
+
+  const fromCursor = cursor && Number.isInteger(cursor.fileIndex) && cursor.fileIndex >= 0;
+  let fileIndex = fromCursor ? Math.min(cursor.fileIndex, names.length - 1) : names.length - 1;
+  // Righe prima del punto di ripresa, e il byte che ci corrisponde; null = da ricavare.
+  let lineIndex = fromCursor && cursor.fileIndex < names.length && Number.isInteger(cursor.lineIndex) && cursor.lineIndex >= 0 ? cursor.lineIndex : null;
+  let byteOffset = lineIndex != null && Number.isInteger(cursor.byteOffset) && cursor.byteOffset >= 0 ? cursor.byteOffset : null;
+
+  const items = [];
+  let scanned = 0;
+  while (fileIndex >= 0 && items.length < max && scanned < maxScannedLines) {
+    const name = names[fileIndex];
+    const filePath = path.join(dumpDir, name);
+    if (lineIndex == null) {
+      ({ lineIndex, byteOffset } = await endOfFile(filePath, files[fileIndex].size));
+    } else if (byteOffset == null || byteOffset > files[fileIndex].size || !(await isLineStart(filePath, byteOffset))) {
+      byteOffset = await lineStartByte(filePath, lineIndex);
+    }
+    let pageFull = false;
+    await scanFileLinesBackward(filePath, byteOffset, lineIndex, (line, index, startByte) => {
+      const entry = parseLine(line);
+      if (entry != null && matchesDumpFilters(entry, filters)) {
+        items.push({ ...entry, dumpKey: dumpKeyFor(name, index) });
+      }
+      lineIndex = index;
+      byteOffset = startByte;
+      scanned += 1;
+      if (items.length >= max || scanned >= maxScannedLines) {
+        pageFull = true;
+        return false;
+      }
+    });
+    if (!pageFull || lineIndex === 0) {
+      fileIndex -= 1;
+      lineIndex = null;
+      byteOffset = null;
+    }
+  }
+
+  const done = fileIndex < 0;
+  if (!done && lineIndex == null) {
+    // La pagina si e' chiusa passando a un file piu' vecchio: si riprende dalla sua fine.
+    ({ lineIndex, byteOffset } = await endOfFile(path.join(dumpDir, names[fileIndex]), files[fileIndex].size));
+  }
+  return { items, nextCursor: done ? null : { fileIndex, lineIndex, byteOffset }, done };
+}
+
+// Il punto di ripresa alla fine di un file: tutte le sue righe stanno prima.
+async function endOfFile(filePath, size) {
+  return { lineIndex: await countLines(filePath, size), byteOffset: size };
+}
+
+// Byte d'inizio della riga `lineIndex` (0 = inizio file), contando le righe dall'inizio.
+async function lineStartByte(filePath, lineIndex) {
+  if (lineIndex <= 0) {
+    return 0;
+  }
+  let start = 0;
+  await scanFileLinesFrom(filePath, 0, 0, (_line, index, endByte) => {
+    start = endByte;
+    return index + 1 < lineIndex;
+  });
+  return start;
 }
 
 // Tutte le entry di un singolo file di dump (per il criterio "tutto il file" del batch).

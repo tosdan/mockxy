@@ -44,6 +44,7 @@ const ROW_HEIGHT = 56;
  * Pagina "Storico dump": browse READ-ONLY (non live) dei dump su disco con virtual scroll a cursore.
  * Legge solo dai file di dump (mai dall'array live delle 250 del monitor); l'utente seleziona singole
  * entry / un range (shift-click) / tutto un file e la creazione mock la fa il backend (createMocksFromDump).
+ * Le voci arrivano dalla piu' recente (order desc): scorrendo si va indietro nel tempo.
  */
 @Component({
   selector: 'app-storico-dump',
@@ -428,7 +429,8 @@ export class StoricoDumpPage implements OnInit {
 
   private loadFiles(): void {
     this.api.listMonitorDumps().subscribe({
-      next: (response) => this.files.set(response.files),
+      // Dal file piu' recente, come le voci della lista.
+      next: (response) => this.files.set([...response.files].reverse()),
       error: () => this.files.set([]),
     });
   }
@@ -437,7 +439,7 @@ export class StoricoDumpPage implements OnInit {
     if (this.destroyed || this.loading() || this.done()) return;
     this.loading.set(true);
     this.pending = this.api
-      .readMonitorDumps(this.cursor(), PAGE_SIZE, this.filters())
+      .readMonitorDumps(this.cursor(), PAGE_SIZE, this.filters(), 'desc')
       .pipe(finalize(() => this.loading.set(false)))
       .subscribe({
         next: (page) => {

@@ -265,4 +265,108 @@ describe("monitor dump reader", () => {
     const ids = entries.map((e) => e.id).sort();
     expect(ids).toEqual(["0", "102"].sort());
   });
+
+  // Lo Storico mostra prima le voci piu' recenti: si legge dall'ultimo file e dalla fine di ogni file.
+  describe("readDumpPage dalla voce piu' recente (order desc)", () => {
+    // Tutte le pagine di una lettura, concatenate, piu' quante pagine sono servite.
+    async function readAll(order, limit, filters, maxScannedLines) {
+      const keys = [];
+      let cursor;
+      let pages = 0;
+      for (;;) {
+        const page = await readDumpPage(dir, cursor, limit, filters, maxScannedLines, order);
+        pages += 1;
+        keys.push(...page.items.map((item) => item.dumpKey));
+        if (page.done) {
+          expect(page.nextCursor).toBeNull();
+          return { keys, pages };
+        }
+        cursor = page.nextCursor;
+        expect(pages).toBeLessThan(10_000);
+      }
+    }
+
+    test("parte dall'ultima riga dell'ultimo file, con le stesse chiavi della lettura in avanti", async () => {
+      await writeNdjson(dir, F1, 3, 0);
+      await writeNdjson(dir, F2, 2, 100);
+      const page = await readDumpPage(dir, undefined, 10, undefined, undefined, "desc");
+      expect(page.items.map((item) => item.id)).toEqual(["101", "100", "2", "1", "0"]);
+      expect(page.items.map((item) => item.dumpKey)).toEqual([`${F2}#1`, `${F2}#0`, `${F1}#2`, `${F1}#1`, `${F1}#0`]);
+      expect(page.done).toBe(true);
+    });
+
+    test("a pagine, attraverso i file, e' esattamente la lettura in avanti rovesciata", async () => {
+      await writeNdjson(dir, F1, 7, 0);
+      await writeNdjson(dir, F2, 5, 100);
+      const forward = await readAll("asc", 100);
+      for (const limit of [1, 2, 3, 5, 7, 12]) {
+        expect((await readAll("desc", limit)).keys).toEqual([...forward.keys].reverse());
+      }
+    });
+
+    test("con i filtri e il tetto di righe lette per chiamata, le pagine corte non perdono voci", async () => {
+      await writeEntries(dir, F1, [
+        captured("1", "GET", "/api/a", 200, "mock"),
+        captured("2", "POST", "/api/b", 201, "handler"),
+        captured("3", "GET", "/api/c", 404, "backend"),
+        captured("4", "GET", "/api/d", 200, "handler"),
+      ]);
+      await writeEntries(dir, F2, [
+        captured("5", "GET", "/api/e", 500, "handler"),
+        captured("6", "GET", "/api/f", 200, "mock"),
+      ]);
+      const filters = { source: "handler" };
+      const forward = await readAll("asc", 100, filters);
+      const backward = await readAll("desc", 10, filters, 1);
+      expect(backward.keys).toEqual([...forward.keys].reverse());
+      expect(backward.keys).toEqual([`${F2}#0`, `${F1}#3`, `${F1}#1`]);
+      expect(backward.pages).toBeGreaterThan(3);
+    });
+
+    test("righe vuote, corrotte, con \\r o senza a capo finale: stesse voci e chiavi", async () => {
+      await fs.promises.writeFile(
+        path.join(dir, F1),
+        `\n${JSON.stringify({ id: "1" })}\r\n\nnon-json\n${JSON.stringify({ id: "2" })}\n${JSON.stringify({ id: "3" })}`,
+        "utf8"
+      );
+      const forward = await readAll("asc", 100);
+      const backward = await readAll("desc", 1);
+      expect(forward.keys).toEqual([`${F1}#1`, `${F1}#4`, `${F1}#5`]);
+      expect(backward.keys).toEqual([...forward.keys].reverse());
+    });
+
+    test("un file piu' grande di un blocco di lettura si legge intero e nell'ordine giusto", async () => {
+      const lines = [];
+      for (let i = 0; i < 1500; i += 1) lines.push(JSON.stringify({ id: String(i), payload: "x".repeat(120) }));
+      await fs.promises.writeFile(path.join(dir, F1), `${lines.join("\n")}\n`, "utf8");
+      const forward = await readAll("asc", 1000);
+      const backward = await readAll("desc", 333);
+      expect(backward.keys).toHaveLength(1500);
+      expect(backward.keys).toEqual([...forward.keys].reverse());
+    });
+
+    test("con un byteOffset che non e' l'inizio di una riga riprende dal conteggio delle righe", async () => {
+      await writeNdjson(dir, F1, 6, 0);
+      const first = await readDumpPage(dir, undefined, 2, undefined, undefined, "desc");
+      expect(first.items.map((item) => item.id)).toEqual(["5", "4"]);
+      const page = await readDumpPage(dir, { ...first.nextCursor, byteOffset: first.nextCursor.byteOffset - 3 }, 2, undefined, undefined, "desc");
+      expect(page.items.map((item) => item.id)).toEqual(["3", "2"]);
+    });
+
+    test("le righe aggiunte dopo la prima pagina non entrano: si legge l'archivio di quel momento", async () => {
+      await writeNdjson(dir, F1, 4, 0);
+      const first = await readDumpPage(dir, undefined, 2, undefined, undefined, "desc");
+      await fs.promises.appendFile(path.join(dir, F1), `${JSON.stringify({ id: "nuova" })}\n`, "utf8");
+      const second = await readDumpPage(dir, first.nextCursor, 10, undefined, undefined, "desc");
+      expect([...first.items, ...second.items].map((item) => item.id)).toEqual(["3", "2", "1", "0"]);
+      expect(second.done).toBe(true);
+    });
+
+    test("archivio vuoto, o file vuoti: nessuna voce e lettura finita", async () => {
+      expect(await readDumpPage(dir, undefined, 10, undefined, undefined, "desc")).toEqual({ items: [], nextCursor: null, done: true });
+      await fs.promises.writeFile(path.join(dir, F1), "", "utf8");
+      await writeNdjson(dir, F2, 1, 0);
+      expect((await readAll("desc", 1)).keys).toEqual([`${F2}#0`]);
+    });
+  });
 });

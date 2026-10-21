@@ -1846,15 +1846,26 @@ paths:
         cursor back as received. Without `byteOffset`, or with one that is not the start of a
         line, the call re-reads the file from its start up to `lineIndex`, as before; the cursor
         it returns carries the byte again.
+
+        With `order=desc` the archive is read newest first: files from the last to the first, and
+        each file from its end. The `dumpKey`s are the same as in the forward order. The cursor
+        has the same fields, read backwards: `byteOffset` is where the part still to read ends
+        (the start of the last entry returned) and `lineIndex` how many lines come before it.
+        Without a cursor the call starts at the end of the newest file; lines appended after the
+        first page are not included, so the reading stays the archive as it was then.
       parameters:
+        - name: order
+          in: query
+          description: "`asc` (default) reads from the oldest entry, `desc` from the newest."
+          schema: { type: string, enum: [asc, desc], default: asc }
         - name: fileIndex
           in: query
-          description: Cursor — index of the file to resume from.
-          schema: { type: integer, minimum: 0, default: 0 }
+          description: Cursor — index of the file to resume from. Without it, the reading starts at the beginning (`asc`) or the end (`desc`) of the archive.
+          schema: { type: integer, minimum: 0 }
         - name: lineIndex
           in: query
-          description: Cursor — line to resume from inside that file.
-          schema: { type: integer, minimum: 0, default: 0 }
+          description: Cursor — line to resume from inside that file (with `desc`, how many lines come before the resume point).
+          schema: { type: integer, minimum: 0 }
         - name: byteOffset
           in: query
           description: Cursor — byte of that line in the file, to resume without re-reading what comes before.
