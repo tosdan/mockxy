@@ -646,6 +646,13 @@ export interface DumpReadFilters {
   statusClasses?: readonly number[];
 }
 
+/** Ordine di lettura dell'archivio: dalla voce piu' vecchia (asc) o dalla piu' recente (desc). */
+export type DumpReadOrder = 'asc' | 'desc';
+
+/**
+ * Cursore della lettura a pagine. Con l'ordine desc gli stessi campi si leggono al contrario:
+ * `byteOffset` e' dove finisce la parte ancora da leggere, `lineIndex` quante righe la precedono.
+ */
 export interface DumpReadCursor {
   fileIndex: number;
   lineIndex: number;

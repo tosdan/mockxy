@@ -597,4 +597,22 @@ describe('MockAdminApiService', () => {
     expect(request.request.method).toBe('DELETE');
     request.flush({ deleted: 3 });
   });
+
+  // Lo Storico legge dalla voce piu' recente; senza ordine la lettura resta in avanti.
+  it('readMonitorDumps passa order=desc solo se chiesto, col cursore cosi\' com\'e\'', () => {
+    service.readMonitorDumps({ fileIndex: 1, lineIndex: 4, byteOffset: 120 }, 300, { q: 'ord' }, 'desc').subscribe();
+    const desc = http.expectOne((req) => req.url === '/_admin/api/monitoring/dumps/read');
+    expect(desc.request.params.get('order')).toBe('desc');
+    expect(desc.request.params.get('fileIndex')).toBe('1');
+    expect(desc.request.params.get('lineIndex')).toBe('4');
+    expect(desc.request.params.get('byteOffset')).toBe('120');
+    expect(desc.request.params.get('q')).toBe('ord');
+    desc.flush({ items: [], nextCursor: null, done: true });
+
+    service.readMonitorDumps(null, 300).subscribe();
+    const asc = http.expectOne((req) => req.url === '/_admin/api/monitoring/dumps/read');
+    expect(asc.request.params.has('order')).toBe(false);
+    expect(asc.request.params.has('fileIndex')).toBe(false);
+    asc.flush({ items: [], nextCursor: null, done: true });
+  });
 });

@@ -39,6 +39,7 @@ import {
   MonitorDumpState,
   MonitorDumpFilesResponse,
   DumpReadCursor,
+  DumpReadOrder,
   DumpReadFilters,
   DumpReadPage,
   DumpSelection,
@@ -416,8 +417,9 @@ export class MockAdminApiService {
   }
 
   /** Legge una pagina di entry dai dump (cursore in avanti per il virtual scroll). */
-  readMonitorDumps(cursor: DumpReadCursor | null, limit: number, filters?: DumpReadFilters): Observable<DumpReadPage> {
+  readMonitorDumps(cursor: DumpReadCursor | null, limit: number, filters?: DumpReadFilters, order: DumpReadOrder = 'asc'): Observable<DumpReadPage> {
     const params: Record<string, string> = { limit: String(limit) };
+    if (order === 'desc') params['order'] = 'desc';
     if (cursor) {
       params['fileIndex'] = String(cursor.fileIndex);
       params['lineIndex'] = String(cursor.lineIndex);
