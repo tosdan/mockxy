@@ -1,8 +1,9 @@
 import { DatePipe } from '@angular/common';
-import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, computed, effect, inject, signal, untracked, viewChild } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, afterNextRender, computed, effect, inject, signal, untracked, viewChild } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CdkFixedSizeVirtualScroll, CdkVirtualForOf, CdkVirtualScrollViewport } from '@angular/cdk/scrolling';
 import { CdkMenuTrigger } from '@angular/cdk/menu';
-import { finalize, type Subscription } from 'rxjs';
+import { finalize, merge, type Subscription } from 'rxjs';
 import { NgIcon, provideIcons } from '@ng-icons/core';
 import {
   lucideArrowLeft,
@@ -122,9 +123,13 @@ const ROW_HEIGHT = 56;
              riga la apre e basta; spunta solo il clic sulla casella.
              A differenza del Monitor il fuoco resta sulla lista e la voce attiva la dice
              aria-activedescendant: la lista e' virtualizzata, e una riga a fuoco che esce dalla zona
-             disegnata viene riciclata, portandosi via il fuoco e i tasti successivi. -->
+             disegnata viene riciclata, portandosi via il fuoco e i tasti successivi.
+             Se la voce attiva esce di vista scorrendo, la lista smette di indicarla (la sua riga puo'
+             non esserci piu') e l'anello di fuoco passa alla lista intera; il primo tasto la riporta
+             in vista, come il rientro da tastiera. -->
         <div class="flex min-h-0 shrink-0 flex-col border-r border-border" [style.width.px]="listWidth()">
-        <cdk-virtual-scroll-viewport #viewport [itemSize]="rowHeight" class="group/list mx-scroll min-h-0 flex-1 focus-visible:outline-none" (scrolledIndexChange)="onScroll()"
+        <cdk-virtual-scroll-viewport #viewport [itemSize]="rowHeight" class="group/list mx-scroll min-h-0 flex-1 focus-visible:outline-none" (scrolledIndexChange)="onScroll()" (focus)="onListFocus()"
+                                     [class]="activeOptionId() ? '' : 'focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/70'"
                                      role="listbox" aria-multiselectable="true" tabindex="0" [attr.aria-label]="'storico.listLabel' | transloco"
                                      [attr.aria-activedescendant]="activeOptionId()" (keydown)="onListKeydown($event)">
           <div
@@ -328,6 +333,8 @@ export class StoricoDumpPage implements OnInit {
   protected readonly responseBodyOpen = signal(true);
   /** Ultima voce spuntata: l'ancora degli intervalli (shift-click, Maiuscole+Spazio). */
   private selectionAnchor: string | null = null;
+  /** Tratto della lista in vista (px): dice se la riga della voce attiva si vede. */
+  private readonly scrollWindow = signal({ offset: 0, size: 0 });
 
   protected readonly rowHeight = ROW_HEIGHT;
 
@@ -369,9 +376,10 @@ export class StoricoDumpPage implements OnInit {
   private destroyed = false;
 
   constructor() {
+    const destroyRef = inject(DestroyRef);
     // Lasciando lo Storico la lettura si ferma: senza, una ricerca rara continuava a scorrere
     // l'archivio, una pagina dopo l'altra, anche dal Catalogo.
-    inject(DestroyRef).onDestroy(() => {
+    destroyRef.onDestroy(() => {
       this.destroyed = true;
       this.pending?.unsubscribe();
       clearTimeout(this.searchTimer);
@@ -380,6 +388,21 @@ export class StoricoDumpPage implements OnInit {
       const value = this.search();
       clearTimeout(this.searchTimer);
       this.searchTimer = setTimeout(() => this.settledSearch.set(value), value === '' ? 0 : SEARCH_DEBOUNCE_MS);
+    });
+    // Lo scroll e ogni nuovo disegno della lista (dati, misure) aggiornano il tratto in vista.
+    // L'altezza cambia anche senza ridimensionare la finestra (la barra della selezione compare
+    // e sparisce), e lo scroll virtuale la rimisura da solo solo in quel caso: qui la si avvisa.
+    afterNextRender(() => {
+      const viewport = this.viewport();
+      const measure = () => this.scrollWindow.set({ offset: viewport.measureScrollOffset(), size: viewport.getViewportSize() });
+      merge(viewport.elementScrolled(), viewport.renderedRangeStream).pipe(takeUntilDestroyed(destroyRef)).subscribe(measure);
+      if (typeof ResizeObserver === 'undefined') return;
+      const resize = new ResizeObserver(() => {
+        viewport.checkViewportSize();
+        measure();
+      });
+      resize.observe(viewport.elementRef.nativeElement);
+      destroyRef.onDestroy(() => resize.disconnect());
     });
     // Ogni cambio di filtro rilegge l'archivio dall'inizio; la prima esecuzione e' il caricamento.
     effect(() => {
@@ -467,11 +490,25 @@ export class StoricoDumpPage implements OnInit {
     return `storico-entry-${index}`;
   }
 
-  /** La voce attiva della lista, se e' fra quelle caricate. */
+  /**
+   * La voce attiva della lista, finche' la sua riga e' in vista. Scorrendo lontano lo scroll
+   * virtuale toglie la riga dal DOM, e aria-activedescendant indicherebbe un elemento che non c'e'.
+   */
   protected readonly activeOptionId = computed(() => {
     const index = this.entries().findIndex((entry) => entry.dumpKey === this.focusedKey());
-    return index < 0 ? null : this.optionId(index);
+    if (index < 0) return null;
+    const { offset, size } = this.scrollWindow();
+    const top = index * ROW_HEIGHT;
+    return top < offset + size && top + ROW_HEIGHT > offset ? this.optionId(index) : null;
   });
+
+  /** Rientrando nella lista da tastiera la voce attiva torna in vista; col mouse no, il clic va dove punta. */
+  protected onListFocus(): void {
+    const current = this.focusedKey();
+    if (current != null && this.viewport().elementRef.nativeElement.matches(':focus-visible')) {
+      this.scrollIntoView(current);
+    }
+  }
 
   /** Tastiera sulla lista: frecce, Home ed End aprono la voce di arrivo; Spazio spunta quella attiva. */
   protected onListKeydown(event: KeyboardEvent): void {
@@ -479,7 +516,11 @@ export class StoricoDumpPage implements OnInit {
     const current = this.focusedKey();
     if (event.key === ' ') {
       event.preventDefault();
-      if (current != null) this.toggleSelection(current, event.shiftKey);
+      if (current != null) {
+        // Se la voce attiva era fuori vista, la si mostra spuntata invece di spuntarla al buio.
+        this.scrollIntoView(current);
+        this.toggleSelection(current, event.shiftKey);
+      }
       return;
     }
     const ordered = this.entries().map((entry) => entry.dumpKey);

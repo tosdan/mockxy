@@ -279,8 +279,8 @@ describe('StoricoDumpPage', () => {
 
         const freccia = press('ArrowDown');
         expect(freccia.defaultPrevented).toBe(true);
+        // aria-activedescendant dipende dalle righe in vista, che jsdom non misura: e2e.
         expect(c.focusedKey()).toBe('f#1');
-        expect(c.activeOptionId()).toBe('storico-entry-1');
 
         press(' ');
         expect([...c.selectedKeys()]).toEqual(['f#1']);

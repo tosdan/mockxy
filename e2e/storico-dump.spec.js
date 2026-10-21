@@ -101,6 +101,50 @@ test.describe("E17 · storico dump → crea mock", () => {
     await expect(storico.locator(`[id="${activeId}"]`)).toContainText("/api/uno-e2e");
   });
 
+  // Lista virtualizzata: scorrendo lontano la riga attiva esce dal DOM. La lista non deve indicare
+  // un elemento che non c'e', e i tasti devono riportare in vista la voce su cui agiscono.
+  test("scorrendo lontano dalla voce attiva, rientro da tastiera e Spazio la riportano in vista", async ({ page, request }) => {
+    await setDumpEnabled(request, true);
+    for (let i = 0; i < 40; i += 1) await request.get(`${E2E_BACKEND}/api/riga-${i}`);
+    await expect.poll(async () => await flushDump(request), { timeout: 8000 }).toBeGreaterThanOrEqual(40);
+    await setDumpEnabled(request, false);
+
+    await gotoStorico(page);
+    const storico = page.locator("app-storico-dump");
+    const list = storico.getByRole("listbox");
+    // La voce indicata da aria-activedescendant, una volta che la lista la indica.
+    const active = async () => {
+      await expect(list).toHaveAttribute("aria-activedescendant", /^storico-entry-\d+$/);
+      return storico.locator(`[id="${await list.getAttribute("aria-activedescendant")}"]`);
+    };
+    const first = storico.getByRole("option").first();
+    const firstPath = (await first.locator('[dir="rtl"]').getAttribute("title")) ?? "";
+    await first.click();
+    await expect(list).toBeFocused();
+    await expect(await active()).toContainText(firstPath);
+
+    const scrollAway = () => list.evaluate((el) => el.scrollTo(0, el.scrollHeight));
+    await scrollAway();
+    await expect(storico.locator(`[id="storico-entry-0"]`)).toHaveCount(0);
+    await expect(list).not.toHaveAttribute("aria-activedescendant", /.*/);
+
+    // Fuori e dentro con Tab: la voce attiva torna in vista.
+    await page.keyboard.press("Tab");
+    await page.keyboard.press("Shift+Tab");
+    await expect(list).toBeFocused();
+    await expect(await active()).toContainText(firstPath);
+    await expect(await active()).toBeInViewport({ ratio: 1 });
+
+    // Spazio dopo aver scorso via: spunta la voce attiva, mostrandola.
+    await scrollAway();
+    await expect(list).not.toHaveAttribute("aria-activedescendant", /.*/);
+    await page.keyboard.press("Space");
+    await expect(storico.getByRole("option", { selected: true })).toHaveCount(1);
+    await expect(await active()).toHaveAttribute("aria-selected", "true");
+    await expect(await active()).toContainText(firstPath);
+    await expect(await active()).toBeInViewport({ ratio: 1 });
+  });
+
   test("una entry selezionata nello storico diventa un mock nel catalogo", async ({ page, request }) => {
     await seedDump(request);
 
