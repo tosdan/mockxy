@@ -7,6 +7,7 @@ import { MonitorNextPage } from './monitor-next.page';
 import { translocoTesting } from '../../testing/transloco-testing';
 import { MockAdminApiService } from '../../mock-admin-api.service';
 import { MonitorStreamStore } from '../../shared/monitor-stream.store';
+import { ViewStateService } from '../../shared/view-state.service';
 import { UiDialog } from '../../ui/ui-dialog/ui-dialog';
 import type { RequestMonitorEntry } from '../../mock-admin-api.types';
 
@@ -64,11 +65,32 @@ const dialogStub = {
   open: vi.fn(() => ({ close: vi.fn() })),
 };
 
+/** Stub in-memory di ViewStateService: la densita' scelta in un test non passa al successivo. */
+function makeViewStateStub() {
+  const state = new Map<string, unknown>();
+  return {
+    read: vi.fn((key: string) => state.get(key) ?? null),
+    write: vi.fn((key: string, value: unknown) => {
+      if (value == null) state.delete(key);
+      else state.set(key, value);
+    }),
+  };
+}
+
 describe('MonitorNextPage', () => {
+  let viewState: ReturnType<typeof makeViewStateStub>;
+
   beforeEach(async () => {
+    viewState = makeViewStateStub();
     await TestBed.configureTestingModule({
       imports: [MonitorNextPage, translocoTesting()],
-      providers: [provideNoopAnimations(), provideRouter([]), { provide: MockAdminApiService, useValue: apiStub }, { provide: UiDialog, useValue: dialogStub }],
+      providers: [
+        provideNoopAnimations(),
+        provideRouter([]),
+        { provide: MockAdminApiService, useValue: apiStub },
+        { provide: UiDialog, useValue: dialogStub },
+        { provide: ViewStateService, useValue: viewState },
+      ],
     }).compileComponents();
   });
 
@@ -136,8 +158,52 @@ describe('MonitorNextPage', () => {
   it('calcola le statistiche su tutte le entry', () => {
     const { c } = create();
     expect(c.total()).toBe(3);
-    expect(c.errorCount()).toBe(1); // 502
+    expect(c.statusCounts()).toEqual({ 2: 2, 3: 0, 4: 0, 5: 1 }); // 201, 200, 502
+    expect(c.unmockedCount()).toBe(2); // le due dal backend
     expect(c.avgLatency()).toBe(Math.round((12 + 88 + 31) / 3));
+  });
+
+  // Gli errori si contano sui chip di stato: ognuno dice quante voci mostrerebbe, fra quelle che
+  // passano gli altri filtri. Il proprio filtro non li cambia.
+  it('i chip di stato contano le voci degli altri filtri, e il numero e\' sul chip', () => {
+    const { fixture, c } = create();
+    c.search.set('payments');
+    c.toggleStatusClass(2);
+    fixture.detectChanges();
+    expect(c.statusCounts()).toEqual({ 2: 0, 3: 0, 4: 0, 5: 1 });
+    const chips = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll<HTMLButtonElement>('button[aria-pressed]'))
+      .filter((b) => /^\dxx/.test((b.textContent ?? '').trim()));
+    expect(chips.map((b) => (b.textContent ?? '').replace(/\s+/g, ' ').trim())).toEqual(['2xx 0', '3xx 0', '4xx 0', '5xx 1']);
+    expect(chips[0].getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('il chip delle non mockate accende e spegne il filtro "backend reale"', () => {
+    const { fixture, c } = create();
+    const chip = () => (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>('button[aria-pressed]') as HTMLButtonElement;
+    expect((chip().textContent ?? '').replace(/\s+/g, ' ')).toContain('2 non mockate');
+    chip().click();
+    fixture.detectChanges();
+    expect(c.sourceFilter()).toBe('real-backend');
+    expect(chip().getAttribute('aria-pressed')).toBe('true');
+    expect(c.filtered().map((e: RequestMonitorEntry) => e.id)).toEqual(['2', '3']);
+    chip().click();
+    fixture.detectChanges();
+    expect(c.sourceFilter()).toBe('all');
+  });
+
+  it('densita\' compatta: la lista la legge dalla classe, e resta per la visita dopo', () => {
+    const { fixture, c } = create();
+    const list = () => (fixture.nativeElement as HTMLElement).querySelector('[role="listbox"]') as HTMLElement;
+    expect(list().classList.contains('mx-compact')).toBe(false);
+    c.toggleCompact();
+    fixture.detectChanges();
+    expect(list().classList.contains('mx-compact')).toBe(true);
+    expect(viewState.write).toHaveBeenLastCalledWith('monitor-density', 'compact');
+
+    const again = create();
+    expect(again.c.compact()).toBe(true);
+    again.c.toggleCompact();
+    expect(viewState.write).toHaveBeenLastCalledWith('monitor-density', null);
   });
 
   it('filtra per ricerca su path/metodo', () => {

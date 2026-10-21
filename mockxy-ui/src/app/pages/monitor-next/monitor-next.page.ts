@@ -99,10 +99,10 @@ interface SourceMeta {
                 class="flex items-center gap-2 rounded-lg px-3 py-1 ring-1 transition hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70"
                 [class]="sourceFilter() === 'real-backend' ? 'bg-[color-mix(in_srgb,var(--status-4xx)_10%,transparent)] ring-[color-mix(in_srgb,var(--status-4xx)_40%,transparent)]' : 'bg-muted/60 ring-border'">
           <span aria-hidden="true" class="h-4 w-0.5 rounded-full" [style.background]="tint('var(--status-4xx)', 45)"></span>
-          <span class="flex items-baseline gap-1.5"><span class="text-[15px] font-bold tabular-nums">{{ unmockedCount() }}</span><span class="text-[11.5px] text-muted-foreground">{{ 'monitor.unmocked' | transloco }}</span></span>
+          <span class="flex items-baseline gap-1.5"><span class="text-[15px] font-bold tabular-nums">{{ unmockedCount() }}</span>&ngsp;<span class="text-[11.5px] text-muted-foreground">{{ 'monitor.unmocked' | transloco }}</span></span>
         </button>
         <div class="flex items-baseline gap-1.5 rounded-lg bg-muted/60 px-3 py-1 ring-1 ring-border">
-          <span class="text-[15px] font-bold tabular-nums">{{ avgLatency() }}</span><span class="text-[11.5px] text-muted-foreground">{{ 'monitor.avgMs' | transloco }}</span>
+          <span class="text-[15px] font-bold tabular-nums">{{ avgLatency() }}</span>&ngsp;<span class="text-[11.5px] text-muted-foreground">{{ 'monitor.avgMs' | transloco }}</span>
         </div>
         <span class="ml-1 inline-flex flex-wrap items-center gap-x-3 gap-y-1 text-[11.5px] text-muted-foreground">
           @for (s of sourceBreakdown(); track s.source) {
