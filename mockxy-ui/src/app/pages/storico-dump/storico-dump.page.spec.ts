@@ -223,26 +223,88 @@ describe('StoricoDumpPage', () => {
     });
   });
 
+  // Prima ogni clic sulla riga la apriva e insieme la spuntava. Ora apre il clic sulla riga e
+  // spunta il clic sulla casella, come nel catalogo e nel Monitor. (Le righe sono in uno scroll
+  // virtuale che qui non disegna nulla: si chiamano i gestori con il bersaglio del clic.)
   describe('selezione', () => {
+    const onCheck = () => {
+      const check = document.createElement('span');
+      check.setAttribute('data-check', '');
+      return check;
+    };
     function clickRow(c: any, index: number, shiftKey = false): void {
-      c.onRowClick(c.entries()[index], index, { shiftKey } as MouseEvent);
+      c.onRowClick(c.entries()[index], { target: document.createElement('span'), shiftKey } as unknown as MouseEvent);
+    }
+    function clickCheck(c: any, index: number, shiftKey = false): void {
+      c.onRowClick(c.entries()[index], { target: onCheck(), shiftKey } as unknown as MouseEvent);
     }
 
-    it('il click alterna la selezione della riga e la mette a fuoco', () => {
+    it('il clic sulla riga la apre senza spuntarla', () => {
       const { c } = create();
       clickRow(c, 1);
-      expect([...c.selectedKeys()]).toEqual(['f#1']);
       expect(c.focusedKey()).toBe('f#1');
-      clickRow(c, 1);
       expect(c.selectedCount()).toBe(0);
     });
 
-    it('shift-click seleziona il range dall’ultimo click, in entrambe le direzioni', () => {
+    it('il clic sulla casella la spunta senza aprirla, e un secondo clic la libera', () => {
+      const { c } = create();
+      clickCheck(c, 1);
+      expect([...c.selectedKeys()]).toEqual(['f#1']);
+      expect(c.focusedKey()).toBe('f#0');
+      clickCheck(c, 1);
+      expect(c.selectedCount()).toBe(0);
+    });
+
+    it('shift-clic sulla casella seleziona il range dall’ultima spuntata, in entrambe le direzioni', () => {
       const { c } = create();
       c.loadMore(); // 3 entry
-      clickRow(c, 2); // ancora: f#2
-      clickRow(c, 0, true); // shift verso l'alto
+      clickCheck(c, 2); // ancora: f#2
+      clickCheck(c, 0, true); // shift verso l'alto
       expect([...c.selectedKeys()].sort()).toEqual(['f#0', 'f#1', 'f#2']);
+    });
+
+    // Il fuoco resta sulla lista: la voce attiva la dice aria-activedescendant (lista virtualizzata).
+    it('le frecce spostano la voce attiva; Spazio la spunta, Maiuscole+Spazio l’intervallo', () => {
+      // jsdom non implementa scrollTo, che lo scroll virtuale usa per portare in vista la voce.
+      const original = HTMLElement.prototype.scrollTo;
+      HTMLElement.prototype.scrollTo = (() => undefined) as typeof original;
+      try {
+        const { c } = create();
+        c.loadMore(); // 3 entry, attiva f#0
+        const press = (key: string, shiftKey = false) => {
+          const event = new KeyboardEvent('keydown', { key, shiftKey, cancelable: true });
+          c.onListKeydown(event);
+          return event;
+        };
+
+        const freccia = press('ArrowDown');
+        expect(freccia.defaultPrevented).toBe(true);
+        // aria-activedescendant dipende dalle righe in vista, che jsdom non misura: e2e.
+        expect(c.focusedKey()).toBe('f#1');
+
+        press(' ');
+        expect([...c.selectedKeys()]).toEqual(['f#1']);
+        press('End');
+        press(' ', true);
+        expect([...c.selectedKeys()].sort()).toEqual(['f#1', 'f#2']);
+        press('Home');
+        expect(c.focusedKey()).toBe('f#0');
+      } finally {
+        HTMLElement.prototype.scrollTo = original;
+      }
+    });
+
+    it('la barra delle azioni compare solo con una selezione, e Annulla la svuota', () => {
+      const { fixture, c } = create();
+      const bar = () => ((fixture.nativeElement as HTMLElement).textContent ?? '').includes('selezionate');
+      expect(bar()).toBe(false);
+      clickCheck(c, 0);
+      fixture.detectChanges();
+      expect(bar()).toBe(true);
+      (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>('button[aria-label="Deseleziona"]')!.click();
+      fixture.detectChanges();
+      expect(c.selectedCount()).toBe(0);
+      expect(bar()).toBe(false);
     });
 
     it('seleziona tutte le caricate / azzera', () => {

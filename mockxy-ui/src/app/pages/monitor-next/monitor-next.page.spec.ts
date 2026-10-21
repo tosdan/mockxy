@@ -354,7 +354,6 @@ describe('MonitorNextPage', () => {
     it('una selezione fatta prima di un riavvio non vale per le voci del nuovo runtime', () => {
       const { restart } = restartableStream();
       const { c } = create();
-      c.enterSelection();
       c.toggleSelection('2');
       expect(c.selectedCount()).toBe(1);
 
@@ -415,7 +414,6 @@ describe('MonitorNextPage', () => {
       expect(c.toast.toasts().at(-1)).toMatchObject({ title: 'Scritto, ma non servito', tone: 'warning' });
 
       apiStub.createMocksFromMonitor.mockReturnValueOnce(of(createResult([captureItem(notServed), captureItem({ requestId: '3' })], { created: 2 })));
-      c.enterSelection();
       c.toggleSelection('2');
       c.toggleSelection('3');
       c.createMocksFromSelected();
@@ -438,11 +436,10 @@ describe('MonitorNextPage', () => {
     expect(c.filtered().map((e: RequestMonitorEntry) => e.id)).toEqual(['2', '3']); // id1 = mock
   });
 
-  it('crea mock massivi con una sola richiesta, nell\'ordine di cattura, ed esce dalla selezione', () => {
+  it('crea mock massivi con una sola richiesta, nell\'ordine di cattura, e svuota la selezione', () => {
     apiStub.createMocksFromMonitor.mockReset();
     apiStub.createMocksFromMonitor.mockReturnValue(of(createResult([captureItem({ requestId: '2' }), captureItem({ requestId: '3', writeOutcome: 'skipped' })], { created: 1, skipped: 1 })));
     const { c } = create();
-    c.enterSelection();
     c.toggleSelection('3');
     c.toggleSelection('2');
     expect(c.selectedCount()).toBe(2);
@@ -450,6 +447,108 @@ describe('MonitorNextPage', () => {
     expect(apiStub.createMocksFromMonitor).toHaveBeenCalledTimes(1);
     expect(apiStub.createMocksFromMonitor.mock.calls[0][0]).toMatchObject({ ids: ['2', '3'], onConflict: 'skip', newEndpointEnabled: true });
     expect(c.toast.toasts().at(-1).description).toBe('1 create, 1 già esistenti');
-    expect(c.selectionMode()).toBe(false);
+    expect(c.selectedCount()).toBe(0);
+  });
+
+  // Come il catalogo: il clic sulla riga apre, quello sulla casella spunta; le azioni sulle voci
+  // spuntate stanno in una barra in fondo alla lista, e non c'e' piu' una modalita' "Seleziona".
+  describe('lista a selezione multipla', () => {
+    function setup() {
+      const created = create();
+      const host = created.fixture.nativeElement as HTMLElement;
+      const options = () => Array.from(host.querySelectorAll<HTMLElement>('[role="option"]'));
+      const option = (id: string) => options().find((row) => row.dataset['entryId'] === id)!;
+      const press = (key: string, shiftKey = false) => {
+        const event = new KeyboardEvent('keydown', { key, shiftKey, bubbles: true, cancelable: true });
+        (document.activeElement ?? host).dispatchEvent(event);
+        created.fixture.detectChanges();
+        return event;
+      };
+      const flush = async () => {
+        await Promise.resolve();
+        created.fixture.detectChanges();
+      };
+      return { ...created, host, options, option, press, flush };
+    }
+    const checked = (rows: HTMLElement[]) => rows.filter((row) => row.getAttribute('aria-selected') === 'true').map((row) => row.dataset['entryId']);
+
+    it('è un listbox a selezione multipla; la voce aperta è corrente e l’unica raggiungibile col Tab', () => {
+      const { host, options, option, fixture } = setup();
+      const listbox = host.querySelector('[role="listbox"]')!;
+      expect(listbox.getAttribute('aria-multiselectable')).toBe('true');
+      expect(listbox.getAttribute('aria-label')).toBe('Richieste catturate');
+
+      option('2').click();
+      fixture.detectChanges();
+      expect(options().filter((row) => row.getAttribute('tabindex') === '0').map((row) => row.dataset['entryId'])).toEqual(['2']);
+      expect(option('2').getAttribute('aria-current')).toBe('true');
+      expect(host.textContent).not.toContain('Seleziona');
+    });
+
+    it('il clic sulla riga la apre senza spuntarla; il clic sulla casella la spunta senza aprirla', () => {
+      const { c, option, fixture } = setup();
+      option('2').click();
+      fixture.detectChanges();
+      expect(c.selected()?.id).toBe('2');
+      expect(c.selectedCount()).toBe(0);
+
+      option('3').querySelector<HTMLElement>('[data-check]')!.click();
+      fixture.detectChanges();
+      expect(c.selected()?.id).toBe('2');
+      expect([...c.selectedIds()]).toEqual(['3']);
+    });
+
+    it('shift-clic sulla casella spunta l’intervallo dall’ultima spuntata', () => {
+      const { options, fixture } = setup();
+      const ids = options().map((row) => row.dataset['entryId']!);
+      options()[0].querySelector<HTMLElement>('[data-check]')!.click();
+      options()[2].querySelector<HTMLElement>('[data-check]')!.dispatchEvent(new MouseEvent('click', { bubbles: true, shiftKey: true }));
+      fixture.detectChanges();
+      expect(checked(options())).toEqual(ids);
+    });
+
+    it('le frecce aprono la voce successiva e le danno il fuoco; Spazio spunta, Maiuscole+Spazio l’intervallo', async () => {
+      const { c, options, press, flush, fixture } = setup();
+      const ids = options().map((row) => row.dataset['entryId']!);
+      options()[0].click();
+      fixture.detectChanges();
+      options()[0].focus();
+
+      const freccia = press('ArrowDown');
+      await flush();
+      expect(freccia.defaultPrevented).toBe(true);
+      expect(c.selected()?.id).toBe(ids[1]);
+      expect((document.activeElement as HTMLElement).dataset['entryId']).toBe(ids[1]);
+
+      press(' ');
+      expect(checked(options())).toEqual([ids[1]]);
+      press('End');
+      await flush();
+      press(' ', true);
+      expect(checked(options())).toEqual([ids[1], ids[2]]);
+    });
+
+    it('la barra in fondo alla lista compare con la selezione: crea i mock o la annulla', () => {
+      const { c, host, option, fixture } = setup();
+      const bar = () => Array.from(host.querySelectorAll('span')).find((span) => /selezionat/.test(span.textContent ?? ''));
+      expect(bar()).toBeUndefined();
+
+      option('2').querySelector<HTMLElement>('[data-check]')!.click();
+      fixture.detectChanges();
+      expect(bar()?.textContent?.trim()).toBe('1 selezionate');
+
+      host.querySelector<HTMLButtonElement>('button[aria-label="Annulla la selezione"]')!.click();
+      fixture.detectChanges();
+      expect(c.selectedCount()).toBe(0);
+      expect(bar()).toBeUndefined();
+    });
+
+    it('il path della riga si tronca in testa, e il filtro del metodo ha un nome', () => {
+      const { host, option } = setup();
+      const path = option('2').querySelector<HTMLElement>('[dir="rtl"]')!;
+      expect(path.getAttribute('title')).toBe('/api/users/42');
+      expect(path.querySelector('bdi')?.getAttribute('dir')).toBe('ltr');
+      expect(host.querySelector('[aria-label="Filtra per metodo"]')).not.toBeNull();
+    });
   });
 });

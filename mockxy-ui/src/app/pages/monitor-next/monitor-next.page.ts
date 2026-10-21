@@ -1,5 +1,5 @@
 import { DatePipe } from '@angular/common';
-import { ChangeDetectionStrategy, Component, TemplateRef, computed, effect, inject, signal, viewChild } from '@angular/core';
+import { ChangeDetectionStrategy, Component, ElementRef, TemplateRef, computed, effect, inject, signal, viewChild } from '@angular/core';
 import { Router } from '@angular/router';
 import { finalize, type Observable } from 'rxjs';
 import { NgIcon, provideIcons } from '@ng-icons/core';
@@ -32,6 +32,7 @@ import { MonitorStreamStore } from '../../shared/monitor-stream.store';
 import { summarizeBatchAttention, type CaptureBatchOptions, type CaptureItemOutcome, type MockSummary, type MonitorCreateMocksResult, type RequestMonitorEntry } from '../../mock-admin-api.types';
 import { readBatchPartialResult } from '../../shared/read-error-message';
 import { MOCK_METHODS } from '../../mock-admin-ui.constants';
+import { listNavigationTarget, toggleListSelection } from '../../shared/list-selection';
 
 interface SourceMeta {
   readonly label: string;
@@ -82,20 +83,11 @@ interface SourceMeta {
           <span class="size-1.5 rounded-full" [style.background]="'var(--status-4xx)'"></span> {{ 'monitor.paused' | transloco }}
         </span>
         }
+        <!-- Niente piu' modalita' "Seleziona": come nel catalogo la casella di ogni riga c'e' sempre,
+             e le azioni sulle voci spuntate stanno nella barra in fondo alla lista. -->
         <div class="ml-auto flex items-center gap-2">
-          @if (selectionMode()) {
-          <span class="text-[12.5px] text-muted-foreground">{{ 'monitor.selectedCount' | transloco: { count: selectedCount() } }}</span>
-          <label class="flex items-center gap-2 text-[12px] text-muted-foreground" [uiTooltip]="'monitor.activateNewTip' | transloco">
-            <ui-checkbox [(checked)]="activateNewMocks" [ariaLabel]="'monitor.activateNew' | transloco" />
-            {{ 'monitor.activateNew' | transloco }}
-          </label>
-          <button ui-button size="sm" [disabled]="selectedCount() === 0 || creatingMock()" (click)="createMocksFromSelected()"><ng-icon name="lucidePlus" size="0.9rem" /> {{ 'monitor.createMock' | transloco }}</button>
-          <button ui-button variant="outline" size="sm" (click)="exitSelection()"><ng-icon name="lucideX" size="0.9rem" /> {{ 'monitor.cancel' | transloco }}</button>
-          } @else {
-          <button ui-button variant="outline" size="sm" [disabled]="filtered().length === 0" (click)="enterSelection()"><ng-icon name="lucideCheck" size="0.9rem" /> {{ 'monitor.select' | transloco }}</button>
           <button ui-button variant="outline" size="sm" [disabled]="clearing()" (click)="clearLog()"><ng-icon name="lucideTrash2" size="0.9rem" /> {{ 'monitor.clear' | transloco }}</button>
           <button ui-button variant="outline" size="sm" [disabled]="filtered().length === 0" (click)="exportJson()"><ng-icon name="lucideDownload" size="0.9rem" /> {{ 'monitor.export' | transloco }}</button>
-          }
         </div>
       </header>
 
@@ -137,7 +129,7 @@ interface SourceMeta {
           </button>
           }
         </label>
-        <ui-select class="w-40" [options]="methodOptions" [value]="methodFilter()" (valueChange)="methodFilter.set($any($event))" />
+        <ui-select class="w-40" [options]="methodOptions" [value]="methodFilter()" (valueChange)="methodFilter.set($any($event))" [ariaLabel]="'monitor.methodFilterAria' | transloco" />
         @for (n of statusChips; track n) {
         <button (click)="toggleStatusClass(n)"
                 class="inline-flex h-8 items-center rounded-lg border px-3 text-[12.5px] font-medium transition"
@@ -161,24 +153,32 @@ interface SourceMeta {
           <div class="grid grid-cols-[1fr_auto] items-center gap-2 border-b border-border px-4 py-2 text-[10.5px] font-bold uppercase tracking-[0.14em] text-muted-foreground">
             <span>{{ 'monitor.colRequest' | transloco }}</span><span>{{ 'monitor.colLatTime' | transloco }}</span>
           </div>
-          <div class="min-h-0 flex-1 overflow-auto mx-scroll">
+          <!-- Lista a selezione multipla, come il catalogo: un solo punto di Tab, le frecce spostano
+               il fuoco e mostrano la voce nel dettaglio, Spazio la spunta (Maiuscole+Spazio spunta
+               l'intervallo). La casella e' un'area di clic dentro la riga, non un controllo a se'. -->
+          <div class="min-h-0 flex-1 overflow-auto mx-scroll" role="listbox" aria-multiselectable="true" [attr.aria-label]="'monitor.listLabel' | transloco" (keydown)="onListKeydown($event)">
             @for (row of filtered(); track row.id) {
-            <button
-              type="button"
-              (click)="onRowClick(row.id)"
-              class="grid w-full grid-cols-[1fr_auto] items-center gap-2 border-b border-border-soft px-4 py-2.5 text-left transition hover:bg-white/[0.03]"
-              [class.mx-selected]="!selectionMode() && row.id === selected()?.id"
+            <div
+              role="option"
+              [attr.data-entry-id]="row.id"
+              [attr.aria-selected]="selectedIds().has(row.id)"
+              [attr.aria-current]="row.id === selected()?.id ? 'true' : null"
+              [attr.tabindex]="row.id === selected()?.id ? 0 : -1"
+              (click)="onRowClick(row.id, $event)"
+              class="group grid w-full cursor-pointer select-none grid-cols-[1fr_auto] items-center gap-2 border-b border-border-soft px-4 py-2.5 text-left transition hover:bg-white/[0.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/70"
+              [class.mx-selected]="row.id === selected()?.id"
               [style.boxShadow]="row.id !== selected()?.id && isUnmocked(row.source) ? 'inset 2px 0 0 0 ' + tint('var(--status-4xx)', 45) : null"
             >
               <span class="flex min-w-0 items-center gap-2.5">
-                @if (selectionMode()) {
-                <span class="grid size-4 shrink-0 place-items-center rounded border transition" [style.borderColor]="selectedIds().has(row.id) ? 'var(--brand)' : 'var(--input)'" [style.background]="selectedIds().has(row.id) ? 'var(--brand)' : 'transparent'">
+                <span data-check aria-hidden="true" class="grid size-4 shrink-0 place-items-center rounded border transition"
+                      [class]="selectedIds().has(row.id) || selectedCount() > 0 ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100'"
+                      [style.borderColor]="selectedIds().has(row.id) ? 'var(--brand)' : 'var(--input)'" [style.background]="selectedIds().has(row.id) ? 'var(--brand)' : 'transparent'">
                   @if (selectedIds().has(row.id)) { <ng-icon name="lucideCheck" size="0.7rem" class="text-white" /> }
                 </span>
-                }
                 <span class="w-12 shrink-0 font-mono text-[12px] font-bold" [style.color]="methodColor(row.method)">{{ row.method }}</span>
                 <span class="min-w-0 flex-1">
-                  <span class="block truncate font-mono text-[13px] text-foreground">{{ row.originalUrl }}</span>
+                  <!-- Il path si tronca in testa, come nel catalogo: la coda e' cio' che distingue. -->
+                  <span class="block truncate text-left font-mono text-[13px] text-foreground" dir="rtl" [title]="row.originalUrl"><bdi dir="ltr">{{ row.originalUrl }}</bdi></span>
                   <span class="mt-0.5 flex items-center gap-1.5 text-[11px] text-muted-foreground">
                     <span class="size-1.5 rounded-full" [style.background]="sourceColor(row.source)"></span>{{ sourceLabel(row.source) }}
                     @if (row.sequenceStep; as seq) {
@@ -192,7 +192,7 @@ interface SourceMeta {
                 <span class="block font-mono text-[12px] tabular-nums text-foreground/80">{{ row.latencyMs }} ms</span>
                 <span class="block font-mono text-[10.5px] tabular-nums text-muted-foreground">{{ row.timestamp | date: 'HH:mm:ss' }}</span>
               </span>
-            </button>
+            </div>
             } @empty {
             <div class="px-5 py-10 text-center text-sm text-muted-foreground">
               @if (loading()) {
@@ -203,6 +203,20 @@ interface SourceMeta {
             </div>
             }
           </div>
+          <!-- Azioni sulle voci spuntate: compaiono solo con una selezione, in fondo alla lista. -->
+          @if (selectedCount() > 0) {
+          <div class="flex shrink-0 flex-wrap items-center gap-x-2 gap-y-1.5 border-t border-border bg-[color-mix(in_srgb,var(--brand)_12%,transparent)] px-3 py-2">
+            <span class="whitespace-nowrap text-[11.5px] font-bold text-foreground">{{ 'monitor.selectedCount' | transloco: { count: selectedCount() } }}</span>
+            <div class="ml-auto flex items-center gap-2">
+              <label class="flex items-center gap-2 text-[12px] text-muted-foreground" [uiTooltip]="'monitor.activateNewTip' | transloco">
+                <ui-checkbox [(checked)]="activateNewMocks" [ariaLabel]="'monitor.activateNew' | transloco" />
+                {{ 'monitor.activateNew' | transloco }}
+              </label>
+              <button ui-button size="xs" [disabled]="creatingMock()" (click)="createMocksFromSelected()"><ng-icon name="lucidePlus" size="0.8rem" /> {{ 'monitor.createMock' | transloco }}</button>
+              <button ui-button variant="ghost" size="xs" (click)="clearSelection()" [uiTooltip]="'monitor.clearSelection' | transloco" [attr.aria-label]="'monitor.clearSelection' | transloco"><ng-icon name="lucideX" size="0.8rem" /></button>
+            </div>
+          </div>
+          }
         </div>
 
         <!-- divisore trascinabile: ridimensiona la lista (largh. persistita) -->
@@ -385,6 +399,7 @@ export class MonitorNextPage {
   private readonly api = inject(MockAdminApiService);
   private readonly toast = inject(ToastService);
   private readonly router = inject(Router);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly stream = inject(MonitorStreamStore);
   private readonly transloco = inject(TranslocoService);
   private readonly dialog = inject(UiDialog);
@@ -434,7 +449,8 @@ export class MonitorNextPage {
   protected readonly methodFilter = signal('all');
   protected readonly sourceFilter = signal('all');
   protected readonly statusClasses = signal<ReadonlySet<number>>(new Set());
-  protected readonly selectionMode = signal(false);
+  /** Ultima voce spuntata: l'ancora degli intervalli (shift-click, Maiuscole+Spazio). */
+  private selectionAnchor: string | null = null;
   /**
    * Le voci spuntate e il runtime a cui appartengono: dopo un riavvio gli stessi ID sono altre
    * richieste, quindi una selezione di un altro runtime non vale più e non si mostra.
@@ -538,6 +554,41 @@ export class MonitorNextPage {
     this.selectedId.set(id);
   }
 
+  /** Clic su una riga: sulla casella la spunta (con shift l'intervallo), altrove la apre. */
+  protected onRowClick(id: string, event: MouseEvent): void {
+    if ((event.target as HTMLElement).closest('[data-check]')) {
+      this.toggleSelection(id, event.shiftKey);
+    } else {
+      this.selectEntry(id);
+    }
+  }
+
+  /** Tastiera sulla lista: frecce, Home ed End aprono la voce di arrivo; Spazio spunta quella a fuoco. */
+  protected onListKeydown(event: KeyboardEvent): void {
+    const row = (event.target as HTMLElement).closest<HTMLElement>('[role="option"]');
+    if (!row || event.ctrlKey || event.metaKey || event.altKey) return;
+    const current = row.dataset['entryId'] ?? null;
+    if (event.key === ' ') {
+      event.preventDefault();
+      if (current != null) this.toggleSelection(current, event.shiftKey);
+      return;
+    }
+    const target = listNavigationTarget(event.key, this.filtered().map((entry) => entry.id), current);
+    if (target == null) return;
+    event.preventDefault();
+    this.selectEntry(target);
+    this.focusEntry(target);
+  }
+
+  /** Porta il fuoco sulla riga di una voce (la lista non e' virtualizzata: la riga c'e' gia'). */
+  private focusEntry(id: string): void {
+    queueMicrotask(() =>
+      Array.from(this.host.nativeElement.querySelectorAll<HTMLElement>('[role="option"]'))
+        .find((row) => row.dataset['entryId'] === id)
+        ?.focus(),
+    );
+  }
+
   /** Avvia il drag del divisore: aggiorna la larghezza della lista, la persiste a fine drag. */
   protected startResize(event: PointerEvent): void {
     event.preventDefault();
@@ -579,6 +630,7 @@ export class MonitorNextPage {
   protected clearLog(): void {
     this.stream.clear();
     this.selectedId.set(undefined);
+    this.clearSelection();
   }
 
   /** Costruisce il comando cURL equivalente alla request catturata. */
@@ -796,26 +848,21 @@ export class MonitorNextPage {
   }
 
   // --- selezione multipla + crea mock massivo ---
-  protected enterSelection(): void {
+  protected clearSelection(): void {
     this.selection.set({ runtimeId: null, ids: new Set() });
-    this.selectionMode.set(true);
+    this.selectionAnchor = null;
   }
 
-  protected exitSelection(): void {
-    this.selectionMode.set(false);
-    this.selection.set({ runtimeId: null, ids: new Set() });
-  }
-
-  /** Le voci spuntate appartengono al runtime delle voci mostrate; quelle di un altro si perdono. */
-  protected toggleSelection(id: string): void {
-    const next = new Set(this.selectedIds());
-    next.has(id) ? next.delete(id) : next.add(id);
-    this.selection.set({ runtimeId: this.stream.runtimeId(), ids: next });
-  }
-
-  /** In modalità selezione il click sulla riga la spunta; altrimenti apre il dettaglio. */
-  protected onRowClick(id: string): void {
-    this.selectionMode() ? this.toggleSelection(id) : this.selectEntry(id);
+  /**
+   * Spunta o toglie una voce; con `range` spunta l'intervallo dall'ultima spuntata, fra le voci
+   * che il filtro mostra. Le voci spuntate appartengono al runtime delle voci mostrate; quelle di
+   * un altro si perdono.
+   */
+  protected toggleSelection(id: string, range = false): void {
+    const ordered = this.filtered().map((entry) => entry.id);
+    const change = toggleListSelection(this.selectedIds(), ordered, id, this.selectionAnchor, range);
+    this.selectionAnchor = change.anchor;
+    this.selection.set({ runtimeId: this.stream.runtimeId(), ids: change.selected });
   }
 
   /**
@@ -839,7 +886,7 @@ export class MonitorNextPage {
           description: this.summarizeBatch(result),
           tone: created === 0 ? 'error' : warning ? 'warning' : 'success',
         });
-        this.exitSelection();
+        this.clearSelection();
       },
       error: (e: unknown) => this.showCreateError(e),
     });
