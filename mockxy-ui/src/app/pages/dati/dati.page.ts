@@ -19,7 +19,9 @@ import { ViewStateService } from '../../shared/view-state.service';
 import { UiButton } from '../../ui/ui-button/ui-button';
 import { UiCheckbox } from '../../ui/ui-checkbox/ui-checkbox';
 import { UiCode } from '../../ui/ui-code/ui-code';
+import { UiBadge } from '../../ui/ui-badge/ui-badge';
 import { UiInput } from '../../ui/ui-input/ui-input';
+import { UiPageHeader } from '../../ui/ui-page-header/ui-page-header';
 import { UiTooltip } from '../../ui/ui-tooltip/ui-tooltip';
 import { ToastService } from '../../ui/ui-toast/ui-toast';
 import { MockAdminApiService } from '../../mock-admin-api.service';
@@ -38,7 +40,7 @@ const SELECTED_FILE_STATE_KEY = 'dati-selected';
  */
 @Component({
   selector: 'app-dati',
-  imports: [NgIcon, TranslocoPipe, UiButton, UiCheckbox, UiCode, UiInput, UiTooltip],
+  imports: [NgIcon, TranslocoPipe, UiBadge, UiButton, UiCheckbox, UiCode, UiInput, UiPageHeader, UiTooltip],
   providers: [
     provideIcons({
       lucideCheck,
@@ -62,23 +64,17 @@ const SELECTED_FILE_STATE_KEY = 'dati-selected';
       (dragleave)="onDragLeave($event)"
       (drop)="onDrop($event)"
     >
-      <!-- TOPBAR -->
-      <header class="relative z-30 flex h-14 shrink-0 items-center gap-3 border-b border-border bg-card px-5">
-        <span class="grid h-8 w-8 place-items-center rounded-lg bg-muted text-brand ring-1 ring-border"><ng-icon name="lucideFileJson" size="1rem" /></span>
-        <div class="leading-tight">
-          <div class="text-sm font-bold tracking-tight">{{ 'dati.title' | transloco }}</div>
-          <div class="text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground">{{ 'dati.subtitle' | transloco }}</div>
-        </div>
-        <div class="ml-2 flex items-center rounded-lg bg-muted p-0.5" role="tablist" [attr.aria-label]="'dati.tabsAria' | transloco">
+      <!-- TESTATA: come il catalogo, nome della vista e conteggio, che e' quello della scheda aperta. -->
+      <ui-page-header [title]="'viewRail.dati' | transloco">
+        <div class="flex items-center rounded-lg bg-muted p-0.5" role="tablist" [attr.aria-label]="'dati.tabsAria' | transloco">
           <button id="dati-files-tab" type="button" role="tab" aria-controls="dati-files-panel" class="rounded-md px-3 py-1.5 text-[12px] font-semibold transition" [class.bg-card]="activeTab() === 'files'" [attr.aria-selected]="activeTab() === 'files'" (click)="switchTab('files')">{{ 'dati.filesTab' | transloco }}</button>
           <button id="dati-runtime-tab" type="button" role="tab" aria-controls="dati-runtime-panel" class="rounded-md px-3 py-1.5 text-[12px] font-semibold transition" [class.bg-card]="activeTab() === 'runtime'" [attr.aria-selected]="activeTab() === 'runtime'" (click)="switchTab('runtime')">{{ 'dati.runtimeTab' | transloco }}</button>
         </div>
-        <span class="text-[12px] text-muted-foreground">
-          @if (activeTab() === 'files') { {{ 'dati.count' | transloco: { count: files().length } }} }
-          @else { {{ 'dati.runtimeCount' | transloco: { count: runtimeItems().length, size: formatSize(runtimeTotalBytes()) } }} }
-        </span>
-
-        <div class="ml-auto flex items-center gap-2">
+        <ui-badge class="whitespace-nowrap">{{ activeTab() === 'files' ? files().length : runtimeItems().length }}</ui-badge>
+        @if (activeTab() === 'runtime') {
+        <span class="text-[11.5px] text-muted-foreground tabular-nums">{{ formatSize(runtimeTotalBytes()) }}</span>
+        }
+        <ng-container actions>
           @if (activeTab() === 'files') {
           <button ui-button size="sm" [disabled]="busy()" (click)="fileInput.click()">
             <ng-icon name="lucideUpload" size="0.9rem" /> {{ 'dati.upload' | transloco }}
@@ -93,8 +89,8 @@ const SELECTED_FILE_STATE_KEY = 'dati-selected';
           <button ui-button variant="destructive" size="sm" [disabled]="runtimeItems().length === 0 || runtimeLoading()" (click)="confirmingResetAll.set(true)"><ng-icon name="lucideRotateCcw" size="0.9rem" /> {{ 'dati.runtimeResetAll' | transloco }}</button>
           }
           }
-        </div>
-      </header>
+        </ng-container>
+      </ui-page-header>
 
       @if (activeTab() === 'files') {
       <!-- BODY: lista + preview -->
@@ -150,11 +146,11 @@ const SELECTED_FILE_STATE_KEY = 'dati-selected';
                 (keydown.escape)="cancelRename()"
                 [attr.aria-label]="'dati.renameAria' | transloco"
               />
-              <button ui-button variant="outline" size="icon" [disabled]="busy()" (click)="confirmRename()" [uiTooltip]="'dati.renameConfirmTip' | transloco"><ng-icon name="lucideCheck" size="0.9rem" /></button>
-              <button ui-button variant="ghost" size="icon" (click)="cancelRename()" [uiTooltip]="'dati.renameCancelTip' | transloco"><ng-icon name="lucideX" size="0.9rem" /></button>
+              <button ui-button variant="outline" size="icon" [disabled]="busy()" (click)="confirmRename()" [uiTooltip]="'dati.renameConfirmTip' | transloco" [attr.aria-label]="'dati.renameConfirmTip' | transloco"><ng-icon name="lucideCheck" size="0.9rem" /></button>
+              <button ui-button variant="ghost" size="icon" (click)="cancelRename()" [uiTooltip]="'dati.renameCancelTip' | transloco" [attr.aria-label]="'dati.renameCancelTip' | transloco"><ng-icon name="lucideX" size="0.9rem" /></button>
               } @else {
               <span class="font-mono text-[15px] font-bold">{{ sel.name }}<span class="text-muted-foreground">.json</span></span>
-              <button ui-button variant="ghost" size="icon" (click)="startRename()" [uiTooltip]="'dati.renameTip' | transloco"><ng-icon name="lucidePencil" size="0.9rem" /></button>
+              <button ui-button variant="ghost" size="icon" (click)="startRename()" [uiTooltip]="'dati.renameTip' | transloco" [attr.aria-label]="'dati.renameTip' | transloco"><ng-icon name="lucidePencil" size="0.9rem" /></button>
               }
               <span class="font-mono text-[11.5px] text-muted-foreground">{{ formatSize(sel.sizeBytes) }} · {{ formatDate(sel.updatedAt) }}</span>
 

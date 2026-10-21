@@ -217,8 +217,12 @@ describe('StoricoDumpPage', () => {
       c.toggleStatusClass(5);
       settle(fixture);
 
-      const content = ((fixture.nativeElement as HTMLElement).textContent ?? '').replace(/\s+/g, ' ');
-      expect(content).toContain('0 risultati');
+      const host = fixture.nativeElement as HTMLElement;
+      const content = (host.textContent ?? '').replace(/\s+/g, ' ');
+      // Il conteggio della testata, nel colore del filtro.
+      const badge = host.querySelector('ui-page-header ui-badge');
+      expect(badge?.textContent?.trim()).toBe('0');
+      expect(badge?.classList.contains('text-brand')).toBe(true);
       expect(content).toContain('Nessuna voce dello storico corrisponde ai filtri.');
     });
   });
@@ -471,6 +475,19 @@ describe('StoricoDumpPage', () => {
       expect(c.statusColor(503)).toBe('var(--status-5xx)');
       expect(c.statusColor(99)).toBe('var(--muted-foreground)');
       expect(c.kb(2048)).toBe('2.0');
+    });
+  });
+
+  describe('testata', () => {
+    it('conta le voci caricate, con "+" finche\' ce ne sono altre da leggere', () => {
+      const { fixture, c } = create();
+      const host = fixture.nativeElement as HTMLElement;
+      const badge = () => host.querySelector('ui-page-header ui-badge')?.textContent?.trim();
+      expect(host.querySelector('h1')?.textContent?.trim()).toBe('Storico');
+      expect(badge()).toBe('2+');
+      c.loadMore();
+      fixture.detectChanges();
+      expect(badge()).toBe('3');
     });
   });
 });

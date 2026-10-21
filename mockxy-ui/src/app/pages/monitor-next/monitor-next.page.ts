@@ -22,6 +22,7 @@ import { UiButton } from '../../ui/ui-button/ui-button';
 import { UiCheckbox } from '../../ui/ui-checkbox/ui-checkbox';
 import { UiCode } from '../../ui/ui-code/ui-code';
 import { UiCollapsible } from '../../ui/ui-collapsible/ui-collapsible';
+import { UiPageHeader } from '../../ui/ui-page-header/ui-page-header';
 import { UiSelect, type UiSelectOption } from '../../ui/ui-select/ui-select';
 import { UiTable } from '../../ui/ui-table/ui-table';
 import { UiTooltip } from '../../ui/ui-tooltip/ui-tooltip';
@@ -49,7 +50,7 @@ interface SourceMeta {
  */
 @Component({
   selector: 'app-monitor-next',
-  imports: [DatePipe, NgIcon, TranslocoPipe, UiBadge, UiButton, UiCheckbox, UiCode, UiCollapsible, UiSelect, UiTable, UiTooltip],
+  imports: [DatePipe, NgIcon, TranslocoPipe, UiBadge, UiButton, UiCheckbox, UiCode, UiCollapsible, UiPageHeader, UiSelect, UiTable, UiTooltip],
   providers: [
     provideIcons({
       lucideActivity, lucideArrowLeft, lucideCheck, lucideCopy, lucideDatabase, lucideDownload, lucideListTree,
@@ -59,43 +60,26 @@ interface SourceMeta {
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="absolute inset-0 flex flex-col overflow-hidden bg-background text-foreground mx-scroll">
-      <!-- TOPBAR -->
-      <header class="relative z-30 flex h-14 shrink-0 items-center gap-4 border-b border-border bg-card px-5">
-        <div class="flex items-center gap-2.5">
-          <span class="grid h-8 w-8 place-items-center rounded-lg bg-gradient-to-br from-brand to-[var(--brand-deep)] text-white ring-1 ring-white/10">
-            <ng-icon name="lucideActivity" size="1.05rem" />
-          </span>
-          <div class="leading-tight">
-            <div class="text-sm font-bold tracking-tight text-foreground">Mockxy</div>
-            <div class="text-[10px] font-bold uppercase tracking-[0.18em] text-brand">Monitor</div>
-          </div>
-        </div>
-        @if (streaming()) {
-        <span class="inline-flex items-center gap-2 rounded-full bg-positive/15 px-3 py-1 text-[11.5px] font-semibold text-positive ring-1 ring-positive/25">
-          <span class="relative grid place-items-center">
-            <span class="absolute size-2.5 animate-ping rounded-full bg-positive/60"></span>
-            <span class="size-1.5 rounded-full bg-positive"></span>
-          </span>
-          Live
-        </span>
-        } @else {
-        <span class="inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[11.5px] font-semibold" [style.color]="'var(--status-4xx)'" [style.background]="tint('var(--status-4xx)', 12)" [style.borderColor]="tint('var(--status-4xx)', 30)">
+      <!-- TESTATA: come il catalogo, nome della vista e conteggio. "Live" non si ripete: lo dicono
+           la barra in alto e il punto sulla voce Monitor. Resta solo la pausa, che spiega perche'
+           la lista non si muove. -->
+      <ui-page-header [title]="'viewRail.monitor' | transloco">
+        <ui-badge [tone]="hasFilter() ? 'brand' : 'neutral'" class="whitespace-nowrap" aria-live="polite">{{ hasFilter() ? ('common.shownOfTotal' | transloco: { shown: filtered().length, total: total() }) : total() }}</ui-badge>
+        @if (!streaming()) {
+        <span class="inline-flex items-center gap-1.5 text-[11.5px] font-semibold" [style.color]="'var(--status-4xx)'">
           <span class="size-1.5 rounded-full" [style.background]="'var(--status-4xx)'"></span> {{ 'monitor.paused' | transloco }}
         </span>
         }
         <!-- Niente piu' modalita' "Seleziona": come nel catalogo la casella di ogni riga c'e' sempre,
              e le azioni sulle voci spuntate stanno nella barra in fondo alla lista. -->
-        <div class="ml-auto flex items-center gap-2">
+        <ng-container actions>
           <button ui-button variant="outline" size="sm" [disabled]="clearing()" (click)="clearLog()"><ng-icon name="lucideTrash2" size="0.9rem" /> {{ 'monitor.clear' | transloco }}</button>
           <button ui-button variant="outline" size="sm" [disabled]="filtered().length === 0" (click)="exportJson()"><ng-icon name="lucideDownload" size="0.9rem" /> {{ 'monitor.export' | transloco }}</button>
-        </div>
-      </header>
+        </ng-container>
+      </ui-page-header>
 
       <!-- STATS STRIP -->
       <div class="relative z-20 flex shrink-0 flex-wrap items-center gap-2.5 border-b border-border bg-card/60 px-5 py-2">
-        <div class="flex items-baseline gap-1.5 rounded-lg bg-muted/60 px-3 py-1 ring-1 ring-border">
-          <span class="text-[15px] font-bold tabular-nums">{{ total() }}</span><span class="text-[11.5px] text-muted-foreground">{{ 'monitor.requests' | transloco }}</span>
-        </div>
         <div class="flex items-baseline gap-1.5 rounded-lg bg-muted/60 px-3 py-1 ring-1 ring-border">
           <span class="text-[15px] font-bold tabular-nums" [style.color]="errorCount() > 0 ? 'var(--status-5xx)' : null">{{ errorCount() }}</span><span class="text-[11.5px] text-muted-foreground">{{ 'monitor.errors' | transloco }}</span>
         </div>
@@ -282,7 +266,7 @@ interface SourceMeta {
               <div class="border-b border-border">
                 <ui-collapsible [open]="false" triggerClass="bg-white/5 px-6 py-2.5 hover:bg-white/10">
                   <div uiCollapsibleHeader class="flex items-center gap-2">
-                    <h3 class="text-[12px] font-bold uppercase tracking-[0.14em] text-foreground/80">Request · headers</h3>
+                    <h2 class="text-[12px] font-bold uppercase tracking-[0.14em] text-foreground/80">Request · headers</h2>
                     <ui-badge tone="neutral">{{ headerCount(sel.requestHeaders) }}</ui-badge>
                   </div>
                   <div class="overflow-x-auto bg-[var(--code)] mx-scroll">
@@ -306,7 +290,7 @@ interface SourceMeta {
               <div class="border-b border-border">
                 <ui-collapsible [open]="false" triggerClass="bg-white/5 px-6 py-2.5 hover:bg-white/10">
                   <div uiCollapsibleHeader class="flex items-center gap-2">
-                    <h3 class="text-[12px] font-bold uppercase tracking-[0.14em] text-foreground/80">Request · body</h3>
+                    <h2 class="text-[12px] font-bold uppercase tracking-[0.14em] text-foreground/80">Request · body</h2>
                     <span class="font-mono text-[11px] text-muted-foreground">{{ sel.requestBodyBytes }} B@if (sel.requestBodyTruncated) { · {{ 'monitor.truncated' | transloco }}}</span>
                   </div>
                   @if (sel.requestBody) {
@@ -321,7 +305,7 @@ interface SourceMeta {
               <div class="border-b border-border">
                 <ui-collapsible [open]="false" triggerClass="bg-white/5 px-6 py-2.5 hover:bg-white/10">
                   <div uiCollapsibleHeader class="flex items-center gap-2">
-                    <h3 class="text-[12px] font-bold uppercase tracking-[0.14em] text-foreground/80">Response · headers</h3>
+                    <h2 class="text-[12px] font-bold uppercase tracking-[0.14em] text-foreground/80">Response · headers</h2>
                     <ui-badge tone="neutral">{{ headerCount(sel.responseHeaders) }}</ui-badge>
                   </div>
                   <div class="overflow-x-auto bg-[var(--code)] mx-scroll">
@@ -345,7 +329,7 @@ interface SourceMeta {
               <div>
                 <ui-collapsible triggerClass="bg-white/5 px-6 py-2.5 hover:bg-white/10">
                   <div uiCollapsibleHeader class="flex items-center gap-2">
-                    <h3 class="text-[12px] font-bold uppercase tracking-[0.14em] text-foreground/80">Response · body</h3>
+                    <h2 class="text-[12px] font-bold uppercase tracking-[0.14em] text-foreground/80">Response · body</h2>
                     <span class="font-mono text-[11px] text-muted-foreground">{{ sel.responseBodyBytes ?? 0 }} B@if (sel.responseBodyTruncated) { · {{ 'monitor.truncated' | transloco }}}</span>
                   </div>
                   @if (sel.responseBody) {
@@ -478,6 +462,10 @@ export class MonitorNextPage {
     { value: 'mock-only-miss', label: 'Miss' },
   ];
   protected readonly statusChips = [2, 3, 4, 5];
+
+  protected readonly hasFilter = computed(
+    () => this.search().trim() !== '' || this.methodFilter() !== 'all' || this.sourceFilter() !== 'all' || this.statusClasses().size > 0,
+  );
 
   /** Lista filtrata per ricerca + metodo + classe di status + provenienza della risposta. */
   protected readonly filtered = computed(() => {

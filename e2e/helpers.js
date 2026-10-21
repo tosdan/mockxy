@@ -297,8 +297,8 @@ async function gotoDati(page, lang = APP_LANG) {
     { key: LANG_STORAGE_KEY, value: lang },
   );
   await page.goto("/_admin/ui/dati");
-  // Sync point: il sottotitolo della topbar, univoco e sempre presente (l'host può avere dim. 0).
-  await expect(page.getByText("file json riusabili negli handler")).toBeVisible();
+  // Sync point: il titolo della pagina, sempre presente (l'host può avere dim. 0).
+  await expect(page.getByRole("heading", { level: 1, name: "Dati" })).toBeVisible();
 }
 
 /** Isolamento dei test della pagina Dati: elimina tutti i file dati dalla run dir via API. */
