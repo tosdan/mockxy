@@ -126,8 +126,11 @@
   --json-key: #9aa1b2;
   --json-string: #a2ad9d;
   --json-number: #c2b69b;
-  --json-punct: #6f6f74;
-  --json-gutter: #5f5f64;
+  /* Punteggiatura e operatori, e sotto loro numeri di riga e commenti: spenti ma leggibili,
+     almeno 4.5:1 (WCAG AA) su --code e sulla riga attiva dell'editor. La punteggiatura resta un
+     gradino sopra i numeri di riga, che non fanno parte del codice. */
+  --json-punct: #8e8e94;
+  --json-gutter: #838389;
 
   /* colori per metodo HTTP — shade -300 come in aurora-2 (l'opacita' 85% la applica il badge) */
   --method-get: #6ee7b7;
