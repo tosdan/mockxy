@@ -1,6 +1,10 @@
 import { EditorSelection, EditorState } from '@codemirror/state';
 import { CompletionContext } from '@codemirror/autocomplete';
-import { languageExtension, selectedTextDecorations, sizeTheme, jsonLinterExtension } from './cm-setup';
+import { EditorView } from '@codemirror/view';
+import { openSearchPanel } from '@codemirror/search';
+import { EDITOR_PHRASE_KEYS, editorPhrases, languageExtension, selectedTextDecorations, sizeTheme, jsonLinterExtension, staticExtensions } from './cm-setup';
+import itDict from '../../../i18n/it.json';
+import enDict from '../../../i18n/en.json';
 import { scriptCompletionSource } from './cm-script-completions';
 
 // Parti pure dell'editor di codice: sorgente di completamento del contratto script
@@ -78,5 +82,41 @@ describe('testo selezionato', () => {
   it('senza selezione nessun segno', () => {
     const state = EditorState.create({ doc: 'abc' });
     expect(selectedTextDecorations(state).size).toBe(0);
+  });
+});
+
+// I testi di CodeMirror seguono la lingua dell'app: senza, l'editor restava in inglese.
+describe('testi di CodeMirror tradotti', () => {
+  it('ogni frase mappata ha la sua traduzione, in italiano e in inglese', () => {
+    for (const dict of [itDict.codeEditor, enDict.codeEditor] as Record<string, string>[]) {
+      for (const key of Object.values(EDITOR_PHRASE_KEYS)) {
+        expect(dict[key], key).toBeTruthy();
+      }
+    }
+  });
+
+  it('lo stato restituisce la frase tradotta, e una frase sconosciuta resta com\'e\'', () => {
+    const state = EditorState.create({ extensions: editorPhrases(itDict.codeEditor) });
+    expect(state.phrase('Find')).toBe('Cerca');
+    expect(state.phrase('replaced $ matches', 3)).toBe('sostituite 3 corrispondenze');
+    expect(state.phrase('Frase nuova')).toBe('Frase nuova');
+  });
+
+  it('il pannello di ricerca montato non mostra piu\' testi inglesi', () => {
+    const parent = document.createElement('div');
+    document.body.append(parent);
+    const view = new EditorView({ state: EditorState.create({ doc: '{}', extensions: [...staticExtensions, editorPhrases(itDict.codeEditor)] }), parent });
+    try {
+      openSearchPanel(view);
+      const panel = parent.querySelector('.cm-search') as HTMLElement;
+      const placeholders = Array.from(panel.querySelectorAll('input[placeholder]')).map((input) => input.getAttribute('placeholder'));
+      const labels = Array.from(panel.querySelectorAll('button, label')).map((el) => (el.textContent ?? '').trim()).filter(Boolean);
+      expect(placeholders).toEqual(['Cerca', 'Sostituisci con']);
+      expect(labels).toEqual(['successivo', 'precedente', 'tutti', 'maiuscole', 'regex', 'parola intera', 'sostituisci', 'sostituisci tutti', '×']);
+      expect(panel.querySelector('button[name="close"]')?.getAttribute('aria-label')).toBe('chiudi');
+    } finally {
+      view.destroy();
+      parent.remove();
+    }
   });
 });
