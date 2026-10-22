@@ -114,10 +114,12 @@ export interface SequenceStepView {
       </div>
 
       <ol class="flex flex-col gap-2" [attr.aria-label]="'sequenceDialog.steps' | transloco">
+        <!-- Un passo concluso si riconosce dalla spunta e da un'opacita' all'80%: al 55% il testo grigio
+             della riga scendeva a 3:1, sotto il minimo. -->
         @for (step of stepViews(); track $index) {
         <li
           class="flex items-center gap-3 rounded-lg border px-3 py-2.5"
-          [class]="step.phase === 'current' ? 'border-[color:color-mix(in_srgb,var(--sequence)_45%,transparent)] bg-[color-mix(in_srgb,var(--sequence)_10%,transparent)]' : step.phase === 'done' ? 'border-border bg-black/20 opacity-55' : 'border-border bg-black/20'"
+          [class]="step.phase === 'current' ? 'border-[color:color-mix(in_srgb,var(--sequence)_45%,transparent)] bg-[color-mix(in_srgb,var(--sequence)_10%,transparent)]' : step.phase === 'done' ? 'border-border bg-black/20 opacity-80' : 'border-border bg-black/20'"
         >
           <span class="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-[color-mix(in_srgb,var(--sequence)_16%,transparent)] font-mono text-[11px] font-bold text-sequence">
             @if (step.phase === 'done') {
@@ -131,7 +133,7 @@ export interface SequenceStepView {
             @if (variantOf(step.response); as variant) {
             <span class="flex min-w-0 items-baseline gap-2">
               @if (variant.title) {
-              <span class="truncate text-[13px] text-foreground">{{ variant.title }}</span>
+              <span class="truncate text-[13px] text-foreground">{{ variant.title }}</span>&ngsp;
               }
               <span class="truncate font-mono" [class]="variant.title ? 'text-[11px] text-muted-foreground' : 'text-[12px] text-foreground'">@if (variant.status != null) {{{ variant.status }} · }{{ step.response }}</span>
             </span>
