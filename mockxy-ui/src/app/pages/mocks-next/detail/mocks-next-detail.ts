@@ -235,13 +235,15 @@ const METHOD_TONES: ReadonlySet<string> = new Set(['get', 'post', 'put', 'delete
             }
             </div>
 
+            <!-- Status, delay o il chip della sequenza: per handler, middleware, SSE e WebSocket il
+                 gruppo e' vuoto, e il suo separatore resterebbe da solo in fondo alla barra. -->
+            @if (hasVariantAttributes()) {
             <div class="relative flex shrink-0 items-center gap-2">
             <span aria-hidden="true" class="pointer-events-none absolute -left-[7px] top-1/2 h-5 w-px -translate-y-1/2 bg-border"></span>
 
             @if (d.type === 'sequence' && d.sequence; as sequence) {
             <ui-chip class="shrink-0">
-              <span class="font-semibold text-sequence">SEQ</span>
-              <span class="font-mono font-semibold tabular-nums text-foreground">{{ sequence.steps.length }} {{ 'sequenceDialog.steps' | transloco }}</span>
+              <span class="font-semibold text-sequence">SEQ</span>&ngsp;<span class="font-mono font-semibold tabular-nums text-foreground">{{ (sequence.steps.length === 1 ? 'detail.sequenceStepsOne' : 'detail.sequenceStepsMany') | transloco: { count: sequence.steps.length } }}</span>
             </ui-chip>
             } @else if (selectedStatus() !== null) {
             <!-- Status e delay sono le due cose che si ritoccano di continuo: cambiarle qui evita
@@ -255,7 +257,9 @@ const METHOD_TONES: ReadonlySet<string> = new Set(['get', 'post', 'put', 'delete
               [disabled]="busy()"
             />
             }
-            @if (d.type !== 'sequence') {
+            <!-- Il ritardo e' una proprieta' delle sole varianti mock (il motore lo legge solo li'): per
+                 handler, middleware, SSE e WebSocket mostrava un "0 ms" che non diceva nulla. -->
+            @if (d.type === 'mock') {
             <span class="inline-flex shrink-0 items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
               delay
               @if (inlineEditable()) {
@@ -277,6 +281,7 @@ const METHOD_TONES: ReadonlySet<string> = new Set(['get', 'post', 'put', 'delete
             </span>
             }
             </div>
+            }
           </div>
           }
         </div>
@@ -733,6 +738,12 @@ export class MocksNextDetail {
       };
     }),
   );
+
+  /** Il gruppo accanto alla tendina ha qualcosa da mostrare: il chip della sequenza, lo status o il delay. */
+  protected readonly hasVariantAttributes = computed(() => {
+    const d = this.detail();
+    return d != null && ((d.type === 'sequence' && d.sequence != null) || d.type === 'mock' || this.selectedStatus() !== null);
+  });
 
   protected readonly selectedStatus = computed<number | null>(() => {
     const d = this.detail();

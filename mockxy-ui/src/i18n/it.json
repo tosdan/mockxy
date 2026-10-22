@@ -478,8 +478,10 @@
     "inactive": "Disattivo",
     "deleteEndpointConfirm": "Eliminare l'endpoint?",
     "delete": "Elimina",
-    "copy": "Copia",
-    "copyEndpointTip": "Copia questo endpoint (metodo, path, response)",
+    "copy": "Duplica",
+    "sequenceStepsOne": "1 passo",
+    "sequenceStepsMany": "{{count}} passi",
+    "copyEndpointTip": "Duplica questo endpoint (metodo, path, response)",
     "templatedLabel": "Template",
     "templatedTip": "Sostituisce i placeholder nel body e negli header: params.id, query.x, headers.x, body.campo, now, uuid, randomInt 1 10 — tra doppie graffe. Filtro dei tipi: params.id | number.",
     "editResponse": "Modifica response",
@@ -571,7 +573,7 @@
     "create": "Crea"
   },
   "copyDialog": {
-    "title": "Copia endpoint",
+    "title": "Duplica endpoint",
     "from": "da {{method}} {{path}}",
     "method": "Metodo",
     "path": "Path",
@@ -585,7 +587,7 @@
     "sharedStateWarning": "La copia continuerà a condividere lo stato: {{names}}.",
     "sharedStateWarningHint": "Per renderla indipendente, modifica nome e seedKey nel sorgente copiato.",
     "cancel": "Annulla",
-    "copy": "Copia"
+    "copy": "Duplica"
   },
   "wsConsole": {
     "connections": "Connessioni",
