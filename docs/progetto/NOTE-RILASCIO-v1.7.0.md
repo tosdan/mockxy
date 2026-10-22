@@ -23,15 +23,18 @@ cambia in tre punti, uno incompatibile per chi crea una collezione chiamata «No
   - **Ordine:** parte dalla richiesta più recente.
   - **Voci:** ogni voce dice quando è arrivata, chi l'ha servita e la latenza.
   - **Filtri:** sono quelli del Monitor e cercano in tutto l'archivio.
-- **Icone di provenienza:** mock, handler, middleware, proxy, SSE, WebSocket, miss e passi di
-  sequenza hanno ciascuno un'icona oltre al colore, nel Monitor, nello Storico e nel tipo degli
-  endpoint del catalogo.
+- **Icone:**
+  - **Provenienza:** nel Monitor e nello Storico mock, handler, middleware, proxy, SSE, WebSocket
+    e miss hanno ciascuno un'icona oltre al colore.
+  - **Sequenze:** nel Monitor anche il badge «SEQ» dei passi di sequenza ha la sua icona.
+  - **Catalogo:** il tipo degli endpoint, sequenze comprese, ha la stessa icona.
 - **Editor di codice:**
   - **Contrasto:** numeri di riga, commenti e punteggiatura sono più leggibili, e nel testo
     selezionato o trovato con la ricerca i caratteri restano leggibili.
   - **Lingua:** il pannello di ricerca e sostituzione e gli altri testi di CodeMirror seguono la
     lingua dell'app.
-- **Accessibilità:** axe-core non segnala violazioni su catalogo, Monitor, Storico e Dati.
+- **Accessibilità:** axe-core non segnala violazioni su catalogo, Monitor, Storico e Dati negli
+  stati verificati.
 - **Admin API:**
   - **Collezioni:** `POST /mocks/collections` riserva anche il nome «Non assegnati» oltre a
     «Unsorted», e il `409` porta `details.code: COLLECTION_LABEL_RESERVED`.
@@ -72,16 +75,18 @@ three places, one of them incompatible for clients creating a collection named �
   - **Order:** it starts from the most recent request.
   - **Entries:** each entry tells when it arrived, what served it and its latency.
   - **Filters:** the Monitor's filters search the whole archive.
-- **Source icons:** mock, handler, middleware, proxy, SSE, WebSocket, miss and sequence steps
-  each have an icon besides their color, in the Monitor, in the History page and in the
-  catalog's endpoint types.
+- **Icons:**
+  - **Source:** in the Monitor and the History page, mock, handler, middleware, proxy, SSE,
+    WebSocket and miss each have an icon besides their color.
+  - **Sequences:** in the Monitor the «SEQ» badge of sequence steps has its icon too.
+  - **Catalog:** endpoint types, sequences included, have the same icons.
 - **Code editor:**
   - **Contrast:** line numbers, comments and punctuation are easier to read, and selected text
     or search results stay readable.
   - **Language:** the search and replace panel and CodeMirror's other texts follow the app's
     language.
 - **Accessibility:** axe-core reports no violations on the catalog, the Monitor, the History
-  page and the Data page.
+  page and the Data page in the states checked.
 - **Admin API:**
   - **Collections:** `POST /mocks/collections` reserves the name «Non assegnati» as well as
     «Unsorted», and the `409` carries `details.code: COLLECTION_LABEL_RESERVED`.

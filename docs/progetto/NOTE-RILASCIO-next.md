@@ -43,9 +43,10 @@ riassumono le novità rispetto alla 1.6.0.
   «Seleziona».
 - **Testata comune:** nome della vista e conteggio in un badge, come nel catalogo. Nel Monitor
   sparisce il badge «Live», che ripeteva la barra in alto; resta l'avviso «In pausa».
-- **Icone di provenienza:** mock, handler, middleware, proxy, SSE, WebSocket, miss e passi di
-  sequenza hanno ciascuno un'icona, oltre al colore. Anche le provenienze che prima comparivano
-  col nome grezzo hanno un'etichetta.
+- **Icone di provenienza:** nel Monitor e nello Storico mock, handler, middleware, proxy, SSE,
+  WebSocket e miss hanno ciascuno un'icona, oltre al colore. Nel Monitor anche il badge «SEQ» dei
+  passi di sequenza ha la sua icona. Le provenienze che prima comparivano col nome grezzo hanno
+  un'etichetta.
 - **Monitor, errori divisi:** il conteggio degli errori passa sui chip delle classi di status
   («4xx 8 · 5xx 4»), che contano le voci fra quelle degli altri filtri.
 - **Monitor, non mockate:** un chip «N non mockate», con lo stesso segno ambra delle righe,
@@ -79,8 +80,11 @@ riassumono le novità rispetto alla 1.6.0.
     `details.code`.
 - **`GET /monitoring/dumps/read`: filtri, ripresa dal byte e ordine dal più recente.**
   - **Filtri:** `q`, `method`, `status` e `source` (o `real-backend`) si applicano a tutto
-    l'archivio, e `limit` conta le corrispondenze. Una chiamata legge al massimo 20.000 righe:
-    con un filtro raro la pagina può tornare corta o vuota con `done: false`.
+    l'archivio, e `limit` conta le corrispondenze. La scansione della pagina esamina al massimo
+    20.000 righe dalla posizione del cursore: con un filtro raro la pagina può tornare corta o
+    vuota con `done: false`. Il tetto riguarda la scansione, non il posizionamento: la lettura
+    dal più recente conta prima le righe del file, e un cursore senza `byteOffset` rilegge il
+    file fino a `lineIndex`.
   - **Ripresa:** il cursore porta `byteOffset` e la chiamata successiva riprende da lì. Un
     cursore senza resta valido, rileggendo il file fino a `lineIndex` come prima.
   - **`order=desc`:** legge dalla voce più recente, con le stesse `dumpKey`. Senza `order` la
@@ -96,8 +100,9 @@ riassumono le novità rispetto alla 1.6.0.
 
 ### Accessibilità
 
-- axe-core non segnala violazioni su catalogo, Monitor, Storico e Dati, nemmeno sul badge «Live»
-  rimosso, che non raggiungeva il contrasto minimo.
+- axe-core non segnala violazioni su catalogo, Monitor, Storico e Dati negli stati verificati
+  (a riposo, con filtri, selezioni e densità compatta). Il badge «Live» rimosso non raggiungeva
+  il contrasto minimo.
 - Ogni pagina ha un titolo `h1` e le sezioni del dettaglio sono `h2`; i pulsanti a sola icona
   hanno un nome accessibile.
 - Il testo dei chip delle statistiche del Monitor viene letto con gli spazi giusti («64 ms
