@@ -105,12 +105,13 @@ export class UiCodeEditor implements OnDestroy {
       });
     });
 
-    // Testi di CodeMirror (ricerca, lint, ripiegamento...) ed etichetta predefinita, nella lingua attiva.
+    // Testi di CodeMirror (ricerca, lint, ripiegamento...) ed etichetta, nella lingua attiva. Si
+    // leggono prima di guardare se l'editor c'e': al primo giro non c'e' ancora, e un ariaLabel letto
+    // solo dentro il dispatch non diventerebbe una dipendenza, e i suoi cambi andrebbero persi.
     effect(() => {
-      const translations = this.translations();
-      this.view?.dispatch({
-        effects: [this.phrasesConf.reconfigure(editorPhrases(translations)), this.ariaConf.reconfigure(this.contentAttributes())],
-      });
+      const phrases = editorPhrases(this.translations());
+      const attributes = this.contentAttributes();
+      this.view?.dispatch({ effects: [this.phrasesConf.reconfigure(phrases), this.ariaConf.reconfigure(attributes)] });
     });
 
     // Altezza min/max.
