@@ -83,8 +83,10 @@ const METHOD_TONES: ReadonlySet<string> = new Set(['get', 'post', 'put', 'delete
         <div class="min-w-0 flex-1">
           <!-- Dove vive l'endpoint, e da dove lo si sposta: prima la collection si vedeva solo nel
                catalogo, e cambiarla passava dal menu della riga. -->
+          <!-- Gli anelli di fuoco dei pulsanti piccoli della testata sono al 70%: al 40% il colore
+               dell'anello stava a 1,9:1 sullo sfondo, sotto il 3:1 di un indicatore di fuoco. -->
           <button
-            class="-ml-1 mb-1.5 flex items-center gap-1.5 rounded px-1 py-0.5 text-[11.5px] text-muted-foreground transition hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+            class="-ml-1 mb-1.5 flex items-center gap-1.5 rounded px-1 py-0.5 text-[11.5px] text-muted-foreground transition hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70"
             [cdkMenuTriggerFor]="collectionMenu"
             [attr.aria-label]="'detail.collectionOf' | transloco"
           >
@@ -120,7 +122,7 @@ const METHOD_TONES: ReadonlySet<string> = new Set(['get', 'post', 'put', 'delete
           <div class="mt-2 flex items-center gap-2">
             <p class="text-[13.5px]" [class]="d.endpoint?.description ? 'text-muted-foreground' : 'text-muted-foreground/50 italic'">{{ d.endpoint?.description || ('detail.noDescription' | transloco) }}</p>
             @if (d.editable) {
-            <button type="button" class="shrink-0 rounded text-muted-foreground transition hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40" (click)="startEditDescription()" [uiTooltip]="'detail.editDescription' | transloco" [attr.aria-label]="'detail.editDescription' | transloco"><ng-icon name="lucidePencil" size="0.7rem" /></button>
+            <button type="button" class="shrink-0 rounded text-muted-foreground transition hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70" (click)="startEditDescription()" [uiTooltip]="'detail.editDescription' | transloco" [attr.aria-label]="'detail.editDescription' | transloco"><ng-icon name="lucidePencil" size="0.7rem" /></button>
             }
           </div>
           }
@@ -134,7 +136,7 @@ const METHOD_TONES: ReadonlySet<string> = new Set(['get', 'post', 'put', 'delete
             <span class="min-w-0 truncate font-mono" [uiTooltip]="filePath()" [showDelay]="250">{{ displayedFilePath() }}</span>
             <button
               type="button"
-              class="grid size-5 shrink-0 place-items-center rounded text-muted-foreground/70 transition hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+              class="grid size-5 shrink-0 place-items-center rounded text-muted-foreground/70 transition hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70"
               [cdkCopyToClipboard]="filePath()"
               (cdkCopyToClipboardCopied)="onPathCopied($event)"
               [uiTooltip]="'detail.copyFilePath' | transloco"
