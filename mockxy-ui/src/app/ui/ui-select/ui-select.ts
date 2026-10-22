@@ -21,6 +21,13 @@ export interface UiSelectOption<T = string> {
   readonly disabled?: boolean;
   /** Colore (CSS) di un pallino guida a sinistra dell'opzione e sul trigger quando selezionata. */
   readonly accent?: string;
+  /**
+   * Icona (nome ng-icons, registrata da chi usa la select) al posto del pallino, colorata con
+   * `accent`: dice di che tipo e' l'opzione senza scriverlo nell'etichetta.
+   */
+  readonly icon?: string;
+  /** Nota breve a destra dell'opzione, nella lista (non sul trigger). */
+  readonly hint?: string;
 }
 
 /** Tono del trigger: 'default' neutro o una classe di status (pill colorata + dot). */
@@ -79,6 +86,8 @@ let uiSelectSeq = 0;
       <span class="flex min-w-0 items-center gap-1.5">
         @if (tone() !== 'default') {
         <span class="size-1.5 shrink-0 rounded-full" [class]="dotClass()"></span>
+        } @else if (selectedOption()?.icon; as icon) {
+        <ng-icon [name]="icon" size="0.85rem" class="shrink-0" [color]="selectedAccent() ?? 'currentColor'" />
         } @else if (selectedAccent(); as acc) {
         <span class="size-1.5 shrink-0 rounded-full" [style.background]="acc"></span>
         }
@@ -99,7 +108,7 @@ let uiSelectSeq = 0;
       [cdkConnectedOverlayOrigin]="origin"
       [cdkConnectedOverlayOpen]="open()"
       [cdkConnectedOverlayPositions]="positions"
-      [cdkConnectedOverlayWidth]="triggerWidth()"
+      [cdkConnectedOverlayMinWidth]="triggerWidth()"
       [cdkConnectedOverlayViewportMargin]="8"
       (overlayOutsideClick)="onOutsideClick($event)"
       (detach)="close(false)"
@@ -108,7 +117,7 @@ let uiSelectSeq = 0;
         #panel
         role="listbox"
         [id]="listboxId"
-        class="max-h-60 overflow-y-auto rounded-lg border border-border bg-popover p-1 text-popover-foreground shadow-lg ring-1 ring-black/20 animate-in fade-in-0 zoom-in-95"
+        class="max-h-60 max-w-[min(28rem,calc(100vw-16px))] overflow-y-auto rounded-lg border border-border bg-popover p-1 text-popover-foreground shadow-lg ring-1 ring-black/20 animate-in fade-in-0 zoom-in-95"
       >
         @for (opt of options(); track opt.value; let i = $index) {
         <button
@@ -122,10 +131,15 @@ let uiSelectSeq = 0;
           (mouseenter)="opt.disabled || activeIndex.set(i)"
           class="flex w-full cursor-pointer items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-sm outline-none transition data-[active]:bg-accent disabled:cursor-not-allowed disabled:opacity-50"
         >
-          @if (opt.accent) {
+          @if (opt.icon) {
+          <ng-icon [name]="opt.icon" size="0.85rem" class="shrink-0" [color]="opt.accent ?? 'currentColor'" />
+          } @else if (opt.accent) {
           <span class="size-1.5 shrink-0 rounded-full" [style.background]="opt.accent"></span>
           }
           <span class="flex-1 truncate" [class.font-medium]="isSelected(opt)">{{ opt.label }}</span>
+          @if (opt.hint) {
+          <span class="shrink-0 font-mono text-[11px] text-muted-foreground">{{ opt.hint }}</span>
+          }
           @if (isSelected(opt)) {
           <ng-icon name="lucideCheck" size="0.9rem" class="shrink-0 text-brand" />
           }
@@ -178,20 +192,26 @@ export class UiSelect<T = string> {
   private readonly triggerRef = viewChild.required<ElementRef<HTMLButtonElement>>('trigger');
   private readonly panelRef = viewChild<ElementRef<HTMLElement>>('panel');
 
+  /** L'opzione selezionata, o null se nessuna. */
+  protected readonly selectedOption = computed(() => this.options().find((o) => o.value === this.value()) ?? null);
+
   /** Etichetta dell'opzione selezionata, o null se nessuna (mostra il placeholder). */
-  protected readonly selectedLabel = computed(
-    () => this.options().find((o) => o.value === this.value())?.label ?? null,
-  );
+  protected readonly selectedLabel = computed(() => this.selectedOption()?.label ?? null);
 
-  /** Colore del pallino dell'opzione selezionata (per il trigger), o null. */
-  protected readonly selectedAccent = computed(
-    () => this.options().find((o) => o.value === this.value())?.accent ?? null,
-  );
+  /** Colore del pallino (o dell'icona) dell'opzione selezionata, per il trigger, o null. */
+  protected readonly selectedAccent = computed(() => this.selectedOption()?.accent ?? null);
 
-  /** Sotto il trigger; se non c'e' spazio, sopra. */
+  /**
+   * Sotto il trigger; se non c'e' spazio, sopra. Il pannello e' largo almeno quanto il trigger e
+   * si allarga fino al contenuto, con un tetto: largo esattamente come un trigger stretto, una nota
+   * (hint) lasciava ai titoli pochi pixel. Piu' largo del trigger puo' non stare a destra: allora
+   * si allinea al suo bordo destro.
+   */
   protected readonly positions: ConnectedPosition[] = [
     { originX: 'start', originY: 'bottom', overlayX: 'start', overlayY: 'top', offsetY: 6 },
+    { originX: 'end', originY: 'bottom', overlayX: 'end', overlayY: 'top', offsetY: 6 },
     { originX: 'start', originY: 'top', overlayX: 'start', overlayY: 'bottom', offsetY: -6 },
+    { originX: 'end', originY: 'top', overlayX: 'end', overlayY: 'bottom', offsetY: -6 },
   ];
 
   protected isSelected(o: UiSelectOption<T>): boolean {

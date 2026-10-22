@@ -751,4 +751,19 @@ describe('MocksNextDetail', () => {
       for (const item of items) expect(transloco.translate(item.hint)).not.toBe(item.hint);
     });
   });
+
+  // Il tipo lo dice l'icona, come nel catalogo; "Sequence · sequence" lo ripeteva due volte.
+  describe('tendina delle varianti', () => {
+    it('etichetta = titolo, icona e colore del tipo, nota con tipo e status', () => {
+      const fixture = create();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const options = (fixture.componentInstance as any).responseOptions() as { label: string; icon?: string; hint?: string; accent?: string }[];
+      expect(options.length).toBeGreaterThan(0);
+      for (const option of options) {
+        expect(option.label).not.toMatch(/ · (mock|handler|middleware|sse|ws|sequence)$/);
+        expect(option.icon).toBeTruthy();
+        expect(option.hint).toMatch(/^(mock|handler|middleware|sse|ws|sequence)( · \d{3})?$/);
+      }
+    });
+  });
 });

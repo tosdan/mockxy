@@ -56,6 +56,46 @@ describe('UiSelect', () => {
     });
   });
 
+  // Un'opzione puo' avere un'icona (al posto del pallino, nel colore accent) e una nota a destra.
+  describe('icona e nota', () => {
+    const WITH_ICONS: UiSelectOption[] = [
+      { value: 'x', label: 'OK', icon: 'lucideCheck', accent: 'var(--type-mock)', hint: 'mock · 200' },
+      { value: 'y', label: 'Semplice', accent: 'var(--brand)' },
+    ];
+
+    it('il trigger mostra l\'icona dell\'opzione scelta al posto del pallino, senza la nota', () => {
+      const { fixture } = create({ options: WITH_ICONS, value: 'x' });
+      const trigger = (fixture.nativeElement as HTMLElement).querySelector('[role="combobox"]') as HTMLElement;
+      expect(trigger.querySelectorAll('ng-icon')).toHaveLength(2); // icona dell'opzione + freccia
+      expect(trigger.querySelector('span.rounded-full')).toBeNull();
+      expect(trigger.textContent).not.toContain('mock · 200');
+
+      const semplice = create({ options: WITH_ICONS, value: 'y' });
+      const triggerSemplice = (semplice.fixture.nativeElement as HTMLElement).querySelector('[role="combobox"]') as HTMLElement;
+      expect(triggerSemplice.querySelector('span.rounded-full')).not.toBeNull();
+    });
+
+    it('nella lista ogni opzione ha la sua icona e la sua nota', () => {
+      const { fixture, c } = create({ options: WITH_ICONS, value: 'y' });
+      c.toggle();
+      fixture.detectChanges();
+      const options = Array.from(document.querySelectorAll('[role="option"]'));
+      expect(options[0].querySelector('ng-icon')).not.toBeNull();
+      expect(options[0].textContent).toContain('mock · 200');
+      expect(options[1].querySelector('span.rounded-full')).not.toBeNull();
+      c.close(false);
+      fixture.detectChanges();
+    });
+  });
+
+  // Il pannello puo' essere piu' largo del trigger: se non sta a destra si allinea al suo bordo destro.
+  it('il pannello ha posizioni di riserva allineate al bordo destro del trigger', () => {
+    const { c } = create();
+    const positions = c.positions as { originX: string; overlayX: string; originY: string }[];
+    expect(positions.map((p) => `${p.originY}:${p.originX}`)).toEqual(['bottom:start', 'bottom:end', 'top:start', 'top:end']);
+    expect(positions.every((p) => p.originX === p.overlayX)).toBe(true);
+  });
+
   describe('apertura', () => {
     it('apre sull’opzione selezionata, o sulla prima abilitata', () => {
       const { c } = create({ value: 'c' });
