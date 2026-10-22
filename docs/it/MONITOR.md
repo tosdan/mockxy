@@ -48,20 +48,39 @@ valore, il draft, il body della richiesta o lo stack.
 
 La registrazione segue l'interruttore globale del **server**: a server spento il monitor è
 fermo; in modalità **proxy totale** resta attivo — è proprio lo scenario «osserva il backend
-vero per catturare» ([il flusso completo](PROXY.md)). Il badge «Live / In pausa» in testa alla
-pagina riflette lo stato della connessione live dell'interfaccia (gli aggiornamenti arrivano in
-streaming), non un interruttore a sé.
+vero per catturare» ([il flusso completo](PROXY.md)). La cattura live dell'interfaccia (gli
+aggiornamenti arrivano in streaming) si mette in pausa e si riprende dalla barra in alto, dove
+compare come «Monitor live / in pausa»; quando è in pausa la testata della pagina lo dice, perché
+spiega come mai la lista non si muove.
 
 ## La pagina
 
+La testata conta le richieste; con un filtro acceso mostra quante ne restano sul totale. Ogni
+voce dice da dove viene con un'icona e un nome: documento per i mock, ƒ per gli handler, due
+cerchi per i middleware, server per il proxy, antenna per SSE, doppia freccia per WebSocket,
+lente barrata per i miss. Una barra ambra a sinistra segna le richieste **non mockate**: quelle
+non servite da un mock, un handler o uno stream SSE o WebSocket del workspace, cioè passate dal
+backend (proxy, middleware) o rimaste senza mock né backend a cui girarle.
+
 La lista si filtra per testo libero, metodo, classe di status e provenienza della risposta —
 il filtro «Servita da», con una voce per ciascuna provenienza (mock, proxy, handler,
-middleware, miss) più la voce combinata «**Backend vero**»: tutto ciò che non è uscito dai
-mock o dagli handler del workspace, la vista naturale quando si osserva il traffico che passa
-dal backend reale. Il dettaglio di una voce mostra richiesta e risposta complete (header e
-body), si esporta in JSON e si copia come comando cURL pronto da rieseguire; dalle voci
-servite da un mock si salta direttamente all'endpoint che le ha generate. La lista si può
-ripulire in ogni momento (l'archivio su disco non ne è toccato).
+middleware, miss) più la voce combinata «**Backend vero**», che tiene proprio le non mockate:
+la vista naturale quando si osserva il traffico che passa dal backend reale. Il chip «N non
+mockate» in cima alla lista accende e spegne quel filtro con un clic. I chip delle classi di
+status contano le proprie voci fra quelle che passano gli altri filtri, così 4xx e 5xx dicono
+quanti errori ci sono e di che tipo.
+
+Le voci si selezionano come nel catalogo: il clic sulla riga la apre nel dettaglio, il clic
+sulla sua casella la spunta (con Maiuscole l'intervallo dall'ultima spuntata). Da tastiera le
+frecce, Home e Fine si spostano fra le voci e le aprono, Spazio spunta quella attiva e
+Maiuscole+Spazio l'intervallo. Con una selezione compare in fondo alla lista la barra delle
+azioni: crea i mock delle voci spuntate, con l'opzione di attivarli subito. Dal menu «⋮» della
+testata si sceglie la **densità compatta**, una riga per voce, ricordata alla visita successiva.
+
+Il dettaglio di una voce mostra richiesta e risposta complete (header e body), si esporta in
+JSON e si copia come comando cURL pronto da rieseguire; dalle voci servite da un mock si salta
+direttamente all'endpoint che le ha generate. La lista si può ripulire in ogni momento
+(l'archivio su disco non ne è toccato).
 
 ## Da traffico a mock
 

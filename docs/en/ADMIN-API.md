@@ -123,7 +123,7 @@ fail with `400`.
 
 | Method and path | What it does |
 |---|---|
-| `POST /mocks/collections` | creates a collection (nested too) |
+| `POST /mocks/collections` | creates a collection (nested too). The names of the virtual collection of unassigned endpoints, `Unsorted` and `Non assegnati`, are reserved (case and accents ignored): they return `409` with `details.code: COLLECTION_LABEL_RESERVED` and `details.reservedLabels` |
 | `PATCH /mocks/collections/order` | reorders the root collections |
 | `PATCH /mocks/collections/:id/parent` | moves a collection within the tree |
 | `PATCH /mocks/collections/:id/items/order` | reorders a collection's endpoints |
@@ -179,8 +179,8 @@ then start the scenario.
 | `GET /monitoring/dump` | state of the disk writing, with the `maxFileBytes` and `maxTotalBytes` limits |
 | `PATCH /monitoring/dump` | turns it on/off and adjusts cadence, threshold and limits at runtime — body `{ enabled?, intervalMs?, threshold?, maxFileBytes?, maxTotalBytes? }`, validated as a whole before any field applies. `maxFileBytes` is a positive integer (the size at which the file rotates), `maxTotalBytes` a non-negative integer (the folder cap; `0` disables pruning). The limits apply from the next write, rotation or pruning, without deleting files in the call; a restart brings back the startup values |
 | `POST /monitoring/dump/flush` | manual flush; body `{}`; answers with the number of entries written |
-| `GET /monitoring/dumps` | list of the dump files |
-| `GET /monitoring/dumps/read` | cursor-paginated reading (`?fileIndex&lineIndex&byteOffset&limit`; pass the cursor back as received: `byteOffset` resumes without re-reading the file from its start), with optional filters in AND applied to the whole archive: `q` (text in the URL or the method), `method`, `status` (classes, `2,4`), `source` (or `real-backend` for what didn't come from a local response). It reads at most 20,000 lines past the cursor: with a rare filter the page can come back short, even empty, with `done: false` and the cursor to continue from |
+| `GET /monitoring/dumps` | list of the dump files in chronological order: by session, then by rotation number (`dump-STAMP.ndjson`, `dump-STAMP-002.ndjson`…) |
+| `GET /monitoring/dumps/read` | cursor-paginated reading (`?fileIndex&lineIndex&byteOffset&limit`; pass the cursor back as received: `byteOffset` resumes without re-reading the file from its start). With `order=desc` it reads from the newest entry: files from the last to the first and each file from its end, with the same `dumpKey`s; without a cursor it starts at the end of the archive, and lines written after the first page are left out. Without `order` it reads forward, and missing cursor fields default to 0. Optional filters in AND applied to the whole archive: `q` (text in the URL or the method), `method`, `status` (classes, `2,4`), `source` (or `real-backend` for what didn't come from a local response: mock, handler, SSE or WebSocket). It reads at most 20,000 lines past the cursor: with a rare filter the page can come back short, even empty, with `done: false` and the cursor to continue from |
 | `POST /monitoring/dumps/create-mocks` | creates mocks in bulk from a file or from a selection of entries (`file` or `keys`), with the same [rules and outcomes](#creating-mocks-from-traffic) as the monitor; the options are optional, with the historical defaults `onConflict: "skip"`, `selectAddedVariants: false`, `newEndpointEnabled: true`. It keeps its counts (`created`, `createdEmpty`, `skippedExisting`, `failed`) and adds `addedVariants`; `items` carry each entry's `key` |
 | `DELETE /monitoring/dumps/:file` | deletes a dump file |
 
