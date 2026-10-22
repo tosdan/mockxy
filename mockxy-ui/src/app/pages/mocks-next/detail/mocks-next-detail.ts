@@ -4,7 +4,8 @@ import { CdkCopyToClipboard } from '@angular/cdk/clipboard';
 import { NgIcon, provideIcons } from '@ng-icons/core';
 import { map } from 'rxjs';
 import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
-import { lucideCable, lucideCheck, lucideCog, lucideCopy, lucideEllipsisVertical, lucideFile, lucideFolder, lucideFileCode, lucideLayers, lucideListOrdered, lucideMessageSquare, lucidePencil, lucidePlus, lucideRadio, lucideTrash2, lucideTriangleAlert, lucideX } from '@ng-icons/lucide';
+import { lucideCheck, lucideCopy, lucideEllipsisVertical, lucideFile, lucideFolder, lucideMessageSquare, lucidePencil, lucidePlus, lucideTrash2, lucideTriangleAlert, lucideX } from '@ng-icons/lucide';
+import { RESPONSE_SOURCE_ICONS, endpointTypeIcon } from '../../../shared/response-source';
 import { UiBadge, type BadgeTone } from '../../../ui/ui-badge/ui-badge';
 import { UiButton } from '../../../ui/ui-button/ui-button';
 import { UiChip } from '../../../ui/ui-chip/ui-chip';
@@ -47,7 +48,7 @@ const METHOD_TONES: ReadonlySet<string> = new Set(['get', 'post', 'put', 'delete
 @Component({
   selector: 'mocks-next-detail',
   imports: [CdkMenuTrigger, CdkCopyToClipboard, NgIcon, StatusCombobox, TranslocoPipe, UiBadge, UiButton, UiCheckbox, UiChip, UiCode, UiCollapsible, UiInput, UiMenu, UiMenuItem, UiSelect, UiSkeleton, UiSwitch, UiTable, UiTooltip, MocksNextDraftConflict, MocksNextResponseForm, MocksNextSequenceSummary, MocksNextSseConsole, MocksNextWsConsole],
-  providers: [provideIcons({ lucideCable, lucideCheck, lucideCog, lucideCopy, lucideEllipsisVertical, lucideFile, lucideFolder, lucideFileCode, lucideLayers, lucideListOrdered, lucideMessageSquare, lucidePencil, lucidePlus, lucideRadio, lucideTrash2, lucideTriangleAlert, lucideX })],
+  providers: [provideIcons({ lucideCheck, lucideCopy, lucideEllipsisVertical, lucideFile, lucideFolder, lucideMessageSquare, lucidePencil, lucidePlus, lucideTrash2, lucideTriangleAlert, lucideX, ...RESPONSE_SOURCE_ICONS })],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { class: 'relative flex min-w-0 flex-1 flex-col overflow-hidden bg-muted' },
   template: `
@@ -119,13 +120,14 @@ const METHOD_TONES: ReadonlySet<string> = new Set(['get', 'post', 'put', 'delete
           <div class="mt-2 flex items-center gap-2">
             <p class="text-[13.5px]" [class]="d.endpoint?.description ? 'text-muted-foreground' : 'text-muted-foreground/50 italic'">{{ d.endpoint?.description || ('detail.noDescription' | transloco) }}</p>
             @if (d.editable) {
-            <button type="button" class="shrink-0 text-muted-foreground/50 transition hover:text-foreground" (click)="startEditDescription()" [uiTooltip]="'detail.editDescription' | transloco"><ng-icon name="lucidePencil" size="0.7rem" /></button>
+            <button type="button" class="shrink-0 rounded text-muted-foreground transition hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40" (click)="startEditDescription()" [uiTooltip]="'detail.editDescription' | transloco" [attr.aria-label]="'detail.editDescription' | transloco"><ng-icon name="lucidePencil" size="0.7rem" /></button>
             }
           </div>
           }
 
           @if (filePath()) {
-          <div class="mt-1.5 flex items-center gap-1.5 text-[11px] text-[var(--foreground-faint)]">
+          <!-- In grigio tenue ma sopra 4,5:1: con --foreground-faint il percorso scendeva sotto. -->
+          <div class="mt-1.5 flex items-center gap-1.5 text-[11px] text-muted-foreground">
             <ng-icon name="lucideFile" size="0.75rem" class="shrink-0" />
             <!-- Relativo alla cartella dei mock: l'assoluto ripete il root del workspace su ogni
                  endpoint ed e' diverso su ogni macchina. Nel tooltip resta per intero. -->
@@ -206,22 +208,33 @@ const METHOD_TONES: ReadonlySet<string> = new Set(['get', 'post', 'put', 'delete
           } @else {
           <!-- La tendina si adatta: larga fissa 512 px sprecava spazio coi titoli corti e troncava
                comunque quelli lunghi. Status e delay le stanno accanto invece che spinti al lato
-               opposto della riga: sono attributi della variante scelta, non della barra. -->
-          <div class="flex min-w-0 flex-1 items-center gap-2">
+               opposto della riga: sono attributi della variante scelta, non della barra.
+               La tendina non scende sotto una larghezza minima: a pannello stretto status e delay,
+               che hanno larghezza fissa, la schiacciavano fino a nascondere la variante attiva.
+               Quando lo spazio non basta, il loro gruppo scende sulla riga sotto, intero. -->
+          <!-- Il separatore sta nello spazio fra i due gruppi, fuori dal flusso: quando il secondo
+               gruppo va a capo cade oltre il bordo sinistro e overflow-hidden lo nasconde, invece di
+               restare in testa alla riga. Il padding tiene dentro gli anelli di fuoco; i pannelli
+               delle tendine sono overlay, quindi non vengono tagliati. -->
+          <div class="-m-1 flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-2 overflow-hidden p-1">
+            <div class="flex min-w-[15rem] max-w-[34rem] flex-1 items-center gap-2">
             <ui-select
-              class="min-w-0 flex-1 max-w-[27rem]"
+              class="min-w-0 flex-1"
               [options]="responseOptions()"
               [value]="d.selectedResponseFile ?? null"
               (valueChange)="store.selectResponse($any($event))"
               [disabled]="busy()"
               [placeholder]="'detail.responseTitlePlaceholder' | transloco"
+              [ariaLabel]="'detail.responseSelectAria' | transloco"
             />
             @if (d.editable) {
-            <button ui-button variant="outline" size="icon" [cdkMenuTriggerFor]="addResponseMenu" [disabled]="busy()" [uiTooltip]="'detail.addResponseTip' | transloco" [attr.aria-label]="'detail.addResponseTip' | transloco"><ng-icon name="lucidePlus" size="0.95rem" /></button>
-            <button ui-button variant="outline" size="icon" [cdkMenuTriggerFor]="responseMenu" [disabled]="busy()" [uiTooltip]="'detail.responseActions' | transloco" [attr.aria-label]="'detail.responseActions' | transloco"><ng-icon name="lucideEllipsisVertical" size="0.9rem" /></button>
+            <button ui-button variant="outline" size="icon" class="shrink-0" [cdkMenuTriggerFor]="addResponseMenu" [disabled]="busy()" [uiTooltip]="'detail.addResponseTip' | transloco" [attr.aria-label]="'detail.addResponseTip' | transloco"><ng-icon name="lucidePlus" size="0.95rem" /></button>
+            <button ui-button variant="outline" size="icon" class="shrink-0" [cdkMenuTriggerFor]="responseMenu" [disabled]="busy()" [uiTooltip]="'detail.responseActions' | transloco" [attr.aria-label]="'detail.responseActions' | transloco"><ng-icon name="lucideEllipsisVertical" size="0.9rem" /></button>
             }
+            </div>
 
-            <span class="mx-0.5 h-5 w-px shrink-0 bg-border"></span>
+            <div class="relative flex shrink-0 items-center gap-2">
+            <span aria-hidden="true" class="pointer-events-none absolute -left-[7px] top-1/2 h-5 w-px -translate-y-1/2 bg-border"></span>
 
             @if (d.type === 'sequence' && d.sequence; as sequence) {
             <ui-chip class="shrink-0">
@@ -261,6 +274,7 @@ const METHOD_TONES: ReadonlySet<string> = new Set(['get', 'post', 'put', 'delete
               ms
             </span>
             }
+            </div>
           </div>
           }
         </div>
@@ -322,42 +336,28 @@ const METHOD_TONES: ReadonlySet<string> = new Set(['get', 'post', 'put', 'delete
           </div>
         </ng-template>
 
-        <!-- menu "aggiungi response": nuovo mock + (clona dalla mock) + nuovi script vanilla -->
+        <!-- menu "aggiungi response": le stesse icone e colori del tipo nel catalogo, nel Monitor e
+             nello Storico (shared/response-source). Un titolo di gruppo al posto di "Nuova response"
+             ripetuto su ogni voce, e una nota breve su cosa fa ciascun tipo. -->
         <ng-template #addResponseMenu>
-          <div ui-menu class="min-w-[15rem]">
-            <button ui-menu-item (click)="createResponseOfType('mock')">
-              <ng-icon name="lucideLayers" size="0.9rem" class="text-type-mock" />
-              <span class="flex-1">{{ 'detail.newResponseMock' | transloco }}</span>
+          <div ui-menu class="min-w-[17rem]">
+            <div class="px-2 pb-1 pt-1 text-[10px] font-bold uppercase tracking-[0.14em] text-muted-foreground">{{ 'detail.newResponseGroup' | transloco }}</div>
+            @for (item of addResponseItems; track item.label) {
+            <button ui-menu-item (click)="item.run()">
+              <ng-icon [name]="item.icon" size="0.9rem" [color]="item.color" />
+              <span class="flex-1">{{ item.label | transloco }}</span>
+              <span class="text-[11px] text-muted-foreground">{{ item.hint | transloco }}</span>
             </button>
-            <div class="mx-1 my-1 h-px bg-border"></div>
-            <button ui-menu-item (click)="createResponseOfType('handler', 'vanilla')">
-              <ng-icon name="lucideFileCode" size="0.9rem" class="text-type-handler" />
-              <span class="flex-1">{{ 'detail.newResponseHandler' | transloco }}</span>
-            </button>
-            <button ui-menu-item (click)="createResponseOfType('middleware', 'vanilla')">
-              <ng-icon name="lucideCog" size="0.9rem" class="text-type-middleware" />
-              <span class="flex-1">{{ 'detail.newResponseMiddleware' | transloco }}</span>
-            </button>
-            <button ui-menu-item (click)="createSseResponse()">
-              <ng-icon name="lucideRadio" size="0.9rem" class="text-brand" />
-              <span class="flex-1">{{ 'detail.newResponseSse' | transloco }}</span>
-            </button>
-            <button ui-menu-item (click)="createWsResponse()">
-              <ng-icon name="lucideCable" size="0.9rem" class="text-brand" />
-              <span class="flex-1">{{ 'detail.newResponseWs' | transloco }}</span>
-            </button>
-            <button ui-menu-item (click)="openSequence('create')">
-              <ng-icon name="lucideListOrdered" size="0.9rem" class="text-sequence" />
-              <span class="flex-1">{{ 'detail.newResponseSequence' | transloco }}</span>
-            </button>
+            }
             @if (isMockSelected()) {
             <div class="mx-1 my-1 h-px bg-border"></div>
+            <div class="px-2 pb-1 pt-1 text-[10px] font-bold uppercase tracking-[0.14em] text-muted-foreground">{{ 'detail.fromMockGroup' | transloco }}</div>
             <button ui-menu-item (click)="createResponseOfType('handler', 'clone')">
-              <ng-icon name="lucideFileCode" size="0.9rem" class="text-type-handler" />
+              <ng-icon [name]="typeIcon('handler')" size="0.9rem" color="var(--type-handler)" />
               <span class="flex-1">{{ 'detail.cloneToHandler' | transloco }}</span>
             </button>
             <button ui-menu-item (click)="createResponseOfType('middleware', 'clone')">
-              <ng-icon name="lucideCog" size="0.9rem" class="text-type-middleware" />
+              <ng-icon [name]="typeIcon('middleware')" size="0.9rem" color="var(--type-middleware)" />
               <span class="flex-1">{{ 'detail.cloneToMiddleware' | transloco }}</span>
             </button>
             }
@@ -769,6 +769,24 @@ export class MocksNextDetail {
   });
 
   /** True se la response selezionata è un mock con body inline (JSON/testo): seminabile in uno script. */
+  protected typeIcon(type: string): string {
+    return endpointTypeIcon(type);
+  }
+
+  /**
+   * Voci "nuova variante" del menu +: icona e colore del tipo come nel catalogo, e una nota breve.
+   * Il colore passa dall'input di ng-icon: una classe text-* sull'icona non vale, perche' il
+   * componente fissa il proprio colore sull'elemento.
+   */
+  protected readonly addResponseItems: readonly { label: string; hint: string; icon: string; color: string; run: () => void }[] = [
+    { label: 'detail.newResponseMock', hint: 'detail.newResponseMockHint', icon: endpointTypeIcon('mock'), color: 'var(--type-mock)', run: () => this.createResponseOfType('mock') },
+    { label: 'detail.newResponseHandler', hint: 'detail.newResponseHandlerHint', icon: endpointTypeIcon('handler'), color: 'var(--type-handler)', run: () => this.createResponseOfType('handler', 'vanilla') },
+    { label: 'detail.newResponseMiddleware', hint: 'detail.newResponseMiddlewareHint', icon: endpointTypeIcon('middleware'), color: 'var(--type-middleware)', run: () => this.createResponseOfType('middleware', 'vanilla') },
+    { label: 'detail.newResponseSse', hint: 'detail.newResponseSseHint', icon: endpointTypeIcon('sse'), color: 'var(--brand)', run: () => this.createSseResponse() },
+    { label: 'detail.newResponseWs', hint: 'detail.newResponseWsHint', icon: endpointTypeIcon('ws'), color: 'var(--brand)', run: () => this.createWsResponse() },
+    { label: 'detail.newResponseSequence', hint: 'detail.newResponseSequenceHint', icon: endpointTypeIcon('sequence'), color: 'var(--sequence)', run: () => this.openSequence('create') },
+  ];
+
   protected readonly isMockSelected = computed(() => {
     const b = this.body();
     return this.detail()?.type === 'mock' && (b.kind === 'json' || b.kind === 'text');
