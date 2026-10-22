@@ -52,6 +52,27 @@ test.describe("E3 · dettaglio", () => {
     expect(separatorVisible).toBe(false);
   });
 
+  // Il pannello della tendina era largo esattamente come il trigger: col catalogo allargato il
+  // trigger scende a ~160 px e la nota "mock · 404" lasciava ai titoli pochi pixel ("No…"). Ora
+  // si allarga fino al contenuto, e sta nella finestra.
+  test("con il catalogo allargato i titoli delle varianti nella tendina restano interi", async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.evaluate(() => localStorage.setItem("mx-catalog-width", "800"));
+    await page.reload();
+    await select("/api/status");
+    const picker = detail.getByRole("combobox", { name: "Variante servita" });
+    expect((await picker.boundingBox()).width).toBeLessThan(200);
+    await picker.click();
+    const titles = page.locator('[role="listbox"] [role="option"] span.truncate');
+    await expect(titles).toHaveCount(2);
+    const fits = await titles.evaluateAll((spans) => spans.map((s) => s.scrollWidth <= s.clientWidth));
+    expect(fits).toEqual([true, true]);
+    const panel = await page.getByRole("listbox").boundingBox();
+    expect(panel.x).toBeGreaterThanOrEqual(0);
+    expect(panel.x + panel.width).toBeLessThanOrEqual(1280);
+    await page.evaluate(() => localStorage.removeItem("mx-catalog-width"));
+  });
+
   test("mostra il percorso del file di definizione", async () => {
     await select("/api/users");
     await expect(detail.getByText(/api[\\/]users[\\/]GET\.endpoint\.json/)).toBeVisible();

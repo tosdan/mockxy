@@ -108,7 +108,7 @@ let uiSelectSeq = 0;
       [cdkConnectedOverlayOrigin]="origin"
       [cdkConnectedOverlayOpen]="open()"
       [cdkConnectedOverlayPositions]="positions"
-      [cdkConnectedOverlayWidth]="triggerWidth()"
+      [cdkConnectedOverlayMinWidth]="triggerWidth()"
       [cdkConnectedOverlayViewportMargin]="8"
       (overlayOutsideClick)="onOutsideClick($event)"
       (detach)="close(false)"
@@ -117,7 +117,7 @@ let uiSelectSeq = 0;
         #panel
         role="listbox"
         [id]="listboxId"
-        class="max-h-60 overflow-y-auto rounded-lg border border-border bg-popover p-1 text-popover-foreground shadow-lg ring-1 ring-black/20 animate-in fade-in-0 zoom-in-95"
+        class="max-h-60 max-w-[min(28rem,calc(100vw-16px))] overflow-y-auto rounded-lg border border-border bg-popover p-1 text-popover-foreground shadow-lg ring-1 ring-black/20 animate-in fade-in-0 zoom-in-95"
       >
         @for (opt of options(); track opt.value; let i = $index) {
         <button
@@ -201,10 +201,17 @@ export class UiSelect<T = string> {
   /** Colore del pallino (o dell'icona) dell'opzione selezionata, per il trigger, o null. */
   protected readonly selectedAccent = computed(() => this.selectedOption()?.accent ?? null);
 
-  /** Sotto il trigger; se non c'e' spazio, sopra. */
+  /**
+   * Sotto il trigger; se non c'e' spazio, sopra. Il pannello e' largo almeno quanto il trigger e
+   * si allarga fino al contenuto, con un tetto: largo esattamente come un trigger stretto, una nota
+   * (hint) lasciava ai titoli pochi pixel. Piu' largo del trigger puo' non stare a destra: allora
+   * si allinea al suo bordo destro.
+   */
   protected readonly positions: ConnectedPosition[] = [
     { originX: 'start', originY: 'bottom', overlayX: 'start', overlayY: 'top', offsetY: 6 },
+    { originX: 'end', originY: 'bottom', overlayX: 'end', overlayY: 'top', offsetY: 6 },
     { originX: 'start', originY: 'top', overlayX: 'start', overlayY: 'bottom', offsetY: -6 },
+    { originX: 'end', originY: 'top', overlayX: 'end', overlayY: 'bottom', offsetY: -6 },
   ];
 
   protected isSelected(o: UiSelectOption<T>): boolean {

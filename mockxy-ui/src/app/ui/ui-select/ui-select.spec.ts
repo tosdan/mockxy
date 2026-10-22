@@ -88,6 +88,14 @@ describe('UiSelect', () => {
     });
   });
 
+  // Il pannello puo' essere piu' largo del trigger: se non sta a destra si allinea al suo bordo destro.
+  it('il pannello ha posizioni di riserva allineate al bordo destro del trigger', () => {
+    const { c } = create();
+    const positions = c.positions as { originX: string; overlayX: string; originY: string }[];
+    expect(positions.map((p) => `${p.originY}:${p.originX}`)).toEqual(['bottom:start', 'bottom:end', 'top:start', 'top:end']);
+    expect(positions.every((p) => p.originX === p.overlayX)).toBe(true);
+  });
+
   describe('apertura', () => {
     it('apre sull’opzione selezionata, o sulla prima abilitata', () => {
       const { c } = create({ value: 'c' });
