@@ -215,7 +215,41 @@ describe('MocksNextSequenceSummary', () => {
     expect(c.cursor().kind).toBe('never');
     fixture.destroy();
   });
+
+  // I passi mostravano solo il file della variante (001.response.json): per sapere cosa rispondeva
+  // un passo bisognava confrontarlo con la tendina. Ora il titolo in evidenza, status e file accanto.
+  describe('passi con il titolo della variante', () => {
+    const withResponses = (state: SequenceState): MockDetail => ({
+      ...detailWith(state),
+      responses: [
+        { fileName: '001.json', type: 'mock', title: 'In lavorazione', status: 202 },
+        { fileName: '002.json', type: 'mock', title: '', status: 200 },
+        { fileName: '003.json', type: 'mock', title: 'Rotto', status: 500, invalid: true },
+      ],
+    });
+    const steps = (fixture: { nativeElement: HTMLElement }) =>
+      Array.from(fixture.nativeElement.querySelectorAll('ol > li')).map((li) => ((li as HTMLElement).textContent ?? '').replace(/\s+/g, ' ').trim());
+
+    it('titolo e status accanto al file; senza titolo resta il file; una variante illeggibile non ne inventa', () => {
+      const { fixture } = create(withResponses(VIRGIN));
+      const [first, second, third] = steps(fixture);
+      expect(first).toMatch(/^1 In lavorazione 202 · 001\.json/);
+      expect(second).toMatch(/^2 200 · 002\.json/);
+      expect(third).toMatch(/^3 003\.json/);
+      fixture.destroy();
+    });
+
+    it('anche la banda del cursore nomina la variante col suo titolo', () => {
+      const state: SequenceState = { stepIndex: 0, servedInStep: 1, stepStartedAt: Date.now(), lastRequestAt: Date.now() };
+      const { fixture } = create(withResponses(state));
+      const band = (fixture.nativeElement as HTMLElement).querySelector('p')?.textContent ?? '';
+      expect(band).toContain('· In lavorazione');
+      expect(band).not.toContain('001.json');
+      fixture.destroy();
+    });
+  });
 });
+
 
 describe('formatAgo', () => {
   it('sotto il minuto conta i secondi', () => {
