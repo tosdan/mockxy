@@ -23,6 +23,35 @@ test.describe("E3 · dettaglio", () => {
     await expect(detail.getByText("Elenco utenti")).toBeVisible();
   });
 
+  // A pannello stretto status e delay, a larghezza fissa, schiacciavano la tendina delle varianti
+  // fino a nascondere quella attiva. Ora la tendina tiene una larghezza minima e status e delay
+  // scendono sotto, insieme; il separatore fra i due gruppi sparisce quando vanno a capo.
+  test("a pannello stretto la variante attiva resta leggibile, e status e delay vanno a capo", async ({ page }) => {
+    await select("/api/status");
+    const picker = detail.getByRole("combobox", { name: "Variante servita" });
+    const status = detail.locator("mocks-next-status-combobox");
+    const delay = detail.getByRole("spinbutton");
+    const geometry = async () => ({ picker: await picker.boundingBox(), status: await status.boundingBox(), delay: await delay.boundingBox() });
+
+    let g = await geometry();
+    expect(Math.abs(g.picker.y - g.status.y)).toBeLessThan(8); // tutto su una riga
+
+    await page.setViewportSize({ width: 1100, height: 800 });
+    await expect.poll(async () => (await status.boundingBox()).y - (await picker.boundingBox()).y).toBeGreaterThan(20);
+    g = await geometry();
+    expect(g.picker.width).toBeGreaterThan(200);
+    await expect(picker).toContainText(/OK/);
+    expect(Math.abs(g.status.y + g.status.height / 2 - (g.delay.y + g.delay.height / 2))).toBeLessThan(4); // status e delay insieme
+    // Il separatore, a capo, cade fuori dalla zona visibile della barra.
+    const separatorVisible = await status.evaluate((el) => {
+      const group = el.parentElement;
+      const separator = group.querySelector('[aria-hidden="true"]');
+      const clip = group.parentElement.getBoundingClientRect();
+      return separator.getBoundingClientRect().right > clip.left;
+    });
+    expect(separatorVisible).toBe(false);
+  });
+
   test("mostra il percorso del file di definizione", async () => {
     await select("/api/users");
     await expect(detail.getByText(/api[\\/]users[\\/]GET\.endpoint\.json/)).toBeVisible();

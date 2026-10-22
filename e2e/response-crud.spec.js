@@ -34,7 +34,7 @@ test.describe("E6 · CRUD response", () => {
   test("crea una nuova response mock e la seleziona", async ({ page }) => {
     await select("/api/health");
     await addBtn().click();
-    await page.getByRole("menuitem", { name: "Nuova response mock", exact: true }).click();
+    await page.getByRole("menuitem", { name: /^Mock\b/ }).click();
     await detail.getByPlaceholder(/Titolo della response/).fill("E2E mock");
     await saveBtn().click();
 
@@ -45,7 +45,7 @@ test.describe("E6 · CRUD response", () => {
   test("crea una nuova response handler con la sorgente template", async ({ page }) => {
     await select("/api/health");
     await addBtn().click();
-    await page.getByRole("menuitem", { name: "Nuova response handler", exact: true }).click();
+    await page.getByRole("menuitem", { name: /^Handler\b/ }).click();
     await detail.getByPlaceholder(/Titolo della response/).fill("E2E handler");
     await saveBtn().click();
 
