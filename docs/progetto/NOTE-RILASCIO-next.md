@@ -2,6 +2,112 @@
 
 ## Prossima versione
 
+## v1.7.0
+
+Una serie di passaggi sull'interfaccia, pagina per pagina: catalogo, Monitor, Storico, editor di
+codice. Le pagine condividono ora lo stesso modo di selezionare e di usare la tastiera, la stessa
+testata e le stesse icone per dire chi ha servito una richiesta. Lo Storico parte dalla voce più
+recente. Nessun cambiamento ai workspace. L'admin API cambia in tre punti, uno dei quali
+incompatibile per i client che creano una collezione chiamata «Non assegnati»: vedi
+[Cambiamenti dell'admin API](#cambiamenti-delladmin-api).
+
+Le [note per la pubblicazione, in italiano e inglese](NOTE-RILASCIO-v1.7.0.md)
+riassumono le novità rispetto alla 1.6.0.
+
+### Catalogo
+
+- **Conteggi delle collezioni ricorsivi:** una collezione conta tutto il suo sottoalbero, non
+  solo gli endpoint diretti.
+- **Filtri:** sotto filtro la testata dice quanti endpoint restano sul totale («7 di 33»), il
+  testo cercato è evidenziato nei percorsi e le collezioni senza risultati spariscono. L'avviso
+  sul riordino sospeso compare solo a chi prova a trascinare, invece di occupare una riga.
+- **Percorsi troncati in testa:** resta visibile la coda, che è ciò che distingue due percorsi
+  lunghi. La casella e il menu della riga non riservano più spazio quando sono nascosti, così il
+  percorso guadagna circa 60 px.
+- **Selezione e tastiera:** il catalogo è un albero navigabile con un solo punto di Tab. Invio
+  apre l'endpoint, Spazio lo spunta, Maiuscole+Spazio spunta l'intervallo. Le collezioni hanno
+  una casella a tre stati che spunta tutto il sottoalbero. Le azioni in massa agiscono su tutti
+  gli endpoint spuntati che il filtro mostra, anche dentro collezioni chiuse.
+- **Densità compatta:** un'opzione del menu «⋮», una riga per endpoint, ricordata fra le visite.
+- **Endpoint disattivati leggibili:** restano sopra 4,5:1 di contrasto; il badge del metodo
+  diventa tratteggiato e l'interruttore grigio.
+- **«Non assegnati»:** nell'interfaccia italiana la collezione virtuale non si chiama più
+  «Unsorted».
+- **Icone del tipo:** ogni riga mostra il tipo dell'endpoint con un'icona oltre che col colore.
+
+### Monitor e Storico
+
+- **Stesso modello di selezione del catalogo:** il clic sulla riga apre la voce, il clic sulla
+  casella la spunta; frecce, Home, Fine e Spazio funzionano da tastiera. Le azioni sulle voci
+  spuntate stanno in una barra in fondo alla lista. Nel Monitor sparisce la modalità
+  «Seleziona».
+- **Testata comune:** nome della vista e conteggio in un badge, come nel catalogo. Nel Monitor
+  sparisce il badge «Live», che ripeteva la barra in alto; resta l'avviso «In pausa».
+- **Icone di provenienza:** nel Monitor e nello Storico mock, handler, middleware, proxy, SSE,
+  WebSocket e miss hanno ciascuno un'icona, oltre al colore. Nel Monitor anche il badge «SEQ» dei
+  passi di sequenza ha la sua icona. Le provenienze che prima comparivano col nome grezzo hanno
+  un'etichetta.
+- **Monitor, errori divisi:** il conteggio degli errori passa sui chip delle classi di status
+  («4xx 8 · 5xx 4»), che contano le voci fra quelle degli altri filtri.
+- **Monitor, non mockate:** un chip «N non mockate», con lo stesso segno ambra delle righe,
+  spiega la barra e accende il filtro «Backend vero». Le risposte di un endpoint WebSocket non
+  sono più contate fra le non mockate.
+- **Monitor, densità compatta:** come nel catalogo, dal menu «⋮». Le latenze dai 10 secondi in
+  su si scrivono in secondi, per restare su una riga.
+- **Storico, cosa e quando:** ogni voce dice quando è arrivata, chi l'ha servita e la latenza. I
+  filtri del Monitor cercano in tutto l'archivio, non solo nelle voci caricate.
+- **Storico dalla voce più recente:** scorrendo si va indietro nel tempo; il menu dei file mette
+  per primo il più recente.
+
+### Editor di codice
+
+- **Contrasto:** numeri di riga, commenti e punteggiatura sono sopra 4,5:1. Negli stati
+  evidenziati (selezione, risultati della ricerca, parentesi corrispondenti) il testo usa il
+  colore pieno; la selezione ha il velo del brand e la ricerca il velo ambra del catalogo, al
+  posto del verde, del ciano e del magenta predefiniti di CodeMirror.
+- **Testi tradotti:** il pannello di ricerca e sostituzione, «Vai alla riga», il pannello dei
+  problemi, il ripiegamento e gli annunci per lo screen reader seguono la lingua dell'app.
+
+### Cambiamenti dell'admin API
+
+- **`POST /mocks/collections`: «Non assegnati» è riservato.**
+  - **Prima:** era riservato solo «Unsorted»; una collezione «Non assegnati» si creava.
+  - **Ora:** anche «Non assegnati» risponde `409`, con lo stesso confronto (maiuscole e accenti
+    ignorati). Il `409` porta `details.code: COLLECTION_LABEL_RESERVED` e
+    `details.reservedLabels`. Una collezione già chiamata così in un workspace esistente resta
+    com'è.
+  - **Per i client:** non creare collezioni con quei nomi; per riconoscere il rifiuto leggere
+    `details.code`.
+- **`GET /monitoring/dumps/read`: filtri, ripresa dal byte e ordine dal più recente.**
+  - **Filtri:** `q`, `method`, `status` e `source` (o `real-backend`) si applicano a tutto
+    l'archivio, e `limit` conta le corrispondenze. La scansione della pagina esamina al massimo
+    20.000 righe dalla posizione del cursore: con un filtro raro la pagina può tornare corta o
+    vuota con `done: false`. Il tetto riguarda la scansione, non il posizionamento: la lettura
+    dal più recente conta prima le righe del file, e un cursore senza `byteOffset` rilegge il
+    file fino a `lineIndex`.
+  - **Ripresa:** il cursore porta `byteOffset` e la chiamata successiva riprende da lì. Un
+    cursore senza resta valido, rileggendo il file fino a `lineIndex` come prima.
+  - **`order=desc`:** legge dalla voce più recente, con le stesse `dumpKey`. Senza `order` la
+    lettura resta in avanti e i campi mancanti del cursore valgono 0.
+  - **`real-backend`:** esclude ora anche le risposte di un endpoint WebSocket (`ws`), come mock,
+    handler e SSE.
+- **`GET /monitoring/dumps`: ordine dei file.**
+  - **Prima:** i nomi erano ordinati come testo, e il primo file di una sessione
+    (`dump-STAMP.ndjson`) finiva dopo i suoi successori ruotati (`dump-STAMP-002.ndjson`).
+  - **Ora:** ordine per sessione e poi per numero di rotazione. Cambia di conseguenza il file a
+    cui si riferisce un `fileIndex`: un cursore ottenuto da una versione precedente non va
+    riusato dopo l'aggiornamento.
+
+### Accessibilità
+
+- axe-core non segnala violazioni su catalogo, Monitor, Storico e Dati negli stati verificati
+  (a riposo, con filtri, selezioni e densità compatta). Il badge «Live» rimosso non raggiungeva
+  il contrasto minimo.
+- Ogni pagina ha un titolo `h1` e le sezioni del dettaglio sono `h2`; i pulsanti a sola icona
+  hanno un nome accessibile.
+- Il testo dei chip delle statistiche del Monitor viene letto con gli spazi giusti («64 ms
+  medi», non «64ms medi»).
+
 ## v1.6.0
 
 Nuovo modo di importare gli helper condivisi tra mock, ricarica degli script senza cache e

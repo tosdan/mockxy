@@ -38,14 +38,19 @@ turn it into mocks (or copy the file). With the cap at `0` pruning is disabled.
 ## The History page
 
 Besides the capture switch and the manual flush, the page lists the dump files and browses
-them with continuous scrolling (reading is paginated, even on very large archives). Each entry
-says when it arrived, what served it and how long it took. The filters are the monitor's (text
-in the path or URL, method, status classes, source) and search the whole archive, not only the
-entries already loaded. From a
-file — whole, or from a selection of entries — you **create mocks in bulk**, with the same
-carry-over rules as the live view ([monitor](MONITOR.md)): masked and recomputable headers
-excluded, skeletons to complete for bodies that can't be reconstructed. Files are deleted
-individually from the page.
+them with continuous scrolling (reading is paginated, even on very large archives). Entries
+start from the **newest**: scrolling goes back in time, and the file menu also lists the newest
+file first. Requests that arrive after the page is opened show up when it is reloaded. Each
+entry says when it arrived, what served it (with the monitor's icon) and how long it took. The
+filters are the monitor's (text in the path or URL, method, status classes, source) and search
+the whole archive, not only the entries already loaded.
+
+Entries are selected as in the monitor: a click on the row opens it, the checkbox checks it,
+and from the keyboard the arrows move and Space checks. «Select loaded» checks every entry read
+so far. From a file — whole, or from a selection of entries — you **create mocks in bulk**, with
+the same carry-over rules as the live view ([monitor](MONITOR.md)): masked and recomputable
+headers excluded, skeletons to complete for bodies that can't be reconstructed. Files are
+deleted individually from the page.
 
 ## Privacy
 

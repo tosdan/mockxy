@@ -48,17 +48,36 @@ request body or stack.
 
 Recording follows the global **server** switch: with the server off the monitor is stopped;
 in **full proxy** mode it stays active — that's precisely the «observe the real backend to
-capture» scenario ([the full flow](PROXY.md)). The «Live / Paused» badge at the top of the
-page reflects the state of the UI's live connection (updates arrive as a stream), not a
-switch of its own.
+capture» scenario ([the full flow](PROXY.md)). The UI's live capture (updates arrive as a
+stream) is paused and resumed from the top bar, where it shows as «Monitor live / paused»; while
+it is paused the page header says so, since it explains why the list is not moving.
 
 ## The page
 
+The header counts the requests; with a filter on it shows how many remain out of the total.
+Each entry tells where it came from with an icon and a name: a document for mocks, ƒ for
+handlers, two circles for middleware, a server for the proxy, a radio tower for SSE, a two-way
+arrow for WebSocket, a crossed-out magnifier for misses. An amber bar on the left marks the
+**not mocked** requests: those not served by a mock, a handler or an SSE or WebSocket stream of
+the workspace, that is, passed to the backend (proxy, middleware) or left with neither a mock
+nor a backend to forward to.
+
 The list filters by free text, method, status class and response origin — the «Served by»
 filter, with one option per origin (mock, proxy, handler, middleware, miss) plus the combined
-«**Real backend**» option: everything that didn't come out of the workspace's mocks or
-handlers, the natural view when observing the traffic flowing through the real backend. An
-entry's detail shows the complete request and response (headers and body), exports to JSON
+«**Real backend**» option, which keeps exactly the not mocked ones: the natural view when
+observing the traffic flowing through the real backend. The «N not mocked» chip at the top of
+the list turns that filter on and off with a click. The status class chips count their own
+entries among those passing the other filters, so 4xx and 5xx tell how many errors there are
+and of which kind.
+
+Entries are selected as in the catalog: a click on the row opens it in the detail, a click on
+its checkbox checks it (with Shift, the range from the last checked one). From the keyboard,
+the arrows, Home and End move between entries and open them, Space checks the active one and
+Shift+Space the range. With a selection, the action bar appears at the bottom of the list: it
+creates the mocks of the checked entries, optionally enabling them right away. The «⋮» menu in
+the header offers a **compact density**, one line per entry, remembered for the next visit.
+
+An entry's detail shows the complete request and response (headers and body), exports to JSON
 and copies as a cURL command ready to re-run; from entries served by a mock you jump straight
 to the endpoint that generated them. The list can be cleared at any time (the on-disk archive
 is untouched).

@@ -31,7 +31,28 @@ Tre semantiche da conoscere:
 
 La lista si restringe con la ricerca libera e i filtri per metodo, tipo di variante selezionata
 (`mock`, `handler`, `middleware`, `sse`, `ws`, `sequence`) e stato. Un badge **SEQ** identifica
-gli endpoint la cui variante selezionata è una [sequenza](RESPONSE.md).
+gli endpoint la cui variante selezionata è una [sequenza](RESPONSE.md). Ogni riga mostra il tipo
+con un'icona, la stessa usata per la provenienza nel [monitor](MONITOR.md). Con un filtro acceso
+la testata dice quanti endpoint restano sul totale, il testo cercato è evidenziato nei percorsi e
+spariscono le collezioni senza risultati; il riordino a trascinamento è sospeso, e un avviso lo
+ricorda a chi prova a trascinare.
+
+## Selezione e tastiera
+
+Ogni riga ha una casella che compare al passaggio del mouse, al fuoco e, avviata una selezione,
+su tutte le righe. Con Maiuscole il clic spunta l'intervallo dall'ultima riga spuntata. Anche le
+collezioni hanno la loro casella, a tre stati: spunta tutti gli endpoint del sottoalbero,
+sottocollezioni comprese (sotto filtro, solo quelli che il filtro mostra). Le azioni in massa —
+abilita, disabilita, sposta, elimina — agiscono su tutti gli endpoint spuntati che il filtro
+mostra, anche dentro collezioni chiuse; ciò che il filtro nasconde non viene mai toccato.
+
+Il catalogo si usa anche da tastiera, con un solo punto di Tab: le frecce si spostano fra le
+righe e aprono o chiudono le collezioni, **Invio** apre l'endpoint nel dettaglio, **Spazio** lo
+spunta (su una collezione spunta il sottoalbero) e Maiuscole+Spazio spunta l'intervallo. Dalla
+ricerca, Freccia giù entra nella lista.
+
+Dal menu «⋮» accanto a «Nuovo» si sceglie la **densità compatta**: una riga per endpoint, con il
+solo necessario a distinguerli. La scelta resta per le visite successive.
 
 ## Gli endpoint
 
