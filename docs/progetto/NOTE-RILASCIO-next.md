@@ -2,7 +2,28 @@
 
 ## Prossima versione
 
+## v1.7.1
+
+Contiene tutte le novità della [1.7.0](#v170), che non è stata pubblicata: la sua pipeline di
+release si è fermata su un test e2e. Il tag `v1.7.0` resta, senza una release; come vuole la
+[procedura](PROCEDURA-RILASCIO.md) (§9), la correzione esce con una nuova versione invece di
+spostare il tag.
+
+Le [note per la pubblicazione, in italiano e inglese](NOTE-RILASCIO-v1.7.1.md) riassumono le
+novità rispetto alla 1.6.0.
+
+### Test
+
+- **Barra delle azioni di massa del catalogo:** il test e2e pretendeva che, alla larghezza minima
+  del catalogo, la barra stesse su una riga. Dipende dal font di sistema: con Noto Sans ci sta per
+  2,5 px, con DejaVu Sans (il sans-serif di Ubuntu e del runner di GitHub) i pulsanti vanno a capo,
+  come il componente prevede. Il test ora controlla ciò che il componente garantisce, col font di
+  sistema e con DejaVu Sans: il conteggio non va mai a capo, e i pulsanti stanno su una riga,
+  accanto all'etichetta o tutti sotto. Nessun cambiamento all'applicazione.
+
 ## v1.7.0
+
+**Non pubblicata:** le stesse novità sono uscite con la [1.7.1](#v171).
 
 Una serie di passaggi sull'interfaccia, pagina per pagina: catalogo, Monitor, Storico, editor di
 codice. Le pagine condividono ora lo stesso modo di selezionare e di usare la tastiera, la stessa
