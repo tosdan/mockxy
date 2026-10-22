@@ -5,7 +5,7 @@
 // attive, e i piccoli costruttori per le parti che cambiano a runtime (linguaggio, lint, dimensioni).
 // Il componente Angular monta tutto questo e gestisce il doppio legame col valore.
 
-import { type EditorState, type Extension } from '@codemirror/state';
+import { EditorState, type Extension } from '@codemirror/state';
 import {
   type Command,
   Decoration,
@@ -235,6 +235,52 @@ export const staticExtensions: Extension[] = [
     ...lintKeymap,
   ]),
 ];
+
+/**
+ * Testi di CodeMirror da tradurre (pannello di ricerca e sostituzione, "vai alla riga", lint,
+ * ripiegamento, completamento, annunci per lo screen reader): frase inglese di CodeMirror -> chiave
+ * della sezione `codeEditor` delle traduzioni. Senza, l'editor restava in inglese anche in italiano.
+ */
+export const EDITOR_PHRASE_KEYS: Readonly<Record<string, string>> = {
+  'Find': 'find',
+  'Replace': 'replace',
+  'next': 'next',
+  'previous': 'previous',
+  'all': 'all',
+  'match case': 'matchCase',
+  'regexp': 'regexp',
+  'by word': 'byWord',
+  'replace': 'replaceOne',
+  'replace all': 'replaceAll',
+  'close': 'close',
+  'current match': 'currentMatch',
+  'on line': 'onLine',
+  'replaced match on line $': 'replacedMatchOnLine',
+  'replaced $ matches': 'replacedMatches',
+  'Go to line': 'goToLine',
+  'go': 'go',
+  'Diagnostics': 'diagnostics',
+  'No diagnostics': 'noDiagnostics',
+  'folded code': 'foldedCode',
+  'unfold': 'unfold',
+  'Fold line': 'foldLine',
+  'Unfold line': 'unfoldLine',
+  'Folded lines': 'foldedLines',
+  'Unfolded lines': 'unfoldedLines',
+  'to': 'to',
+  'Completions': 'completions',
+  'Selection deleted': 'selectionDeleted',
+  'Control character': 'controlCharacter',
+};
+
+/** Le frasi tradotte per CodeMirror, dalla sezione `codeEditor` della lingua attiva. */
+export function editorPhrases(translations: Readonly<Record<string, string>>): Extension {
+  const phrases: Record<string, string> = {};
+  for (const [phrase, key] of Object.entries(EDITOR_PHRASE_KEYS)) {
+    if (translations[key]) phrases[phrase] = translations[key];
+  }
+  return EditorState.phrases.of(phrases);
+}
 
 // Estensione del linguaggio (ricaricabile via compartment dal componente). Per JavaScript aggancia
 // anche il completamento del contratto handler/middleware.

@@ -6,14 +6,18 @@ import {
   afterNextRender,
   computed,
   effect,
+  inject,
   input,
   model,
   viewChild,
 } from '@angular/core';
 import { Compartment, EditorState } from '@codemirror/state';
 import { EditorView, placeholder as cmPlaceholder } from '@codemirror/view';
+import { toSignal } from '@angular/core/rxjs-interop';
+import { TranslocoService } from '@jsverse/transloco';
 import { cn } from '../cn';
 import {
+  editorPhrases,
   jsonLinterExtension,
   languageExtension,
   sizeTheme,
@@ -56,6 +60,13 @@ export class UiCodeEditor implements OnDestroy {
   private readonly readOnlyConf = new Compartment();
   private readonly sizeConf = new Compartment();
   private readonly placeholderConf = new Compartment();
+  private readonly phrasesConf = new Compartment();
+  private readonly ariaConf = new Compartment();
+
+  /** Testi dell'editor nella lingua attiva: si aggiornano quando la lingua cambia. */
+  private readonly translations = toSignal(inject(TranslocoService).selectTranslateObject<Record<string, string>>('codeEditor'), {
+    initialValue: {} as Record<string, string>,
+  });
 
   protected readonly hostClass = computed(() =>
     cn(
@@ -94,6 +105,15 @@ export class UiCodeEditor implements OnDestroy {
       });
     });
 
+    // Testi di CodeMirror (ricerca, lint, ripiegamento...) ed etichetta, nella lingua attiva. Si
+    // leggono prima di guardare se l'editor c'e': al primo giro non c'e' ancora, e un ariaLabel letto
+    // solo dentro il dispatch non diventerebbe una dipendenza, e i suoi cambi andrebbero persi.
+    effect(() => {
+      const phrases = editorPhrases(this.translations());
+      const attributes = this.contentAttributes();
+      this.view?.dispatch({ effects: [this.phrasesConf.reconfigure(phrases), this.ariaConf.reconfigure(attributes)] });
+    });
+
     // Altezza min/max.
     effect(() => {
       const min = this.minRows();
@@ -113,6 +133,15 @@ export class UiCodeEditor implements OnDestroy {
     });
   }
 
+  // Attributi dell'area di testo; senza ariaLabel l'etichetta e' quella generica, tradotta.
+  private contentAttributes() {
+    return EditorView.contentAttributes.of({
+      'aria-label': this.ariaLabel() ?? this.translations()['ariaLabel'] ?? 'Code editor',
+      autocapitalize: 'off',
+      autocorrect: 'off',
+    });
+  }
+
   private createView(): void {
     const state = EditorState.create({
       doc: this.value(),
@@ -123,11 +152,8 @@ export class UiCodeEditor implements OnDestroy {
         this.readOnlyConf.of(EditorState.readOnly.of(this.disabled())),
         this.sizeConf.of(sizeTheme(this.minRows(), this.maxRows())),
         this.placeholderConf.of(this.placeholder() ? cmPlaceholder(this.placeholder()!) : []),
-        EditorView.contentAttributes.of({
-          'aria-label': this.ariaLabel() ?? 'Editor di codice',
-          autocapitalize: 'off',
-          autocorrect: 'off',
-        }),
+        this.phrasesConf.of(editorPhrases(this.translations())),
+        this.ariaConf.of(this.contentAttributes()),
         EditorView.updateListener.of((update) => {
           if (update.docChanged) {
             this.value.set(update.state.doc.toString());
