@@ -91,20 +91,45 @@ test.describe("E1 · catalogo", () => {
     await expect(catalog.getByText("/api/health", { exact: true })).toHaveCount(0);
   });
 
-  test("la barra delle azioni di massa sta su una riga alla larghezza minima del catalogo", async ({ page }) => {
-    const catalog = page.locator("mocks-next-catalog");
-    // Le spunte degli endpoint: anche le cartelle hanno la loro casella.
-    const endpointBoxes = catalog.locator('[data-row-key^="e:"] [role="checkbox"]');
-    await endpointBoxes.nth(0).click({ force: true });
-    await endpointBoxes.nth(1).click({ force: true });
+  // Alla larghezza minima del catalogo il conteggio non si spezza mai, e i pulsanti stanno o accanto
+  // all'etichetta o, se lo spazio non basta, tutti insieme sotto. Quale dei due dipende dal font di
+  // sistema: con Noto Sans la barra sta su una riga per 2,5 px, con DejaVu Sans (il sans-serif di
+  // Ubuntu e del runner della CI) va a capo. Si prova con entrambi, invece di supporre un font.
+  for (const font of [null, "DejaVu Sans"]) {
+    test(`la barra delle azioni di massa non spezza conteggio e pulsanti, col font ${font ?? "di sistema"}`, async ({ page }) => {
+      if (font) await page.addStyleTag({ content: `* { font-family: "${font}" !important; }` });
+      const catalog = page.locator("mocks-next-catalog");
+      // Le spunte degli endpoint: anche le cartelle hanno la loro casella.
+      const endpointBoxes = catalog.locator('[data-row-key^="e:"] [role="checkbox"]');
+      await endpointBoxes.nth(0).click({ force: true });
+      await endpointBoxes.nth(1).click({ force: true });
 
-    const label = catalog.getByText("2 selezionati");
-    const move = catalog.getByRole("button", { name: "Sposta", exact: true });
-    const [labelBox, moveBox] = [await label.boundingBox(), await move.boundingBox()];
-    // Una riga sola: l'etichetta non va a capo e i pulsanti le stanno accanto, non sotto.
-    expect(labelBox.height).toBeLessThan(20);
-    expect(Math.abs(labelBox.y + labelBox.height / 2 - (moveBox.y + moveBox.height / 2))).toBeLessThan(4);
-  });
+      const label = catalog.getByText("2 selezionati");
+      await expect(label).toBeVisible();
+      const geometry = await label.evaluate((labelEl) => {
+        const bar = labelEl.parentElement;
+        const buttons = [...bar.querySelectorAll("button")].map((button) => button.getBoundingClientRect());
+        const box = labelEl.getBoundingClientRect();
+        return {
+          label: { top: box.top, bottom: box.bottom, height: box.height, middle: box.top + box.height / 2 },
+          barRight: bar.getBoundingClientRect().right,
+          middles: buttons.map((rect) => rect.top + rect.height / 2),
+          tops: buttons.map((rect) => rect.top),
+          rights: buttons.map((rect) => rect.right),
+        };
+      });
+      // Il conteggio su una riga sola.
+      expect(geometry.label.height).toBeLessThan(20);
+      // I pulsanti tutti su una riga, dentro la barra.
+      const middles = geometry.middles;
+      expect(Math.max(...middles) - Math.min(...middles)).toBeLessThan(2);
+      expect(Math.max(...geometry.rights)).toBeLessThanOrEqual(geometry.barRight);
+      // ...accanto all'etichetta, o interamente sotto.
+      const beside = Math.abs(middles[0] - geometry.label.middle) < 4;
+      const below = Math.min(...geometry.tops) >= geometry.label.bottom;
+      expect(beside || below).toBe(true);
+    });
+  }
 
   test("spunta e menu non tolgono spazio al path: lo cede il path quando il menu compare", async ({ page }) => {
     const catalog = page.locator("mocks-next-catalog");
