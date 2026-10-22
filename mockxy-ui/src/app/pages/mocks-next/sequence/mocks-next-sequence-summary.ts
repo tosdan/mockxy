@@ -83,7 +83,7 @@ export interface SequenceStepView {
             @case ('staleReset') { {{ 'sequenceSummary.staleReset' | transloco }} }
             @default {
             {{ (c.terminal ? 'sequenceSummary.nextTerminal' : 'sequenceSummary.next') | transloco: { step: c.stepIndex + 1 } }}
-            <span class="font-mono text-muted-foreground">· {{ c.response }}</span>
+            <span class="text-muted-foreground" [class.font-mono]="!variantOf(c.response).title">· {{ variantOf(c.response).title || c.response }}</span>
             }
             }
           </p>
@@ -125,8 +125,17 @@ export interface SequenceStepView {
             } @else { {{ $index + 1 }} }
           </span>
 
+          <!-- Il titolo della variante dice cosa risponde il passo; il file resta accanto, in piccolo,
+               con lo status. Senza titolo il passo si riconosce dal file, come prima. -->
           <div class="flex min-w-0 flex-1 flex-col gap-1.5">
-            <span class="truncate font-mono text-[12px] text-foreground">{{ step.response }}</span>
+            @if (variantOf(step.response); as variant) {
+            <span class="flex min-w-0 items-baseline gap-2">
+              @if (variant.title) {
+              <span class="truncate text-[13px] text-foreground">{{ variant.title }}</span>
+              }
+              <span class="truncate font-mono" [class]="variant.title ? 'text-[11px] text-muted-foreground' : 'text-[12px] text-foreground'">@if (variant.status != null) {{{ variant.status }} · }{{ step.response }}</span>
+            </span>
+            }
             @if (step.progress != null) {
             <span class="block h-[3px] overflow-hidden rounded-full bg-white/10">
               <span class="block h-full rounded-full bg-[var(--sequence)]" [style.width.%]="step.progress"></span>
@@ -163,6 +172,14 @@ export class MocksNextSequenceSummary {
   readonly detail = input.required<MockDetail>();
 
   protected readonly sequence = computed<SequenceVariantConfig>(() => this.detail().sequence!);
+
+  /** Titolo e status della variante di un passo, dall'elenco delle varianti dell'endpoint. */
+  private readonly variants = computed(() => new Map((this.detail().responses ?? []).map((r) => [r.fileName, r])));
+
+  protected variantOf(fileName: string): { title: string; status: number | null } {
+    const variant = this.variants().get(fileName);
+    return { title: variant?.invalid ? '' : (variant?.title ?? '').trim(), status: variant?.invalid ? null : (variant?.status ?? null) };
+  }
   protected readonly resetting = signal(false);
 
   private readonly state = signal<SequenceState | null>(null);
