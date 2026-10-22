@@ -5,6 +5,8 @@ import { TestBed } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { MocksNextDetail } from './mocks-next-detail';
+import { TranslocoService } from '@jsverse/transloco';
+import { endpointTypeIcon } from '../../../shared/response-source';
 import { translocoTesting } from '../../../testing/transloco-testing';
 import { MockAdminApiService } from '../../../mock-admin-api.service';
 import { MocksStore } from '../mocks-next.store';
@@ -725,5 +727,28 @@ describe('MocksNextDetail', () => {
     const options = (fixture.componentInstance as any).responseOptions();
     expect(options[1]).toMatchObject({ value: '002.response.json', disabled: true });
     expect(options[1].label).toContain('non leggibile');
+  });
+
+  // axe trovava due pulsanti senza nome su ogni endpoint: la matita della descrizione e la tendina
+  // delle varianti.
+  describe('nomi accessibili', () => {
+    it('la matita della descrizione e la tendina delle varianti hanno un nome', () => {
+      const host = create().nativeElement as HTMLElement;
+      expect(host.querySelector('button[aria-label="Modifica descrizione"]')).not.toBeNull();
+      expect(host.querySelector('[role="combobox"][aria-label="Variante servita"]')).not.toBeNull();
+    });
+  });
+
+  // Il menu + usa le icone del tipo condivise con catalogo, Monitor e Storico.
+  describe('menu "nuova variante"', () => {
+    it('una voce per tipo, con l\'icona del tipo, il nome breve e una nota', () => {
+      const fixture = create();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const items = (fixture.componentInstance as any).addResponseItems as { label: string; hint: string; icon: string }[];
+      const transloco = TestBed.inject(TranslocoService);
+      expect(items.map((item) => transloco.translate(item.label))).toEqual(['Mock', 'Handler', 'Middleware', 'Stream SSE', 'Canale WebSocket', 'Sequenza']);
+      expect(items.map((item) => item.icon)).toEqual(['mock', 'handler', 'middleware', 'sse', 'ws', 'sequence'].map(endpointTypeIcon));
+      for (const item of items) expect(transloco.translate(item.hint)).not.toBe(item.hint);
+    });
   });
 });
