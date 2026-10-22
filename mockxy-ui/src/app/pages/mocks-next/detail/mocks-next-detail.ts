@@ -721,11 +721,15 @@ export class MocksNextDetail {
           accent: 'var(--status-4xx)',
         };
       }
+      // Il tipo lo dice l'icona, come nel catalogo: "Sequence · sequence" lo ripeteva due volte.
+      // Nella lista resta come nota a destra, con lo status quando c'e'.
       const type = r.type ?? 'mock';
       return {
         value: r.fileName,
-        label: `${r.title || r.fileName} · ${type}`,
+        label: r.title || r.fileName,
+        icon: endpointTypeIcon(type),
         accent: type === 'sequence' ? 'var(--sequence)' : `var(--type-${type}, var(--brand))`,
+        hint: r.status != null ? `${type} · ${r.status}` : type,
       };
     }),
   );
