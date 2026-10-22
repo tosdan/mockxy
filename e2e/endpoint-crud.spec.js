@@ -146,8 +146,8 @@ test.describe("E7 · CRUD endpoint", () => {
 
   test("copia un endpoint verso un nuovo path", async ({ page }) => {
     await catalog.getByText("/api/users", { exact: true }).click();
-    // "Duplica" esatto: il nome del pulsante della testata e della conferma nella finestra.
-    await detail.getByRole("button", { name: "Duplica", exact: true }).click();
+    // "Duplica in…" apre la finestra; dentro, la conferma si chiama "Duplica".
+    await detail.getByRole("button", { name: "Duplica in…", exact: true }).click();
 
     const dialog = page.locator("cdk-dialog-container");
     await expect(dialog).toBeVisible();

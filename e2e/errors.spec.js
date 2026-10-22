@@ -41,7 +41,7 @@ test.describe("E13 · robustezza ed errori", () => {
   // ed e' il punto: te lo dice prima, invece di lasciarti cliccare e fallire.
   test("copiare un endpoint verso un path esistente e' impedito prima di inviare", async ({ page }) => {
     await catalog.getByText("/api/users", { exact: true }).click();
-    await detail.getByRole("button", { name: "Duplica", exact: true }).click();
+    await detail.getByRole("button", { name: "Duplica in…", exact: true }).click();
 
     const dialog = page.locator("cdk-dialog-container");
     await expect(dialog).toBeVisible();
