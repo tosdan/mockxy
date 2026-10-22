@@ -49,3 +49,36 @@ jobs:
       - run: npm --prefix mockxy-ui ci
       - run: npm --prefix mockxy-ui test -- --watch=false
       - run: npm --prefix mockxy-ui run build
+
+  # Gli e2e giravano solo nella workflow di release, al tag: un test che dipendeva dal font di
+  # sistema e' emerso solo allora, e la 1.7.0 non e' uscita. Qui girano a ogni PR e push su main,
+  # sul runner Ubuntu e col suo font, come in release; la release li ripete prima dei pacchetti.
+  e2e:
+    name: E2E (Chromium)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            mockxy-ui/package-lock.json
+      - run: npm ci
+      - run: npm --prefix mockxy-ui ci
+      - name: Installa Chromium per gli E2E
+        run: npx playwright install --with-deps chromium
+      # Compila la UI desktop e lancia la suite (con 2 nuovi tentativi in CI, da playwright.config.js).
+      - run: npm run test:e2e
+      - name: Report E2E (solo su fallimento)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-report
+          path: |
+            test-results/
+            playwright-report/
+          if-no-files-found: ignore
+          retention-days: 14

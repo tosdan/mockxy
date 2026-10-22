@@ -63,7 +63,12 @@ Run these locally before opening a PR — CI runs the same on every PR:
 npm test                       # engine + Electron-module tests (Jest)
 npm --prefix mockxy-ui test -- --watch=false   # UI tests (Vitest)
 npm run build:frontend         # UI production build (AOT — catches template/type errors)
+npm run test:e2e               # end-to-end tests in Chromium (Playwright; builds the desktop UI first)
 ```
+
+The first e2e run needs the browser: `npx playwright install chromium`. In CI
+the e2e tests run on Ubuntu with its system fonts, which can differ from yours:
+a test that measures layout should not assume one font.
 
 A broken spec blocks the whole UI suite, so keep specs green. Components and
 stores that use the bilingual i18n need the shared Transloco testing helper in
