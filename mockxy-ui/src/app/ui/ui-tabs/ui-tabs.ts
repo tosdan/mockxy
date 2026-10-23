@@ -32,7 +32,7 @@ export class UiTabsTrigger {
 
   protected readonly cls = computed(() =>
     cn(
-      'inline-flex cursor-pointer items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-[13px] font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 disabled:pointer-events-none disabled:opacity-50',
+      'inline-flex cursor-pointer items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-[13px] font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70 disabled:pointer-events-none disabled:opacity-50',
       this.brn.selected() ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground',
       this.userClass(),
     ),

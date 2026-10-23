@@ -70,7 +70,7 @@ export class UiCodeEditor implements OnDestroy {
 
   protected readonly hostClass = computed(() =>
     cn(
-      'block w-full overflow-hidden rounded-lg bg-[var(--code)] ring-1 ring-border transition-shadow focus-within:outline-none focus-within:ring-2 focus-within:ring-ring/50',
+      'block w-full overflow-hidden rounded-lg bg-[var(--code)] ring-1 ring-border transition-shadow focus-within:outline-none focus-within:ring-2 focus-within:ring-ring/70',
       this.invalid() && 'ring-destructive/60 focus-within:ring-destructive/60',
       this.disabled() && 'cursor-not-allowed opacity-60',
     ),

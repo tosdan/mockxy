@@ -108,7 +108,7 @@ function javascriptLinesHtml(code: string): string[] {
         [cdkCopyToClipboard]="code()"
         (cdkCopyToClipboardCopied)="onCopied($event)"
         [attr.aria-label]="(copied() ? 'common.copied' : 'common.copyCode') | transloco"
-        class="absolute right-2 top-2 z-10 grid size-7 place-items-center rounded-md bg-[var(--code)]/80 text-muted-foreground opacity-0 ring-1 ring-border transition hover:bg-accent hover:text-foreground focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 group-hover:opacity-100"
+        class="absolute right-2 top-2 z-10 grid size-7 place-items-center rounded-md bg-[var(--code)]/80 text-muted-foreground opacity-0 ring-1 ring-border transition hover:bg-accent hover:text-foreground focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70 group-hover:opacity-100"
       >
         <ng-icon [name]="copied() ? 'lucideCheck' : 'lucideCopy'" size="0.85rem" [class.text-positive]="copied()" />
       </button>

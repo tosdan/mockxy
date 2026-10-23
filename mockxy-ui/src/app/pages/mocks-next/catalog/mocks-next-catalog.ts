@@ -19,11 +19,9 @@ import {
   lucideExpand,
   lucideFilter,
   lucideFilterX,
-  lucideFileCode,
   lucideFolder,
   lucideFolderPlus,
   lucideInfo,
-  lucideLayers,
   lucideMessageSquare,
   lucideMinus,
   lucidePlus,
@@ -135,11 +133,9 @@ interface NavRow {
       lucideExpand,
       lucideFilter,
       lucideFilterX,
-      lucideFileCode,
       lucideFolder,
       lucideFolderPlus,
       lucideInfo,
-      lucideLayers,
       lucideMessageSquare,
       lucideMinus,
       lucidePlus,
@@ -232,7 +228,7 @@ interface NavRow {
             type="button"
             role="radio"
             [attr.aria-checked]="store.statusFilter() === s.value"
-            class="rounded-md px-2.5 py-1 text-[11.5px] font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+            class="rounded-md px-2.5 py-1 text-[11.5px] font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70"
             [class]="store.statusFilter() === s.value ? 'bg-accent text-foreground shadow-[0_0_0_1px_var(--border)]' : 'text-muted-foreground hover:text-foreground'"
             (click)="store.statusFilter.set(s.value)"
           >
@@ -250,7 +246,7 @@ interface NavRow {
         @if (store.hasMenuFilter()) {
         <button
           type="button"
-          class="grid size-7 shrink-0 place-items-center rounded-lg text-muted-foreground transition hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+          class="grid size-7 shrink-0 place-items-center rounded-lg text-muted-foreground transition hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70"
           [uiTooltip]="'catalog.resetFilters' | transloco"
           [attr.aria-label]="'catalog.resetFilters' | transloco"
           (click)="resetFilters()"
@@ -600,15 +596,15 @@ interface NavRow {
     <ng-template #newMenu>
       <div ui-menu class="min-w-[15rem]">
         <button ui-menu-item (click)="create.emit('mock')">
-          <ng-icon name="lucideLayers" size="0.9rem" class="text-type-mock" />
+          <ng-icon [name]="typeIcon('mock')" size="0.9rem" class="text-type-mock" />
           <span class="flex-1">Mock</span>
         </button>
         <button ui-menu-item (click)="create.emit('handler')">
-          <ng-icon name="lucideFileCode" size="0.9rem" class="text-type-handler" />
+          <ng-icon [name]="typeIcon('handler')" size="0.9rem" class="text-type-handler" />
           <span class="flex-1">Handler</span>
         </button>
         <button ui-menu-item (click)="create.emit('middleware')">
-          <ng-icon name="lucideCog" size="0.9rem" class="text-type-middleware" />
+          <ng-icon [name]="typeIcon('middleware')" size="0.9rem" class="text-type-middleware" />
           <span class="flex-1">Middleware</span>
         </button>
         <div class="my-1 h-px bg-border"></div>

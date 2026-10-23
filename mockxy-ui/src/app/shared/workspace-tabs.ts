@@ -51,7 +51,7 @@ import { DesktopService, type OpenWorkspace, type WorkspaceRef } from './desktop
       <span class="mx-0.5 h-4 w-px shrink-0 bg-border"></span>
 
       <button
-        class="grid h-6 w-6 shrink-0 place-items-center rounded-md text-muted-foreground transition hover:bg-card hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+        class="grid h-6 w-6 shrink-0 place-items-center rounded-md text-muted-foreground transition hover:bg-card hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70"
         (click)="open()"
         [uiTooltip]="'workspaceTabs.open' | transloco"
         [attr.aria-label]="'workspaceTabs.open' | transloco"
@@ -59,7 +59,7 @@ import { DesktopService, type OpenWorkspace, type WorkspaceRef } from './desktop
         <ng-icon name="lucidePlus" size="0.9rem" />
       </button>
       <button
-        class="grid h-6 w-6 shrink-0 place-items-center rounded-md text-muted-foreground transition hover:bg-card hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+        class="grid h-6 w-6 shrink-0 place-items-center rounded-md text-muted-foreground transition hover:bg-card hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70"
         [cdkMenuTriggerFor]="recentMenu"
         [uiTooltip]="'workspaceTabs.recent' | transloco"
         [attr.aria-label]="'workspaceTabs.recentAria' | transloco"

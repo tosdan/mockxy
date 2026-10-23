@@ -45,7 +45,7 @@ export class UiCheckbox {
 
   protected readonly boxClass = computed(() =>
     cn(
-      'group inline-flex size-[18px] items-center justify-center rounded-[5px] border border-input bg-transparent transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 data-[state=checked]:border-primary data-[state=checked]:bg-primary',
+      'group inline-flex size-[18px] items-center justify-center rounded-[5px] border border-input bg-transparent transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70 data-[state=checked]:border-primary data-[state=checked]:bg-primary',
       this.disabled() ? 'cursor-not-allowed opacity-50' : 'cursor-pointer',
     ),
   );

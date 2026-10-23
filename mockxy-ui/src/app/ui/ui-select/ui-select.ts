@@ -163,7 +163,7 @@ export class UiSelect<T = string> {
 
   // h-8 = stessa altezza del ui-button default, per coerenza tra i controlli.
   private readonly baseTrigger =
-    'flex h-8 w-full cursor-pointer items-center justify-between gap-2 rounded-lg border border-input bg-black/40 pl-3 pr-2.5 text-sm font-medium text-foreground outline-none transition hover:border-ring/40 focus-visible:border-ring/50 focus-visible:ring-2 focus-visible:ring-ring/20 disabled:cursor-not-allowed disabled:opacity-50';
+    'flex h-8 w-full cursor-pointer items-center justify-between gap-2 rounded-lg border border-input bg-black/40 pl-3 pr-2.5 text-sm font-medium text-foreground outline-none transition hover:border-ring/40 focus-visible:border-ring/70 focus-visible:ring-2 focus-visible:ring-ring/20 disabled:cursor-not-allowed disabled:opacity-50';
 
   /** Classe del trigger: base + override del tono (border/bg/text colorati). */
   protected readonly triggerClass = computed(() => {

@@ -55,7 +55,7 @@ export function describeRuntimeConfigValue(value: RuntimeConfigValues[RuntimeCon
       cdkOverlayOrigin
       #origin="cdkOverlayOrigin"
       #trigger
-      class="flex items-center gap-1.5 rounded px-1 py-0.5 transition hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+      class="flex items-center gap-1.5 rounded px-1 py-0.5 transition hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70"
       [class.font-semibold]="store.overrideCount() > 0"
       [class.text-[color:var(--status-3xx)]]="store.overrideCount() > 0"
       [attr.aria-expanded]="open()"
