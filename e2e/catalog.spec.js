@@ -303,4 +303,38 @@ test.describe("E1 · catalogo", () => {
     await expect(catalog.getByText("middleware", { exact: true })).toBeVisible();
     await expect(catalog.getByText("POST", { exact: true })).toBeVisible();
   });
+
+  // Le classi text-* sulle icone erano ignorate: ng-icon dichiara il colore in un proprio layer,
+  // che nasceva dopo quelli di Tailwind e li batteva. E a Middleware mancava l'icona.
+  test("nel menu Nuovo ogni tipo ha la sua icona, nel colore del tipo", async ({ page }) => {
+    await page.locator("mocks-next-catalog").getByRole("button", { name: /Nuovo/ }).click();
+    for (const [label, token] of [["Mock", "--type-mock"], ["Handler", "--type-handler"], ["Middleware", "--type-middleware"]]) {
+      const icon = page.getByRole("menuitem", { name: label, exact: true }).locator("ng-icon");
+      await expect(icon.locator("svg")).toHaveCount(1);
+      const [actual, expected] = await icon.evaluate((el, name) => {
+        const probe = document.createElement("span");
+        probe.style.color = `var(${name})`;
+        document.body.append(probe);
+        const resolved = getComputedStyle(probe).color;
+        probe.remove();
+        return [getComputedStyle(el).color, resolved];
+      }, token);
+      expect(actual, label).toBe(expected);
+    }
+  });
+
+  // Al 40% l'anello di focus stava a 1,9:1 sullo sfondo; sui controlli pieni, attaccato al bordo,
+  // sembrava solo un controllo piu' grande. Ora e' al 70% e staccato di 2px.
+  test("il focus da tastiera su un pulsante e' un contorno staccato dal bordo", async ({ page }) => {
+    const button = page.locator("mocks-next-catalog").getByRole("button", { name: /Nuovo/ });
+    await page.keyboard.press("Shift");
+    await button.focus();
+    const outline = () => button.evaluate((el) => {
+      const s = getComputedStyle(el);
+      return { width: s.outlineWidth, offset: s.outlineOffset, styleName: s.outlineStyle, color: s.outlineColor };
+    });
+    expect(await outline()).toMatchObject({ width: "2px", offset: "2px", styleName: "solid" });
+    // Il pulsante ha una transizione: il colore parte dal testo e si assesta su --ring al 70%.
+    await expect.poll(async () => (await outline()).color).toMatch(/\/ 0\.7\)$|, 0\.7\)$/);
+  });
 });
