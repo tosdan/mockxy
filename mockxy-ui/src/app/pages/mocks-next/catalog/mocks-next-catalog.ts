@@ -69,9 +69,6 @@ import { highlightParts, type TextPart } from './path-highlight';
 
 const METHOD_TONES: ReadonlySet<string> = new Set(['get', 'post', 'put', 'delete', 'patch']);
 
-/** Oltre questa profondità le linee guida smettono di aggiungersi: l'indentazione basta da sola. */
-const MAX_GUIDE_DEPTH = 12;
-
 /** Chiave (ViewStateService) delle collection collassate, ritrovate tornando sulla view. */
 const COLLAPSED_COLLECTIONS_STATE_KEY = 'mocks-collapsed';
 
@@ -427,9 +424,6 @@ interface NavRow {
         (focus)="activeRowKey.set('c:' + col.id)"
         (keydown)="onRowKeydown($event)"
       >
-        @for (guide of guides(depth); track guide) {
-        <span class="mx-tree-line" [style.left.px]="guide"></span>
-        }
         <!-- Casella a tre stati: spunta (o toglie) tutti gli endpoint del sottoalbero che il filtro
              lascia vedere, anche a cartella chiusa. Sta dove c'era la maniglia: la riga si trascina
              comunque tutta, come quella di un endpoint, che la maniglia non l'ha mai avuta. -->
@@ -496,9 +490,6 @@ interface NavRow {
         [class]="ep.id === store.selectedId() ? 'mx-selected' : 'hover:bg-accent'"
         [class.mx-muted]="!ep.enabled"
       >
-        @for (guide of guides(depth); track guide) {
-        <span class="mx-tree-line" [style.left.px]="guide"></span>
-        }
         <!-- La spunta ha un bersaglio suo: cliccare la riga apre l'endpoint, come prima. Non tiene
              posto nella riga: sta nel margine dell'indentazione, a sinistra del metodo, e il fondo
              copre la linea guida che le passa sotto. Compare in hover, al fuoco e, a selezione
@@ -1316,25 +1307,11 @@ export class MocksNextCatalog {
   );
 
   /**
-   * Ascisse dei tratti verticali per una riga a quella profondità: uno per ogni livello di
-   * antenato, allineati al centro dello scalino di indentazione (8 + i*14 + 7). Tabella
-   * precalcolata: la si legge a ogni riga a ogni ciclo di rendering.
-   */
-  private static readonly GUIDE_OFFSETS: readonly (readonly number[])[] = Array.from(
-    { length: MAX_GUIDE_DEPTH + 1 },
-    (_unused, depth) => Array.from({ length: depth }, (_u, level) => 8 + level * 14 + 7),
-  );
-
-  /**
    * Ascissa della spunta di un endpoint: nel margine dell'indentazione, 5 px prima del metodo
    * (che comincia a 8 + depth*14). A profondita' 1, la minima di un endpoint, sta a 3 px dal bordo.
    */
   protected checkboxLeft(depth: number): number {
     return 8 + depth * 14 - 19;
-  }
-
-  protected guides(depth: number): readonly number[] {
-    return MocksNextCatalog.GUIDE_OFFSETS[Math.min(depth, MAX_GUIDE_DEPTH)];
   }
 
   protected resetFilters(): void {

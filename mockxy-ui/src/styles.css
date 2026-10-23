@@ -186,14 +186,6 @@
   background: rgba(255, 255, 255, 0.6);
   background-clip: padding-box;
 }
-/* Linea-guida verticale dell'albero del catalogo. */
-.mx-tree-line {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  width: 1px;
-  background: var(--border);
-}
 /* Riga endpoint selezionata: velo verso destra + bordo sinistro curvo. */
 .mx-selected {
   position: relative;
