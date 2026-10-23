@@ -45,7 +45,7 @@ selezione: lì un clic spunta la riga invece di aprirla, finché **Fine** non la
 spunte. **Esc** chiude la modalità e toglie tutte le spunte, da qualunque punto della pagina
 tranne i campi di testo, i menu e le finestre.
 
-Le righe spuntate hanno una tinta indaco e un segno di spunta nel margine; quella aperta nel dettaglio ha una sfumatura verso
+Le righe spuntate hanno una tinta indaco; quella aperta nel dettaglio ha una sfumatura verso
 destra e il bordo destro chiaro, ed è l'unica riga con un bordo. Le collezioni hanno una casella
 a tre stati: spunta tutti gli endpoint del sottoalbero, sottocollezioni comprese (sotto filtro,
 solo quelli che il filtro mostra); lo stesso fa Ctrl+clic sulla collezione, mentre il clic

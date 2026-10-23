@@ -527,12 +527,6 @@ interface NavRow {
         [class.mx-checked]="selection().has(ep.id)"
         [class.mx-muted]="!ep.enabled"
       >
-        <!-- La tinta da sola non basta a chi non distingue i colori: la spunta ha anche un segno, nel
-             margine del rientro, in colonna con la casella della cartella che contiene la riga.
-             Solo un segno, non un bersaglio: si spunta col clic, in modalita' o con Ctrl. -->
-        @if (selection().has(ep.id)) {
-        <ng-icon name="lucideCheck" size="0.75rem" strokeWidth="3" aria-hidden="true" class="pointer-events-none absolute top-1/2 -translate-y-1/2 text-selection" [style.left.px]="indent(depth) - 13" />
-        }
         <!-- Da spenta la riga perde il colore, non l'opacita': ogni testo eredita il grigio di
              .mx-muted, che resta sopra il contrasto AA anche sulla riga selezionata. Il solo
              grigio pero' si nota poco, su un tema gia' grigio: il badge del metodo si svuota e

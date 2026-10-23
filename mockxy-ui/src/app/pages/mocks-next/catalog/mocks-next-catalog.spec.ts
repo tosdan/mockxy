@@ -245,13 +245,6 @@ describe('MocksNextCatalog', () => {
       expect(rows(fixture)[1].classList).toContain('mx-open');
       expect(rows(fixture)[1].classList).toContain('mx-checked');
       expect(rows(fixture)[2].classList).not.toContain('mx-checked');
-
-      // La tinta da sola non basta a chi non distingue i colori: anche un segno, solo decorativo.
-      const mark = (row: HTMLElement) => row.querySelector<HTMLElement>('ng-icon[name="lucideCheck"]');
-      expect(mark(rows(fixture)[0])?.getAttribute('aria-hidden')).toBe('true');
-      expect(mark(rows(fixture)[0])?.classList).toContain('pointer-events-none');
-      expect(mark(rows(fixture)[0])?.style.left).toBe('9px'); // profondità 1: in colonna con la casella della cartella
-      expect(mark(rows(fixture)[2])).toBeNull();
     });
 
     it('in modalità selezione un clic spunta invece di aprire; Fine esce e tiene le spunte', () => {

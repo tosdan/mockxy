@@ -322,7 +322,7 @@ test.describe("E1 · catalogo", () => {
 
   // Aperta e spuntata, la riga somma la tinta della selezione e la sfumatura chiara verso destra:
   // il testo grigio (spento o secondario) va misurato dove il fondo e' piu' chiaro, l'ultimo
-  // colore della sfumatura. Anche il segno di spunta, non testo, deve stare sopra 3:1.
+  // colore della sfumatura.
   for (const compact of [false, true]) {
     test(`aperta e spuntata, la riga resta leggibile nel punto più chiaro${compact ? ", in densità compatta" : ""}`, async ({ page }) => {
       const catalog = page.locator("mocks-next-catalog");
@@ -380,14 +380,9 @@ test.describe("E1 · catalogo", () => {
           const texts = [...rowEl.querySelectorAll("*")].filter(
             (el) => el.offsetParent && [...el.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim()),
           );
-          const mark = rowEl.querySelector('ng-icon[name="lucideCheck"]');
-          return {
-            texts: texts.map((el) => ({ text: el.textContent.trim(), ratio: ratio(el, getComputedStyle(el).color) })),
-            mark: ratio(mark, getComputedStyle(mark).color),
-          };
+          return texts.map((el) => ({ text: el.textContent.trim(), ratio: ratio(el, getComputedStyle(el).color) }));
         });
-        for (const { text, ratio } of results.texts) expect(ratio, `${path}: «${text}»`).toBeGreaterThanOrEqual(4.5);
-        expect(results.mark, `${path}: segno di spunta`).toBeGreaterThanOrEqual(3);
+        for (const { text, ratio } of results) expect(ratio, `${path}: «${text}»`).toBeGreaterThanOrEqual(4.5);
         await row.locator("ui-badge").click({ modifiers: ["ControlOrMeta"] }); // toglie la spunta
       }
     });
