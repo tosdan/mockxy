@@ -1341,6 +1341,8 @@ describe("admin API", () => {
       });
     expect(conflict.status).toBe(409);
     expect(conflict.body.details.existingMockId).toBe(firstCreate.body.id);
+    // Il codice permette a un client di spiegare il rifiuto nella propria lingua.
+    expect(conflict.body.details.code).toBe("ENDPOINT_EXISTS");
 
     // La response catturata diventa una nuova variante dell'endpoint esistente, selezionata.
     const added = await request(app)
@@ -3199,12 +3201,21 @@ describe("admin API", () => {
         .post(`/_admin/api/mocks/${id}/copy`)
         .send({ method: "POST", path: "/taken", copyResponses: false });
       expect(collide.status).toBe(409);
+      // Il codice e l'id dell'endpoint che occupa la destinazione, anche nell'anteprima (dry run).
+      const takenId = await idOf(app, "POST", "/taken");
+      expect(collide.body.details).toEqual({ code: "ENDPOINT_EXISTS", existingMockId: takenId });
+      const preview = await request(app)
+        .post(`/_admin/api/mocks/${id}/copy?dryRun=true`)
+        .send({ method: "POST", path: "/taken", copyResponses: false });
+      expect(preview.status).toBe(409);
+      expect(preview.body.details.code).toBe("ENDPOINT_EXISTS");
 
       // copiare su se stesso (stesso metodo + stessa path) è anch'esso un conflitto
       const itself = await request(app)
         .post(`/_admin/api/mocks/${id}/copy`)
         .send({ method: "GET", path: "/orig", copyResponses: false });
       expect(itself.status).toBe(409);
+      expect(itself.body.details).toEqual({ code: "ENDPOINT_EXISTS", existingMockId: id });
     });
 
     test("copies a handler endpoint preserving its source asset", async () => {

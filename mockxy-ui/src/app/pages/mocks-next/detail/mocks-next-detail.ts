@@ -235,7 +235,7 @@ const METHOD_TONES: ReadonlySet<string> = new Set(['get', 'post', 'put', 'delete
             }
             </div>
 
-            <!-- Status, delay o il chip della sequenza: per handler, middleware, SSE e WebSocket il
+            <!-- Status, delay o il chip della sequenza: per handler, middleware, SSE e WS il
                  gruppo e' vuoto, e il suo separatore resterebbe da solo in fondo alla barra. -->
             @if (hasVariantAttributes()) {
             <div class="relative flex shrink-0 items-center gap-2">
@@ -258,7 +258,7 @@ const METHOD_TONES: ReadonlySet<string> = new Set(['get', 'post', 'put', 'delete
             />
             }
             <!-- Il ritardo e' una proprieta' delle sole varianti mock (il motore lo legge solo li'): per
-                 handler, middleware, SSE e WebSocket mostrava un "0 ms" che non diceva nulla. -->
+                 handler, middleware, SSE e WS mostrava un "0 ms" che non diceva nulla. -->
             @if (d.type === 'mock') {
             <span class="inline-flex shrink-0 items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
               delay
@@ -1026,6 +1026,7 @@ export class MocksNextDetail {
       data: { id: d.id, method: d.method, path: d.path, responseCount: d.responses?.length ?? 0 } satisfies CopyDialogData,
       viewContainerRef: this.vcr,
       autoFocus: 'dialog',
+      ariaLabelledBy: 'mx-copy-dialog-title',
     });
   }
 

@@ -47,13 +47,17 @@ test.describe("E13 · robustezza ed errori", () => {
     await expect(dialog).toBeVisible();
     const confirm = dialog.getByRole("button", { name: "Duplica", exact: true });
 
+    // All'apertura metodo e path sono quelli di partenza: un'indicazione, non un errore.
+    await expect(dialog.getByText(/Scegli un altro metodo o path/)).toBeVisible();
+    await expect(confirm).toBeDisabled();
+
     // Un path libero: l'anteprima arriva e il pulsante si accende.
     await dialog.locator("input[ui-input]").fill("/api/libero-e2e");
     await expect(confirm).toBeEnabled();
 
     // GET /api/health esiste già → la copia (stesso metodo GET dell'origine) va in conflitto.
     await dialog.locator("input[ui-input]").fill("/api/health");
-    await expect(dialog.getByText(/already exists/i)).toBeVisible();
+    await expect(dialog.getByText("Esiste già un endpoint GET /api/health: scegli un altro metodo o path.")).toBeVisible();
     await expect(confirm).toBeDisabled();
 
     await dialog.getByRole("button", { name: "Annulla" }).click();
