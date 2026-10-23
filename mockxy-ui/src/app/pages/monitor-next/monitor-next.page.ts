@@ -115,7 +115,7 @@ const DENSITY_STATE_KEY = 'monitor-density';
           <ng-icon name="lucideSearch" size="0.9rem" class="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
           <!-- pr-8 anche a campo vuoto: il testo non deve spostarsi quando il pulsante compare. -->
           <input #searchInput type="text" [placeholder]="'monitor.filterPlaceholder' | transloco" [value]="search()" (input)="search.set($any($event.target).value)"
-                 class="h-8 w-64 rounded-lg border border-input bg-black/30 pl-8 pr-8 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-ring/50 focus:ring-2 focus:ring-ring/20" />
+                 class="h-8 w-64 rounded-lg border border-input bg-black/30 pl-8 pr-8 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-ring/70 focus:ring-2 focus:ring-ring/20" />
           @if (search() !== '') {
           <button
             type="button"

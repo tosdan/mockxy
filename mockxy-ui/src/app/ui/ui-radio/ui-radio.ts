@@ -38,7 +38,7 @@ export class UiRadioGroup<T = unknown> {
     >
       <input
         type="radio"
-        class="size-[18px] shrink-0 cursor-pointer appearance-none rounded-full border border-input bg-transparent outline-none transition checked:border-primary checked:bg-[radial-gradient(circle_at_center,var(--primary)_4px,transparent_4.5px)] focus-visible:ring-2 focus-visible:ring-ring/40 disabled:cursor-not-allowed"
+        class="size-[18px] shrink-0 cursor-pointer appearance-none rounded-full border border-input bg-transparent outline-none transition checked:border-primary checked:bg-[radial-gradient(circle_at_center,var(--primary)_4px,transparent_4.5px)] focus-visible:ring-2 focus-visible:ring-ring/70 disabled:cursor-not-allowed"
         [name]="group.name()"
         [checked]="checked()"
         [disabled]="disabled()"

@@ -48,7 +48,7 @@ const VIEWS: readonly RailView[] = [
         routerLinkActive="bg-accent text-foreground shadow-[inset_2px_0_0_0_var(--brand-soft)]"
         #link="routerLinkActive"
         [attr.aria-current]="link.isActive ? 'page' : null"
-        class="relative flex w-13 flex-col items-center gap-1 rounded-lg py-2 text-[9px] font-bold tracking-wide text-muted-foreground no-underline transition hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+        class="relative flex w-13 flex-col items-center gap-1 rounded-lg py-2 text-[9px] font-bold tracking-wide text-muted-foreground no-underline transition hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70"
       >
         <ng-icon [name]="view.icon" size="1.1rem" />
         {{ view.labelKey | transloco }}

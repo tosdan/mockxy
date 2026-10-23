@@ -199,7 +199,7 @@ export class StatusCombobox {
       this.baseInput,
       ro
         ? 'inline-flex items-center whitespace-nowrap select-none pr-3'
-        : 'field-sizing-content min-w-44 pr-7 hover:border-ring/40 focus:border-ring/50 focus:ring-2 focus:ring-ring/20 disabled:cursor-not-allowed disabled:opacity-50',
+        : 'field-sizing-content min-w-44 pr-7 hover:border-ring/40 focus:border-ring/70 focus:ring-2 focus:ring-ring/20 disabled:cursor-not-allowed disabled:opacity-50',
       t === 'default' ? 'pl-3' : 'pl-6',
       t !== 'default' && TONE_PILL[t],
     );

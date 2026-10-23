@@ -1,3 +1,7 @@
+/* ng-icon mette il proprio colore (currentColor, o l'input [color]) in "@layer ng-icon", nello
+   stile del componente iniettato a runtime: nato dopo i layer di Tailwind, quel layer li batteva
+   tutti, e un text-* su un'icona era ignorato. Dichiararlo qui per primo lo rende il piu' debole. */
+@layer ng-icon;
 @import 'tailwindcss';
 @import 'tw-animate-css';
 @import '@angular/cdk/overlay-prebuilt.css';

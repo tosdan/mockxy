@@ -51,7 +51,7 @@ import { RuntimeConfigIndicator } from './runtime-config-indicator';
         type="button"
         cdkOverlayOrigin
         #origin="cdkOverlayOrigin"
-        class="flex items-center gap-1.5 rounded px-1 py-0.5 font-semibold text-[color:var(--status-4xx)] transition hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+        class="flex items-center gap-1.5 rounded px-1 py-0.5 font-semibold text-[color:var(--status-4xx)] transition hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70"
         [attr.aria-expanded]="open()"
         aria-haspopup="dialog"
         (click)="open.set(!open())"
@@ -107,7 +107,7 @@ import { RuntimeConfigIndicator } from './runtime-config-indicator';
         type="button"
         cdkOverlayOrigin
         #runtimeOrigin="cdkOverlayOrigin"
-        class="flex items-center gap-1.5 rounded px-1 py-0.5 font-semibold text-[color:var(--status-4xx)] transition hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+        class="flex items-center gap-1.5 rounded px-1 py-0.5 font-semibold text-[color:var(--status-4xx)] transition hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70"
         [attr.aria-expanded]="runtimeOpen()"
         aria-haspopup="dialog"
         (click)="runtimeOpen.set(!runtimeOpen())"
@@ -171,7 +171,7 @@ import { RuntimeConfigIndicator } from './runtime-config-indicator';
         type="button"
         cdkOverlayOrigin
         #warningsOrigin="cdkOverlayOrigin"
-        class="flex items-center gap-1.5 rounded px-1 py-0.5 font-semibold text-[color:var(--status-3xx)] transition hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+        class="flex items-center gap-1.5 rounded px-1 py-0.5 font-semibold text-[color:var(--status-3xx)] transition hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70"
         [attr.aria-expanded]="warningsOpen()"
         aria-haspopup="dialog"
         (click)="warningsOpen.set(!warningsOpen())"

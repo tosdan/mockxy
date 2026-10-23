@@ -22,7 +22,7 @@ import { AppPreferencesDialog } from './app-preferences-dialog';
   template: `
     <button
       type="button"
-      class="flex w-13 flex-col items-center gap-1 rounded-lg py-2 text-[9px] font-bold tracking-wide text-muted-foreground transition hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+      class="flex w-13 flex-col items-center gap-1 rounded-lg py-2 text-[9px] font-bold tracking-wide text-muted-foreground transition hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70"
       [cdkMenuTriggerFor]="settingsMenu"
       [attr.aria-label]="'settingsMenu.tip' | transloco"
     >

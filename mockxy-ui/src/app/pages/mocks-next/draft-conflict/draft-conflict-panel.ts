@@ -51,7 +51,7 @@ let nextPanelId = 0;
         tabindex="-1"
         [attr.aria-labelledby]="headingId"
         [attr.aria-busy]="guard().loading()"
-        class="flex flex-col gap-3 rounded-lg border border-[color:var(--status-4xx)]/30 bg-[color:var(--status-4xx)]/[0.10] px-3.5 py-3 text-[12.5px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+        class="flex flex-col gap-3 rounded-lg border border-[color:var(--status-4xx)]/30 bg-[color:var(--status-4xx)]/[0.10] px-3.5 py-3 text-[12.5px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70"
       >
         <div class="flex items-start gap-2.5">
           <ng-icon name="lucideTriangleAlert" size="0.9rem" class="mt-0.5 shrink-0 text-[color:var(--status-4xx)]" />
@@ -104,7 +104,7 @@ let nextPanelId = 0;
         }
       </section>
       } @else if (guard().reloaded()) {
-      <p #reloadedNote tabindex="-1" role="status" class="rounded-lg px-1 text-[12.5px] text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40">
+      <p #reloadedNote tabindex="-1" role="status" class="rounded-lg px-1 text-[12.5px] text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70">
         {{ 'draftConflict.reloaded' | transloco }}
       </p>
       }

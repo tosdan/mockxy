@@ -38,7 +38,7 @@ export class UiSwitch {
 
   protected readonly trackClass = computed(() =>
     cn(
-      'inline-flex shrink-0 cursor-pointer items-center rounded-full border border-transparent p-0.5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40',
+      'inline-flex shrink-0 cursor-pointer items-center rounded-full border border-transparent p-0.5 transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring/70',
       this.size() === 'sm' ? 'h-4 w-7' : 'h-5 w-9',
       this.checked() ? 'bg-positive' : 'bg-[var(--switch-off)]',
       this.disabled() && 'cursor-not-allowed opacity-50',
