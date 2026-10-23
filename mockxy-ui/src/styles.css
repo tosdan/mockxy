@@ -40,6 +40,8 @@
   --color-positive: var(--positive);
   --color-sequence: var(--sequence);
   --color-highlight: var(--highlight);
+  --color-selection: var(--selection);
+  --color-selection-foreground: var(--selection-foreground);
   --color-method-get: var(--method-get);
   --color-method-post: var(--method-post);
   --color-method-put: var(--method-put);
@@ -121,6 +123,8 @@
   --sequence: #6ee7b7; /* sequenza di varianti attiva (badge/chip SEQ): il verde acceso dei badge GET/2xx */
   --type-sequence: var(--sequence);
   --switch-off: rgba(120, 120, 128, 0.5);
+  --selection: #818cf8; /* spunta della selezione multipla: un indaco, l'unica tinta che non dice gia' altro */
+  --selection-foreground: #c7cbff; /* testo sopra la tinta della selezione */
   --highlight: #fcd34d; /* evidenziatore del testo cercato: si usa come velo, non pieno */
   --destructive: #fb7185; /* rose-400: bordo/fondo dei controlli distruttivi */
   --destructive-foreground: #ffffff;
@@ -185,6 +189,22 @@
 .mx-scroll::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 255, 255, 0.6);
   background-clip: padding-box;
+}
+/* Riga del catalogo aperta nel dettaglio: la sfumatura cresce verso destra e il bordo sta a destra,
+   dal lato del pannello che la mostra. E' l'unica riga con un bordo: la si trova a colpo d'occhio. */
+.mx-open {
+  position: relative;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.032) 36%, rgba(255, 255, 255, 0.085));
+  box-shadow: inset -2px 0 0 0 var(--brand-soft);
+}
+/* Riga spuntata per un'azione di gruppo: solo la tinta. Aperta e spuntata: la sfumatura sopra la tinta. */
+.mx-checked {
+  background: color-mix(in srgb, var(--selection) 15%, transparent);
+}
+.mx-open.mx-checked {
+  background:
+    linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.032) 36%, rgba(255, 255, 255, 0.085)),
+    color-mix(in srgb, var(--selection) 15%, transparent);
 }
 /* Riga endpoint selezionata: velo verso destra + bordo sinistro curvo. */
 .mx-selected {

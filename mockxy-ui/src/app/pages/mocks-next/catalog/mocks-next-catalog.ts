@@ -22,6 +22,7 @@ import {
   lucideFolder,
   lucideFolderPlus,
   lucideInfo,
+  lucideListChecks,
   lucideMessageSquare,
   lucideMinus,
   lucidePlus,
@@ -133,6 +134,7 @@ interface NavRow {
       lucideFolder,
       lucideFolderPlus,
       lucideInfo,
+      lucideListChecks,
       lucideMessageSquare,
       lucideMinus,
       lucidePlus,
@@ -185,6 +187,20 @@ interface NavRow {
             <ng-icon name="lucidePlus" size="0.9rem" />
             {{ 'catalog.new' | transloco }}
             <ng-icon name="lucideChevronDown" size="0.75rem" class="opacity-70" />
+          </button>
+          <!-- Modalita' selezione: un clic sulla riga la spunta. Ctrl+clic e Maiusc+clic spuntano anche
+               fuori modalita', per chi le scorciatoie le conosce. -->
+          <button
+            ui-button
+            variant="outline"
+            size="icon"
+            [class]="selectionMode() ? 'size-7 !border-selection/60 !bg-selection/15 !text-selection-foreground' : 'size-7'"
+            [attr.aria-pressed]="selectionMode()"
+            [uiTooltip]="'catalog.selectionModeTip' | transloco"
+            [attr.aria-label]="'catalog.selectionModeLabel' | transloco"
+            (click)="toggleSelectionMode()"
+          >
+            <ng-icon name="lucideListChecks" size="0.95rem" />
           </button>
           <!-- Ricarica, espandi e collassa: rare, quindi in secondo piano. -->
           <button ui-button variant="outline" size="icon" class="size-7" [uiTooltip]="'catalog.viewActionsTip' | transloco" [attr.aria-label]="'catalog.viewActionsTip' | transloco" [cdkMenuTriggerFor]="viewMenu">
@@ -272,6 +288,16 @@ interface NavRow {
       </div>
       }
     </div>
+
+    @if (selectionMode()) {
+    <div role="status" class="mx-2 mt-2 flex shrink-0 items-center gap-2 rounded-lg bg-selection/15 py-1.5 pl-2.5 pr-1.5 text-[12px]">
+      <span class="min-w-0 flex-1">
+        <span class="font-semibold text-selection-foreground">{{ 'catalog.selectionModeTitle' | transloco }}</span>
+        <span class="text-muted-foreground"> · {{ 'catalog.selectionModeHint' | transloco }}</span>
+      </span>
+      <button ui-button variant="outline" size="xs" class="!border-selection/60 !text-selection-foreground" (click)="selectionMode.set(false)">{{ 'catalog.selectionModeDone' | transloco }}</button>
+    </div>
+    }
 
     <!-- albero appiattito: Unsorted fisso in cima + UNA sola lista piatta (endpoint e collection intercalati) -->
     <div class="min-h-0 flex-1 overflow-y-auto mx-scroll px-2 py-2">
@@ -365,7 +391,10 @@ interface NavRow {
     <!-- A 380 px il conteggio andava a capo dentro la propria etichetta. Ora non si spezza mai:
          se lo spazio non basta (font di sistema piu' larghi, altre lingue) scende a capo il gruppo
          dei pulsanti, intero. -->
-    <div class="flex shrink-0 flex-wrap items-center gap-x-2 gap-y-1.5 border-t border-border bg-[color-mix(in_srgb,var(--brand)_12%,transparent)] px-2 py-2">
+    <div class="flex shrink-0 flex-wrap items-center gap-x-2 gap-y-1.5 border-t border-border bg-selection/10 px-2 py-2">
+      @if (!selectionMode()) {
+      <span class="basis-full text-[11px] text-muted-foreground">{{ 'catalog.selectionShortcutsHint' | transloco }}</span>
+      }
       <span class="whitespace-nowrap text-[11.5px] font-bold text-foreground">{{ (selection().size === 1 ? 'catalog.selectedOne' : 'catalog.selectedCount') | transloco: { count: selection().size } }}</span>
       <div class="ml-auto flex items-center gap-1">
       @if (confirmingBulkDelete()) {
@@ -419,8 +448,9 @@ interface NavRow {
         [attr.tabindex]="tabbableKey() === 'c:' + col.id ? 0 : -1"
         class="group/folder relative flex w-full cursor-pointer select-none items-center gap-1.5 rounded-lg py-1.5 pr-1 text-left transition hover:bg-accent in-[.mx-compact]:py-[3px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/70"
         [class.mx-drop-into]="dropIntoId() === col.id"
+        [class.mx-checked]="folderCheckState(col.id) === 'all'"
         [style.padding-left.px]="folderIndent(depth)"
-        (click)="toggleCollapse(col.id)"
+        (click)="onFolderClick(col.id, $event)"
         (focus)="activeRowKey.set('c:' + col.id)"
         (keydown)="onRowKeydown($event)"
       >
@@ -435,8 +465,8 @@ interface NavRow {
           [attr.aria-checked]="state === 'all' ? 'true' : state === 'some' ? 'mixed' : 'false'"
           [attr.aria-label]="'catalog.selectCollectionAria' | transloco: { name: isUnsorted(col) ? ('catalog.unsorted' | transloco) : col.name }"
           class="absolute left-[6px] top-1/2 z-10 grid size-3.5 -translate-y-1/2 place-items-center rounded transition"
-          [class]="state === 'none' ? 'shadow-[inset_0_0_0_1px_var(--input)] opacity-0 group-hover/folder:opacity-100 focus-visible:opacity-100' : 'bg-brand text-background'"
-          [class.opacity-100]="selection().size > 0"
+          [class]="state === 'none' ? 'shadow-[inset_0_0_0_1px_var(--input)] opacity-0 group-hover/folder:opacity-100 focus-visible:opacity-100' : 'bg-selection text-background'"
+          [class.opacity-100]="selection().size > 0 || selectionMode()"
           (click)="$event.stopPropagation(); toggleCollectionSelection(col.id)"
           (keydown.enter)="$event.stopPropagation(); toggleCollectionSelection(col.id)"
           (keydown.space)="$event.preventDefault(); $event.stopPropagation(); toggleCollectionSelection(col.id)"
@@ -469,7 +499,13 @@ interface NavRow {
           <ng-icon name="lucideEllipsisVertical" size="0.9rem" />
         </button>
         }
+        <!-- Con delle spunte il contatore dice quante: si legge anche a cartella chiusa. -->
+        @let checked = folderCheckedCount(col.id);
+        @if (checked > 0) {
+        <ui-badge tone="neutral" class="shrink-0 !border-selection/45 !bg-selection/20 !text-selection-foreground">{{ checked }}/{{ folderEndpointCount(col.id) }}</ui-badge>
+        } @else {
         <ui-badge tone="neutral" class="shrink-0">{{ col.count }}</ui-badge>
+        }
       </div>
     </ng-template>
 
@@ -482,34 +518,15 @@ interface NavRow {
         [attr.aria-current]="ep.id === store.selectedId() ? 'true' : null"
         [attr.data-row-key]="'e:' + ep.id"
         [attr.tabindex]="tabbableKey() === 'e:' + ep.id ? 0 : -1"
-        (click)="store.selectMock(ep.id)"
+        (click)="onEndpointClick(ep.id, $event)"
         (focus)="activeRowKey.set('e:' + ep.id)"
         (keydown)="onRowKeydown($event)"
         class="group relative flex min-h-11 cursor-pointer select-none items-center gap-2 rounded-lg py-1.5 pr-2 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/70 in-[.mx-compact]:min-h-[30px] in-[.mx-compact]:py-[3px]"
         [style.padding-left.px]="endpointIndent(depth)"
-        [class]="ep.id === store.selectedId() ? 'mx-selected' : 'hover:bg-accent'"
+        [class]="ep.id === store.selectedId() ? 'mx-open' : 'hover:bg-accent'"
+        [class.mx-checked]="selection().has(ep.id)"
         [class.mx-muted]="!ep.enabled"
       >
-        <!-- La spunta ha un bersaglio suo: cliccare la riga apre l'endpoint, come prima. Non tiene
-             posto nella riga: sta nella colonna delle caselle, allineata a quella delle cartelle.
-             Compare in hover, al fuoco e, a selezione iniziata, su tutte le righe; spuntare non
-             sposta nulla. -->
-        <span
-          role="checkbox"
-          tabindex="0"
-          [attr.aria-checked]="selection().has(ep.id)"
-          [attr.aria-label]="'catalog.selectEndpointAria' | transloco: { path: ep.path }"
-          class="absolute left-[6px] top-1/2 z-10 grid size-3.5 -translate-y-1/2 place-items-center rounded transition"
-          [class]="selection().has(ep.id) ? 'bg-brand text-background' : 'bg-card shadow-[inset_0_0_0_1px_var(--input)] opacity-0 group-hover:bg-accent group-hover:opacity-100 focus-visible:opacity-100'"
-          [class.opacity-100]="selection().size > 0"
-          (click)="$event.stopPropagation(); onSelectionClick(ep.id, $event)"
-          (keydown.enter)="$event.stopPropagation(); onSelectionClick(ep.id, $event)"
-          (keydown.space)="$event.preventDefault(); $event.stopPropagation(); onSelectionClick(ep.id, $event)"
-        >
-          @if (selection().has(ep.id)) {
-          <ng-icon name="lucideCheck" size="0.6rem" />
-          }
-        </span>
         <!-- Da spenta la riga perde il colore, non l'opacita': ogni testo eredita il grigio di
              .mx-muted, che resta sopra il contrasto AA anche sulla riga selezionata. Il solo
              grigio pero' si nota poco, su un tema gia' grigio: il badge del metodo si svuota e
@@ -753,6 +770,9 @@ export class MocksNextCatalog {
    * modificabili) ne' quando accompagna un modificatore, che sarebbe una scorciatoia diversa.
    */
   protected onDocumentKeydown(event: KeyboardEvent): void {
+    if (event.key === 'Escape' && this.escapeSelection(event)) {
+      return;
+    }
     if (event.key !== '/' || event.ctrlKey || event.metaKey || event.altKey) {
       return;
     }
@@ -821,6 +841,34 @@ export class MocksNextCatalog {
     this.lastSelectedId = id;
   }
 
+  /** Modalita' selezione: un clic sulla riga la spunta invece di aprirla. */
+  protected readonly selectionMode = signal(false);
+
+  protected toggleSelectionMode(): void {
+    this.selectionMode.update((on) => !on);
+  }
+
+  /**
+   * Clic su un endpoint: lo apre, oppure lo spunta in modalita' selezione e con Ctrl (Cmd su Mac).
+   * Maiusc estende dall'ultimo spuntato, in modalita' o fuori.
+   */
+  protected onEndpointClick(id: string, event: MouseEvent): void {
+    if (this.selectionMode() || event.ctrlKey || event.metaKey || event.shiftKey) {
+      this.onSelectionClick(id, event);
+      return;
+    }
+    this.store.selectMock(id);
+  }
+
+  /** Clic su una cartella: la apre o la chiude; con Ctrl (Cmd) spunta tutto il suo contenuto. */
+  protected onFolderClick(collectionId: string, event: MouseEvent): void {
+    if (event.ctrlKey || event.metaKey) {
+      this.toggleCollectionSelection(collectionId);
+      return;
+    }
+    this.toggleCollapse(collectionId);
+  }
+
   protected clearSelection(): void {
     this.selection.set(new Set());
     this.lastSelectedId = null;
@@ -867,6 +915,16 @@ export class MocksNextCatalog {
     const selected = this.selection();
     const checked = ids.filter((id) => selected.has(id)).length;
     return checked === ids.length ? 'all' : checked === 0 ? 'none' : 'some';
+  }
+
+  /** Endpoint spuntati nel sottoalbero di una cartella, fra quelli che il filtro lascia vedere. */
+  protected folderCheckedCount(collectionId: string): number {
+    const selected = this.selection();
+    return (this.collectionEndpointIds().get(collectionId) ?? []).filter((id) => selected.has(id)).length;
+  }
+
+  protected folderEndpointCount(collectionId: string): number {
+    return this.collectionEndpointIds().get(collectionId)?.length ?? 0;
   }
 
   /** Spunta tutto il sottoalbero, o toglie tutte le spunte se era già tutto spuntato. */
@@ -1016,6 +1074,21 @@ export class MocksNextCatalog {
     if (key == null) return;
     event.preventDefault();
     this.focusRow(key);
+  }
+
+  /**
+   * Esc annulla la selezione e chiude la modalita', se il tasto arriva dal catalogo o dalla pagina
+   * (non da un campo, un menu o un dialog, che con Esc chiudono se stessi).
+   */
+  private escapeSelection(event: KeyboardEvent): boolean {
+    if (!this.selectionMode() && this.selection().size === 0) return false;
+    const target = event.target as HTMLElement | null;
+    if (/^(INPUT|TEXTAREA|SELECT)$/.test(target?.tagName ?? '')) return false;
+    if (target !== document.body && !this.host.nativeElement.contains(target)) return false;
+    this.selectionMode.set(false);
+    this.clearSelection();
+    event.preventDefault();
+    return true;
   }
 
   protected onRowKeydown(event: KeyboardEvent): void {
@@ -1306,9 +1379,9 @@ export class MocksNextCatalog {
   );
 
   /**
-   * Rientro delle righe. Le caselle di spunta stanno tutte in una colonna fissa (6-20 px dal bordo
+   * Rientro delle righe. Le caselle delle cartelle stanno in una colonna fissa (6-20 px dal bordo
    * della riga), fuori dal flusso: il rientro parte dopo di lei. La cartella ha lo chevron a 28 px,
-   * l'endpoint (che sta almeno a profondita' 1) il metodo a 26 px, 6 px dopo la casella.
+   * l'endpoint (che sta almeno a profondita' 1) il metodo a 26 px.
    */
   protected folderIndent(depth: number): number {
     return 28 + depth * 14;

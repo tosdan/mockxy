@@ -459,6 +459,12 @@
     "confirmBulkDelete": "Delete {{count}}",
     "deleteSelectedTip": "Delete the selected ones",
     "clearSelectionTip": "Clear the selection",
+    "selectionModeLabel": "Select",
+    "selectionModeTip": "Select several endpoints (also with Ctrl+click and Shift+click)",
+    "selectionModeTitle": "Selection mode",
+    "selectionModeHint": "click rows to check them",
+    "selectionModeDone": "Done",
+    "selectionShortcutsHint": "Ctrl+click adds or removes · Shift+click selects a range · Esc clears",
     "unsorted": "Unsorted",
     "collectionLabelReserved": "This name is reserved for unassigned endpoints. Choose another one.",
     "rootLevel": "Top level"

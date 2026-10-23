@@ -459,6 +459,12 @@
     "confirmBulkDelete": "Elimina {{count}}",
     "deleteSelectedTip": "Elimina i selezionati",
     "clearSelectionTip": "Annulla la selezione",
+    "selectionModeLabel": "Seleziona",
+    "selectionModeTip": "Seleziona più endpoint (anche con Ctrl+clic e Maiusc+clic)",
+    "selectionModeTitle": "Modalità selezione",
+    "selectionModeHint": "clic sulle righe per spuntarle",
+    "selectionModeDone": "Fine",
+    "selectionShortcutsHint": "Ctrl+clic aggiunge o toglie · Maiusc+clic seleziona un intervallo · Esc annulla",
     "unsorted": "Non assegnati",
     "collectionLabelReserved": "Questo nome è riservato agli endpoint non assegnati: scegline un altro.",
     "rootLevel": "Livello principale"
