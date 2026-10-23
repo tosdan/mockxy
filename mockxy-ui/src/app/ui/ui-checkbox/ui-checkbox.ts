@@ -9,6 +9,9 @@ import { cn } from '../cn';
  * primitivo, stile dai token. Il box e' il button interno (data-state), il segno
  * di spunta e' proiettato e compare via group-data-[state=checked].
  *
+ * L'etichetta passa per l'input aria-label del brain, che la mette sul button interno (quello
+ * con role="checkbox"); come attributo dell'host verrebbe azzerata e la casella resterebbe muta.
+ *
  * NB: cursore/opacita' del disabled sono pilotati dal NOSTRO signal disabled(),
  * non da data-[disabled]: il brain lascia data-disabled="false" quando abilitato,
  * quindi una variante data-[disabled] scatterebbe anche da abilitato.
@@ -23,7 +26,7 @@ import { cn } from '../cn';
       [checked]="checked()"
       (checkedChange)="checked.set($event)"
       [disabled]="disabled()"
-      [attr.aria-label]="ariaLabel()"
+      [aria-label]="ariaLabel()"
       [class]="boxClass()"
     >
       <ng-icon

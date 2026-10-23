@@ -146,13 +146,13 @@ test.describe("E7 · CRUD endpoint", () => {
 
   test("copia un endpoint verso un nuovo path", async ({ page }) => {
     await catalog.getByText("/api/users", { exact: true }).click();
-    // "Copia" esatto: il blocco codice ha un bottone "Copia il codice" da escludere.
-    await detail.getByRole("button", { name: "Copia", exact: true }).click();
+    // "Duplica in…" apre la finestra; dentro, la conferma si chiama "Duplica".
+    await detail.getByRole("button", { name: "Duplica in…", exact: true }).click();
 
     const dialog = page.locator("cdk-dialog-container");
     await expect(dialog).toBeVisible();
     await dialog.locator("input[ui-input]").fill("/api/users-copia");
-    await dialog.getByRole("button", { name: "Copia", exact: true }).click();
+    await dialog.getByRole("button", { name: "Duplica", exact: true }).click();
 
     await expect(catalog.getByText("/api/users-copia", { exact: true })).toBeVisible();
     await expect(statusBar.getByText(/9\s+endpoint/)).toBeVisible();

@@ -766,4 +766,46 @@ describe('MocksNextDetail', () => {
       }
     });
   });
+
+  // Piccole cose della testata e della barra delle varianti.
+  describe('piccole cose', () => {
+    const host = (fixture: ReturnType<typeof create>) => fixture.nativeElement as HTMLElement;
+    const text = (fixture: ReturnType<typeof create>) => (host(fixture).textContent ?? '').replace(/\s+/g, ' ');
+    const sequenceDetail = (steps: number) => detail({
+      type: 'sequence',
+      status: null,
+      selectedResponseFile: '900.response.json',
+      responses: [{ fileName: '900.response.json', type: 'sequence', title: 'Sequence', selected: true }],
+      sequence: { steps: Array.from({ length: steps }, (_, i) => ({ response: `00${i + 1}.response.json` })), onEnd: 'stay', resetAfterMs: null },
+    });
+    const show = (fixture: ReturnType<typeof create>, d: MockDetail) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (api as any).getSequenceState = vi.fn(() => of({ sequenceFile: '900.response.json', sequenceState: null }));
+      store.selected.set(d);
+      fixture.detectChanges();
+    };
+
+    it('il pulsante della testata dice che si sceglie dove duplicare: "Duplica in…"', () => {
+      const fixture = create();
+      const labels = Array.from(host(fixture).querySelectorAll('button')).map((b) => (b.textContent ?? '').trim());
+      expect(labels).toContain('Duplica in…');
+    });
+
+    it('il chip della sequenza conta i passi, al singolare e al plurale, con lo spazio dopo SEQ', () => {
+      const fixture = create();
+      show(fixture, sequenceDetail(2));
+      expect(text(fixture)).toContain('SEQ 2 passi');
+      show(fixture, sequenceDetail(1));
+      expect(text(fixture)).toContain('SEQ 1 passo');
+    });
+
+    it('il delay compare solo per le varianti mock; per handler e simili sparisce anche il suo separatore', () => {
+      const fixture = create();
+      expect(host(fixture).querySelector('input[type="number"]')).not.toBeNull();
+      expect(host(fixture).querySelector('span[aria-hidden="true"].absolute.w-px')).not.toBeNull();
+      show(fixture, detail({ type: 'handler', status: null, responses: [{ fileName: '001.response.json', type: 'handler', title: 'Echo', selected: true }] }));
+      expect(text(fixture)).not.toMatch(/delay/i);
+      expect(host(fixture).querySelector('span[aria-hidden="true"].absolute.w-px')).toBeNull();
+    });
+  });
 });

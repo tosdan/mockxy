@@ -1,5 +1,6 @@
 {
   "common": {
+    "endpointExists": "An endpoint with this method and path already exists.",
     "error": "Error",
     "operationFailed": "Operation not completed.",
     "noHeaders": "No headers.",
@@ -478,8 +479,10 @@
     "inactive": "Disabled",
     "deleteEndpointConfirm": "Delete the endpoint?",
     "delete": "Delete",
-    "copy": "Copy",
-    "copyEndpointTip": "Copy this endpoint (method, path, response)",
+    "copy": "Duplicate to…",
+    "sequenceStepsOne": "1 step",
+    "sequenceStepsMany": "{{count}} steps",
+    "copyEndpointTip": "Create a new endpoint with another method or path, starting from this one",
     "templatedLabel": "Template",
     "templatedTip": "Replaces placeholders in body and headers: params.id, query.x, headers.x, body.field, now, uuid, randomInt 1 10 — inside double braces. Type filter: params.id | number.",
     "editResponse": "Edit response",
@@ -571,7 +574,9 @@
     "create": "Create"
   },
   "copyDialog": {
-    "title": "Copy endpoint",
+    "sameAsSource": "Choose another method or path: with these, the new endpoint would be the one you started from.",
+    "endpointExists": "An endpoint {{method}} {{path}} already exists: choose another method or path.",
+    "title": "Duplicate endpoint",
     "from": "from {{method}} {{path}}",
     "method": "Method",
     "path": "Path",
@@ -585,7 +590,7 @@
     "sharedStateWarning": "The copy will keep sharing runtime state: {{names}}.",
     "sharedStateWarningHint": "To make it independent, change the name and seedKey in the copied source.",
     "cancel": "Cancel",
-    "copy": "Copy"
+    "copy": "Duplicate"
   },
   "wsConsole": {
     "connections": "Connections",

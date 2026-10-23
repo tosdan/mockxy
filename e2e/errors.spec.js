@@ -41,11 +41,15 @@ test.describe("E13 · robustezza ed errori", () => {
   // ed e' il punto: te lo dice prima, invece di lasciarti cliccare e fallire.
   test("copiare un endpoint verso un path esistente e' impedito prima di inviare", async ({ page }) => {
     await catalog.getByText("/api/users", { exact: true }).click();
-    await detail.getByRole("button", { name: "Copia", exact: true }).click();
+    await detail.getByRole("button", { name: "Duplica in…", exact: true }).click();
 
     const dialog = page.locator("cdk-dialog-container");
     await expect(dialog).toBeVisible();
-    const confirm = dialog.getByRole("button", { name: "Copia", exact: true });
+    const confirm = dialog.getByRole("button", { name: "Duplica", exact: true });
+
+    // All'apertura metodo e path sono quelli di partenza: un'indicazione, non un errore.
+    await expect(dialog.getByText(/Scegli un altro metodo o path/)).toBeVisible();
+    await expect(confirm).toBeDisabled();
 
     // Un path libero: l'anteprima arriva e il pulsante si accende.
     await dialog.locator("input[ui-input]").fill("/api/libero-e2e");
@@ -53,7 +57,7 @@ test.describe("E13 · robustezza ed errori", () => {
 
     // GET /api/health esiste già → la copia (stesso metodo GET dell'origine) va in conflitto.
     await dialog.locator("input[ui-input]").fill("/api/health");
-    await expect(dialog.getByText(/already exists/i)).toBeVisible();
+    await expect(dialog.getByText("Esiste già un endpoint GET /api/health: scegli un altro metodo o path.")).toBeVisible();
     await expect(confirm).toBeDisabled();
 
     await dialog.getByRole("button", { name: "Annulla" }).click();

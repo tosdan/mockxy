@@ -12,6 +12,7 @@ import { MockAdminApiService } from '../../../mock-admin-api.service';
 import type { EndpointCopyPreview } from '../../../mock-admin-api.types';
 import { routePathError } from '../../../mock-path-convention';
 import { MOCK_METHODS } from '../../../mock-admin-ui.constants';
+import { isEndpointExistsError, readErrorMessage } from '../../../shared/read-error-message';
 
 export interface CopyDialogData {
   readonly id: string;
@@ -38,21 +39,21 @@ const METHOD_OPTIONS: readonly UiSelectOption<string>[] = MOCK_METHODS.map((m) =
       <div class="flex items-center gap-2 border-b border-border px-5 py-3.5">
         <span class="grid h-7 w-7 place-items-center rounded-md bg-muted text-brand ring-1 ring-border"><ng-icon name="lucideCopy" size="0.95rem" /></span>
         <div class="leading-tight">
-          <h2 class="text-[15px] font-bold tracking-tight">{{ 'copyDialog.title' | transloco }}</h2>
+          <h2 id="mx-copy-dialog-title" class="text-[15px] font-bold tracking-tight">{{ 'copyDialog.title' | transloco }}</h2>
           <p class="font-mono text-[11px] text-muted-foreground">{{ 'copyDialog.from' | transloco: { method: data.method, path: data.path } }}</p>
         </div>
-        <button ui-button variant="ghost" size="icon" class="ml-auto" (click)="close()" [disabled]="store.creating()"><ng-icon name="lucideX" size="0.95rem" /></button>
+        <button ui-button variant="ghost" size="icon" class="ml-auto" (click)="close()" [disabled]="store.creating()" [attr.aria-label]="'common.close' | transloco"><ng-icon name="lucideX" size="0.95rem" /></button>
       </div>
 
       <div class="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto mx-scroll px-5 py-4">
         <div class="flex flex-wrap items-end gap-3">
           <div class="flex flex-col gap-1.5">
-            <label class="text-[12px] font-bold uppercase tracking-[0.14em] text-foreground/80">{{ 'copyDialog.method' | transloco }}</label>
-            <ui-select class="w-36" [options]="methodOptions" [value]="method()" (valueChange)="method.set($any($event))" />
+            <span class="text-[12px] font-bold uppercase tracking-[0.14em] text-foreground/80" aria-hidden="true">{{ 'copyDialog.method' | transloco }}</span>
+            <ui-select class="w-36" [ariaLabel]="'copyDialog.method' | transloco" [options]="methodOptions" [value]="method()" (valueChange)="method.set($any($event))" />
           </div>
           <div class="flex min-w-0 flex-1 flex-col gap-1.5">
-            <label class="text-[12px] font-bold uppercase tracking-[0.14em] text-foreground/80">{{ 'copyDialog.path' | transloco }}</label>
-            <input ui-input type="text" class="w-full font-mono text-[13px]" [placeholder]="'copyDialog.pathPlaceholder' | transloco" [value]="path()" (input)="path.set($any($event.target).value)" />
+            <label for="mx-copy-dialog-path" class="text-[12px] font-bold uppercase tracking-[0.14em] text-foreground/80">{{ 'copyDialog.path' | transloco }}</label>
+            <input ui-input id="mx-copy-dialog-path" type="text" class="w-full font-mono text-[13px]" [placeholder]="'copyDialog.pathPlaceholder' | transloco" [value]="path()" (input)="path.set($any($event.target).value)" />
             @if (pathError()) {
             <span class="text-[11.5px] text-destructive-soft">{{ (pathError() ?? '') | transloco }}</span>
             }
@@ -68,7 +69,11 @@ const METHOD_OPTIONS: readonly UiSelectOption<string>[] = MOCK_METHODS.map((m) =
         </div>
 
         <div class="rounded-lg border border-border bg-muted/50 px-3.5 py-3" aria-live="polite">
-          @if (previewLoading()) {
+          <!-- La finestra parte dal metodo e dal path dell'originale: li' il server risponderebbe
+               "esiste gia'", e l'utente veniva accolto da un errore prima di aver fatto nulla. -->
+          @if (sameAsSource()) {
+          <p class="text-[12px] text-muted-foreground">{{ 'copyDialog.sameAsSource' | transloco }}</p>
+          } @else if (previewLoading()) {
           <p class="text-[12px] text-muted-foreground">{{ 'copyDialog.previewLoading' | transloco }}</p>
           } @else if (previewError()) {
           <p class="text-[12px] text-destructive-soft">{{ previewError() }}</p>
@@ -125,6 +130,9 @@ export class MocksNextCopyDialog {
     path: this.path().trim(),
     copyResponses: this.copyResponses(),
   }));
+  /** Metodo e path sono ancora quelli dell'endpoint di partenza: non c'e' niente da duplicare. */
+  protected readonly sameAsSource = computed(() => this.method() === this.data.method && this.path().trim() === this.data.path);
+
   protected readonly canCopy = computed(() => (
     !this.store.creating()
     && !this.previewLoading()
@@ -144,7 +152,7 @@ export class MocksNextCopyDialog {
     this.preview.set(null);
     this.previewKey.set(null);
     this.previewError.set(null);
-    if (request.path === '' || this.pathError() != null) {
+    if (request.path === '' || this.pathError() != null || this.sameAsSource()) {
       this.previewLoading.set(false);
       return;
     }
@@ -162,8 +170,9 @@ export class MocksNextCopyDialog {
         error: (error: unknown) => {
           if (this.currentRequestKey() !== key) return;
           this.previewError.set(
-            (error as { error?: { message?: string } })?.error?.message
-              ?? this.transloco.translate('copyDialog.previewFailed'),
+            isEndpointExistsError(error)
+              ? this.transloco.translate('copyDialog.endpointExists', { method: request.method, path: request.path })
+              : readErrorMessage(error) ?? this.transloco.translate('copyDialog.previewFailed'),
           );
           this.previewLoading.set(false);
         },

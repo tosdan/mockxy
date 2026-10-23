@@ -1,5 +1,6 @@
 {
   "common": {
+    "endpointExists": "Esiste già un endpoint con questo metodo e path.",
     "error": "Errore",
     "operationFailed": "Operazione non completata.",
     "noHeaders": "Nessun header.",
@@ -478,8 +479,10 @@
     "inactive": "Disattivo",
     "deleteEndpointConfirm": "Eliminare l'endpoint?",
     "delete": "Elimina",
-    "copy": "Copia",
-    "copyEndpointTip": "Copia questo endpoint (metodo, path, response)",
+    "copy": "Duplica in…",
+    "sequenceStepsOne": "1 passo",
+    "sequenceStepsMany": "{{count}} passi",
+    "copyEndpointTip": "Crea un nuovo endpoint con un altro metodo o path, a partire da questo",
     "templatedLabel": "Template",
     "templatedTip": "Sostituisce i placeholder nel body e negli header: params.id, query.x, headers.x, body.campo, now, uuid, randomInt 1 10 — tra doppie graffe. Filtro dei tipi: params.id | number.",
     "editResponse": "Modifica response",
@@ -571,7 +574,9 @@
     "create": "Crea"
   },
   "copyDialog": {
-    "title": "Copia endpoint",
+    "sameAsSource": "Scegli un altro metodo o path: con questi il nuovo endpoint sarebbe quello di partenza.",
+    "endpointExists": "Esiste già un endpoint {{method}} {{path}}: scegli un altro metodo o path.",
+    "title": "Duplica endpoint",
     "from": "da {{method}} {{path}}",
     "method": "Metodo",
     "path": "Path",
@@ -585,7 +590,7 @@
     "sharedStateWarning": "La copia continuerà a condividere lo stato: {{names}}.",
     "sharedStateWarningHint": "Per renderla indipendente, modifica nome e seedKey nel sorgente copiato.",
     "cancel": "Annulla",
-    "copy": "Copia"
+    "copy": "Duplica"
   },
   "wsConsole": {
     "connections": "Connessioni",

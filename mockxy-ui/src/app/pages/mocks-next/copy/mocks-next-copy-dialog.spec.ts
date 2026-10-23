@@ -3,7 +3,7 @@ import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { DIALOG_DATA, DialogRef } from '@angular/cdk/dialog';
-import { of } from 'rxjs';
+import { of, throwError } from 'rxjs';
 import { MocksNextCopyDialog } from './mocks-next-copy-dialog';
 import { MocksStore } from '../mocks-next.store';
 import { MockAdminApiService } from '../../../mock-admin-api.service';
@@ -47,7 +47,7 @@ describe('MocksNextCopyDialog', () => {
         { provide: DialogRef, useValue: dialogRef },
         {
           provide: DIALOG_DATA,
-          useValue: { id: 'abc', method: 'POST', path: '/api/items-copy', responseCount: 1 },
+          useValue: { id: 'abc', method: 'POST', path: '/api/items', responseCount: 1 },
         },
       ],
     }).compileComponents();
@@ -55,17 +55,44 @@ describe('MocksNextCopyDialog', () => {
 
   afterEach(() => vi.useRealTimers());
 
-  function create() {
+  /** Apre la finestra sull'originale POST /api/items e, salvo `path: null`, scrive un path nuovo. */
+  function create(path: string | null = '/api/items-copy') {
     const fixture = TestBed.createComponent(MocksNextCopyDialog);
-    fixture.detectChanges();
     const component = fixture.componentInstance as unknown as {
       path: ReturnType<typeof signal<string>>;
       preview: ReturnType<typeof signal<EndpointCopyPreview | null>>;
       canCopy(): boolean;
       copy(): void;
     };
+    if (path != null) component.path.set(path);
+    fixture.detectChanges();
     return { fixture, component };
   }
+
+  // All'apertura metodo e path sono quelli dell'originale: il server direbbe "esiste gia'", e
+  // l'utente veniva accolto da un errore prima di aver fatto nulla.
+  it('all\'apertura non chiede l\'anteprima: invita a cambiare metodo o path', () => {
+    const { fixture, component } = create(null);
+    vi.advanceTimersByTime(150);
+    fixture.detectChanges();
+    expect(api.previewEndpointCopy).not.toHaveBeenCalled();
+    expect(component.canCopy()).toBe(false);
+    expect(fixture.nativeElement.textContent).toContain('Scegli un altro metodo o path');
+  });
+
+  it('una destinazione occupata (409 ENDPOINT_EXISTS) la spiega in italiano, non col messaggio del server', () => {
+    api.previewEndpointCopy.mockReturnValueOnce(throwError(() => ({
+      status: 409,
+      error: { message: 'An endpoint already exists for this folder and method.', details: { code: 'ENDPOINT_EXISTS', existingMockId: 'x' } },
+    })));
+    const { fixture, component } = create('/api/health');
+    vi.advanceTimersByTime(150);
+    fixture.detectChanges();
+    const text = fixture.nativeElement.textContent as string;
+    expect(text).toContain('Esiste già un endpoint POST /api/health: scegli un altro metodo o path.');
+    expect(text).not.toContain('already exists');
+    expect(component.canCopy()).toBe(false);
+  });
 
   it('disabilita il commit finché il dry run corrente non è riuscito e mostra il warning', () => {
     const { fixture, component } = create();
