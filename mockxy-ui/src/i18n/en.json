@@ -460,11 +460,11 @@
     "deleteSelectedTip": "Delete the selected ones",
     "clearSelectionTip": "Clear the selection",
     "selectionModeLabel": "Select",
-    "selectionModeTip": "Select several endpoints (also with Ctrl+click and Shift+click)",
+    "selectionModeTip": "Select several endpoints (also with Ctrl+click)",
     "selectionModeTitle": "Selection mode",
     "selectionModeHint": "click rows to check them",
     "selectionModeDone": "Done",
-    "selectionShortcutsHint": "Ctrl+click adds or removes · Shift+click selects a range · Esc clears",
+    "selectionShortcutsHint": "Ctrl+click adds or removes · Ctrl+click on a collection checks all of it · Esc clears",
     "unsorted": "Unsorted",
     "collectionLabelReserved": "This name is reserved for unassigned endpoints. Choose another one.",
     "rootLevel": "Top level"

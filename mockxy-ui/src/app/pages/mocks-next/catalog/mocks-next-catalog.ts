@@ -188,8 +188,8 @@ interface NavRow {
             {{ 'catalog.new' | transloco }}
             <ng-icon name="lucideChevronDown" size="0.75rem" class="opacity-70" />
           </button>
-          <!-- Modalita' selezione: un clic sulla riga la spunta. Ctrl+clic e Maiusc+clic spuntano anche
-               fuori modalita', per chi le scorciatoie le conosce. -->
+          <!-- Modalita' selezione: un clic sulla riga la spunta. Ctrl+clic spunta anche fuori
+               modalita', per chi la scorciatoia la conosce. -->
           <button
             ui-button
             variant="outline"
@@ -449,6 +449,7 @@ interface NavRow {
         class="group/folder relative flex w-full cursor-pointer select-none items-center gap-1.5 rounded-lg py-1.5 pr-1 text-left transition hover:bg-accent in-[.mx-compact]:py-[3px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/70"
         [class.mx-drop-into]="dropIntoId() === col.id"
         [class.mx-checked]="folderCheckState(col.id) === 'all'"
+        [class.mx-checked-some]="folderCheckState(col.id) === 'some'"
         [style.padding-left.px]="folderIndent(depth)"
         (click)="onFolderClick(col.id, $event)"
         (focus)="activeRowKey.set('c:' + col.id)"
@@ -803,42 +804,25 @@ export class MocksNextCatalog {
    * è stato di questa vista, non del workspace — cambiando view si riparte puliti.
    */
   protected readonly selection = signal<ReadonlySet<string>>(new Set());
-  /** Ultimo id spuntato: l'ancora dell'intervallo per shift-click. */
-  private lastSelectedId: string | null = null;
   protected readonly confirmingBulkDelete = signal(false);
 
   /**
-   * Spunta un endpoint. Con shift estende dall'ultimo spuntato **fra le righe visibili**: sotto
-   * filtro l'intervallo è quello che si vede, non quello nascosto.
+   * Spunta o toglie la spunta di un endpoint. Niente intervalli: nel catalogo si spunta per
+   * endpoint o per cartella intera, e un intervallo che attraversa cartelle diverse confondeva.
    */
-  protected onSelectionClick(id: string, event: Event): void {
+  protected toggleSelection(id: string): void {
     const next = new Set(this.selection());
-    const visibleIds = this.flatRows()
-      .filter((row) => row.kind === 'endpoint')
-      .map((row) => row.endpoint.id);
-
-    const withShift = (event as MouseEvent | KeyboardEvent).shiftKey === true;
-    if (withShift && this.lastSelectedId != null) {
-      const from = visibleIds.indexOf(this.lastSelectedId);
-      const to = visibleIds.indexOf(id);
-      if (from >= 0 && to >= 0) {
-        const [start, end] = from <= to ? [from, to] : [to, from];
-        for (const rangeId of visibleIds.slice(start, end + 1)) {
-          next.add(rangeId);
-        }
-        this.selection.set(next);
-        this.lastSelectedId = id;
-        return;
-      }
-    }
-
     if (next.has(id)) {
       next.delete(id);
     } else {
       next.add(id);
     }
     this.selection.set(next);
-    this.lastSelectedId = id;
+  }
+
+  protected clearSelection(): void {
+    this.selection.set(new Set());
+    this.confirmingBulkDelete.set(false);
   }
 
   /** Modalita' selezione: un clic sulla riga la spunta invece di aprirla. */
@@ -848,13 +832,10 @@ export class MocksNextCatalog {
     this.selectionMode.update((on) => !on);
   }
 
-  /**
-   * Clic su un endpoint: lo apre, oppure lo spunta in modalita' selezione e con Ctrl (Cmd su Mac).
-   * Maiusc estende dall'ultimo spuntato, in modalita' o fuori.
-   */
+  /** Clic su un endpoint: lo apre, oppure lo spunta in modalita' selezione e con Ctrl (Cmd su Mac). */
   protected onEndpointClick(id: string, event: MouseEvent): void {
-    if (this.selectionMode() || event.ctrlKey || event.metaKey || event.shiftKey) {
-      this.onSelectionClick(id, event);
+    if (this.selectionMode() || event.ctrlKey || event.metaKey) {
+      this.toggleSelection(id);
       return;
     }
     this.store.selectMock(id);
@@ -867,12 +848,6 @@ export class MocksNextCatalog {
       return;
     }
     this.toggleCollapse(collectionId);
-  }
-
-  protected clearSelection(): void {
-    this.selection.set(new Set());
-    this.lastSelectedId = null;
-    this.confirmingBulkDelete.set(false);
   }
 
   /**
@@ -938,7 +913,6 @@ export class MocksNextCatalog {
       else next.add(id);
     }
     this.selection.set(next);
-    this.lastSelectedId = allChecked ? null : ids[ids.length - 1];
     this.confirmingBulkDelete.set(false);
   }
 
@@ -1128,7 +1102,7 @@ export class MocksNextCatalog {
         break;
       case ' ':
         if (row.collectionId != null) this.toggleCollectionSelection(row.collectionId);
-        else this.onSelectionClick(row.endpointId!, event);
+        else this.toggleSelection(row.endpointId!);
         break;
       default:
         return;
