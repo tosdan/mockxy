@@ -201,12 +201,14 @@
 .mx-checked {
   background: color-mix(in srgb, var(--selection) 15%, transparent);
 }
-/* Cartella spuntata in parte: strisce a 45 gradi, la tinta della selezione alternata allo sfondo. */
+/* Cartella spuntata in parte: strisce a 45 gradi, la tinta della selezione alternata a una sua
+   versione piu' tenue (allo sfondo puro le strisce scure staccavano troppo). Oltre il 10% le
+   strisce si confonderebbero con la tinta piena della cartella tutta spuntata. */
 .mx-checked-some {
   background: repeating-linear-gradient(
     45deg,
     color-mix(in srgb, var(--selection) 15%, transparent) 0 6px,
-    transparent 6px 12px
+    color-mix(in srgb, var(--selection) 8%, transparent) 6px 12px
   );
 }
 .mx-open.mx-checked {
