@@ -245,6 +245,13 @@ describe('MocksNextCatalog', () => {
       expect(rows(fixture)[1].classList).toContain('mx-open');
       expect(rows(fixture)[1].classList).toContain('mx-checked');
       expect(rows(fixture)[2].classList).not.toContain('mx-checked');
+
+      // La tinta da sola non basta a chi non distingue i colori: anche un segno, solo decorativo.
+      const mark = (row: HTMLElement) => row.querySelector<HTMLElement>('ng-icon[name="lucideCheck"]');
+      expect(mark(rows(fixture)[0])?.getAttribute('aria-hidden')).toBe('true');
+      expect(mark(rows(fixture)[0])?.classList).toContain('pointer-events-none');
+      expect(mark(rows(fixture)[0])?.style.left).toBe('9px'); // profondità 1: in colonna con la casella della cartella
+      expect(mark(rows(fixture)[2])).toBeNull();
     });
 
     it('in modalità selezione un clic spunta invece di aprire; Fine esce e tiene le spunte', () => {
@@ -311,6 +318,38 @@ describe('MocksNextCatalog', () => {
       expect(checkedIds(fixture)).toEqual([]);
       expect(host.querySelector('[role="status"]')).toBeNull();
       expect(modeButton(fixture).getAttribute('aria-pressed')).toBe('false');
+    });
+
+    // Esc vale in tutta la pagina (il dettaglio, le barre), tranne che nei menu e nei dialog, che con
+    // Esc chiudono se stessi, e quando qualcuno ha gia' gestito il tasto.
+    it('Esc vale anche fuori dal catalogo, ma non da un menu o un dialog né se è già gestito', () => {
+      const { fixture, store } = create();
+      seedCatalog(store);
+      fixture.detectChanges();
+      const outside = document.body.appendChild(document.createElement('button'));
+      const overlay = document.body.appendChild(document.createElement('div'));
+      overlay.className = 'cdk-overlay-container';
+      const inOverlay = overlay.appendChild(document.createElement('button'));
+      const escape = (target: Element, handled = false) => {
+        const event = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
+        if (handled) event.preventDefault();
+        target.dispatchEvent(event);
+        fixture.detectChanges();
+      };
+      try {
+        ctrlClick(fixture, rows(fixture)[0]);
+
+        escape(inOverlay);
+        expect(checkedIds(fixture)).toEqual(['uno']);
+        escape(outside, true);
+        expect(checkedIds(fixture)).toEqual(['uno']);
+
+        escape(outside);
+        expect(checkedIds(fixture)).toEqual([]);
+      } finally {
+        outside.remove();
+        overlay.remove();
+      }
     });
 
     it('abilita e disabilita passano dalla rotta di massa, in una chiamata sola', () => {

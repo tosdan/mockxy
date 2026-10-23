@@ -125,6 +125,7 @@
   --switch-off: rgba(120, 120, 128, 0.5);
   --selection: #818cf8; /* spunta della selezione multipla: un indaco, l'unica tinta che non dice gia' altro */
   --selection-foreground: #c7cbff; /* testo sopra la tinta della selezione */
+  --foreground-disabled-checked: #a6a6aa; /* testo di una riga spenta e spuntata: la tinta ne abbassava il contrasto sotto 4.5:1 */
   --highlight: #fcd34d; /* evidenziatore del testo cercato: si usa come velo, non pieno */
   --destructive: #fb7185; /* rose-400: bordo/fondo dei controlli distruttivi */
   --destructive-foreground: #ffffff;
@@ -211,10 +212,15 @@
     color-mix(in srgb, var(--selection) 8%, transparent) 6px 12px
   );
 }
+/* Sopra la tinta la sfumatura arriva al 6% invece che all'8,5%: piu' chiara, il testo secondario
+   (#a3a3a3) scendeva sotto 4.5:1 dove la riga e' piu' luminosa, a destra. */
 .mx-open.mx-checked {
   background:
-    linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.032) 36%, rgba(255, 255, 255, 0.085)),
+    linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.024) 36%, rgba(255, 255, 255, 0.06)),
     color-mix(in srgb, var(--selection) 15%, transparent);
+}
+.mx-checked.mx-muted {
+  color: var(--foreground-disabled-checked);
 }
 /* Riga endpoint selezionata: velo verso destra + bordo sinistro curvo. */
 .mx-selected {

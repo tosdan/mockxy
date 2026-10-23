@@ -41,9 +41,10 @@ reminds whoever tries to drag.
 A click on an endpoint opens it in the detail; **Ctrl+click** (⌘+click on Mac) checks it without
 opening it, and a second one unchecks it. The **Select** button next to «⋮» starts selection
 mode: there a click checks the row instead of opening it, until **Done** closes the mode and keeps
-the checks. **Esc** closes the mode and clears every check.
+the checks. **Esc** closes the mode and clears every check, from anywhere on the page except
+text fields, menus and dialogs.
 
-Checked rows have an indigo tint; the one open in the detail has a gradient towards the right
+Checked rows have an indigo tint and a check mark in the margin; the one open in the detail has a gradient towards the right
 and a light right edge, and it is the only row with an edge. Collections have a three-state
 checkbox: it checks every endpoint of the subtree, sub-collections included (under a filter, only
 those the filter shows); Ctrl+click on the collection does the same, while a plain click expands

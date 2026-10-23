@@ -320,6 +320,79 @@ test.describe("E1 · catalogo", () => {
     }
   });
 
+  // Aperta e spuntata, la riga somma la tinta della selezione e la sfumatura chiara verso destra:
+  // il testo grigio (spento o secondario) va misurato dove il fondo e' piu' chiaro, l'ultimo
+  // colore della sfumatura. Anche il segno di spunta, non testo, deve stare sopra 3:1.
+  for (const compact of [false, true]) {
+    test(`aperta e spuntata, la riga resta leggibile nel punto più chiaro${compact ? ", in densità compatta" : ""}`, async ({ page }) => {
+      const catalog = page.locator("mocks-next-catalog");
+      if (compact) {
+        await catalog.getByRole("button", { name: "Azioni di vista" }).click();
+        await page.getByRole("menuitemcheckbox", { name: "Densità compatta" }).click();
+        await page.keyboard.press("Escape");
+      }
+      for (const path of ["/api/legacy", "/api/status"]) {
+        const row = catalog.locator('[role="treeitem"]').filter({ hasText: path }).first();
+        await row.locator("ui-badge").click();
+        await row.locator("ui-badge").click({ modifiers: ["ControlOrMeta"] });
+        await expect(row).toHaveClass(/mx-open/);
+        await expect(row).toHaveClass(/mx-checked/);
+        await page.mouse.move(1200, 850);
+        await page.waitForTimeout(300); // fine delle transizioni di colore
+        const results = await row.evaluate((rowEl) => {
+          const canvas = document.createElement("canvas");
+          canvas.width = canvas.height = 1;
+          const context = canvas.getContext("2d", { willReadFrequently: true });
+          const paint = (colors) => {
+            context.clearRect(0, 0, 1, 1);
+            for (const color of colors) {
+              context.fillStyle = color;
+              context.fillRect(0, 0, 1, 1);
+            }
+            return [...context.getImageData(0, 0, 1, 1).data];
+          };
+          // Fondo sotto un elemento: gli strati degli antenati fino al primo opaco; di ogni
+          // sfumatura l'ultimo colore, il piu' chiaro.
+          const layersUnder = (element) => {
+            const layers = [];
+            for (let node = element; node; node = node.parentElement) {
+              const style = getComputedStyle(node);
+              const stops = style.backgroundImage.match(/(?:rgba?|oklab|oklch|color)\([^)]*\)/g);
+              if (stops) layers.unshift(stops[stops.length - 1]);
+              layers.unshift(style.backgroundColor);
+              if (paint([style.backgroundColor])[3] === 255) break;
+            }
+            return layers;
+          };
+          const luminance = ([r, g, b]) => {
+            const [lr, lg, lb] = [r, g, b].map((v) => {
+              const c = v / 255;
+              return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+            });
+            return 0.2126 * lr + 0.7152 * lg + 0.0722 * lb;
+          };
+          const ratio = (element, color) => {
+            const layers = layersUnder(element);
+            const a = luminance(paint(layers));
+            const b = luminance(paint([...layers, color]));
+            return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+          };
+          const texts = [...rowEl.querySelectorAll("*")].filter(
+            (el) => el.offsetParent && [...el.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim()),
+          );
+          const mark = rowEl.querySelector('ng-icon[name="lucideCheck"]');
+          return {
+            texts: texts.map((el) => ({ text: el.textContent.trim(), ratio: ratio(el, getComputedStyle(el).color) })),
+            mark: ratio(mark, getComputedStyle(mark).color),
+          };
+        });
+        for (const { text, ratio } of results.texts) expect(ratio, `${path}: «${text}»`).toBeGreaterThanOrEqual(4.5);
+        expect(results.mark, `${path}: segno di spunta`).toBeGreaterThanOrEqual(3);
+        await row.locator("ui-badge").click({ modifiers: ["ControlOrMeta"] }); // toglie la spunta
+      }
+    });
+  }
+
   test("l'endpoint disabilitato ha lo switch spento, gli attivi acceso", async ({ page }) => {
     const catalog = page.locator("mocks-next-catalog");
     // Ogni riga (endpoint o cartella) è un .cdk-drag isolato: il filtro per percorso ne prende una sola.

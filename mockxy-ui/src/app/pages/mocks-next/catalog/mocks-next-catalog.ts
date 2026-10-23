@@ -527,6 +527,12 @@ interface NavRow {
         [class.mx-checked]="selection().has(ep.id)"
         [class.mx-muted]="!ep.enabled"
       >
+        <!-- La tinta da sola non basta a chi non distingue i colori: la spunta ha anche un segno, nel
+             margine del rientro, in colonna con la casella della cartella che contiene la riga.
+             Solo un segno, non un bersaglio: si spunta col clic, in modalita' o con Ctrl. -->
+        @if (selection().has(ep.id)) {
+        <ng-icon name="lucideCheck" size="0.75rem" strokeWidth="3" aria-hidden="true" class="pointer-events-none absolute top-1/2 -translate-y-1/2 text-selection" [style.left.px]="indent(depth) - 13" />
+        }
         <!-- Da spenta la riga perde il colore, non l'opacita': ogni testo eredita il grigio di
              .mx-muted, che resta sopra il contrasto AA anche sulla riga selezionata. Il solo
              grigio pero' si nota poco, su un tema gia' grigio: il badge del metodo si svuota e
@@ -1050,14 +1056,16 @@ export class MocksNextCatalog {
   }
 
   /**
-   * Esc annulla la selezione e chiude la modalita', se il tasto arriva dal catalogo o dalla pagina
-   * (non da un campo, un menu o un dialog, che con Esc chiudono se stessi).
+   * Esc annulla la selezione e chiude la modalita', da qualunque punto della pagina: catalogo,
+   * dettaglio, barre. Non da un campo o un editor, ne' da un menu o un dialog (overlay CDK), che con
+   * Esc chiudono se stessi; ne' quando qualcuno ha gia' gestito il tasto.
    */
   private escapeSelection(event: KeyboardEvent): boolean {
     if (!this.selectionMode() && this.selection().size === 0) return false;
+    if (event.defaultPrevented) return false;
     const target = event.target as HTMLElement | null;
-    if (/^(INPUT|TEXTAREA|SELECT)$/.test(target?.tagName ?? '')) return false;
-    if (target !== document.body && !this.host.nativeElement.contains(target)) return false;
+    if (target?.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target?.tagName ?? '')) return false;
+    if (target?.closest('.cdk-overlay-container')) return false;
     this.selectionMode.set(false);
     this.clearSelection();
     event.preventDefault();
