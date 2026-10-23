@@ -350,7 +350,7 @@ interface NavRow {
           [attr.aria-level]="row.depth + 2"
           [attr.aria-label]="'catalog.newSubCollection' | transloco"
           class="flex items-center gap-1.5 py-1 pr-1"
-          [style.padding-left.px]="folderIndent(row.depth + 1)"
+          [style.padding-left.px]="indent(row.depth + 1)"
         >
           <ng-icon name="lucideFolderPlus" size="0.85rem" class="shrink-0 text-brand" />
           <input
@@ -450,14 +450,13 @@ interface NavRow {
         [class.mx-drop-into]="dropIntoId() === col.id"
         [class.mx-checked]="folderCheckState(col.id) === 'all'"
         [class.mx-checked-some]="folderCheckState(col.id) === 'some'"
-        [style.padding-left.px]="folderIndent(depth)"
+        [style.padding-left.px]="indent(depth)"
         (click)="onFolderClick(col.id, $event)"
         (focus)="activeRowKey.set('c:' + col.id)"
         (keydown)="onRowKeydown($event)"
       >
         <!-- Casella a tre stati: spunta (o toglie) tutti gli endpoint del sottoalbero che il filtro
-             lascia vedere, anche a cartella chiusa. Sta nella colonna delle caselle, la stessa per
-             ogni riga a ogni profondita'. -->
+             lascia vedere, anche a cartella chiusa. Sta prima dello chevron e segue il rientro. -->
         @if (folderCheckState(col.id); as state) {
         @if (state !== 'empty') {
         <span
@@ -465,7 +464,7 @@ interface NavRow {
           tabindex="0"
           [attr.aria-checked]="state === 'all' ? 'true' : state === 'some' ? 'mixed' : 'false'"
           [attr.aria-label]="'catalog.selectCollectionAria' | transloco: { name: isUnsorted(col) ? ('catalog.unsorted' | transloco) : col.name }"
-          class="absolute left-[6px] top-1/2 z-10 grid size-3.5 -translate-y-1/2 place-items-center rounded transition"
+          class="grid size-3.5 shrink-0 place-items-center rounded transition"
           [class]="state === 'none' ? 'shadow-[inset_0_0_0_1px_var(--input)] opacity-0 group-hover/folder:opacity-100 focus-visible:opacity-100' : 'bg-selection text-background'"
           [class.opacity-100]="selection().size > 0 || selectionMode()"
           (click)="$event.stopPropagation(); toggleCollectionSelection(col.id)"
@@ -523,7 +522,7 @@ interface NavRow {
         (focus)="activeRowKey.set('e:' + ep.id)"
         (keydown)="onRowKeydown($event)"
         class="group relative flex min-h-11 cursor-pointer select-none items-center gap-2 rounded-lg py-1.5 pr-2 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/70 in-[.mx-compact]:min-h-[30px] in-[.mx-compact]:py-[3px]"
-        [style.padding-left.px]="endpointIndent(depth)"
+        [style.padding-left.px]="indent(depth)"
         [class]="ep.id === store.selectedId() ? 'mx-open' : 'hover:bg-accent'"
         [class.mx-checked]="selection().has(ep.id)"
         [class.mx-muted]="!ep.enabled"
@@ -1352,17 +1351,9 @@ export class MocksNextCatalog {
     () => this.typeOptions.find((option) => option.value === this.store.typeFilter())?.labelKey ?? 'catalog.filterAll',
   );
 
-  /**
-   * Rientro delle righe. Le caselle delle cartelle stanno in una colonna fissa (6-20 px dal bordo
-   * della riga), fuori dal flusso: il rientro parte dopo di lei. La cartella ha lo chevron a 28 px,
-   * l'endpoint (che sta almeno a profondita' 1) il metodo a 26 px.
-   */
-  protected folderIndent(depth: number): number {
-    return 28 + depth * 14;
-  }
-
-  protected endpointIndent(depth: number): number {
-    return 12 + depth * 14;
+  /** Rientro delle righe: 14 px per livello. La casella della cartella sta nel flusso, quindi segue il rientro. */
+  protected indent(depth: number): number {
+    return 8 + depth * 14;
   }
 
   protected resetFilters(): void {
