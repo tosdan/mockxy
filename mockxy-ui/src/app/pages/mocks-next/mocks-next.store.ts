@@ -3,7 +3,7 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { EMPTY, Observable, catchError, concatMap, defer, filter, finalize, from, map, of, switchMap, throwError, toArray, type MonoTypeOperatorFunction } from 'rxjs';
 import { TranslocoService } from '@jsverse/transloco';
 import { MockAdminApiService } from '../../mock-admin-api.service';
-import { isNotFoundError, isReadInconsistentError, isReservedCollectionLabelError, readRevisionConflict } from '../../shared/read-error-message';
+import { isEndpointExistsError, isNotFoundError, isReadInconsistentError, isReservedCollectionLabelError, readRevisionConflict } from '../../shared/read-error-message';
 import { ViewStateService } from '../../shared/view-state.service';
 import { RuntimeSyncStore, affects, type RuntimeSyncEvent } from '../../shared/runtime-sync.store';
 import {
@@ -993,7 +993,11 @@ export class MocksStore {
         onDone?.(true, detail.id);
       },
       error: (e) => {
-        this.error.set(readErrorMessage(e) ?? this.transloco.translate('common.unexpectedError'));
+        this.error.set(
+          isEndpointExistsError(e)
+            ? this.transloco.translate('common.endpointExists')
+            : readErrorMessage(e) ?? this.transloco.translate('common.unexpectedError'),
+        );
         onDone?.(false);
       },
     });

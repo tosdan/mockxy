@@ -188,8 +188,8 @@ paths:
       description: |
         Creates an endpoint together with its first variant. The route path determines the
         folder the files land in, so **method + path must be free**: an existing endpoint answers
-        `409` and reports its id in `details.existingMockId`, which lets a client offer "add this
-        as a variant of the existing endpoint" instead.
+        `409` with `details.code: ENDPOINT_EXISTS` and reports its id in `details.existingMockId`,
+        which lets a client offer "add this as a variant of the existing endpoint" instead.
       requestBody:
         required: true
         content:
@@ -228,7 +228,7 @@ paths:
               example:
                 error: Conflict
                 message: An endpoint already exists for this folder and method.
-                details: { existingMockId: bW9ja3MvYXBpL3VzZXJzL0dFVC5lbmRwb2ludC5qc29u }
+                details: { code: ENDPOINT_EXISTS, existingMockId: bW9ja3MvYXBpL3VzZXJzL0dFVC5lbmRwb2ludC5qc29u }
         "500": { $ref: "#/components/responses/MutationFailed" }
 
   /mocks/resolve:
@@ -741,7 +741,9 @@ paths:
         "400": { $ref: "#/components/responses/BadRequest" }
         "404": { $ref: "#/components/responses/MockNotFound" }
         "409":
-          description: An endpoint already exists at the destination.
+          description: |
+            An endpoint already exists at the destination: `details.code` is `ENDPOINT_EXISTS` and
+            `details.existingMockId` its id. The dry run answers the same way.
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }

@@ -100,6 +100,7 @@ async function createAdminEndpointFromMock(mocksDir, payload, reloadRuntime) {
     // L'id dell'endpoint esistente permette al chiamante di proporre un'alternativa
     // (es. il monitor: "aggiungi la response catturata come variante") senza rifare il match.
     throw createAdminError(409, "An endpoint already exists for this folder and method.", {
+      code: "ENDPOINT_EXISTS",
       existingMockId: encodeMockId(toPosixRelativePath(path.relative(mocksDir, endpointPath))),
     });
   }
@@ -163,6 +164,7 @@ async function createAdminEndpointFromScript(mocksDir, payload, reloadRuntime, t
   const sourcePath = path.join(responseDir, sourceFile);
   if (fs.existsSync(endpointPath)) {
     throw createAdminError(409, "An endpoint already exists for this folder and method.", {
+      code: "ENDPOINT_EXISTS",
       existingMockId: encodeMockId(toPosixRelativePath(path.relative(mocksDir, endpointPath))),
     });
   }
@@ -1566,7 +1568,11 @@ async function planAdminEndpointCopy(mocksDir, id, payload) {
 
   const targetEndpointPath = path.join(configDir, `${method}${ENDPOINT_SUFFIX}`);
   if (fs.existsSync(targetEndpointPath)) {
-    throw createAdminError(409, "An endpoint already exists for this folder and method.");
+    // Il codice permette alla GUI di spiegare il rifiuto nella lingua di chi la usa.
+    throw createAdminError(409, "An endpoint already exists for this folder and method.", {
+      code: "ENDPOINT_EXISTS",
+      existingMockId: encodeMockId(toPosixRelativePath(path.relative(mocksDir, targetEndpointPath))),
+    });
   }
   const targetResponseDir = getEndpointResponsesDir(targetEndpointPath, method);
   if (fs.existsSync(targetResponseDir)) {

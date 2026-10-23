@@ -12,6 +12,7 @@ import { MockAdminApiService } from '../../../mock-admin-api.service';
 import type { EndpointCopyPreview } from '../../../mock-admin-api.types';
 import { routePathError } from '../../../mock-path-convention';
 import { MOCK_METHODS } from '../../../mock-admin-ui.constants';
+import { isEndpointExistsError, readErrorMessage } from '../../../shared/read-error-message';
 
 export interface CopyDialogData {
   readonly id: string;
@@ -68,7 +69,11 @@ const METHOD_OPTIONS: readonly UiSelectOption<string>[] = MOCK_METHODS.map((m) =
         </div>
 
         <div class="rounded-lg border border-border bg-muted/50 px-3.5 py-3" aria-live="polite">
-          @if (previewLoading()) {
+          <!-- La finestra parte dal metodo e dal path dell'originale: li' il server risponderebbe
+               "esiste gia'", e l'utente veniva accolto da un errore prima di aver fatto nulla. -->
+          @if (sameAsSource()) {
+          <p class="text-[12px] text-muted-foreground">{{ 'copyDialog.sameAsSource' | transloco }}</p>
+          } @else if (previewLoading()) {
           <p class="text-[12px] text-muted-foreground">{{ 'copyDialog.previewLoading' | transloco }}</p>
           } @else if (previewError()) {
           <p class="text-[12px] text-destructive-soft">{{ previewError() }}</p>
@@ -125,6 +130,9 @@ export class MocksNextCopyDialog {
     path: this.path().trim(),
     copyResponses: this.copyResponses(),
   }));
+  /** Metodo e path sono ancora quelli dell'endpoint di partenza: non c'e' niente da duplicare. */
+  protected readonly sameAsSource = computed(() => this.method() === this.data.method && this.path().trim() === this.data.path);
+
   protected readonly canCopy = computed(() => (
     !this.store.creating()
     && !this.previewLoading()
@@ -144,7 +152,7 @@ export class MocksNextCopyDialog {
     this.preview.set(null);
     this.previewKey.set(null);
     this.previewError.set(null);
-    if (request.path === '' || this.pathError() != null) {
+    if (request.path === '' || this.pathError() != null || this.sameAsSource()) {
       this.previewLoading.set(false);
       return;
     }
@@ -162,8 +170,9 @@ export class MocksNextCopyDialog {
         error: (error: unknown) => {
           if (this.currentRequestKey() !== key) return;
           this.previewError.set(
-            (error as { error?: { message?: string } })?.error?.message
-              ?? this.transloco.translate('copyDialog.previewFailed'),
+            isEndpointExistsError(error)
+              ? this.transloco.translate('copyDialog.endpointExists', { method: request.method, path: request.path })
+              : readErrorMessage(error) ?? this.transloco.translate('copyDialog.previewFailed'),
           );
           this.previewLoading.set(false);
         },

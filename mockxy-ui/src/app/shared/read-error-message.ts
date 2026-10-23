@@ -52,6 +52,19 @@ export function isReservedCollectionLabelError(error: unknown): boolean {
   );
 }
 
+/**
+ * Un `409 ENDPOINT_EXISTS`: metodo e path chiesti (creazione o duplicazione) sono gia' di un altro
+ * endpoint. Il messaggio del server e' in inglese: la GUI lo spiega nella lingua di chi la usa.
+ */
+export function isEndpointExistsError(error: unknown): boolean {
+  return (
+    isObject(error) &&
+    isObject(error['error']) &&
+    isObject(error['error']['details']) &&
+    error['error']['details']['code'] === 'ENDPOINT_EXISTS'
+  );
+}
+
 /** Un 404 su un salvataggio: la risorsa della bozza non esiste più. */
 export function isNotFoundError(error: unknown): boolean {
   return isObject(error) && error['status'] === 404;

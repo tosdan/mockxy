@@ -1,5 +1,6 @@
 {
   "common": {
+    "endpointExists": "An endpoint with this method and path already exists.",
     "error": "Error",
     "operationFailed": "Operation not completed.",
     "noHeaders": "No headers.",
@@ -573,6 +574,8 @@
     "create": "Create"
   },
   "copyDialog": {
+    "sameAsSource": "Choose another method or path: with these, the new endpoint would be the one you started from.",
+    "endpointExists": "An endpoint {{method}} {{path}} already exists: choose another method or path.",
     "title": "Duplicate endpoint",
     "from": "from {{method}} {{path}}",
     "method": "Method",
