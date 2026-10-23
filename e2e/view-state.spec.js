@@ -11,7 +11,7 @@ test.describe("E19 · stato delle view preservato tra le navigazioni", () => {
 
     // Seleziona un endpoint diverso dal primo e collassa una cartella.
     await catalog.getByText("/api/status", { exact: true }).click();
-    await expect(catalog.locator(".mx-selected")).toContainText("/api/status");
+    await expect(catalog.locator('[aria-current="true"]')).toContainText("/api/status");
     await catalog.getByText("Core API", { exact: true }).click();
     await expect(catalog.getByText("/api/users", { exact: true })).toHaveCount(0);
 
@@ -22,7 +22,7 @@ test.describe("E19 · stato delle view preservato tra le navigazioni", () => {
     await expect(page).toHaveURL(/\/mocks/);
 
     // Stato ritrovato: stesso selezionato, stessa cartella collassata.
-    await expect(catalog.locator(".mx-selected")).toContainText("/api/status");
+    await expect(catalog.locator('[aria-current="true"]')).toContainText("/api/status");
     await expect(catalog.getByText("Core API", { exact: true })).toBeVisible();
     await expect(catalog.getByText("/api/users", { exact: true })).toHaveCount(0);
   });

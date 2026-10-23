@@ -39,17 +39,23 @@ ricorda a chi prova a trascinare.
 
 ## Selezione e tastiera
 
-Ogni riga ha una casella che compare al passaggio del mouse, al fuoco e, avviata una selezione,
-su tutte le righe. Con Maiuscole il clic spunta l'intervallo dall'ultima riga spuntata. Anche le
-collezioni hanno la loro casella, a tre stati: spunta tutti gli endpoint del sottoalbero,
-sottocollezioni comprese (sotto filtro, solo quelli che il filtro mostra). Le azioni in massa —
+Un clic su un endpoint lo apre nel dettaglio; **Ctrl+clic** (⌘+clic su Mac) lo spunta senza
+aprirlo, e un secondo lo toglie. Il pulsante **Seleziona** accanto a «⋮» avvia la modalità
+selezione: lì un clic spunta la riga invece di aprirla, finché **Fine** non la chiude tenendo le
+spunte. **Esc** chiude la modalità e toglie tutte le spunte.
+
+Le righe spuntate hanno una tinta indaco; quella aperta nel dettaglio ha una sfumatura verso
+destra e il bordo destro chiaro, ed è l'unica riga con un bordo. Le collezioni hanno una casella
+a tre stati: spunta tutti gli endpoint del sottoalbero, sottocollezioni comprese (sotto filtro,
+solo quelli che il filtro mostra); lo stesso fa Ctrl+clic sulla collezione, mentre il clic
+semplice la apre o la chiude. Una collezione spuntata per intero ha la tinta, una spuntata in
+parte ha delle strisce, e il suo contatore dice quanti endpoint sono spuntati sul totale. Le azioni in massa —
 abilita, disabilita, sposta, elimina — agiscono su tutti gli endpoint spuntati che il filtro
 mostra, anche dentro collezioni chiuse; ciò che il filtro nasconde non viene mai toccato.
 
 Il catalogo si usa anche da tastiera, con un solo punto di Tab: le frecce si spostano fra le
 righe e aprono o chiudono le collezioni, **Invio** apre l'endpoint nel dettaglio, **Spazio** lo
-spunta (su una collezione spunta il sottoalbero) e Maiuscole+Spazio spunta l'intervallo. Dalla
-ricerca, Freccia giù entra nella lista.
+spunta (su una collezione spunta il sottoalbero). Dalla ricerca, Freccia giù entra nella lista.
 
 Dal menu «⋮» accanto a «Nuovo» si sceglie la **densità compatta**: una riga per endpoint, con il
 solo necessario a distinguerli. La scelta resta per le visite successive.

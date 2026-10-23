@@ -99,10 +99,10 @@ test.describe("E1 · catalogo", () => {
     test(`la barra delle azioni di massa non spezza conteggio e pulsanti, col font ${font ?? "di sistema"}`, async ({ page }) => {
       if (font) await page.addStyleTag({ content: `* { font-family: "${font}" !important; }` });
       const catalog = page.locator("mocks-next-catalog");
-      // Le spunte degli endpoint: anche le cartelle hanno la loro casella.
-      const endpointBoxes = catalog.locator('[data-row-key^="e:"] [role="checkbox"]');
-      await endpointBoxes.nth(0).click({ force: true });
-      await endpointBoxes.nth(1).click({ force: true });
+      // Gli endpoint si spuntano con Ctrl+clic (Cmd su Mac) sulla riga.
+      const endpointRows = catalog.locator('[data-row-key^="e:"]');
+      await endpointRows.nth(0).locator("ui-badge").click({ modifiers: ["ControlOrMeta"] });
+      await endpointRows.nth(1).locator("ui-badge").click({ modifiers: ["ControlOrMeta"] });
 
       const label = catalog.getByText("2 selezionati");
       await expect(label).toBeVisible();
@@ -131,7 +131,7 @@ test.describe("E1 · catalogo", () => {
     });
   }
 
-  test("spunta e menu non tolgono spazio al path: lo cede il path quando il menu compare", async ({ page }) => {
+  test("il menu non toglie spazio al path: lo cede il path quando il menu compare", async ({ page }) => {
     const catalog = page.locator("mocks-next-catalog");
     const row = catalog.locator('[role="treeitem"]').filter({ hasText: "/api/users/:id" });
     const path = row.locator('[dir="rtl"]');
@@ -154,16 +154,19 @@ test.describe("E1 · catalogo", () => {
     expect(hover.row.height).toBe(rest.row.height);
   });
 
-  test("spuntare un endpoint non sposta la riga, e il click non lascia il menu acceso", async ({ page }) => {
+  test("Ctrl+clic spunta senza aprire e senza spostare la riga, e non lascia il menu acceso", async ({ page }) => {
     const catalog = page.locator("mocks-next-catalog");
     const row = catalog.locator('[role="treeitem"]').filter({ hasText: "/api/health" });
     const badge = row.locator("ui-badge");
     const before = await badge.boundingBox();
+    const opened = await catalog.locator('[aria-current="true"]').getAttribute("data-row-key");
 
-    await row.getByRole("checkbox").click();
+    await badge.click({ modifiers: ["ControlOrMeta"] });
     await page.mouse.move(1000, 600);
 
-    await expect(row.getByRole("checkbox")).toHaveAttribute("aria-checked", "true");
+    await expect(row).toHaveAttribute("aria-selected", "true");
+    await expect(row).toHaveClass(/mx-checked/);
+    await expect(catalog.locator('[aria-current="true"]')).toHaveAttribute("data-row-key", opened);
     expect((await badge.boundingBox()).x).toBe(before.x);
     await expect(row.getByRole("button", { name: "Sposta in collection" })).toHaveCSS("opacity", "0");
   });
@@ -179,14 +182,13 @@ test.describe("E1 · catalogo", () => {
     const menu = row.getByRole("button", { name: "Sposta in collection" });
     await expect(menu).toHaveCSS("opacity", "1");
 
-    await page.keyboard.press("Tab"); // la spunta
-    await page.keyboard.press("Tab"); // il menu
+    await page.keyboard.press("Tab"); // il menu: gli endpoint non hanno piu' la spunta
     await expect(menu).toBeFocused();
     await page.keyboard.press("Enter");
     await expect(page.getByRole("menuitem", { name: "Core API" })).toBeVisible();
   });
 
-  test("da tastiera Spazio spunta e Maiuscole+Spazio spunta l'intervallo; le azioni di massa partono", async ({ page }) => {
+  test("da tastiera Spazio spunta solo la riga a fuoco, anche con Maiuscole; Invio apre", async ({ page }) => {
     const catalog = page.locator("mocks-next-catalog");
     const row = (p) => catalog.locator('[role="treeitem"]').filter({ hasText: p }).first();
     await page.keyboard.press("/");
@@ -195,21 +197,50 @@ test.describe("E1 · catalogo", () => {
     await page.keyboard.press("ArrowDown"); // /api/health
     await page.keyboard.press("Space");
     await expect(row("/api/health")).toHaveAttribute("aria-selected", "true");
-    // Spuntare non apre: il dettaglio resta sull'endpoint aperto di partenza.
-    await expect(row("/api/health").getByRole("checkbox")).toHaveAttribute("aria-checked", "true");
 
     await page.keyboard.press("ArrowDown"); // /api/legacy
     await page.keyboard.press("ArrowDown"); // /api/status
+    // Niente intervalli: Maiuscole+Spazio spunta la riga a fuoco e basta.
     await page.keyboard.press("Shift+Space");
-    for (const p of ["/api/health", "/api/legacy", "/api/status"]) {
-      await expect(row(p)).toHaveAttribute("aria-selected", "true");
-    }
-    await expect(catalog.getByText("3 selezionati")).toBeVisible();
+    await expect(row("/api/status")).toHaveAttribute("aria-selected", "true");
+    await expect(row("/api/legacy")).toHaveAttribute("aria-selected", "false");
+    await expect(catalog.getByText("2 selezionati")).toBeVisible();
 
     // Invio, invece, apre.
     await page.keyboard.press("Enter");
     await expect(page.locator("mocks-next-detail").getByRole("heading", { name: "/api/status", exact: true })).toBeVisible();
     await expect(row("/api/status")).toHaveAttribute("aria-current", "true");
+  });
+
+  // Le righe non hanno piu' la casella: si spunta in modalita' selezione, o con Ctrl+clic.
+  test("in modalità selezione i clic spuntano; la cartella spuntata in parte ha le strisce; Esc annulla", async ({ page }) => {
+    const catalog = page.locator("mocks-next-catalog");
+    const row = (p) => catalog.locator('[role="treeitem"]').filter({ hasText: p }).first();
+    const folder = catalog.locator('[role="treeitem"][data-row-key^="c:"]').filter({ hasText: "Core API" });
+    const opened = await catalog.locator('[aria-current="true"]').getAttribute("data-row-key");
+
+    await catalog.getByRole("button", { name: "Seleziona", exact: true }).click();
+    await expect(catalog.getByRole("status")).toContainText("Modalità selezione");
+    await row("/api/users").click();
+    await expect(row("/api/users")).toHaveAttribute("aria-selected", "true");
+    await expect(catalog.locator('[aria-current="true"]')).toHaveAttribute("data-row-key", opened);
+
+    // Core API ha 3 endpoint, uno spuntato: casella mista, strisce e contatore.
+    await expect(folder.getByRole("checkbox")).toHaveAttribute("aria-checked", "mixed");
+    await expect(folder).toHaveClass(/mx-checked-some/);
+    await expect(folder.locator("ui-badge").last()).toHaveText("1/3");
+    const stripes = await folder.evaluate((el) => getComputedStyle(el).backgroundImage);
+    expect(stripes).toContain("repeating-linear-gradient");
+
+    await catalog.getByRole("button", { name: "Fine", exact: true }).click();
+    await expect(catalog.getByRole("status")).toHaveCount(0);
+    await expect(row("/api/users")).toHaveAttribute("aria-selected", "true");
+    await expect(catalog.getByText("Ctrl+clic aggiunge o toglie")).toBeVisible();
+
+    await row("/api/users").focus();
+    await page.keyboard.press("Escape");
+    await expect(row("/api/users")).toHaveAttribute("aria-selected", "false");
+    await expect(catalog.getByText("1 selezionato")).toHaveCount(0);
   });
 
   test("la densità compatta mette ogni endpoint su una riga, e resta dopo un ricaricamento", async ({ page }) => {

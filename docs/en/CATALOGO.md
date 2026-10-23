@@ -38,17 +38,23 @@ reminds whoever tries to drag.
 
 ## Selection and keyboard
 
-Each row has a checkbox that shows on hover, on focus and, once a selection has started, on
-every row. With Shift, a click checks the range from the last checked row. Collections have
-their own checkbox too, with three states: it checks every endpoint of the subtree,
-sub-collections included (under a filter, only those the filter shows). Bulk actions — enable,
+A click on an endpoint opens it in the detail; **Ctrl+click** (⌘+click on Mac) checks it without
+opening it, and a second one unchecks it. The **Select** button next to «⋮» starts selection
+mode: there a click checks the row instead of opening it, until **Done** closes the mode and keeps
+the checks. **Esc** closes the mode and clears every check.
+
+Checked rows have an indigo tint; the one open in the detail has a gradient towards the right
+and a light right edge, and it is the only row with an edge. Collections have a three-state
+checkbox: it checks every endpoint of the subtree, sub-collections included (under a filter, only
+those the filter shows); Ctrl+click on the collection does the same, while a plain click expands
+or collapses it. A fully checked collection has the tint, a partly checked one has stripes, and
+its counter tells how many endpoints are checked out of the total. Bulk actions — enable,
 disable, move, delete — act on every checked endpoint the filter shows, even inside collapsed
 collections; what the filter hides is never touched.
 
 The catalog also works from the keyboard, with a single Tab stop: the arrows move between rows
 and expand or collapse collections, **Enter** opens the endpoint in the detail, **Space** checks
-it (on a collection it checks the subtree) and Shift+Space checks the range. From the search
-field, Arrow Down enters the list.
+it (on a collection it checks the subtree). From the search field, Arrow Down enters the list.
 
 The «⋮» menu next to «New» offers a **compact density**: one line per endpoint, with only what
 tells them apart. The choice is kept for later visits.

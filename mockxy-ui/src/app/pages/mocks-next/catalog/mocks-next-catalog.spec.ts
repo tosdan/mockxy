@@ -148,10 +148,18 @@ describe('MocksNextCatalog', () => {
         { id: 'tre', type: 'mock', method: 'GET', path: '/tre', status: 200, disabled: false, configFilePath: 'tre' },
       ] as never);
     }
-    function boxes(fixture: ReturnType<typeof create>['fixture']): HTMLElement[] {
-      // Solo le spunte degli endpoint: anche le cartelle hanno la loro casella.
-      return Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('[data-row-key^="e:"] [role="checkbox"]'));
+    function rows(fixture: ReturnType<typeof create>['fixture']): HTMLElement[] {
+      return Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('[data-row-key^="e:"]'));
     }
+    /** Gli endpoint non hanno piu' la casella: si spuntano con Ctrl+clic sulla riga. */
+    function ctrlClick(fixture: ReturnType<typeof create>['fixture'], row: HTMLElement, init: MouseEventInit = { ctrlKey: true }) {
+      row.dispatchEvent(new MouseEvent('click', { bubbles: true, ...init }));
+      fixture.detectChanges();
+    }
+    const checkedIds = (fixture: ReturnType<typeof create>['fixture']) =>
+      rows(fixture).filter((row) => row.getAttribute('aria-selected') === 'true').map((row) => row.dataset['rowKey']!.slice(2));
+    const modeButton = (fixture: ReturnType<typeof create>['fixture']) =>
+      (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>('button[aria-label="Seleziona"]')!;
     function bulkBarText(fixture: ReturnType<typeof create>['fixture']): string {
       return (fixture.nativeElement as HTMLElement).textContent ?? '';
     }
@@ -163,11 +171,11 @@ describe('MocksNextCatalog', () => {
 
       expect(bulkBarText(fixture)).not.toContain('selezionat');
 
-      boxes(fixture)[0].click();
+      ctrlClick(fixture, rows(fixture)[0]);
       fixture.detectChanges();
       expect(bulkBarText(fixture)).toContain('1 selezionato');
 
-      boxes(fixture)[1].click();
+      ctrlClick(fixture, rows(fixture)[1]);
       fixture.detectChanges();
       expect(bulkBarText(fixture)).toContain('2 selezionati');
     });
@@ -177,7 +185,7 @@ describe('MocksNextCatalog', () => {
       const { fixture, store } = create();
       seedCatalog(store);
       fixture.detectChanges();
-      boxes(fixture)[0].click();
+      ctrlClick(fixture, rows(fixture)[0]);
       fixture.detectChanges();
 
       const label = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('span')).find(
@@ -187,16 +195,122 @@ describe('MocksNextCatalog', () => {
       expect(headerButton(fixture, 'Sposta').textContent?.trim()).toBe('Sposta');
     });
 
-    it('shift-click estende dall ultimo spuntato', () => {
+    it('un clic apre l endpoint, Ctrl+clic (o Cmd+clic) lo spunta senza aprirlo e un secondo lo toglie', () => {
+      const { fixture, store } = create();
+      seedCatalog(store);
+      fixture.detectChanges();
+      const select = vi.spyOn(store, 'selectMock').mockImplementation(() => undefined);
+
+      rows(fixture)[0].click();
+      fixture.detectChanges();
+      expect(select).toHaveBeenCalledWith('uno');
+      expect(checkedIds(fixture)).toEqual([]);
+
+      ctrlClick(fixture, rows(fixture)[1]);
+      ctrlClick(fixture, rows(fixture)[2], { metaKey: true });
+      expect(checkedIds(fixture)).toEqual(['due', 'tre']);
+      expect(select).toHaveBeenCalledTimes(1);
+
+      ctrlClick(fixture, rows(fixture)[1]);
+      expect(checkedIds(fixture)).toEqual(['tre']);
+    });
+
+    // Un intervallo che attraversava cartelle diverse confondeva: si spunta per endpoint o per cartella.
+    it('Maiusc+clic non spunta un intervallo: apre l endpoint come un clic', () => {
+      const { fixture, store } = create();
+      seedCatalog(store);
+      fixture.detectChanges();
+      const select = vi.spyOn(store, 'selectMock').mockImplementation(() => undefined);
+
+      ctrlClick(fixture, rows(fixture)[0]);
+      ctrlClick(fixture, rows(fixture)[2], { shiftKey: true });
+
+      expect(checkedIds(fixture)).toEqual(['uno']);
+      expect(select).toHaveBeenCalledWith('tre');
+    });
+
+    it('gli endpoint non hanno casella: la spunta e la riga aperta si vedono dallo sfondo della riga', () => {
+      const { fixture, store } = create();
+      seedCatalog(store);
+      store.selected.set({ id: 'due' } as never);
+      fixture.detectChanges();
+      expect((fixture.nativeElement as HTMLElement).querySelector('[data-row-key^="e:"] [role="checkbox"]')).toBeNull();
+
+      ctrlClick(fixture, rows(fixture)[0]);
+      ctrlClick(fixture, rows(fixture)[1]);
+
+      expect(rows(fixture)[0].classList).toContain('mx-checked');
+      expect(rows(fixture)[0].classList).not.toContain('mx-open');
+      // Aperta e spuntata: le due classi insieme, la sfumatura sopra la tinta.
+      expect(rows(fixture)[1].classList).toContain('mx-open');
+      expect(rows(fixture)[1].classList).toContain('mx-checked');
+      expect(rows(fixture)[2].classList).not.toContain('mx-checked');
+    });
+
+    it('in modalità selezione un clic spunta invece di aprire; Fine esce e tiene le spunte', () => {
+      const { fixture, store } = create();
+      seedCatalog(store);
+      fixture.detectChanges();
+      const select = vi.spyOn(store, 'selectMock').mockImplementation(() => undefined);
+      const host = fixture.nativeElement as HTMLElement;
+
+      expect(modeButton(fixture).getAttribute('aria-pressed')).toBe('false');
+      modeButton(fixture).click();
+      fixture.detectChanges();
+      expect(modeButton(fixture).getAttribute('aria-pressed')).toBe('true');
+      expect(host.querySelector('[role="status"]')?.textContent).toContain('Modalità selezione');
+
+      rows(fixture)[0].click();
+      rows(fixture)[2].click();
+      fixture.detectChanges();
+      expect(checkedIds(fixture)).toEqual(['uno', 'tre']);
+      expect(select).not.toHaveBeenCalled();
+
+      headerButton(fixture, 'Fine').click();
+      fixture.detectChanges();
+      expect(host.querySelector('[role="status"]')).toBeNull();
+      expect(checkedIds(fixture)).toEqual(['uno', 'tre']);
+
+      rows(fixture)[1].click();
+      fixture.detectChanges();
+      expect(select).toHaveBeenCalledWith('due');
+    });
+
+    it('fuori modalità la barra ricorda le scorciatoie, in modalità no', () => {
       const { fixture, store } = create();
       seedCatalog(store);
       fixture.detectChanges();
 
-      boxes(fixture)[0].click();
-      boxes(fixture)[2].dispatchEvent(new MouseEvent('click', { bubbles: true, shiftKey: true }));
+      ctrlClick(fixture, rows(fixture)[0]);
+      expect(bulkBarText(fixture)).toContain('Ctrl+clic aggiunge o toglie');
+
+      modeButton(fixture).click();
+      fixture.detectChanges();
+      expect(bulkBarText(fixture)).not.toContain('Ctrl+clic aggiunge o toglie');
+    });
+
+    it('Esc toglie le spunte ed esce dalla modalità, ma non da un campo di testo', () => {
+      const { fixture, store } = create();
+      seedCatalog(store);
+      fixture.detectChanges();
+      const host = fixture.nativeElement as HTMLElement;
+      const escape = (target: Element) => {
+        target.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+        fixture.detectChanges();
+      };
+
+      modeButton(fixture).click();
+      fixture.detectChanges();
+      rows(fixture)[0].click();
       fixture.detectChanges();
 
-      expect(boxes(fixture).filter((b) => b.getAttribute('aria-checked') === 'true')).toHaveLength(3);
+      escape(host.querySelector('label input')!);
+      expect(checkedIds(fixture)).toEqual(['uno']);
+
+      escape(rows(fixture)[0]);
+      expect(checkedIds(fixture)).toEqual([]);
+      expect(host.querySelector('[role="status"]')).toBeNull();
+      expect(modeButton(fixture).getAttribute('aria-pressed')).toBe('false');
     });
 
     it('abilita e disabilita passano dalla rotta di massa, in una chiamata sola', () => {
@@ -205,8 +319,8 @@ describe('MocksNextCatalog', () => {
       fixture.detectChanges();
       const spy = vi.spyOn(store, 'setEndpointsEnabled').mockImplementation(() => {});
 
-      boxes(fixture)[0].click();
-      boxes(fixture)[1].click();
+      ctrlClick(fixture, rows(fixture)[0]);
+      ctrlClick(fixture, rows(fixture)[1]);
       fixture.detectChanges();
       Array.from((fixture.nativeElement as HTMLElement).querySelectorAll<HTMLButtonElement>('button'))
         .find((b) => b.textContent?.trim() === 'Disabilita')!
@@ -221,7 +335,7 @@ describe('MocksNextCatalog', () => {
       seedCatalog(store);
       fixture.detectChanges();
 
-      boxes(fixture).forEach((b) => b.click());
+      rows(fixture).forEach((row) => ctrlClick(fixture, row));
       fixture.detectChanges();
 
       // Il filtro per tipo lascia visibile il solo handler: la selezione resta, ma l'azione
@@ -243,7 +357,7 @@ describe('MocksNextCatalog', () => {
       fixture.detectChanges();
       const spy = vi.spyOn(store, 'removeEndpoints').mockImplementation(() => {});
 
-      boxes(fixture)[0].click();
+      ctrlClick(fixture, rows(fixture)[0]);
       fixture.detectChanges();
       (fixture.nativeElement as HTMLElement)
         .querySelector<HTMLButtonElement>('button[aria-label="Elimina i selezionati"]')!
@@ -669,22 +783,19 @@ describe('MocksNextCatalog', () => {
     it('Spazio spunta l’endpoint a fuoco senza aprirlo, e una seconda volta toglie la spunta', () => {
       const { fixture, store } = setup();
       const select = vi.spyOn(store, 'selectMock').mockImplementation(() => undefined);
-      const checked = () => rowOf(fixture, 'e:uno').querySelector('[role="checkbox"]')!.getAttribute('aria-checked');
 
       rowOf(fixture, 'e:uno').focus();
       const spazio = press(fixture, ' ');
-      expect(checked()).toBe('true');
       expect(rowOf(fixture, 'e:uno').getAttribute('aria-selected')).toBe('true');
       expect(spazio.defaultPrevented).toBe(true);
       expect(select).not.toHaveBeenCalled();
       expect(document.activeElement).toBe(rowOf(fixture, 'e:uno'));
 
       press(fixture, ' ');
-      expect(checked()).toBe('false');
       expect(rowOf(fixture, 'e:uno').getAttribute('aria-selected')).toBe('false');
     });
 
-    it('Maiuscole+Spazio spunta l’intervallo dall’ultimo spuntato, come lo shift-click', () => {
+    it('Maiuscole+Spazio spunta solo l’endpoint a fuoco: niente intervalli', () => {
       const { fixture } = setup();
       const checkedKeys = () =>
         treeRows(fixture)
@@ -696,7 +807,7 @@ describe('MocksNextCatalog', () => {
       rowOf(fixture, 'e:due').focus();
       press(fixture, ' ', document.activeElement!, true);
 
-      expect(checkedKeys()).toEqual(['e:sciolto', 'e:uno', 'e:due']);
+      expect(checkedKeys()).toEqual(['e:sciolto', 'e:due']);
     });
 
     // Con la selezione multipla aria-selected dice le spunte: l'endpoint aperto lo dice aria-current.
@@ -807,7 +918,8 @@ describe('MocksNextCatalog', () => {
 
     it('è "mista" se solo una parte è spuntata, e un clic la completa; un altro la libera', () => {
       const { fixture } = setup();
-      click(fixture, rowOf(fixture, 'e:due').querySelector<HTMLElement>('[role="checkbox"]')!);
+      rowOf(fixture, 'e:due').dispatchEvent(new MouseEvent('click', { bubbles: true, ctrlKey: true }));
+      fixture.detectChanges();
 
       expect(box(fixture, 'c:madre').getAttribute('aria-checked')).toBe('mixed');
       expect(box(fixture, 'c:figlia').getAttribute('aria-checked')).toBe('true');
@@ -818,6 +930,57 @@ describe('MocksNextCatalog', () => {
       click(fixture, box(fixture, 'c:madre'));
       expect(endpointChecked(fixture)).toEqual([]);
       expect(box(fixture, 'c:madre').getAttribute('aria-checked')).toBe('false');
+    });
+
+    it('Ctrl+clic sulla cartella la spunta tutta senza aprirla o chiuderla; un clic semplice la chiude', () => {
+      const { fixture } = setup();
+      const ctrlClickFolder = () => {
+        rowOf(fixture, 'c:madre').dispatchEvent(new MouseEvent('click', { bubbles: true, ctrlKey: true }));
+        fixture.detectChanges();
+      };
+
+      ctrlClickFolder();
+      expect(endpointChecked(fixture)).toEqual(['e:uno', 'e:due']);
+      expect(rowOf(fixture, 'c:madre').getAttribute('aria-expanded')).toBe('true');
+
+      ctrlClickFolder();
+      expect(endpointChecked(fixture)).toEqual([]);
+
+      click(fixture, rowOf(fixture, 'c:madre'));
+      expect(rowOf(fixture, 'c:madre').getAttribute('aria-expanded')).toBe('false');
+      expect(endpointChecked(fixture)).toEqual([]);
+    });
+
+    it('spuntata in parte ha le strisce e conta gli spuntati sul totale; tutta, la tinta piena', () => {
+      const { fixture } = setup();
+      const count = (key: string) => Array.from(rowOf(fixture, key).querySelectorAll('ui-badge')).pop()!.textContent!.trim();
+      expect(count('c:madre')).toBe('2');
+
+      rowOf(fixture, 'e:due').dispatchEvent(new MouseEvent('click', { bubbles: true, ctrlKey: true }));
+      fixture.detectChanges();
+
+      expect(rowOf(fixture, 'c:madre').classList).toContain('mx-checked-some');
+      expect(rowOf(fixture, 'c:madre').classList).not.toContain('mx-checked');
+      expect(count('c:madre')).toBe('1/2');
+      expect(rowOf(fixture, 'c:figlia').classList).toContain('mx-checked');
+      expect(count('c:figlia')).toBe('1/1');
+    });
+
+    // Senza caselle negli endpoint non serve piu' una colonna fissa: quella della cartella segue il rientro.
+    it('la casella della cartella sta nella riga, prima dello chevron, e segue il rientro', () => {
+      const { fixture } = setup();
+      expect(box(fixture, 'c:madre').classList).not.toContain('absolute');
+      expect(box(fixture, 'c:madre').nextElementSibling?.getAttribute('name')).toBe('lucideChevronRight');
+      expect(rowOf(fixture, 'c:madre').style.paddingLeft).toBe('8px');
+      expect(rowOf(fixture, 'c:figlia').style.paddingLeft).toBe('22px');
+    });
+
+    it('in modalità selezione la casella delle cartelle si vede sempre', () => {
+      const { fixture } = setup();
+      expect(box(fixture, 'c:madre').classList).not.toContain('opacity-100');
+      (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>('button[aria-label="Seleziona"]')!.click();
+      fixture.detectChanges();
+      expect(box(fixture, 'c:madre').classList).toContain('opacity-100');
     });
 
     it('una cartella senza endpoint non ha casella', () => {
@@ -985,14 +1148,12 @@ describe('MocksNextCatalog', () => {
       expect(rowOf(fixture, 'c:madre').querySelector('button')?.getAttribute('aria-label')).toBe('Azioni collection');
     });
 
-    // Spunta e menu tenevano posto anche invisibili, circa 60 px tolti al path.
-    it('la spunta sta nel margine dell’indentazione, prima del metodo, a ogni profondità', () => {
+    // Il menu teneva posto anche invisibile, circa 30 px tolti al path. La spunta non c'e' piu'.
+    it('gli endpoint non hanno casella e il metodo segue il rientro', () => {
       const { fixture } = setup();
-      const box = (key: string) => rowOf(fixture, key).querySelector<HTMLElement>('[role="checkbox"]')!;
-
-      expect(box('e:uno').classList).toContain('absolute');
-      expect(box('e:uno').style.left).toBe('3px'); // profondità 1: metodo a 22 px
-      expect(box('e:due').style.left).toBe('17px'); // profondità 2: metodo a 36 px
+      expect(rowOf(fixture, 'e:uno').querySelector('[role="checkbox"]')).toBeNull();
+      expect(rowOf(fixture, 'e:uno').style.paddingLeft).toBe('22px'); // profondità 1
+      expect(rowOf(fixture, 'e:due').style.paddingLeft).toBe('36px'); // profondità 2
     });
 
     it('il menu non tiene posto: invisibile non riceve click, e la riga resta alta come prima', () => {
