@@ -324,7 +324,7 @@ interface NavRow {
           [attr.aria-level]="row.depth + 2"
           [attr.aria-label]="'catalog.newSubCollection' | transloco"
           class="flex items-center gap-1.5 py-1 pr-1"
-          [style.padding-left.px]="8 + (row.depth + 1) * 14"
+          [style.padding-left.px]="folderIndent(row.depth + 1)"
         >
           <ng-icon name="lucideFolderPlus" size="0.85rem" class="shrink-0 text-brand" />
           <input
@@ -419,14 +419,14 @@ interface NavRow {
         [attr.tabindex]="tabbableKey() === 'c:' + col.id ? 0 : -1"
         class="group/folder relative flex w-full cursor-pointer select-none items-center gap-1.5 rounded-lg py-1.5 pr-1 text-left transition hover:bg-accent in-[.mx-compact]:py-[3px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/70"
         [class.mx-drop-into]="dropIntoId() === col.id"
-        [style.padding-left.px]="8 + depth * 14"
+        [style.padding-left.px]="folderIndent(depth)"
         (click)="toggleCollapse(col.id)"
         (focus)="activeRowKey.set('c:' + col.id)"
         (keydown)="onRowKeydown($event)"
       >
         <!-- Casella a tre stati: spunta (o toglie) tutti gli endpoint del sottoalbero che il filtro
-             lascia vedere, anche a cartella chiusa. Sta dove c'era la maniglia: la riga si trascina
-             comunque tutta, come quella di un endpoint, che la maniglia non l'ha mai avuta. -->
+             lascia vedere, anche a cartella chiusa. Sta nella colonna delle caselle, la stessa per
+             ogni riga a ogni profondita'. -->
         @if (folderCheckState(col.id); as state) {
         @if (state !== 'empty') {
         <span
@@ -434,7 +434,7 @@ interface NavRow {
           tabindex="0"
           [attr.aria-checked]="state === 'all' ? 'true' : state === 'some' ? 'mixed' : 'false'"
           [attr.aria-label]="'catalog.selectCollectionAria' | transloco: { name: isUnsorted(col) ? ('catalog.unsorted' | transloco) : col.name }"
-          class="grid size-3.5 shrink-0 place-items-center rounded transition"
+          class="absolute left-[6px] top-1/2 z-10 grid size-3.5 -translate-y-1/2 place-items-center rounded transition"
           [class]="state === 'none' ? 'shadow-[inset_0_0_0_1px_var(--input)] opacity-0 group-hover/folder:opacity-100 focus-visible:opacity-100' : 'bg-brand text-background'"
           [class.opacity-100]="selection().size > 0"
           (click)="$event.stopPropagation(); toggleCollectionSelection(col.id)"
@@ -486,21 +486,20 @@ interface NavRow {
         (focus)="activeRowKey.set('e:' + ep.id)"
         (keydown)="onRowKeydown($event)"
         class="group relative flex min-h-11 cursor-pointer select-none items-center gap-2 rounded-lg py-1.5 pr-2 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/70 in-[.mx-compact]:min-h-[30px] in-[.mx-compact]:py-[3px]"
-        [style.padding-left.px]="8 + depth * 14"
+        [style.padding-left.px]="endpointIndent(depth)"
         [class]="ep.id === store.selectedId() ? 'mx-selected' : 'hover:bg-accent'"
         [class.mx-muted]="!ep.enabled"
       >
         <!-- La spunta ha un bersaglio suo: cliccare la riga apre l'endpoint, come prima. Non tiene
-             posto nella riga: sta nel margine dell'indentazione, a sinistra del metodo, e il fondo
-             copre la linea guida che le passa sotto. Compare in hover, al fuoco e, a selezione
-             iniziata, su tutte le righe; spuntare non sposta nulla. -->
+             posto nella riga: sta nella colonna delle caselle, allineata a quella delle cartelle.
+             Compare in hover, al fuoco e, a selezione iniziata, su tutte le righe; spuntare non
+             sposta nulla. -->
         <span
           role="checkbox"
           tabindex="0"
           [attr.aria-checked]="selection().has(ep.id)"
           [attr.aria-label]="'catalog.selectEndpointAria' | transloco: { path: ep.path }"
-          class="absolute top-1/2 z-10 grid size-3.5 -translate-y-1/2 place-items-center rounded transition"
-          [style.left.px]="checkboxLeft(depth)"
+          class="absolute left-[6px] top-1/2 z-10 grid size-3.5 -translate-y-1/2 place-items-center rounded transition"
           [class]="selection().has(ep.id) ? 'bg-brand text-background' : 'bg-card shadow-[inset_0_0_0_1px_var(--input)] opacity-0 group-hover:bg-accent group-hover:opacity-100 focus-visible:opacity-100'"
           [class.opacity-100]="selection().size > 0"
           (click)="$event.stopPropagation(); onSelectionClick(ep.id, $event)"
@@ -1307,11 +1306,16 @@ export class MocksNextCatalog {
   );
 
   /**
-   * Ascissa della spunta di un endpoint: nel margine dell'indentazione, 5 px prima del metodo
-   * (che comincia a 8 + depth*14). A profondita' 1, la minima di un endpoint, sta a 3 px dal bordo.
+   * Rientro delle righe. Le caselle di spunta stanno tutte in una colonna fissa (6-20 px dal bordo
+   * della riga), fuori dal flusso: il rientro parte dopo di lei. La cartella ha lo chevron a 28 px,
+   * l'endpoint (che sta almeno a profondita' 1) il metodo a 26 px, 6 px dopo la casella.
    */
-  protected checkboxLeft(depth: number): number {
-    return 8 + depth * 14 - 19;
+  protected folderIndent(depth: number): number {
+    return 28 + depth * 14;
+  }
+
+  protected endpointIndent(depth: number): number {
+    return 12 + depth * 14;
   }
 
   protected resetFilters(): void {
