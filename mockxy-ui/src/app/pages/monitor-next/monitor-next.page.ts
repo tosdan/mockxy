@@ -12,6 +12,7 @@ import {
   lucideDatabase,
   lucideDownload,
   lucideEllipsisVertical,
+  lucideListChecks,
   lucideListTree,
   lucidePlus,
   lucideRows3,
@@ -40,6 +41,7 @@ import { summarizeBatchAttention, type CaptureBatchOptions, type CaptureItemOutc
 import { readBatchPartialResult } from '../../shared/read-error-message';
 import { MOCK_METHODS } from '../../mock-admin-ui.constants';
 import { listNavigationTarget, toggleListSelection } from '../../shared/list-selection';
+import { isSelectionEscape } from '../../shared/selection-escape';
 
 /** Chiave (ViewStateService) della densita' del Monitor: 'compact', o assente per quella normale. */
 const DENSITY_STATE_KEY = 'monitor-density';
@@ -57,11 +59,14 @@ const DENSITY_STATE_KEY = 'monitor-density';
   imports: [CdkMenuTrigger, DatePipe, NgIcon, TranslocoPipe, UiBadge, UiButton, UiCheckbox, UiCode, UiCollapsible, UiMenu, UiMenuItemCheckbox, UiPageHeader, UiSelect, UiTable, UiTooltip],
   providers: [
     provideIcons({
-      lucideActivity, lucideArrowLeft, lucideCheck, lucideCopy, lucideDatabase, lucideDownload, lucideEllipsisVertical, lucideListTree,
+      lucideActivity, lucideArrowLeft, lucideCheck, lucideCopy, lucideDatabase, lucideDownload, lucideEllipsisVertical, lucideListChecks, lucideListTree,
       lucidePlus, lucideRows3, lucideSearch, lucideTrash2, lucideX, ...RESPONSE_SOURCE_ICONS,
     }),
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
+  host: {
+    '(document:keydown)': 'onDocumentKeydown($event)',
+  },
   template: `
     <div class="absolute inset-0 flex flex-col overflow-hidden bg-background text-foreground mx-scroll">
       <!-- TESTATA: come il catalogo, nome della vista e conteggio. "Live" non si ripete: lo dicono
@@ -79,6 +84,20 @@ const DENSITY_STATE_KEY = 'monitor-density';
         <ng-container actions>
           <button ui-button variant="outline" size="sm" [disabled]="clearing()" (click)="clearLog()"><ng-icon name="lucideTrash2" size="0.9rem" /> {{ 'monitor.clear' | transloco }}</button>
           <button ui-button variant="outline" size="sm" [disabled]="filtered().length === 0" (click)="exportJson()"><ng-icon name="lucideDownload" size="0.9rem" /> {{ 'monitor.export' | transloco }}</button>
+          <!-- Modalita' selezione, come nel catalogo: un clic sulla riga la spunta. Ctrl+clic e
+               Maiusc+clic (l'intervallo) spuntano anche fuori modalita'. -->
+          <button
+            ui-button
+            variant="outline"
+            size="icon"
+            [class]="selectionMode() ? 'size-8 !border-selection/60 !bg-selection/15 !text-selection-foreground' : 'size-8'"
+            [attr.aria-pressed]="selectionMode()"
+            [uiTooltip]="'common.selectionModeTipRange' | transloco"
+            [attr.aria-label]="'common.selectionModeLabel' | transloco"
+            (click)="toggleSelectionMode()"
+          >
+            <ng-icon name="lucideListChecks" size="0.95rem" />
+          </button>
           <!-- Opzioni di vista, come nel catalogo: per ora la densita'. -->
           <button ui-button variant="outline" size="icon" class="size-8" [uiTooltip]="'monitor.viewActionsTip' | transloco" [attr.aria-label]="'monitor.viewActionsTip' | transloco" [cdkMenuTriggerFor]="viewMenu">
             <ng-icon name="lucideEllipsisVertical" size="0.95rem" />
@@ -153,9 +172,19 @@ const DENSITY_STATE_KEY = 'monitor-density';
           <div class="grid grid-cols-[1fr_auto] items-center gap-2 border-b border-border px-4 py-2 text-[10.5px] font-bold uppercase tracking-[0.14em] text-muted-foreground">
             <span>{{ 'monitor.colRequest' | transloco }}</span><span>{{ 'monitor.colLatTime' | transloco }}</span>
           </div>
+          @if (selectionMode()) {
+          <div role="status" class="mx-2 mt-2 flex shrink-0 items-center gap-2 rounded-lg bg-selection/15 py-1.5 pl-2.5 pr-1.5 text-[12px]">
+            <span class="min-w-0 flex-1">
+              <span class="font-semibold text-selection-foreground">{{ 'common.selectionModeTitle' | transloco }}</span>
+              <span class="text-muted-foreground"> · {{ 'common.selectionModeHint' | transloco }}</span>
+            </span>
+            <button ui-button variant="outline" size="xs" class="!border-selection/60 !text-selection-foreground" (click)="selectionMode.set(false)">{{ 'common.selectionModeDone' | transloco }}</button>
+          </div>
+          }
           <!-- Lista a selezione multipla, come il catalogo: un solo punto di Tab, le frecce spostano
                il fuoco e mostrano la voce nel dettaglio, Spazio la spunta (Maiuscole+Spazio spunta
-               l'intervallo). La casella e' un'area di clic dentro la riga, non un controllo a se'. -->
+               l'intervallo). Niente caselle: col mouse si spunta in modalita' selezione, con
+               Ctrl+clic o con Maiusc+clic; la riga spuntata ha la tinta e il bordo sinistro indaco. -->
           <!-- Densita' compatta: una riga sola per voce; le righe la leggono con in-[.mx-compact]. -->
           <div class="min-h-0 flex-1 overflow-auto mx-scroll" [class.mx-compact]="compact()" role="listbox" aria-multiselectable="true" [attr.aria-label]="'monitor.listLabel' | transloco" (keydown)="onListKeydown($event)">
             @for (row of filtered(); track row.id) {
@@ -166,16 +195,12 @@ const DENSITY_STATE_KEY = 'monitor-density';
               [attr.aria-current]="row.id === selected()?.id ? 'true' : null"
               [attr.tabindex]="row.id === selected()?.id ? 0 : -1"
               (click)="onRowClick(row.id, $event)"
-              class="group grid w-full cursor-pointer select-none grid-cols-[1fr_auto] items-center gap-2 border-b border-border-soft px-4 py-2.5 text-left transition hover:bg-white/[0.03] in-[.mx-compact]:py-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/70"
+              class="group relative grid w-full cursor-pointer select-none grid-cols-[1fr_auto] items-center gap-2 border-b border-border-soft px-4 py-2.5 text-left transition hover:bg-white/[0.03] in-[.mx-compact]:py-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/70"
               [class.mx-open]="row.id === selected()?.id"
+              [class.mx-checked]="selectedIds().has(row.id)"
               [style.boxShadow]="unmockedEdge(row)"
             >
               <span class="flex min-w-0 items-center gap-2.5">
-                <span data-check aria-hidden="true" class="grid size-4 shrink-0 place-items-center rounded border transition"
-                      [class]="selectedIds().has(row.id) || selectedCount() > 0 ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100'"
-                      [style.borderColor]="selectedIds().has(row.id) ? 'var(--brand)' : 'var(--input)'" [style.background]="selectedIds().has(row.id) ? 'var(--brand)' : 'transparent'">
-                  @if (selectedIds().has(row.id)) { <ng-icon name="lucideCheck" size="0.7rem" class="text-white" /> }
-                </span>
                 <span class="w-12 shrink-0 font-mono text-[12px] font-bold" [style.color]="methodColor(row.method)">{{ row.method }}</span>
                 <!-- In densita' compatta la provenienza resta come icona davanti al path; per un passo di
                      sequenza l'icona SEQ, che dice di piu' di "mock". Il nome lo legge lo screen reader. -->
@@ -214,7 +239,10 @@ const DENSITY_STATE_KEY = 'monitor-density';
           </div>
           <!-- Azioni sulle voci spuntate: compaiono solo con una selezione, in fondo alla lista. -->
           @if (selectedCount() > 0) {
-          <div class="flex shrink-0 flex-wrap items-center gap-x-2 gap-y-1.5 border-t border-border bg-[color-mix(in_srgb,var(--brand)_12%,transparent)] px-3 py-2">
+          <div class="flex shrink-0 flex-wrap items-center gap-x-2 gap-y-1.5 border-t border-border bg-selection/10 px-3 py-2">
+            @if (!selectionMode()) {
+            <span class="basis-full text-[11px] text-muted-foreground">{{ 'common.selectionShortcutsRangeHint' | transloco }}</span>
+            }
             <span class="whitespace-nowrap text-[11.5px] font-bold text-foreground">{{ 'monitor.selectedCount' | transloco: { count: selectedCount() } }}</span>
             <div class="ml-auto flex items-center gap-2">
               <label class="flex items-center gap-2 text-[12px] text-muted-foreground" [uiTooltip]="'monitor.activateNewTip' | transloco">
@@ -609,13 +637,33 @@ export class MonitorNextPage {
     this.selectedId.set(id);
   }
 
-  /** Clic su una riga: sulla casella la spunta (con shift l'intervallo), altrove la apre. */
+  /** Modalita' selezione: un clic sulla riga la spunta invece di aprirla. */
+  protected readonly selectionMode = signal(false);
+
+  protected toggleSelectionMode(): void {
+    this.selectionMode.update((on) => !on);
+  }
+
+  /**
+   * Clic su una riga: la apre, oppure la spunta in modalita' selezione e con Ctrl (Cmd su Mac).
+   * Maiusc spunta l'intervallo dall'ultima spuntata, in modalita' o fuori: in una lista in ordine
+   * di tempo un intervallo e' una raffica di richieste consecutive.
+   */
   protected onRowClick(id: string, event: MouseEvent): void {
-    if ((event.target as HTMLElement).closest('[data-check]')) {
+    if (event.shiftKey || this.selectionMode() || event.ctrlKey || event.metaKey) {
       this.toggleSelection(id, event.shiftKey);
-    } else {
-      this.selectEntry(id);
+      return;
     }
+    this.selectEntry(id);
+  }
+
+  /** Esc annulla la selezione e chiude la modalita', da qualunque punto della pagina (isSelectionEscape). */
+  protected onDocumentKeydown(event: KeyboardEvent): void {
+    if (!this.selectionMode() && this.selectedCount() === 0) return;
+    if (!isSelectionEscape(event)) return;
+    this.selectionMode.set(false);
+    this.clearSelection();
+    event.preventDefault();
   }
 
   /** Tastiera sulla lista: frecce, Home ed End aprono la voce di arrivo; Spazio spunta quella a fuoco. */
@@ -1038,12 +1086,15 @@ export class MonitorNextPage {
   /**
    * Barra ambra a sinistra delle righe non mockate. Resta anche sulla riga aperta: quella si segna a
    * destra (.mx-open), quindi i due bordi stanno insieme. Lo stile in linea vince sulla classe, per
-   * questo la riga aperta e non mockata ripete qui anche il bordo destro.
+   * questo la riga aperta e non mockata ripete qui anche il bordo destro. Da spuntata il bordo
+   * sinistro e' della spunta (.mx-checked): che la richiesta non sia mockata lo dice la provenienza.
    */
   protected unmockedEdge(row: RequestMonitorEntry): string | null {
     if (!this.isUnmocked(row.source)) return null;
+    const open = row.id === this.selected()?.id;
+    if (this.selectedIds().has(row.id)) return open ? 'inset -2px 0 0 0 var(--brand-soft)' : null;
     const edge = 'inset 2px 0 0 0 ' + this.tint('var(--status-4xx)', 45);
-    return row.id === this.selected()?.id ? edge + ', inset -2px 0 0 0 var(--brand-soft)' : edge;
+    return open ? edge + ', inset -2px 0 0 0 var(--brand-soft)' : edge;
   }
 
   /** Tinta trasparente di un colore (per fondi/bordi tenui), via color-mix. */

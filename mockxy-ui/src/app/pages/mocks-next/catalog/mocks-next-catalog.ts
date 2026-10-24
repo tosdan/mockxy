@@ -67,6 +67,7 @@ import {
   type RowRect,
 } from './catalog-dnd';
 import { highlightParts, type TextPart } from './path-highlight';
+import { isSelectionEscape } from '../../../shared/selection-escape';
 
 const METHOD_TONES: ReadonlySet<string> = new Set(['get', 'post', 'put', 'delete', 'patch']);
 
@@ -197,7 +198,7 @@ interface NavRow {
             [class]="selectionMode() ? 'size-7 !border-selection/60 !bg-selection/15 !text-selection-foreground' : 'size-7'"
             [attr.aria-pressed]="selectionMode()"
             [uiTooltip]="'catalog.selectionModeTip' | transloco"
-            [attr.aria-label]="'catalog.selectionModeLabel' | transloco"
+            [attr.aria-label]="'common.selectionModeLabel' | transloco"
             (click)="toggleSelectionMode()"
           >
             <ng-icon name="lucideListChecks" size="0.95rem" />
@@ -292,10 +293,10 @@ interface NavRow {
     @if (selectionMode()) {
     <div role="status" class="mx-2 mt-2 flex shrink-0 items-center gap-2 rounded-lg bg-selection/15 py-1.5 pl-2.5 pr-1.5 text-[12px]">
       <span class="min-w-0 flex-1">
-        <span class="font-semibold text-selection-foreground">{{ 'catalog.selectionModeTitle' | transloco }}</span>
-        <span class="text-muted-foreground"> · {{ 'catalog.selectionModeHint' | transloco }}</span>
+        <span class="font-semibold text-selection-foreground">{{ 'common.selectionModeTitle' | transloco }}</span>
+        <span class="text-muted-foreground"> · {{ 'common.selectionModeHint' | transloco }}</span>
       </span>
-      <button ui-button variant="outline" size="xs" class="!border-selection/60 !text-selection-foreground" (click)="selectionMode.set(false)">{{ 'catalog.selectionModeDone' | transloco }}</button>
+      <button ui-button variant="outline" size="xs" class="!border-selection/60 !text-selection-foreground" (click)="selectionMode.set(false)">{{ 'common.selectionModeDone' | transloco }}</button>
     </div>
     }
 
@@ -1049,17 +1050,10 @@ export class MocksNextCatalog {
     this.focusRow(key);
   }
 
-  /**
-   * Esc annulla la selezione e chiude la modalita', da qualunque punto della pagina: catalogo,
-   * dettaglio, barre. Non da un campo o un editor, ne' da un menu o un dialog (overlay CDK), che con
-   * Esc chiudono se stessi; ne' quando qualcuno ha gia' gestito il tasto.
-   */
+  /** Esc annulla la selezione e chiude la modalita', da qualunque punto della pagina (isSelectionEscape). */
   private escapeSelection(event: KeyboardEvent): boolean {
     if (!this.selectionMode() && this.selection().size === 0) return false;
-    if (event.defaultPrevented) return false;
-    const target = event.target as HTMLElement | null;
-    if (target?.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target?.tagName ?? '')) return false;
-    if (target?.closest('.cdk-overlay-container')) return false;
+    if (!isSelectionEscape(event)) return false;
     this.selectionMode.set(false);
     this.clearSelection();
     event.preventDefault();

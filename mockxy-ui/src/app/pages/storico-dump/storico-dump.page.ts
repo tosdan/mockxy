@@ -9,6 +9,7 @@ import {
   lucideArrowLeft,
   lucideCheck,
   lucideLayers,
+  lucideListChecks,
   lucidePlus,
   lucideSearch,
   lucideTrash2,
@@ -29,6 +30,7 @@ import { MockAdminApiService } from '../../mock-admin-api.service';
 import { summarizeBatchAttention, type DumpCreateMocksResult, type DumpEntry, type DumpReadCursor, type DumpReadFilters, type DumpSelection, type MonitorDumpFile } from '../../mock-admin-api.types';
 import { MOCK_METHODS } from '../../mock-admin-ui.constants';
 import { listNavigationTarget, toggleListSelection } from '../../shared/list-selection';
+import { isSelectionEscape } from '../../shared/selection-escape';
 import { RESPONSE_SOURCE_ICONS, responseSourceMeta } from '../../shared/response-source';
 import { readBatchPartialResult } from '../../shared/read-error-message';
 
@@ -66,8 +68,11 @@ const ROW_HEIGHT = 56;
     UiTable,
     UiTooltip,
   ],
-  providers: [provideIcons({ lucideArrowLeft, lucideCheck, lucideLayers, lucidePlus, lucideSearch, lucideTrash2, lucideX, ...RESPONSE_SOURCE_ICONS })],
+  providers: [provideIcons({ lucideArrowLeft, lucideCheck, lucideLayers, lucideListChecks, lucidePlus, lucideSearch, lucideTrash2, lucideX, ...RESPONSE_SOURCE_ICONS })],
   changeDetection: ChangeDetectionStrategy.OnPush,
+  host: {
+    '(document:keydown)': 'onDocumentKeydown($event)',
+  },
   template: `
     <div class="absolute inset-0 flex flex-col overflow-hidden bg-background text-foreground">
       <!-- TESTATA: come il catalogo, nome della vista e conteggio. Il "+" dice che scorrendo se ne
@@ -79,6 +84,19 @@ const ROW_HEIGHT = 56;
           <button ui-button variant="outline" size="sm" [cdkMenuTriggerFor]="filesMenu" [disabled]="creating()"><ng-icon name="lucideLayers" size="0.9rem" /> {{ 'storico.files' | transloco: { count: files().length } }}</button>
           <!-- "Crea mock" e "Annulla" stanno nella barra in fondo alla lista, che compare con una
                selezione, come nel catalogo e nel Monitor. Qui resta il modo di spuntare tutto. -->
+          <!-- Modalita' selezione, come nel catalogo e nel Monitor. -->
+          <button
+            ui-button
+            variant="outline"
+            size="icon"
+            [class]="selectionMode() ? 'size-8 !border-selection/60 !bg-selection/15 !text-selection-foreground' : 'size-8'"
+            [attr.aria-pressed]="selectionMode()"
+            [uiTooltip]="'common.selectionModeTipRange' | transloco"
+            [attr.aria-label]="'common.selectionModeLabel' | transloco"
+            (click)="toggleSelectionMode()"
+          >
+            <ng-icon name="lucideListChecks" size="0.95rem" />
+          </button>
           <button ui-button variant="outline" size="sm" [disabled]="entries().length === 0" (click)="selectAllLoaded()"><ng-icon name="lucideCheck" size="0.9rem" /> {{ 'storico.selectLoaded' | transloco }}</button>
         </ng-container>
       </ui-page-header>
@@ -118,8 +136,9 @@ const ROW_HEIGHT = 56;
       <!-- BODY: lista virtualizzata + dettaglio -->
       <div class="relative z-10 flex min-h-0 flex-1">
         <!-- Lista a selezione multipla, come il Monitor: le frecce spostano la voce attiva e la
-             mostrano nel dettaglio, Spazio la spunta (Maiuscole+Spazio l'intervallo). Il clic sulla
-             riga la apre e basta; spunta solo il clic sulla casella.
+             mostrano nel dettaglio, Spazio la spunta (Maiuscole+Spazio l'intervallo). Niente caselle:
+             il clic apre la riga, e la spunta in modalita' selezione, con Ctrl o con Maiusc
+             (l'intervallo); la riga spuntata ha la tinta e il bordo sinistro indaco.
              A differenza del Monitor il fuoco resta sulla lista e la voce attiva la dice
              aria-activedescendant: la lista e' virtualizzata, e una riga a fuoco che esce dalla zona
              disegnata viene riciclata, portandosi via il fuoco e i tasti successivi.
@@ -127,6 +146,15 @@ const ROW_HEIGHT = 56;
              non esserci piu') e l'anello di fuoco passa alla lista intera; il primo tasto la riporta
              in vista, come il rientro da tastiera. -->
         <div class="flex min-h-0 shrink-0 flex-col border-r border-border" [style.width.px]="listWidth()">
+        @if (selectionMode()) {
+        <div role="status" class="mx-2 mt-2 flex shrink-0 items-center gap-2 rounded-lg bg-selection/15 py-1.5 pl-2.5 pr-1.5 text-[12px]">
+          <span class="min-w-0 flex-1">
+            <span class="font-semibold text-selection-foreground">{{ 'common.selectionModeTitle' | transloco }}</span>
+            <span class="text-muted-foreground"> · {{ 'common.selectionModeHint' | transloco }}</span>
+          </span>
+          <button ui-button variant="outline" size="xs" class="!border-selection/60 !text-selection-foreground" (click)="selectionMode.set(false)">{{ 'common.selectionModeDone' | transloco }}</button>
+        </div>
+        }
         <cdk-virtual-scroll-viewport #viewport [itemSize]="rowHeight" class="group/list mx-scroll min-h-0 flex-1 focus-visible:outline-none" (scrolledIndexChange)="onScroll()" (focus)="onListFocus()"
                                      [class]="activeOptionId() ? '' : 'focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/70'"
                                      role="listbox" aria-multiselectable="true" tabindex="0" [attr.aria-label]="'storico.listLabel' | transloco"
@@ -141,16 +169,11 @@ const ROW_HEIGHT = 56;
             [attr.aria-selected]="selectedKeys().has(row.dumpKey)"
             [attr.aria-current]="row.dumpKey === focusedKey() ? 'true' : null"
             (click)="onRowClick(row, $event)"
-            class="group flex w-full cursor-pointer select-none items-center gap-2.5 border-b border-border-soft px-4 text-left transition hover:bg-white/[0.03]"
+            class="group relative flex w-full cursor-pointer select-none items-center gap-2.5 border-b border-border-soft px-4 text-left transition hover:bg-white/[0.03]"
             [class]="row.dumpKey === focusedKey() ? 'mx-open group-focus-visible/list:ring-2 group-focus-visible/list:ring-inset group-focus-visible/list:ring-ring/70' : ''"
+            [class.mx-checked]="selectedKeys().has(row.dumpKey)"
             [style.height.px]="rowHeight"
           >
-            <span data-check aria-hidden="true" class="grid size-4 shrink-0 place-items-center rounded border transition"
-                  [class]="selectedKeys().has(row.dumpKey) || selectedCount() > 0 ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'"
-                  [style.borderColor]="selectedKeys().has(row.dumpKey) ? 'var(--brand)' : 'var(--input)'"
-                  [style.background]="selectedKeys().has(row.dumpKey) ? 'var(--brand)' : 'transparent'">
-              @if (selectedKeys().has(row.dumpKey)) { <ng-icon name="lucideCheck" size="0.7rem" class="text-white" /> }
-            </span>
             <span class="w-12 shrink-0 font-mono text-[12px] font-bold" [style.color]="methodColor(row.method)">{{ row.method }}</span>
             <!-- Quando e da chi: in uno storico l'ora e' il dato principale, e la provenienza dice
                  cosa e' gia' un mock. Il path si tronca in testa, come nel catalogo. -->
@@ -172,7 +195,10 @@ const ROW_HEIGHT = 56;
           }
         </cdk-virtual-scroll-viewport>
         @if (selectedCount() > 0) {
-        <div class="flex shrink-0 flex-wrap items-center gap-x-2 gap-y-1.5 border-t border-border bg-[color-mix(in_srgb,var(--brand)_12%,transparent)] px-3 py-2">
+        <div class="flex shrink-0 flex-wrap items-center gap-x-2 gap-y-1.5 border-t border-border bg-selection/10 px-3 py-2">
+          @if (!selectionMode()) {
+          <span class="basis-full text-[11px] text-muted-foreground">{{ 'common.selectionShortcutsRangeHint' | transloco }}</span>
+          }
           <span class="whitespace-nowrap text-[11.5px] font-bold text-foreground">{{ 'storico.selectedCount' | transloco: { count: selectedCount() } }}</span>
           <div class="ml-auto flex items-center gap-2">
             <button ui-button size="xs" [disabled]="creating()" (click)="createFromSelected()"><ng-icon name="lucidePlus" size="0.8rem" /> {{ 'storico.createMockShort' | transloco }}</button>
@@ -466,16 +492,32 @@ export class StoricoDumpPage implements OnInit {
     }
   }
 
+  /** Modalita' selezione: un clic sulla riga la spunta invece di aprirla. */
+  protected readonly selectionMode = signal(false);
+
+  protected toggleSelectionMode(): void {
+    this.selectionMode.update((on) => !on);
+  }
+
   /**
-   * Clic su una riga: sulla casella la spunta (con shift l'intervallo dall'ultima spuntata),
-   * altrove la apre nel dettaglio. Prima ogni clic faceva entrambe le cose.
+   * Clic su una riga: la apre nel dettaglio, oppure la spunta in modalita' selezione e con Ctrl
+   * (Cmd su Mac). Maiusc spunta l'intervallo dall'ultima spuntata, in modalita' o fuori.
    */
   protected onRowClick(entry: DumpEntry, event: MouseEvent): void {
-    if ((event.target as HTMLElement).closest('[data-check]')) {
+    if (event.shiftKey || this.selectionMode() || event.ctrlKey || event.metaKey) {
       this.toggleSelection(entry.dumpKey, event.shiftKey);
-    } else {
-      this.focusedKey.set(entry.dumpKey);
+      return;
     }
+    this.focusedKey.set(entry.dumpKey);
+  }
+
+  /** Esc annulla la selezione e chiude la modalita', da qualunque punto della pagina (isSelectionEscape). */
+  protected onDocumentKeydown(event: KeyboardEvent): void {
+    if (!this.selectionMode() && this.selectedCount() === 0) return;
+    if (!isSelectionEscape(event)) return;
+    this.selectionMode.set(false);
+    this.clearSelection();
+    event.preventDefault();
   }
 
   /** Spunta o toglie una voce; con `range` l'intervallo dall'ultima spuntata, fra le voci caricate. */

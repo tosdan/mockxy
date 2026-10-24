@@ -1,5 +1,11 @@
 {
   "common": {
+    "selectionModeLabel": "Select",
+    "selectionModeTitle": "Selection mode",
+    "selectionModeHint": "click rows to check them",
+    "selectionModeDone": "Done",
+    "selectionModeTipRange": "Select several requests (also with Ctrl+click and Shift+click)",
+    "selectionShortcutsRangeHint": "Ctrl+click adds or removes · Shift+click selects a range · Esc clears",
     "endpointExists": "An endpoint with this method and path already exists.",
     "error": "Error",
     "operationFailed": "Operation not completed.",
@@ -459,11 +465,7 @@
     "confirmBulkDelete": "Delete {{count}}",
     "deleteSelectedTip": "Delete the selected ones",
     "clearSelectionTip": "Clear the selection",
-    "selectionModeLabel": "Select",
     "selectionModeTip": "Select several endpoints (also with Ctrl+click)",
-    "selectionModeTitle": "Selection mode",
-    "selectionModeHint": "click rows to check them",
-    "selectionModeDone": "Done",
     "selectionShortcutsHint": "Ctrl+click adds or removes · Ctrl+click on a collection checks all of it · Esc clears",
     "unsorted": "Unsorted",
     "collectionLabelReserved": "This name is reserved for unassigned endpoints. Choose another one.",
