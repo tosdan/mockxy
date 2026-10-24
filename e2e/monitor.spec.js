@@ -41,6 +41,36 @@ test.describe("E15 · monitor", () => {
     await expect(monitor.getByText("/api/percorso-inesistente").first()).toBeVisible();
   });
 
+  // La riga aperta si segna a destra, verso il dettaglio: la barra ambra delle non mockate, a
+  // sinistra, prima spariva quando la riga era aperta, ora resta.
+  test("la riga aperta ha il bordo a destra, e una non mockata tiene la barra ambra a sinistra", async ({ page, request }) => {
+    await request.get(`${E2E_BACKEND}/api/health`);
+    await request.get(`${E2E_BACKEND}/api/percorso-inesistente`);
+    await gotoMonitor(page);
+    monitor = page.locator("app-monitor-next");
+    const row = (text) => monitor.getByRole("option").filter({ hasText: text }).first();
+    // Le righe hanno una transizione: si aspetta che le ombre arrivino al valore finale.
+    const edges = (locator, expected) =>
+      expect
+        .poll(() =>
+          locator.evaluate((el) => {
+            const shadow = getComputedStyle(el).boxShadow;
+            return { left: /\) 2px 0px 0px 0px inset/.test(shadow), right: /\) -2px 0px 0px 0px inset/.test(shadow) };
+          }),
+        )
+        .toEqual(expected);
+
+    await row("/api/percorso-inesistente").click();
+    await expect(row("/api/percorso-inesistente")).toHaveClass(/mx-open/);
+    await edges(row("/api/percorso-inesistente"), { left: true, right: true });
+    await edges(row("/api/health"), { left: false, right: false });
+
+    await row("/api/health").click();
+    await expect(row("/api/health")).toHaveClass(/mx-open/);
+    await edges(row("/api/health"), { left: false, right: true });
+    await edges(row("/api/percorso-inesistente"), { left: true, right: false });
+  });
+
   // La barra ambra delle righe non mockate ha un chip che la spiega e le filtra; gli errori si
   // contano sui chip di stato, divisi in 4xx e 5xx.
   test("chip delle non mockate, conteggi sui chip di stato e densita' compatta", async ({ page, request }) => {

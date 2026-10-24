@@ -565,6 +565,26 @@ describe('MonitorNextPage', () => {
       expect(host.textContent).not.toContain('Seleziona');
     });
 
+    // La riga aperta si segna a destra, verso il dettaglio, come nel catalogo: cosi' la barra ambra
+    // delle non mockate, a sinistra, resta anche quando la riga e' aperta.
+    it('la riga aperta ha il segno a destra, e se non è mockata tiene anche la barra ambra', () => {
+      const { option, fixture } = setup();
+      option('1').click(); // mock: solo il segno della riga aperta, dalla classe
+      fixture.detectChanges();
+      expect(option('1').classList).toContain('mx-open');
+      expect(option('1').style.boxShadow).toBe('');
+      expect(option('2').classList).not.toContain('mx-open');
+      expect(option('2').style.boxShadow).toContain('inset 2px 0 0 0');
+      expect(option('2').style.boxShadow).not.toContain('-2px');
+
+      option('2').click(); // proxy: lo stile in linea porta la barra ambra e ripete il bordo destro
+      fixture.detectChanges();
+      expect(option('2').classList).toContain('mx-open');
+      expect(option('2').style.boxShadow).toContain('inset 2px 0 0 0');
+      expect(option('2').style.boxShadow).toContain('inset -2px 0 0 0 var(--brand-soft)');
+      expect(option('1').classList).not.toContain('mx-open');
+    });
+
     it('il clic sulla riga la apre senza spuntarla; il clic sulla casella la spunta senza aprirla', () => {
       const { c, option, fixture } = setup();
       option('2').click();
