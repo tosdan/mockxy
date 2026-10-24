@@ -22,10 +22,12 @@ test.describe("E16 · monitor → crea mock", () => {
     const monitor = page.locator("app-monitor-next");
     await expect(monitor.getByText("/api/catturato-e2e").first()).toBeVisible();
 
-    // Spunta la richiesta dalla sua casella → crea mock dalla barra in fondo alla lista.
+    // In modalita' selezione un clic spunta la richiesta → crea mock dalla barra in fondo alla lista.
     const row = monitor.getByRole("option").filter({ hasText: "/api/catturato-e2e" });
-    await row.hover();
-    await row.locator("[data-check]").click();
+    await monitor.getByRole("button", { name: "Seleziona", exact: true }).click();
+    await row.click();
+    await expect(row).toHaveAttribute("aria-selected", "true");
+    await expect(row).toHaveClass(/mx-checked/);
     await expect(monitor.getByText("1 selezionate")).toBeVisible();
     await monitor.getByRole("button", { name: "Crea mock", exact: true }).click();
 

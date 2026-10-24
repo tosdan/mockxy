@@ -240,17 +240,11 @@ describe('StoricoDumpPage', () => {
   // spunta il clic sulla casella, come nel catalogo e nel Monitor. (Le righe sono in uno scroll
   // virtuale che qui non disegna nulla: si chiamano i gestori con il bersaglio del clic.)
   describe('selezione', () => {
-    const onCheck = () => {
-      const check = document.createElement('span');
-      check.setAttribute('data-check', '');
-      return check;
-    };
-    function clickRow(c: any, index: number, shiftKey = false): void {
-      c.onRowClick(c.entries()[index], { target: document.createElement('span'), shiftKey } as unknown as MouseEvent);
+    // Niente caselle: si spunta con Ctrl+clic, in modalita' selezione o con Maiusc+clic (l'intervallo).
+    function clickRow(c: any, index: number, init: { shiftKey?: boolean; ctrlKey?: boolean; metaKey?: boolean } = {}): void {
+      c.onRowClick(c.entries()[index], { target: document.createElement('span'), shiftKey: false, ctrlKey: false, metaKey: false, ...init } as unknown as MouseEvent);
     }
-    function clickCheck(c: any, index: number, shiftKey = false): void {
-      c.onRowClick(c.entries()[index], { target: onCheck(), shiftKey } as unknown as MouseEvent);
-    }
+    const clickCheck = (c: any, index: number) => clickRow(c, index, { ctrlKey: true });
 
     it('il clic sulla riga la apre senza spuntarla', () => {
       const { c } = create();
@@ -259,21 +253,42 @@ describe('StoricoDumpPage', () => {
       expect(c.selectedCount()).toBe(0);
     });
 
-    it('il clic sulla casella la spunta senza aprirla, e un secondo clic la libera', () => {
+    it('Ctrl+clic (o Cmd+clic) la spunta senza aprirla, e un secondo la libera', () => {
       const { c } = create();
       clickCheck(c, 1);
       expect([...c.selectedKeys()]).toEqual(['f#1']);
       expect(c.focusedKey()).toBe('f#0');
+      clickRow(c, 0, { metaKey: true });
+      expect([...c.selectedKeys()].sort()).toEqual(['f#0', 'f#1']);
       clickCheck(c, 1);
-      expect(c.selectedCount()).toBe(0);
+      expect([...c.selectedKeys()]).toEqual(['f#0']);
     });
 
-    it('shift-clic sulla casella seleziona il range dall’ultima spuntata, in entrambe le direzioni', () => {
+    it('Maiusc+clic seleziona il range dall’ultima spuntata, in entrambe le direzioni, anche fuori modalità', () => {
       const { c } = create();
       c.loadMore(); // 3 entry
       clickCheck(c, 2); // ancora: f#2
-      clickCheck(c, 0, true); // shift verso l'alto
+      clickRow(c, 0, { shiftKey: true }); // verso l'alto
       expect([...c.selectedKeys()].sort()).toEqual(['f#0', 'f#1', 'f#2']);
+      expect(c.focusedKey()).toBe('f#0');
+    });
+
+    it('in modalità selezione un clic spunta invece di aprire; Esc esce e svuota', () => {
+      const { c, fixture } = create();
+      const host = fixture.nativeElement as HTMLElement;
+      host.querySelector<HTMLButtonElement>('button[aria-label="Seleziona"]')!.click();
+      fixture.detectChanges();
+      expect(host.textContent).toContain('Modalità selezione');
+
+      clickRow(c, 1);
+      expect([...c.selectedKeys()]).toEqual(['f#1']);
+      expect(c.focusedKey()).toBe('f#0');
+
+      document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+      fixture.detectChanges();
+      expect(c.selectedCount()).toBe(0);
+      expect(c.selectionMode()).toBe(false);
+      expect(host.textContent).not.toContain('Modalità selezione');
     });
 
     // Il fuoco resta sulla lista: la voce attiva la dice aria-activedescendant (lista virtualizzata).

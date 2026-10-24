@@ -47,8 +47,9 @@ monitor) e in quanto tempo. I filtri sono quelli del monitor (testo nel percorso
 metodo, classi di status, provenienza) e cercano in tutto l'archivio, non solo nelle voci già
 caricate.
 
-Le voci si selezionano come nel monitor: il clic sulla riga la apre, la casella la spunta, e da
-tastiera le frecce si spostano e Spazio spunta. «Seleziona caricate» spunta tutte quelle lette
+Le voci si selezionano come nel monitor: il clic sulla riga la apre, Ctrl+clic la spunta,
+Maiusc+clic spunta l'intervallo, il pulsante **Seleziona** avvia la modalità selezione ed Esc
+toglie le spunte; da tastiera le frecce si spostano e Spazio spunta. «Seleziona caricate» spunta tutte quelle lette
 fin lì. Da un file — intero, o da una selezione di voci — si **creano mock in blocco**, con le
 stesse regole di travaso della vista live ([monitor](MONITOR.md)): header mascherati e
 ricalcolabili esclusi, scheletri da completare per i body non ricostruibili. I file si

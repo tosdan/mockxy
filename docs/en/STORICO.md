@@ -45,8 +45,9 @@ entry says when it arrived, what served it (with the monitor's icon) and how lon
 filters are the monitor's (text in the path or URL, method, status classes, source) and search
 the whole archive, not only the entries already loaded.
 
-Entries are selected as in the monitor: a click on the row opens it, the checkbox checks it,
-and from the keyboard the arrows move and Space checks. «Select loaded» checks every entry read
+Entries are selected as in the monitor: a click on the row opens it, Ctrl+click checks it,
+Shift+click checks the range, the **Select** button starts selection mode and Esc clears the
+checks; from the keyboard the arrows move and Space checks. «Select loaded» checks every entry read
 so far. From a file — whole, or from a selection of entries — you **create mocks in bulk**, with
 the same carry-over rules as the live view ([monitor](MONITOR.md)): masked and recomputable
 headers excluded, skeletons to complete for bodies that can't be reconstructed. Files are

@@ -72,10 +72,14 @@ mockate» in cima alla lista accende e spegne quel filtro con un clic. I chip de
 status contano le proprie voci fra quelle che passano gli altri filtri, così 4xx e 5xx dicono
 quanti errori ci sono e di che tipo.
 
-Le voci si selezionano come nel catalogo: il clic sulla riga la apre nel dettaglio, il clic
-sulla sua casella la spunta (con Maiuscole l'intervallo dall'ultima spuntata). Da tastiera le
-frecce, Home e Fine si spostano fra le voci e le aprono, Spazio spunta quella attiva e
-Maiuscole+Spazio l'intervallo. Con una selezione compare in fondo alla lista la barra delle
+Le voci si selezionano come nel catalogo: il clic sulla riga la apre nel dettaglio,
+**Ctrl+clic** (⌘+clic su Mac) la spunta senza aprirla e **Maiusc+clic** spunta l'intervallo
+dall'ultima spuntata, comodo per prendere una raffica di richieste consecutive. Il pulsante
+**Seleziona** nella testata avvia la modalità selezione, in cui un clic spunta la riga, finché
+**Fine** non la chiude tenendo le spunte; **Esc** chiude la modalità e toglie le spunte. Le voci
+spuntate hanno una tinta indaco e il bordo sinistro dello stesso colore, che su una voce non
+mockata prende il posto della barra ambra. Da tastiera le frecce, Home e Fine si spostano fra le
+voci e le aprono, Spazio spunta quella attiva e Maiuscole+Spazio l'intervallo. Con una selezione compare in fondo alla lista la barra delle
 azioni: crea i mock delle voci spuntate, con l'opzione di attivarli subito. Dal menu «⋮» della
 testata si sceglie la **densità compatta**, una riga per voce, ricordata alla visita successiva.
 

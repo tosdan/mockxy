@@ -71,10 +71,14 @@ the list turns that filter on and off with a click. The status class chips count
 entries among those passing the other filters, so 4xx and 5xx tell how many errors there are
 and of which kind.
 
-Entries are selected as in the catalog: a click on the row opens it in the detail, a click on
-its checkbox checks it (with Shift, the range from the last checked one). From the keyboard,
-the arrows, Home and End move between entries and open them, Space checks the active one and
-Shift+Space the range. With a selection, the action bar appears at the bottom of the list: it
+Entries are selected as in the catalog: a click on the row opens it in the detail,
+**Ctrl+click** (⌘+click on Mac) checks it without opening it and **Shift+click** checks the range
+from the last checked one, handy for a burst of consecutive requests. The **Select** button in
+the header starts selection mode, where a click checks the row, until **Done** closes it and keeps
+the checks; **Esc** closes the mode and clears the checks. Checked entries have an indigo tint and
+a left edge of the same color, which on a not mocked entry takes the place of the amber bar. From
+the keyboard, the arrows, Home and End move between entries and open them, Space checks the
+active one and Shift+Space the range. With a selection, the action bar appears at the bottom of the list: it
 creates the mocks of the checked entries, optionally enabling them right away. The «⋮» menu in
 the header offers a **compact density**, one line per entry, remembered for the next visit.
 

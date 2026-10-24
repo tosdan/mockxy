@@ -179,7 +179,10 @@ describe('MonitorNextPage', () => {
 
   it('il chip delle non mockate accende e spegne il filtro "backend reale"', () => {
     const { fixture, c } = create();
-    const chip = () => (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>('button[aria-pressed]') as HTMLButtonElement;
+    const chip = () =>
+      Array.from((fixture.nativeElement as HTMLElement).querySelectorAll<HTMLButtonElement>('button[aria-pressed]')).find((b) =>
+        (b.textContent ?? '').includes('non mockate'),
+      )!;
     expect((chip().textContent ?? '').replace(/\s+/g, ' ')).toContain('2 non mockate');
     chip().click();
     fixture.detectChanges();
@@ -585,26 +588,104 @@ describe('MonitorNextPage', () => {
       expect(option('1').classList).not.toContain('mx-open');
     });
 
-    it('il clic sulla riga la apre senza spuntarla; il clic sulla casella la spunta senza aprirla', () => {
-      const { c, option, fixture } = setup();
+    // Come nel catalogo, niente caselle: si spunta con Ctrl+clic, in modalita' selezione o, qui, con
+    // Maiusc+clic, che in una lista in ordine di tempo prende una raffica di richieste consecutive.
+    const clickWith = (row: HTMLElement, init: MouseEventInit) => row.dispatchEvent(new MouseEvent('click', { bubbles: true, ...init }));
+
+    it('un clic apre la riga; Ctrl+clic (o Cmd+clic) la spunta senza aprirla; le righe non hanno caselle', () => {
+      const { c, host, option, fixture } = setup();
+      expect(host.querySelector('[role="option"] [data-check]')).toBeNull();
       option('2').click();
       fixture.detectChanges();
       expect(c.selected()?.id).toBe('2');
       expect(c.selectedCount()).toBe(0);
 
-      option('3').querySelector<HTMLElement>('[data-check]')!.click();
+      clickWith(option('3'), { ctrlKey: true });
+      clickWith(option('1'), { metaKey: true });
       fixture.detectChanges();
       expect(c.selected()?.id).toBe('2');
-      expect([...c.selectedIds()]).toEqual(['3']);
+      expect([...c.selectedIds()].sort()).toEqual(['1', '3']);
+      expect(option('3').classList).toContain('mx-checked');
+
+      clickWith(option('3'), { ctrlKey: true });
+      expect([...c.selectedIds()]).toEqual(['1']);
     });
 
-    it('shift-clic sulla casella spunta l’intervallo dall’ultima spuntata', () => {
-      const { options, fixture } = setup();
+    it('Maiusc+clic spunta l’intervallo dall’ultima spuntata, anche fuori modalità', () => {
+      const { c, options, fixture } = setup();
       const ids = options().map((row) => row.dataset['entryId']!);
-      options()[0].querySelector<HTMLElement>('[data-check]')!.click();
-      options()[2].querySelector<HTMLElement>('[data-check]')!.dispatchEvent(new MouseEvent('click', { bubbles: true, shiftKey: true }));
+      const opened = c.selected()?.id;
+      clickWith(options()[0], { ctrlKey: true });
+      clickWith(options()[2], { shiftKey: true });
       fixture.detectChanges();
       expect(checked(options())).toEqual(ids);
+      expect(c.selected()?.id).toBe(opened);
+    });
+
+    it('in modalità selezione un clic spunta invece di aprire; Fine esce e tiene le spunte', () => {
+      const { c, host, option, fixture } = setup();
+      const mode = () => host.querySelector<HTMLButtonElement>('button[aria-label="Seleziona"]')!;
+      const opened = c.selected()?.id;
+      const banner = () => Array.from(host.querySelectorAll('[role="status"]')).find((el) => (el.textContent ?? '').includes('Modalità selezione'));
+      mode().click();
+      fixture.detectChanges();
+      expect(mode().getAttribute('aria-pressed')).toBe('true');
+      expect(banner()).toBeDefined();
+
+      option('1').click();
+      option('3').click();
+      fixture.detectChanges();
+      expect([...c.selectedIds()].sort()).toEqual(['1', '3']);
+      expect(c.selected()?.id).toBe(opened);
+      expect(host.textContent).not.toContain('Ctrl+clic aggiunge o toglie');
+
+      Array.from(host.querySelectorAll<HTMLButtonElement>('button')).find((b) => b.textContent?.trim() === 'Fine')!.click();
+      fixture.detectChanges();
+      expect(banner()).toBeUndefined();
+      expect([...c.selectedIds()].sort()).toEqual(['1', '3']);
+      expect(host.textContent).toContain('Ctrl+clic aggiunge o toglie · Maiusc+clic seleziona un intervallo');
+    });
+
+    it('Esc toglie le spunte ed esce dalla modalità da tutta la pagina, ma non da un campo o un overlay', () => {
+      const { c, host, option, fixture } = setup();
+      const outside = document.body.appendChild(document.createElement('button'));
+      const overlay = document.body.appendChild(document.createElement('div'));
+      overlay.className = 'cdk-overlay-container';
+      const inOverlay = overlay.appendChild(document.createElement('button'));
+      const escape = (target: Element) => {
+        target.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+        fixture.detectChanges();
+      };
+      try {
+        host.querySelector<HTMLButtonElement>('button[aria-label="Seleziona"]')!.click();
+        option('2').click();
+        fixture.detectChanges();
+
+        escape(inOverlay);
+        escape(host.querySelector('input')!);
+        expect([...c.selectedIds()]).toEqual(['2']);
+
+        escape(outside);
+        expect(c.selectedCount()).toBe(0);
+        expect(c.selectionMode()).toBe(false);
+      } finally {
+        outside.remove();
+        overlay.remove();
+      }
+    });
+
+    // Da spuntata, il bordo sinistro e' della spunta: l'indaco prende il posto della barra ambra.
+    it('una riga non mockata spuntata perde la barra ambra; aperta tiene solo il bordo destro', () => {
+      const { option, fixture } = setup();
+      clickWith(option('2'), { ctrlKey: true });
+      fixture.detectChanges();
+      expect(option('2').classList).toContain('mx-checked');
+      expect(option('2').style.boxShadow).toBe('');
+      expect(option('3').style.boxShadow).toContain('inset 2px 0 0 0');
+
+      option('2').click(); // la apre: resta spuntata
+      fixture.detectChanges();
+      expect(option('2').style.boxShadow).toBe('inset -2px 0 0 0 var(--brand-soft)');
     });
 
     it('le frecce aprono la voce successiva e le danno il fuoco; Spazio spunta, Maiuscole+Spazio l’intervallo', async () => {
@@ -633,7 +714,7 @@ describe('MonitorNextPage', () => {
       const bar = () => Array.from(host.querySelectorAll('span')).find((span) => /selezionat/.test(span.textContent ?? ''));
       expect(bar()).toBeUndefined();
 
-      option('2').querySelector<HTMLElement>('[data-check]')!.click();
+      option('2').dispatchEvent(new MouseEvent('click', { bubbles: true, ctrlKey: true }));
       fixture.detectChanges();
       expect(bar()?.textContent?.trim()).toBe('1 selezionate');
 

@@ -71,7 +71,7 @@ test.describe("E17 · storico dump → crea mock", () => {
   });
 
   // Prima ogni clic sulla riga la apriva e insieme la spuntava.
-  test("il clic sulla riga apre senza spuntare; la casella spunta; da tastiera frecce e Spazio", async ({ page, request }) => {
+  test("il clic sulla riga apre senza spuntare; Ctrl+clic spunta; da tastiera frecce e Spazio", async ({ page, request }) => {
     await setDumpEnabled(request, true);
     for (const p of ["/api/uno-e2e", "/api/due-e2e", "/api/tre-e2e"]) await request.get(`${E2E_BACKEND}${p}`);
     await expect.poll(async () => await flushDump(request), { timeout: 8000 }).toBeGreaterThanOrEqual(3);
@@ -94,7 +94,8 @@ test.describe("E17 · storico dump → crea mock", () => {
     // La riga ha una transizione: si aspetta che l'ombra arrivi al valore finale.
     await expect.poll(() => current.evaluate((el) => getComputedStyle(el).boxShadow)).toMatch(/\) -2px 0px 0px 0px inset/);
 
-    await rows.filter({ hasText: "/api/tre-e2e" }).locator("[data-check]").click();
+    // Niente caselle: Ctrl+clic spunta senza aprire.
+    await rows.filter({ hasText: "/api/tre-e2e" }).click({ modifiers: ["ControlOrMeta"] });
     await expect(storico.getByRole("option", { selected: true })).toHaveCount(1);
     await expect(current).toContainText("/api/due-e2e"); // spuntare non apre
 
