@@ -214,7 +214,7 @@ const DENSITY_STATE_KEY = 'monitor-density';
                   <span class="mt-0.5 flex items-center gap-1.5 text-[11px] text-muted-foreground in-[.mx-compact]:hidden">
                     <ng-icon [name]="sourceIcon(row.source)" size="0.75rem" [style.color]="sourceColor(row.source)" />{{ sourceLabel(row.source) }}
                     @if (row.sequenceStep; as seq) {
-                    <span class="inline-flex items-center gap-1 rounded bg-[color-mix(in_srgb,var(--brand)_16%,transparent)] px-1 text-[10px] font-bold tracking-wide text-brand-soft" [uiTooltip]="'monitor.sequenceStepTip' | transloco"><ng-icon [name]="sequenceIcon" size="0.65rem" />SEQ {{ seq.index + 1 }}/{{ seq.count }}</span>
+                    <span class="mx-seq-badge inline-flex items-center gap-1 rounded bg-[color-mix(in_srgb,var(--brand)_16%,transparent)] px-1 text-[10px] font-bold tracking-wide text-brand-soft" [uiTooltip]="'monitor.sequenceStepTip' | transloco"><ng-icon [name]="sequenceIcon" size="0.65rem" />SEQ {{ seq.index + 1 }}/{{ seq.count }}</span>
                     }
                   </span>
                 </span>
@@ -241,7 +241,7 @@ const DENSITY_STATE_KEY = 'monitor-density';
           @if (selectedCount() > 0) {
           <div class="flex shrink-0 flex-wrap items-center gap-x-2 gap-y-1.5 border-t border-border bg-selection/10 px-3 py-2">
             @if (!selectionMode()) {
-            <span class="basis-full text-[11px] text-muted-foreground">{{ 'common.selectionShortcutsRangeHint' | transloco }}</span>
+            <span class="basis-full text-[11px] leading-4 text-muted-foreground">{{ 'common.selectionShortcutsRangeHint' | transloco }}</span>
             }
             <span class="whitespace-nowrap text-[11.5px] font-bold text-foreground">{{ 'monitor.selectedCount' | transloco: { count: selectedCount() } }}</span>
             <div class="ml-auto flex items-center gap-2">

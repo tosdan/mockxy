@@ -137,6 +137,11 @@ test.describe("E17 · storico dump → crea mock", () => {
     await expect(storico.getByRole("option", { selected: true })).toHaveCount(1);
     await expect(await active()).toHaveAttribute("aria-selected", "true");
     await expect(await active()).toBeInViewport({ ratio: 1 });
+    // La barra non deve rendere frazionaria l'altezza della lista: col suggerimento delle
+    // scorciatoie a 16,5 px per riga, l'ultima voce restava coperta per mezzo pixel (coi font di
+    // sistema; con DejaVu il suggerimento va su due righe, 33 px, e il difetto non si vedeva).
+    const hint = storico.getByText(/Ctrl\+clic aggiunge o toglie/);
+    expect(await hint.evaluate((el) => parseFloat(getComputedStyle(el).lineHeight) % 1)).toBe(0);
     await page.keyboard.press("Space");
     await expect(storico.getByRole("option", { selected: true })).toHaveCount(0);
     await page.keyboard.press("Home");
