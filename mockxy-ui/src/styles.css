@@ -228,6 +228,12 @@
 .mx-checked-some::before {
   border-left-style: dashed;
 }
+/* Il badge SEQ del Monitor ha un fondo suo, brand al 16%: sopra la tinta della selezione e la
+   sfumatura della riga aperta il suo testo brand-soft scendeva a 3,6:1. Su una riga spuntata prende
+   l'indaco chiaro della selezione (sopra 6:1). */
+.mx-checked .mx-seq-badge {
+  color: var(--selection-foreground);
+}
 /* Sopra la tinta la sfumatura arriva al 6% invece che all'8,5%: piu' chiara, il testo secondario
    (#a3a3a3) scendeva sotto 4.5:1 dove la riga e' piu' luminosa, a destra. */
 .mx-open.mx-checked {

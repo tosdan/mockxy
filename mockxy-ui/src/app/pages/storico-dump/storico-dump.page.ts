@@ -197,7 +197,7 @@ const ROW_HEIGHT = 56;
         @if (selectedCount() > 0) {
         <div class="flex shrink-0 flex-wrap items-center gap-x-2 gap-y-1.5 border-t border-border bg-selection/10 px-3 py-2">
           @if (!selectionMode()) {
-          <span class="basis-full text-[11px] text-muted-foreground">{{ 'common.selectionShortcutsRangeHint' | transloco }}</span>
+          <span class="basis-full text-[11px] leading-4 text-muted-foreground">{{ 'common.selectionShortcutsRangeHint' | transloco }}</span>
           }
           <span class="whitespace-nowrap text-[11.5px] font-bold text-foreground">{{ 'storico.selectedCount' | transloco: { count: selectedCount() } }}</span>
           <div class="ml-auto flex items-center gap-2">
@@ -584,8 +584,9 @@ export class StoricoDumpPage implements OnInit {
     const viewport = this.viewport();
     const top = index * ROW_HEIGHT;
     const offset = viewport.measureScrollOffset();
-    // L'altezza del momento, non quella memorizzata dallo scroll virtuale: la barra la cambia.
-    const size = viewport.elementRef.nativeElement.clientHeight;
+    // L'altezza del momento, non quella memorizzata dallo scroll virtuale: la barra la cambia. E
+    // frazionaria: clientHeight arrotonda, e mezzo pixel dell'ultima riga restava coperto.
+    const size = viewport.elementRef.nativeElement.getBoundingClientRect().height;
     if (top < offset) viewport.scrollToOffset(top);
     else if (top + ROW_HEIGHT > offset + size) viewport.scrollToOffset(top + ROW_HEIGHT - size);
   }

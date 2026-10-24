@@ -1,5 +1,5 @@
 const { test, expect } = require("@playwright/test");
-const { gotoMonitor, clearMonitor, resetWorkspace, E2E_BACKEND } = require("./helpers");
+const { gotoMonitor, clearMonitor, mockIdByPath, resetWorkspace, E2E_BACKEND } = require("./helpers");
 
 // E15 — Monitor del traffico live. Il monitor cattura le richieste che passano dal server (solo
 // /api/*, non /_admin/*). Genero traffico con richieste dirette al backend (fixture context), poi
@@ -133,5 +133,77 @@ test.describe("E15 · monitor", () => {
 
     await monitor.getByRole("button", { name: "Pulisci" }).click();
     await expect(monitor.getByText("nessun traffico")).toBeVisible();
+  });
+});
+
+// Il badge SEQ di un passo di sequenza ha un fondo suo: aperta e spuntata, la riga somma la tinta
+// della selezione e la sfumatura chiara, e il testo del badge scendeva sotto 4.5:1. Scrive una
+// variante su disco: il workspace si ripristina alla fine.
+test.describe("E15 · monitor, badge SEQ sulla riga spuntata", () => {
+  test.beforeEach(async ({ request }) => {
+    await clearMonitor(request);
+  });
+  test.afterEach(async ({ request, page }) => {
+    await resetWorkspace(request, page);
+  });
+
+  test("aperta e spuntata, il badge SEQ resta leggibile nel punto più chiaro", async ({ page, request }) => {
+    const id = await mockIdByPath(request, "/api/status");
+    const created = await request.post(`${E2E_BACKEND}/_admin/api/mocks/${id}/responses`, {
+      data: { type: "sequence", title: "Polling", steps: [{ response: "001.response.json", times: 2 }, { response: "002.response.json" }], onEnd: "stay" },
+    });
+    expect(created.ok()).toBeTruthy();
+    const { selectedResponseFile } = await created.json();
+    expect((await request.put(`${E2E_BACKEND}/_admin/api/mocks/${id}`, { data: { selectedResponseFile } })).ok()).toBeTruthy();
+    await request.get(`${E2E_BACKEND}/api/status`);
+
+    await gotoMonitor(page);
+    const monitor = page.locator("app-monitor-next");
+    const row = monitor.getByRole("option").filter({ hasText: "/api/status" }).first();
+    const badge = row.locator(".mx-seq-badge");
+    await expect(badge).toContainText("SEQ 1/");
+    await row.click();
+    await row.click({ modifiers: ["ControlOrMeta"] });
+    await expect(row).toHaveClass(/mx-open/);
+    await expect(row).toHaveClass(/mx-checked/);
+    await page.mouse.move(1200, 850);
+
+    // Fondo sotto il testo: gli strati fino al primo opaco, di ogni sfumatura il colore piu' chiaro.
+    const ratio = () =>
+      badge.evaluate((el) => {
+        const canvas = document.createElement("canvas");
+        canvas.width = canvas.height = 1;
+        const context = canvas.getContext("2d", { willReadFrequently: true });
+        const paint = (colors) => {
+          context.clearRect(0, 0, 1, 1);
+          for (const color of colors) {
+            context.fillStyle = color;
+            context.fillRect(0, 0, 1, 1);
+          }
+          return [...context.getImageData(0, 0, 1, 1).data];
+        };
+        const layers = [];
+        for (let node = el; node; node = node.parentElement) {
+          const style = getComputedStyle(node);
+          const stops = style.backgroundImage.match(/(?:rgba?|oklab|oklch|color)\([^)]*\)/g);
+          if (stops) layers.unshift(stops[stops.length - 1]);
+          layers.unshift(style.backgroundColor);
+          if (paint([style.backgroundColor])[3] === 255) break;
+        }
+        const luminance = ([r, g, b]) => {
+          const [lr, lg, lb] = [r, g, b].map((v) => {
+            const c = v / 255;
+            return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+          });
+          return 0.2126 * lr + 0.7152 * lg + 0.0722 * lb;
+        };
+        const back = luminance(paint(layers));
+        const text = luminance(paint([...layers, getComputedStyle(el).color]));
+        return (Math.max(text, back) + 0.05) / (Math.min(text, back) + 0.05);
+      });
+    // Le righe hanno una transizione: a meta' la tinta non c'e' ancora e il contrasto sembra alto,
+    // quindi si misura una volta sola, a transizione finita.
+    await page.waitForTimeout(400);
+    expect(await ratio()).toBeGreaterThanOrEqual(4.5);
   });
 });
