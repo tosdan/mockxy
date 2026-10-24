@@ -44,12 +44,13 @@ mode: there a click checks the row instead of opening it, until **Done** closes 
 the checks. **Esc** closes the mode and clears every check, from anywhere on the page except
 text fields, menus and dialogs.
 
-Checked rows have an indigo tint; the one open in the detail has a gradient towards the right
-and a light right edge, and it is the only row with an edge. Collections have a three-state
-checkbox: it checks every endpoint of the subtree, sub-collections included (under a filter, only
-those the filter shows); Ctrl+click on the collection does the same, while a plain click expands
-or collapses it. A fully checked collection has the tint, a partly checked one has stripes, and
-its counter tells how many endpoints are checked out of the total. Bulk actions — enable,
+Checked rows have an indigo tint and a left edge of the same color; the one open in the detail
+has a gradient towards the right and a light right edge, so the two marks never mix up.
+Collections have a three-state checkbox: it checks every endpoint of the subtree,
+sub-collections included (under a filter, only those the filter shows); Ctrl+click on the
+collection does the same, while a plain click expands or collapses it. A fully checked collection
+has the tint and a solid edge, a partly checked one has stripes and a dashed edge, and its counter
+tells how many endpoints are checked out of the total. Bulk actions — enable,
 disable, move, delete — act on every checked endpoint the filter shows, even inside collapsed
 collections; what the filter hides is never touched.
 

@@ -232,6 +232,17 @@ test.describe("E1 · catalogo", () => {
     const stripes = await folder.evaluate((el) => getComputedStyle(el).backgroundImage);
     expect(stripes).toContain("repeating-linear-gradient");
 
+    // Non solo colore: un bordo sinistro, continuo sulla riga spuntata, tratteggiato sulla
+    // cartella spuntata in parte, assente sulle altre.
+    const leftEdge = (locator) =>
+      locator.evaluate((el) => {
+        const style = getComputedStyle(el, "::before");
+        return style.content === "none" ? "none" : `${style.borderLeftStyle} ${style.borderLeftWidth}`;
+      });
+    expect(await leftEdge(row("/api/users"))).toBe("solid 2px");
+    expect(await leftEdge(folder)).toBe("dashed 2px");
+    expect(await leftEdge(row("/api/users/:id"))).toBe("none");
+
     await catalog.getByRole("button", { name: "Fine", exact: true }).click();
     await expect(catalog.getByRole("status")).toHaveCount(0);
     await expect(row("/api/users")).toHaveAttribute("aria-selected", "true");
@@ -380,9 +391,14 @@ test.describe("E1 · catalogo", () => {
           const texts = [...rowEl.querySelectorAll("*")].filter(
             (el) => el.offsetParent && [...el.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim()),
           );
-          return texts.map((el) => ({ text: el.textContent.trim(), ratio: ratio(el, getComputedStyle(el).color) }));
+          return {
+            texts: texts.map((el) => ({ text: el.textContent.trim(), ratio: ratio(el, getComputedStyle(el).color) })),
+            edge: ratio(rowEl, getComputedStyle(rowEl, "::before").borderLeftColor),
+          };
         });
-        for (const { text, ratio } of results) expect(ratio, `${path}: «${text}»`).toBeGreaterThanOrEqual(4.5);
+        for (const { text, ratio } of results.texts) expect(ratio, `${path}: «${text}»`).toBeGreaterThanOrEqual(4.5);
+        // Il bordo della spunta e' un elemento grafico: almeno 3:1 sul fondo della riga.
+        expect(results.edge, `${path}: bordo della spunta`).toBeGreaterThanOrEqual(3);
         await row.locator("ui-badge").click({ modifiers: ["ControlOrMeta"] }); // toglie la spunta
       }
     });

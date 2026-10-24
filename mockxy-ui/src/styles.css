@@ -192,7 +192,7 @@
   background-clip: padding-box;
 }
 /* Riga del catalogo aperta nel dettaglio: la sfumatura cresce verso destra e il bordo sta a destra,
-   dal lato del pannello che la mostra. E' l'unica riga con un bordo: la si trova a colpo d'occhio. */
+   dal lato del pannello che la mostra. Il bordo sinistro e' della spunta: i due segni non si toccano. */
 .mx-open {
   position: relative;
   background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.032) 36%, rgba(255, 255, 255, 0.085));

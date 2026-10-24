@@ -45,12 +45,13 @@ selezione: lì un clic spunta la riga invece di aprirla, finché **Fine** non la
 spunte. **Esc** chiude la modalità e toglie tutte le spunte, da qualunque punto della pagina
 tranne i campi di testo, i menu e le finestre.
 
-Le righe spuntate hanno una tinta indaco; quella aperta nel dettaglio ha una sfumatura verso
-destra e il bordo destro chiaro, ed è l'unica riga con un bordo. Le collezioni hanno una casella
-a tre stati: spunta tutti gli endpoint del sottoalbero, sottocollezioni comprese (sotto filtro,
-solo quelli che il filtro mostra); lo stesso fa Ctrl+clic sulla collezione, mentre il clic
-semplice la apre o la chiude. Una collezione spuntata per intero ha la tinta, una spuntata in
-parte ha delle strisce, e il suo contatore dice quanti endpoint sono spuntati sul totale. Le azioni in massa —
+Le righe spuntate hanno una tinta indaco e un bordo sinistro dello stesso colore; quella aperta
+nel dettaglio ha una sfumatura verso destra e il bordo destro chiaro, così i due segni non si
+confondono. Le collezioni hanno una casella a tre stati: spunta tutti gli endpoint del
+sottoalbero, sottocollezioni comprese (sotto filtro, solo quelli che il filtro mostra); lo stesso
+fa Ctrl+clic sulla collezione, mentre il clic semplice la apre o la chiude. Una collezione
+spuntata per intero ha la tinta e il bordo continuo, una spuntata in parte ha strisce e bordo
+tratteggiato, e il suo contatore dice quanti endpoint sono spuntati sul totale. Le azioni in massa —
 abilita, disabilita, sposta, elimina — agiscono su tutti gli endpoint spuntati che il filtro
 mostra, anche dentro collezioni chiuse; ciò che il filtro nasconde non viene mai toccato.
 
