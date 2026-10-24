@@ -142,7 +142,7 @@ const ROW_HEIGHT = 56;
             [attr.aria-current]="row.dumpKey === focusedKey() ? 'true' : null"
             (click)="onRowClick(row, $event)"
             class="group flex w-full cursor-pointer select-none items-center gap-2.5 border-b border-border-soft px-4 text-left transition hover:bg-white/[0.03]"
-            [class]="row.dumpKey === focusedKey() ? 'mx-selected group-focus-visible/list:ring-2 group-focus-visible/list:ring-inset group-focus-visible/list:ring-ring/70' : ''"
+            [class]="row.dumpKey === focusedKey() ? 'mx-open group-focus-visible/list:ring-2 group-focus-visible/list:ring-inset group-focus-visible/list:ring-ring/70' : ''"
             [style.height.px]="rowHeight"
           >
             <span data-check aria-hidden="true" class="grid size-4 shrink-0 place-items-center rounded border transition"
