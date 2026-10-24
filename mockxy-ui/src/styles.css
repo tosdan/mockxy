@@ -40,6 +40,8 @@
   --color-positive: var(--positive);
   --color-sequence: var(--sequence);
   --color-highlight: var(--highlight);
+  --color-selection: var(--selection);
+  --color-selection-foreground: var(--selection-foreground);
   --color-method-get: var(--method-get);
   --color-method-post: var(--method-post);
   --color-method-put: var(--method-put);
@@ -121,6 +123,9 @@
   --sequence: #6ee7b7; /* sequenza di varianti attiva (badge/chip SEQ): il verde acceso dei badge GET/2xx */
   --type-sequence: var(--sequence);
   --switch-off: rgba(120, 120, 128, 0.5);
+  --selection: #818cf8; /* spunta della selezione multipla: un indaco, l'unica tinta che non dice gia' altro */
+  --selection-foreground: #c7cbff; /* testo sopra la tinta della selezione */
+  --foreground-disabled-checked: #a6a6aa; /* testo di una riga spenta e spuntata: la tinta ne abbassava il contrasto sotto 4.5:1 */
   --highlight: #fcd34d; /* evidenziatore del testo cercato: si usa come velo, non pieno */
   --destructive: #fb7185; /* rose-400: bordo/fondo dei controlli distruttivi */
   --destructive-foreground: #ffffff;
@@ -186,13 +191,51 @@
   background: rgba(255, 255, 255, 0.6);
   background-clip: padding-box;
 }
-/* Linea-guida verticale dell'albero del catalogo. */
-.mx-tree-line {
+/* Riga del catalogo aperta nel dettaglio: la sfumatura cresce verso destra e il bordo sta a destra,
+   dal lato del pannello che la mostra. Il bordo sinistro e' della spunta: i due segni non si toccano. */
+.mx-open {
+  position: relative;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.032) 36%, rgba(255, 255, 255, 0.085));
+  box-shadow: inset -2px 0 0 0 var(--brand-soft);
+}
+/* Riga spuntata per un'azione di gruppo: solo la tinta. Aperta e spuntata: la sfumatura sopra la tinta. */
+.mx-checked {
+  background: color-mix(in srgb, var(--selection) 15%, transparent);
+}
+/* Cartella spuntata in parte: strisce a 45 gradi, la tinta della selezione alternata a una sua
+   versione piu' tenue (allo sfondo puro le strisce scure staccavano troppo). Oltre il 10% le
+   strisce si confonderebbero con la tinta piena della cartella tutta spuntata. */
+.mx-checked-some {
+  background: repeating-linear-gradient(
+    45deg,
+    color-mix(in srgb, var(--selection) 15%, transparent) 0 6px,
+    color-mix(in srgb, var(--selection) 8%, transparent) 6px 12px
+  );
+}
+/* Il segno della spunta che non e' solo colore: un bordo sinistro, continuo se la riga e' spuntata
+   tutta, tratteggiato se e' una cartella spuntata in parte. Il bordo destro resta della riga
+   aperta. Disegnato sopra la riga, con lo stesso arrotondamento: non sposta il contenuto. */
+.mx-checked::before,
+.mx-checked-some::before {
+  content: '';
   position: absolute;
-  top: 0;
-  bottom: 0;
-  width: 1px;
-  background: var(--border);
+  inset: 0;
+  border-left: 2px solid var(--selection);
+  border-radius: inherit;
+  pointer-events: none;
+}
+.mx-checked-some::before {
+  border-left-style: dashed;
+}
+/* Sopra la tinta la sfumatura arriva al 6% invece che all'8,5%: piu' chiara, il testo secondario
+   (#a3a3a3) scendeva sotto 4.5:1 dove la riga e' piu' luminosa, a destra. */
+.mx-open.mx-checked {
+  background:
+    linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.024) 36%, rgba(255, 255, 255, 0.06)),
+    color-mix(in srgb, var(--selection) 15%, transparent);
+}
+.mx-checked.mx-muted {
+  color: var(--foreground-disabled-checked);
 }
 /* Riga endpoint selezionata: velo verso destra + bordo sinistro curvo. */
 .mx-selected {

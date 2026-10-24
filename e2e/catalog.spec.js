@@ -99,10 +99,10 @@ test.describe("E1 · catalogo", () => {
     test(`la barra delle azioni di massa non spezza conteggio e pulsanti, col font ${font ?? "di sistema"}`, async ({ page }) => {
       if (font) await page.addStyleTag({ content: `* { font-family: "${font}" !important; }` });
       const catalog = page.locator("mocks-next-catalog");
-      // Le spunte degli endpoint: anche le cartelle hanno la loro casella.
-      const endpointBoxes = catalog.locator('[data-row-key^="e:"] [role="checkbox"]');
-      await endpointBoxes.nth(0).click({ force: true });
-      await endpointBoxes.nth(1).click({ force: true });
+      // Gli endpoint si spuntano con Ctrl+clic (Cmd su Mac) sulla riga.
+      const endpointRows = catalog.locator('[data-row-key^="e:"]');
+      await endpointRows.nth(0).locator("ui-badge").click({ modifiers: ["ControlOrMeta"] });
+      await endpointRows.nth(1).locator("ui-badge").click({ modifiers: ["ControlOrMeta"] });
 
       const label = catalog.getByText("2 selezionati");
       await expect(label).toBeVisible();
@@ -131,7 +131,7 @@ test.describe("E1 · catalogo", () => {
     });
   }
 
-  test("spunta e menu non tolgono spazio al path: lo cede il path quando il menu compare", async ({ page }) => {
+  test("il menu non toglie spazio al path: lo cede il path quando il menu compare", async ({ page }) => {
     const catalog = page.locator("mocks-next-catalog");
     const row = catalog.locator('[role="treeitem"]').filter({ hasText: "/api/users/:id" });
     const path = row.locator('[dir="rtl"]');
@@ -154,16 +154,19 @@ test.describe("E1 · catalogo", () => {
     expect(hover.row.height).toBe(rest.row.height);
   });
 
-  test("spuntare un endpoint non sposta la riga, e il click non lascia il menu acceso", async ({ page }) => {
+  test("Ctrl+clic spunta senza aprire e senza spostare la riga, e non lascia il menu acceso", async ({ page }) => {
     const catalog = page.locator("mocks-next-catalog");
     const row = catalog.locator('[role="treeitem"]').filter({ hasText: "/api/health" });
     const badge = row.locator("ui-badge");
     const before = await badge.boundingBox();
+    const opened = await catalog.locator('[aria-current="true"]').getAttribute("data-row-key");
 
-    await row.getByRole("checkbox").click();
+    await badge.click({ modifiers: ["ControlOrMeta"] });
     await page.mouse.move(1000, 600);
 
-    await expect(row.getByRole("checkbox")).toHaveAttribute("aria-checked", "true");
+    await expect(row).toHaveAttribute("aria-selected", "true");
+    await expect(row).toHaveClass(/mx-checked/);
+    await expect(catalog.locator('[aria-current="true"]')).toHaveAttribute("data-row-key", opened);
     expect((await badge.boundingBox()).x).toBe(before.x);
     await expect(row.getByRole("button", { name: "Sposta in collection" })).toHaveCSS("opacity", "0");
   });
@@ -179,14 +182,13 @@ test.describe("E1 · catalogo", () => {
     const menu = row.getByRole("button", { name: "Sposta in collection" });
     await expect(menu).toHaveCSS("opacity", "1");
 
-    await page.keyboard.press("Tab"); // la spunta
-    await page.keyboard.press("Tab"); // il menu
+    await page.keyboard.press("Tab"); // il menu: gli endpoint non hanno piu' la spunta
     await expect(menu).toBeFocused();
     await page.keyboard.press("Enter");
     await expect(page.getByRole("menuitem", { name: "Core API" })).toBeVisible();
   });
 
-  test("da tastiera Spazio spunta e Maiuscole+Spazio spunta l'intervallo; le azioni di massa partono", async ({ page }) => {
+  test("da tastiera Spazio spunta solo la riga a fuoco, anche con Maiuscole; Invio apre", async ({ page }) => {
     const catalog = page.locator("mocks-next-catalog");
     const row = (p) => catalog.locator('[role="treeitem"]').filter({ hasText: p }).first();
     await page.keyboard.press("/");
@@ -195,21 +197,61 @@ test.describe("E1 · catalogo", () => {
     await page.keyboard.press("ArrowDown"); // /api/health
     await page.keyboard.press("Space");
     await expect(row("/api/health")).toHaveAttribute("aria-selected", "true");
-    // Spuntare non apre: il dettaglio resta sull'endpoint aperto di partenza.
-    await expect(row("/api/health").getByRole("checkbox")).toHaveAttribute("aria-checked", "true");
 
     await page.keyboard.press("ArrowDown"); // /api/legacy
     await page.keyboard.press("ArrowDown"); // /api/status
+    // Niente intervalli: Maiuscole+Spazio spunta la riga a fuoco e basta.
     await page.keyboard.press("Shift+Space");
-    for (const p of ["/api/health", "/api/legacy", "/api/status"]) {
-      await expect(row(p)).toHaveAttribute("aria-selected", "true");
-    }
-    await expect(catalog.getByText("3 selezionati")).toBeVisible();
+    await expect(row("/api/status")).toHaveAttribute("aria-selected", "true");
+    await expect(row("/api/legacy")).toHaveAttribute("aria-selected", "false");
+    await expect(catalog.getByText("2 selezionati")).toBeVisible();
 
     // Invio, invece, apre.
     await page.keyboard.press("Enter");
     await expect(page.locator("mocks-next-detail").getByRole("heading", { name: "/api/status", exact: true })).toBeVisible();
     await expect(row("/api/status")).toHaveAttribute("aria-current", "true");
+  });
+
+  // Le righe non hanno piu' la casella: si spunta in modalita' selezione, o con Ctrl+clic.
+  test("in modalità selezione i clic spuntano; la cartella spuntata in parte ha le strisce; Esc annulla", async ({ page }) => {
+    const catalog = page.locator("mocks-next-catalog");
+    const row = (p) => catalog.locator('[role="treeitem"]').filter({ hasText: p }).first();
+    const folder = catalog.locator('[role="treeitem"][data-row-key^="c:"]').filter({ hasText: "Core API" });
+    const opened = await catalog.locator('[aria-current="true"]').getAttribute("data-row-key");
+
+    await catalog.getByRole("button", { name: "Seleziona", exact: true }).click();
+    await expect(catalog.getByRole("status")).toContainText("Modalità selezione");
+    await row("/api/users").click();
+    await expect(row("/api/users")).toHaveAttribute("aria-selected", "true");
+    await expect(catalog.locator('[aria-current="true"]')).toHaveAttribute("data-row-key", opened);
+
+    // Core API ha 3 endpoint, uno spuntato: casella mista, strisce e contatore.
+    await expect(folder.getByRole("checkbox")).toHaveAttribute("aria-checked", "mixed");
+    await expect(folder).toHaveClass(/mx-checked-some/);
+    await expect(folder.locator("ui-badge").last()).toHaveText("1/3");
+    const stripes = await folder.evaluate((el) => getComputedStyle(el).backgroundImage);
+    expect(stripes).toContain("repeating-linear-gradient");
+
+    // Non solo colore: un bordo sinistro, continuo sulla riga spuntata, tratteggiato sulla
+    // cartella spuntata in parte, assente sulle altre.
+    const leftEdge = (locator) =>
+      locator.evaluate((el) => {
+        const style = getComputedStyle(el, "::before");
+        return style.content === "none" ? "none" : `${style.borderLeftStyle} ${style.borderLeftWidth}`;
+      });
+    expect(await leftEdge(row("/api/users"))).toBe("solid 2px");
+    expect(await leftEdge(folder)).toBe("dashed 2px");
+    expect(await leftEdge(row("/api/users/:id"))).toBe("none");
+
+    await catalog.getByRole("button", { name: "Fine", exact: true }).click();
+    await expect(catalog.getByRole("status")).toHaveCount(0);
+    await expect(row("/api/users")).toHaveAttribute("aria-selected", "true");
+    await expect(catalog.getByText("Ctrl+clic aggiunge o toglie")).toBeVisible();
+
+    await row("/api/users").focus();
+    await page.keyboard.press("Escape");
+    await expect(row("/api/users")).toHaveAttribute("aria-selected", "false");
+    await expect(catalog.getByText("1 selezionato")).toHaveCount(0);
   });
 
   test("la densità compatta mette ogni endpoint su una riga, e resta dopo un ricaricamento", async ({ page }) => {
@@ -288,6 +330,79 @@ test.describe("E1 · catalogo", () => {
       expect(ratio, selector).toBeGreaterThanOrEqual(4.5);
     }
   });
+
+  // Aperta e spuntata, la riga somma la tinta della selezione e la sfumatura chiara verso destra:
+  // il testo grigio (spento o secondario) va misurato dove il fondo e' piu' chiaro, l'ultimo
+  // colore della sfumatura.
+  for (const compact of [false, true]) {
+    test(`aperta e spuntata, la riga resta leggibile nel punto più chiaro${compact ? ", in densità compatta" : ""}`, async ({ page }) => {
+      const catalog = page.locator("mocks-next-catalog");
+      if (compact) {
+        await catalog.getByRole("button", { name: "Azioni di vista" }).click();
+        await page.getByRole("menuitemcheckbox", { name: "Densità compatta" }).click();
+        await page.keyboard.press("Escape");
+      }
+      for (const path of ["/api/legacy", "/api/status"]) {
+        const row = catalog.locator('[role="treeitem"]').filter({ hasText: path }).first();
+        await row.locator("ui-badge").click();
+        await row.locator("ui-badge").click({ modifiers: ["ControlOrMeta"] });
+        await expect(row).toHaveClass(/mx-open/);
+        await expect(row).toHaveClass(/mx-checked/);
+        await page.mouse.move(1200, 850);
+        await page.waitForTimeout(300); // fine delle transizioni di colore
+        const results = await row.evaluate((rowEl) => {
+          const canvas = document.createElement("canvas");
+          canvas.width = canvas.height = 1;
+          const context = canvas.getContext("2d", { willReadFrequently: true });
+          const paint = (colors) => {
+            context.clearRect(0, 0, 1, 1);
+            for (const color of colors) {
+              context.fillStyle = color;
+              context.fillRect(0, 0, 1, 1);
+            }
+            return [...context.getImageData(0, 0, 1, 1).data];
+          };
+          // Fondo sotto un elemento: gli strati degli antenati fino al primo opaco; di ogni
+          // sfumatura l'ultimo colore, il piu' chiaro.
+          const layersUnder = (element) => {
+            const layers = [];
+            for (let node = element; node; node = node.parentElement) {
+              const style = getComputedStyle(node);
+              const stops = style.backgroundImage.match(/(?:rgba?|oklab|oklch|color)\([^)]*\)/g);
+              if (stops) layers.unshift(stops[stops.length - 1]);
+              layers.unshift(style.backgroundColor);
+              if (paint([style.backgroundColor])[3] === 255) break;
+            }
+            return layers;
+          };
+          const luminance = ([r, g, b]) => {
+            const [lr, lg, lb] = [r, g, b].map((v) => {
+              const c = v / 255;
+              return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+            });
+            return 0.2126 * lr + 0.7152 * lg + 0.0722 * lb;
+          };
+          const ratio = (element, color) => {
+            const layers = layersUnder(element);
+            const a = luminance(paint(layers));
+            const b = luminance(paint([...layers, color]));
+            return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+          };
+          const texts = [...rowEl.querySelectorAll("*")].filter(
+            (el) => el.offsetParent && [...el.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim()),
+          );
+          return {
+            texts: texts.map((el) => ({ text: el.textContent.trim(), ratio: ratio(el, getComputedStyle(el).color) })),
+            edge: ratio(rowEl, getComputedStyle(rowEl, "::before").borderLeftColor),
+          };
+        });
+        for (const { text, ratio } of results.texts) expect(ratio, `${path}: «${text}»`).toBeGreaterThanOrEqual(4.5);
+        // Il bordo della spunta e' un elemento grafico: almeno 3:1 sul fondo della riga.
+        expect(results.edge, `${path}: bordo della spunta`).toBeGreaterThanOrEqual(3);
+        await row.locator("ui-badge").click({ modifiers: ["ControlOrMeta"] }); // toglie la spunta
+      }
+    });
+  }
 
   test("l'endpoint disabilitato ha lo switch spento, gli attivi acceso", async ({ page }) => {
     const catalog = page.locator("mocks-next-catalog");
