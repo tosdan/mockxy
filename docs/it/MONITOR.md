@@ -60,7 +60,9 @@ voce dice da dove viene con un'icona e un nome: documento per i mock, ƒ per gli
 cerchi per i middleware, server per il proxy, antenna per SSE, doppia freccia per WebSocket,
 lente barrata per i miss. Una barra ambra a sinistra segna le richieste **non mockate**: quelle
 non servite da un mock, un handler o uno stream SSE o WebSocket del workspace, cioè passate dal
-backend (proxy, middleware) o rimaste senza mock né backend a cui girarle.
+backend (proxy, middleware) o rimaste senza mock né backend a cui girarle. La voce aperta nel
+dettaglio ha una sfumatura verso destra e il bordo destro chiaro, come nel catalogo e nello
+Storico: la barra ambra resta visibile anche su di lei.
 
 La lista si filtra per testo libero, metodo, classe di status e provenienza della risposta —
 il filtro «Servita da», con una voce per ciascuna provenienza (mock, proxy, handler,

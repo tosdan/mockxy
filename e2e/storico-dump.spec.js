@@ -89,6 +89,10 @@ test.describe("E17 · storico dump → crea mock", () => {
     await rows.filter({ hasText: "/api/due-e2e" }).click();
     await expect(current).toContainText("/api/due-e2e");
     await expect(storico.getByRole("option", { selected: true })).toHaveCount(0);
+    // La voce aperta si segna a destra, verso il dettaglio, come nel catalogo.
+    await expect(current).toHaveClass(/mx-open/);
+    // La riga ha una transizione: si aspetta che l'ombra arrivi al valore finale.
+    await expect.poll(() => current.evaluate((el) => getComputedStyle(el).boxShadow)).toMatch(/\) -2px 0px 0px 0px inset/);
 
     await rows.filter({ hasText: "/api/tre-e2e" }).locator("[data-check]").click();
     await expect(storico.getByRole("option", { selected: true })).toHaveCount(1);

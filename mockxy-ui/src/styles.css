@@ -191,8 +191,9 @@
   background: rgba(255, 255, 255, 0.6);
   background-clip: padding-box;
 }
-/* Riga del catalogo aperta nel dettaglio: la sfumatura cresce verso destra e il bordo sta a destra,
-   dal lato del pannello che la mostra. Il bordo sinistro e' della spunta: i due segni non si toccano. */
+/* Riga aperta nel dettaglio (catalogo, Monitor, Storico): la sfumatura cresce verso destra e il
+   bordo sta a destra, dal lato del pannello che la mostra. Il bordo sinistro resta libero per altri
+   segni (la spunta nel catalogo, la barra ambra delle non mockate nel Monitor). */
 .mx-open {
   position: relative;
   background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.032) 36%, rgba(255, 255, 255, 0.085));

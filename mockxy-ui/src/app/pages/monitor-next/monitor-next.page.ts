@@ -167,8 +167,8 @@ const DENSITY_STATE_KEY = 'monitor-density';
               [attr.tabindex]="row.id === selected()?.id ? 0 : -1"
               (click)="onRowClick(row.id, $event)"
               class="group grid w-full cursor-pointer select-none grid-cols-[1fr_auto] items-center gap-2 border-b border-border-soft px-4 py-2.5 text-left transition hover:bg-white/[0.03] in-[.mx-compact]:py-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/70"
-              [class.mx-selected]="row.id === selected()?.id"
-              [style.boxShadow]="row.id !== selected()?.id && isUnmocked(row.source) ? 'inset 2px 0 0 0 ' + tint('var(--status-4xx)', 45) : null"
+              [class.mx-open]="row.id === selected()?.id"
+              [style.boxShadow]="unmockedEdge(row)"
             >
               <span class="flex min-w-0 items-center gap-2.5">
                 <span data-check aria-hidden="true" class="grid size-4 shrink-0 place-items-center rounded border transition"
@@ -1033,6 +1033,17 @@ export class MonitorNextPage {
    */
   protected isUnmocked(source: string): boolean {
     return isUnmockedSource(source);
+  }
+
+  /**
+   * Barra ambra a sinistra delle righe non mockate. Resta anche sulla riga aperta: quella si segna a
+   * destra (.mx-open), quindi i due bordi stanno insieme. Lo stile in linea vince sulla classe, per
+   * questo la riga aperta e non mockata ripete qui anche il bordo destro.
+   */
+  protected unmockedEdge(row: RequestMonitorEntry): string | null {
+    if (!this.isUnmocked(row.source)) return null;
+    const edge = 'inset 2px 0 0 0 ' + this.tint('var(--status-4xx)', 45);
+    return row.id === this.selected()?.id ? edge + ', inset -2px 0 0 0 var(--brand-soft)' : edge;
   }
 
   /** Tinta trasparente di un colore (per fondi/bordi tenui), via color-mix. */

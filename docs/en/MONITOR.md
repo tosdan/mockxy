@@ -60,7 +60,8 @@ handlers, two circles for middleware, a server for the proxy, a radio tower for 
 arrow for WebSocket, a crossed-out magnifier for misses. An amber bar on the left marks the
 **not mocked** requests: those not served by a mock, a handler or an SSE or WebSocket stream of
 the workspace, that is, passed to the backend (proxy, middleware) or left with neither a mock
-nor a backend to forward to.
+nor a backend to forward to. The entry open in the detail has a gradient towards the right and a
+light right edge, as in the catalog and the History page: the amber bar stays visible on it too.
 
 The list filters by free text, method, status class and response origin — the «Served by»
 filter, with one option per origin (mock, proxy, handler, middleware, miss) plus the combined
