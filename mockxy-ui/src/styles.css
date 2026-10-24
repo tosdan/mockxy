@@ -212,6 +212,21 @@
     color-mix(in srgb, var(--selection) 8%, transparent) 6px 12px
   );
 }
+/* Il segno della spunta che non e' solo colore: un bordo sinistro, continuo se la riga e' spuntata
+   tutta, tratteggiato se e' una cartella spuntata in parte. Il bordo destro resta della riga
+   aperta. Disegnato sopra la riga, con lo stesso arrotondamento: non sposta il contenuto. */
+.mx-checked::before,
+.mx-checked-some::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-left: 2px solid var(--selection);
+  border-radius: inherit;
+  pointer-events: none;
+}
+.mx-checked-some::before {
+  border-left-style: dashed;
+}
 /* Sopra la tinta la sfumatura arriva al 6% invece che all'8,5%: piu' chiara, il testo secondario
    (#a3a3a3) scendeva sotto 4.5:1 dove la riga e' piu' luminosa, a destra. */
 .mx-open.mx-checked {
