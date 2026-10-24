@@ -23,8 +23,8 @@ import { UiDialog } from '../../../ui/ui-dialog/ui-dialog';
 import { MockAdminApiService } from '../../../mock-admin-api.service';
 import { MocksStore } from '../mocks-next.store';
 import { StatusCombobox, isValidStatus } from '../status-combobox/status-combobox';
-import { MocksNextCopyDialog, type CopyDialogData } from '../copy/mocks-next-copy-dialog';
-import { MocksNextSequenceDialog, type SequenceDialogData } from '../sequence/mocks-next-sequence-dialog';
+import { COPY_DIALOG_TITLE_ID, MocksNextCopyDialog, type CopyDialogData } from '../copy/mocks-next-copy-dialog';
+import { MocksNextSequenceDialog, SEQUENCE_DIALOG_TITLE_ID, type SequenceDialogData } from '../sequence/mocks-next-sequence-dialog';
 import { MocksNextSequenceSummary } from '../sequence/mocks-next-sequence-summary';
 import { MocksNextSseConsole } from '../sse/mocks-next-sse-console';
 import { MocksNextWsConsole } from '../ws/mocks-next-ws-console';
@@ -1014,6 +1014,7 @@ export class MocksNextDetail {
         data: { detail, mode: resolvedMode } satisfies SequenceDialogData,
         viewContainerRef: this.vcr,
         autoFocus: 'dialog',
+        ariaLabelledBy: SEQUENCE_DIALOG_TITLE_ID,
       });
     });
   }
@@ -1026,7 +1027,7 @@ export class MocksNextDetail {
       data: { id: d.id, method: d.method, path: d.path, responseCount: d.responses?.length ?? 0 } satisfies CopyDialogData,
       viewContainerRef: this.vcr,
       autoFocus: 'dialog',
-      ariaLabelledBy: 'mx-copy-dialog-title',
+      ariaLabelledBy: COPY_DIALOG_TITLE_ID,
     });
   }
 

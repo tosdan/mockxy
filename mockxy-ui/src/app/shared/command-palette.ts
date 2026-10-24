@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, ViewContainerRef, inject } from '@angular/core';
 import { DialogRef } from '@angular/cdk/dialog';
+import { TranslocoService } from '@jsverse/transloco';
 import { UiDialog } from '../ui/ui-dialog/ui-dialog';
 import { CommandPaletteDialog } from './command-palette-dialog';
 
@@ -19,6 +20,7 @@ import { CommandPaletteDialog } from './command-palette-dialog';
 export class CommandPalette {
   private readonly dialog = inject(UiDialog);
   private readonly vcr = inject(ViewContainerRef);
+  private readonly transloco = inject(TranslocoService);
   private openRef: DialogRef<unknown> | null = null;
 
   protected onKeydown(event: KeyboardEvent): void {
@@ -34,6 +36,8 @@ export class CommandPalette {
     this.openRef = this.dialog.open(CommandPaletteDialog, {
       viewContainerRef: this.vcr,
       autoFocus: 'first-tabbable',
+      // Il dialog e' quello del CDK: e' lui a portare il nome (prima ce n'era un secondo, interno).
+      ariaLabel: this.transloco.translate('palette.title'),
     });
     this.openRef.closed.subscribe(() => (this.openRef = null));
   }

@@ -29,6 +29,9 @@ const METHOD_OPTIONS: readonly UiSelectOption<string>[] = MOCK_METHODS.map((m) =
  * spento → copia solo la response selezionata; acceso → copia tutte. Il backend rifiuta
  * (409) un metodo+path già esistente; l'errore è mostrato inline (oltre che come toast).
  */
+/** Id del titolo della finestra: chi la apre lo passa ad `ariaLabelledBy`, cosi' il dialog si chiama come il titolo. */
+export const COPY_DIALOG_TITLE_ID = 'mx-copy-dialog-title';
+
 @Component({
   selector: 'mocks-next-copy-dialog',
   imports: [NgIcon, TranslocoPipe, UiButton, UiCheckbox, UiInput, UiSelect],

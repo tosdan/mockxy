@@ -57,6 +57,9 @@ function validateInt(value: string, min: 0 | 1): string | null {
  * salvataggio riavvia il motore, avvisa che gli override si perdono tutti. Non li copia nelle
  * impostazioni e non li riapplica al nuovo runtime.
  */
+/** Id del titolo della finestra: chi la apre lo passa ad `ariaLabelledBy`, cosi' il dialog si chiama come il titolo. */
+export const WORKSPACE_SETTINGS_DIALOG_TITLE_ID = 'mx-workspace-settings-dialog-title';
+
 @Component({
   selector: 'app-workspace-settings-dialog',
   imports: [NgIcon, UiButton, UiInput, UiSwitch, TranslocoPipe],
@@ -67,10 +70,10 @@ function validateInt(value: string, min: 0 | 1): string | null {
       <div class="flex items-center gap-2 border-b border-border px-5 py-3.5">
         <span class="grid h-7 w-7 place-items-center rounded-md bg-muted text-brand ring-1 ring-border"><ng-icon name="lucideCog" size="0.95rem" /></span>
         <div class="min-w-0 leading-tight">
-          <h2 class="text-[15px] font-bold tracking-tight">{{ 'workspaceSettings.title' | transloco }}</h2>
+          <h2 id="mx-workspace-settings-dialog-title" class="text-[15px] font-bold tracking-tight">{{ 'workspaceSettings.title' | transloco }}</h2>
           <p class="truncate font-mono text-[11px] text-muted-foreground" [title]="data.root">{{ data.name }}</p>
         </div>
-        <button ui-button variant="ghost" size="icon" class="ml-auto" (click)="close()"><ng-icon name="lucideX" size="0.95rem" /></button>
+        <button ui-button variant="ghost" size="icon" class="ml-auto" (click)="close()" [attr.aria-label]="'common.close' | transloco"><ng-icon name="lucideX" size="0.95rem" /></button>
       </div>
 
       <div class="flex max-h-[68vh] flex-col gap-4 overflow-y-auto px-5 py-4">
@@ -80,9 +83,10 @@ function validateInt(value: string, min: 0 | 1): string | null {
           <p class="break-all font-mono text-[12px] text-muted-foreground">{{ data.root }}</p>
         </div>
         <div class="flex flex-col gap-1.5">
-          <label class="text-[12px] font-bold uppercase tracking-[0.14em] text-foreground/80">{{ 'workspaceSettings.titleLabel' | transloco }}</label>
+          <label for="mx-ws-titleLabel" class="text-[12px] font-bold uppercase tracking-[0.14em] text-foreground/80">{{ 'workspaceSettings.titleLabel' | transloco }}</label>
           <input
             ui-input
+            id="mx-ws-titleLabel"
             type="text"
             class="text-[13px]"
             [value]="title()"
@@ -93,9 +97,10 @@ function validateInt(value: string, min: 0 | 1): string | null {
           <span class="text-[11.5px] text-muted-foreground">{{ 'workspaceSettings.titleHint' | transloco: { name: defaultName } }}</span>
         </div>
         <div class="flex flex-col gap-1.5">
-          <label class="text-[12px] font-bold uppercase tracking-[0.14em] text-foreground/80">{{ 'workspaceSettings.port' | transloco }}</label>
+          <label for="mx-ws-port" class="text-[12px] font-bold uppercase tracking-[0.14em] text-foreground/80">{{ 'workspaceSettings.port' | transloco }}</label>
           <input
             ui-input
+            id="mx-ws-port"
             type="number"
             class="w-40 font-mono text-[13px]"
             min="1024"
@@ -112,9 +117,10 @@ function validateInt(value: string, min: 0 | 1): string | null {
           <span class="text-[11.5px] text-muted-foreground">{{ 'workspaceSettings.portHint' | transloco }}</span>
         </div>
         <div class="flex flex-col gap-1.5">
-          <label class="text-[12px] font-bold uppercase tracking-[0.14em] text-foreground/80">{{ 'workspaceSettings.backendUrl' | transloco }}</label>
+          <label for="mx-ws-backendUrl" class="text-[12px] font-bold uppercase tracking-[0.14em] text-foreground/80">{{ 'workspaceSettings.backendUrl' | transloco }}</label>
           <input
             ui-input
+            id="mx-ws-backendUrl"
             type="text"
             class="font-mono text-[13px]"
             placeholder="http://localhost:8080"
@@ -200,9 +206,10 @@ function validateInt(value: string, min: 0 | 1): string | null {
         </div>
 
         <div class="flex flex-col gap-1.5">
-          <label class="text-[12px] font-bold uppercase tracking-[0.14em] text-foreground/80">{{ 'workspaceSettings.globalDelay' | transloco }}</label>
+          <label for="mx-ws-globalDelay" class="text-[12px] font-bold uppercase tracking-[0.14em] text-foreground/80">{{ 'workspaceSettings.globalDelay' | transloco }}</label>
           <input
             ui-input
+            id="mx-ws-globalDelay"
             type="number"
             class="w-40 font-mono text-[13px]"
             min="0"
@@ -231,9 +238,10 @@ function validateInt(value: string, min: 0 | 1): string | null {
         </div>
 
         <div class="flex flex-col gap-1.5">
-          <label class="text-[12px] font-bold uppercase tracking-[0.14em] text-foreground/80">{{ 'workspaceSettings.requestTimeout' | transloco }}</label>
+          <label for="mx-ws-requestTimeout" class="text-[12px] font-bold uppercase tracking-[0.14em] text-foreground/80">{{ 'workspaceSettings.requestTimeout' | transloco }}</label>
           <input
             ui-input
+            id="mx-ws-requestTimeout"
             type="number"
             class="w-40 font-mono text-[13px]"
             min="1"
@@ -253,9 +261,10 @@ function validateInt(value: string, min: 0 | 1): string | null {
         <div class="border-t border-border pt-2.5 text-[11px] font-bold uppercase tracking-[0.16em] text-muted-foreground">{{ 'workspaceSettings.monitorSection' | transloco }}</div>
 
         <div class="flex flex-col gap-1.5">
-          <label class="text-[12px] font-bold uppercase tracking-[0.14em] text-foreground/80">{{ 'workspaceSettings.monitorDumpInterval' | transloco }}</label>
+          <label for="mx-ws-monitorDumpInterval" class="text-[12px] font-bold uppercase tracking-[0.14em] text-foreground/80">{{ 'workspaceSettings.monitorDumpInterval' | transloco }}</label>
           <input
             ui-input
+            id="mx-ws-monitorDumpInterval"
             type="number"
             class="w-40 font-mono text-[13px]"
             min="1"
@@ -270,9 +279,10 @@ function validateInt(value: string, min: 0 | 1): string | null {
         </div>
 
         <div class="flex flex-col gap-1.5">
-          <label class="text-[12px] font-bold uppercase tracking-[0.14em] text-foreground/80">{{ 'workspaceSettings.monitorDumpThreshold' | transloco }}</label>
+          <label for="mx-ws-monitorDumpThreshold" class="text-[12px] font-bold uppercase tracking-[0.14em] text-foreground/80">{{ 'workspaceSettings.monitorDumpThreshold' | transloco }}</label>
           <input
             ui-input
+            id="mx-ws-monitorDumpThreshold"
             type="number"
             class="w-40 font-mono text-[13px]"
             min="1"
@@ -287,9 +297,10 @@ function validateInt(value: string, min: 0 | 1): string | null {
         </div>
 
         <div class="flex flex-col gap-1.5">
-          <label class="text-[12px] font-bold uppercase tracking-[0.14em] text-foreground/80">{{ 'workspaceSettings.monitorDumpMaxFile' | transloco }}</label>
+          <label for="mx-ws-monitorDumpMaxFile" class="text-[12px] font-bold uppercase tracking-[0.14em] text-foreground/80">{{ 'workspaceSettings.monitorDumpMaxFile' | transloco }}</label>
           <input
             ui-input
+            id="mx-ws-monitorDumpMaxFile"
             type="number"
             class="w-56 font-mono text-[13px]"
             min="1"
@@ -304,9 +315,10 @@ function validateInt(value: string, min: 0 | 1): string | null {
         </div>
 
         <div class="flex flex-col gap-1.5">
-          <label class="text-[12px] font-bold uppercase tracking-[0.14em] text-foreground/80">{{ 'workspaceSettings.monitorDumpMaxTotal' | transloco }}</label>
+          <label for="mx-ws-monitorDumpMaxTotal" class="text-[12px] font-bold uppercase tracking-[0.14em] text-foreground/80">{{ 'workspaceSettings.monitorDumpMaxTotal' | transloco }}</label>
           <input
             ui-input
+            id="mx-ws-monitorDumpMaxTotal"
             type="number"
             class="w-56 font-mono text-[13px]"
             min="0"

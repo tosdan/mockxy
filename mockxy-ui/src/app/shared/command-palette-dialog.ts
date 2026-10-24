@@ -40,9 +40,6 @@ interface Command {
   host: { '(keydown)': 'onKeydown($event)' },
   template: `
     <div
-      role="dialog"
-      aria-modal="true"
-      [attr.aria-label]="'palette.title' | transloco"
       class="flex max-h-[70vh] w-[min(92vw,640px)] flex-col overflow-hidden rounded-xl border border-border bg-popover text-foreground shadow-2xl"
     >
       <label class="flex shrink-0 items-center gap-2.5 border-b border-border px-4 py-3">
@@ -53,6 +50,7 @@ interface Command {
           type="text"
           role="combobox"
           aria-autocomplete="list"
+          aria-expanded="true"
           aria-controls="palette-list"
           [attr.aria-activedescendant]="activeId()"
           class="border-0 bg-transparent px-0 py-0 text-[14px] focus:ring-0"

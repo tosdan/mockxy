@@ -15,6 +15,9 @@ import { UpdateNotificationService } from './update-notification.service';
  * del log degli errori su disco (cartella logs/ accanto all'eseguibile); le modifiche si applicano
  * subito, senza riavvio né ricaricamento della finestra.
  */
+/** Id del titolo della finestra: chi la apre lo passa ad `ariaLabelledBy`, cosi' il dialog si chiama come il titolo. */
+export const APP_PREFERENCES_DIALOG_TITLE_ID = 'mx-app-preferences-dialog-title';
+
 @Component({
   selector: 'app-preferences-dialog',
   imports: [NgIcon, UiButton, UiSwitch, TranslocoPipe],
@@ -25,10 +28,10 @@ import { UpdateNotificationService } from './update-notification.service';
       <div class="flex items-center gap-2 border-b border-border px-5 py-3.5">
         <span class="grid h-7 w-7 place-items-center rounded-md bg-muted text-brand ring-1 ring-border"><ng-icon name="lucideSlidersHorizontal" size="0.95rem" /></span>
         <div class="min-w-0 leading-tight">
-          <h2 class="text-[15px] font-bold tracking-tight">{{ 'appPreferences.title' | transloco }}</h2>
+          <h2 id="mx-app-preferences-dialog-title" class="text-[15px] font-bold tracking-tight">{{ 'appPreferences.title' | transloco }}</h2>
           <p class="text-[11px] text-muted-foreground">{{ 'appPreferences.subtitle' | transloco }}</p>
         </div>
-        <button ui-button variant="ghost" size="icon" class="ml-auto" (click)="close()"><ng-icon name="lucideX" size="0.95rem" /></button>
+        <button ui-button variant="ghost" size="icon" class="ml-auto" (click)="close()" [attr.aria-label]="'common.close' | transloco"><ng-icon name="lucideX" size="0.95rem" /></button>
       </div>
 
       <div class="flex max-h-[68vh] flex-col gap-4 overflow-y-auto px-5 py-4">
