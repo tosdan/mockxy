@@ -53,6 +53,9 @@ const DEFAULT_STEP_VALUE: Record<SequenceMode, string> = { times: '3', forMs: '1
 const STATE_POLL_MS = 1500;
 
 /** Editor di una response sequence, usato sia per crearla sia per modificare quella selezionata. */
+/** Id del titolo della finestra: chi la apre lo passa ad `ariaLabelledBy`, cosi' il dialog si chiama come il titolo. */
+export const SEQUENCE_DIALOG_TITLE_ID = 'mx-sequence-dialog-title';
+
 @Component({
   selector: 'mocks-next-sequence-dialog',
   imports: [NgIcon, TranslocoPipe, UiButton, UiCheckbox, UiInput, UiSelect, UiToggleGroup, UiToggleItem, UiTooltip, MocksNextDraftConflict],
@@ -74,10 +77,10 @@ const STATE_POLL_MS = 1500;
       <div class="flex items-center gap-2 border-b border-border px-5 py-3.5">
         <span class="grid h-7 w-7 place-items-center rounded-md bg-muted text-sequence ring-1 ring-border"><ng-icon name="lucideListOrdered" size="0.95rem" /></span>
         <div class="min-w-0 leading-tight">
-          <h2 class="text-[15px] font-bold tracking-tight">{{ (isEdit ? 'sequenceDialog.editTitle' : 'sequenceDialog.createTitle') | transloco }}</h2>
+          <h2 id="mx-sequence-dialog-title" class="text-[15px] font-bold tracking-tight">{{ (isEdit ? 'sequenceDialog.editTitle' : 'sequenceDialog.createTitle') | transloco }}</h2>
           <p class="truncate font-mono text-[11px] text-muted-foreground">{{ data.detail.method }} {{ data.detail.path }}</p>
         </div>
-        <button ui-button variant="ghost" size="icon" class="ml-auto" (click)="close()" [attr.aria-label]="'sequenceDialog.cancel' | transloco"><ng-icon name="lucideX" size="0.95rem" /></button>
+        <button ui-button variant="ghost" size="icon" class="ml-auto" (click)="close()" [attr.aria-label]="'common.close' | transloco"><ng-icon name="lucideX" size="0.95rem" /></button>
       </div>
 
       <div class="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-5 py-4 mx-scroll">

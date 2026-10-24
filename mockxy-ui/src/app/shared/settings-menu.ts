@@ -6,8 +6,8 @@ import { TranslocoPipe } from '@jsverse/transloco';
 import { UiMenu, UiMenuItem } from '../ui/ui-menu/ui-menu';
 import { UiDialog } from '../ui/ui-dialog/ui-dialog';
 import { DesktopService } from './desktop.service';
-import { WorkspaceSettingsDialog } from './workspace-settings-dialog';
-import { AppPreferencesDialog } from './app-preferences-dialog';
+import { WORKSPACE_SETTINGS_DIALOG_TITLE_ID, WorkspaceSettingsDialog } from './workspace-settings-dialog';
+import { APP_PREFERENCES_DIALOG_TITLE_ID, AppPreferencesDialog } from './app-preferences-dialog';
 
 /**
  * Ingranaggio delle impostazioni (solo app desktop): impostazioni del workspace attivo (es. porta)
@@ -55,7 +55,7 @@ export class SettingsMenu {
     if (!ws) {
       return;
     }
-    this.dialog.open(WorkspaceSettingsDialog, { data: ws, viewContainerRef: this.vcr, autoFocus: 'dialog' });
+    this.dialog.open(WorkspaceSettingsDialog, { data: ws, viewContainerRef: this.vcr, autoFocus: 'dialog', ariaLabelledBy: WORKSPACE_SETTINGS_DIALOG_TITLE_ID });
   }
 
   /** Apre le preferenze globali dell'app (log errori, ...). */
@@ -64,6 +64,6 @@ export class SettingsMenu {
     if (!prefs) {
       return;
     }
-    this.dialog.open(AppPreferencesDialog, { data: prefs, viewContainerRef: this.vcr, autoFocus: 'dialog' });
+    this.dialog.open(AppPreferencesDialog, { data: prefs, viewContainerRef: this.vcr, autoFocus: 'dialog', ariaLabelledBy: APP_PREFERENCES_DIALOG_TITLE_ID });
   }
 }

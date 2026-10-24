@@ -5,8 +5,8 @@ import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
 import { UiDialog } from '../../ui/ui-dialog/ui-dialog';
 import { ToastService } from '../../ui/ui-toast/ui-toast';
 import { MocksNextCatalog } from './catalog/mocks-next-catalog';
-import { MocksNextCreateDialog, type CreateDialogData } from './create/mocks-next-create-dialog';
-import { OpenapiImportDialog } from './openapi-import/openapi-import-dialog';
+import { CREATE_DIALOG_TITLE_ID, MocksNextCreateDialog, type CreateDialogData } from './create/mocks-next-create-dialog';
+import { OPENAPI_IMPORT_DIALOG_TITLE_ID, OpenapiImportDialog } from './openapi-import/openapi-import-dialog';
 import { MocksNextDetail } from './detail/mocks-next-detail';
 import { MocksStore } from './mocks-next.store';
 import { WorkspaceSummaryStore } from '../../shared/workspace-summary.store';
@@ -109,6 +109,7 @@ export class MocksNextPage implements OnInit {
       data: { type } satisfies CreateDialogData,
       viewContainerRef: this.vcr,
       autoFocus: 'dialog',
+      ariaLabelledBy: CREATE_DIALOG_TITLE_ID,
     });
   }
 
@@ -117,6 +118,7 @@ export class MocksNextPage implements OnInit {
     this.dialog.open(OpenapiImportDialog, {
       viewContainerRef: this.vcr,
       autoFocus: 'dialog',
+      ariaLabelledBy: OPENAPI_IMPORT_DIALOG_TITLE_ID,
     });
   }
 

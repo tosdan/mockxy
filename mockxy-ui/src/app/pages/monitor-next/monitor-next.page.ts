@@ -412,8 +412,8 @@ const DENSITY_STATE_KEY = 'monitor-density';
       @if (mockExistsPrompt(); as prompt) {
       <div class="flex w-[min(92vw,480px)] flex-col overflow-hidden rounded-xl border border-border bg-card text-foreground shadow-2xl">
         <div class="flex items-center gap-2 border-b border-border px-5 py-3.5">
-          <h2 class="text-[15px] font-bold tracking-tight">{{ 'monitor.mockExistsTitle' | transloco }}</h2>
-          <button ui-button variant="ghost" size="icon" class="ml-auto" (click)="cancelAddResponseToExisting()"><ng-icon name="lucideX" size="0.95rem" /></button>
+          <h2 id="mx-mock-exists-dialog-title" class="text-[15px] font-bold tracking-tight">{{ 'monitor.mockExistsTitle' | transloco }}</h2>
+          <button ui-button variant="ghost" size="icon" class="ml-auto" (click)="cancelAddResponseToExisting()" [attr.aria-label]="'common.close' | transloco"><ng-icon name="lucideX" size="0.95rem" /></button>
         </div>
         <div class="px-5 py-4 text-[13.5px] leading-relaxed text-muted-foreground">
           <p>
@@ -798,7 +798,7 @@ export class MonitorNextPage {
           // Endpoint già esistente: invece dell'errore, proponi di aggiungere la response
           // catturata come nuova variante di quell'endpoint.
           this.mockExistsPrompt.set({ existingMockId: item.id, method: item.method ?? entry.method, path: item.path ?? entry.path, entry, runtimeId: result.runtimeId });
-          this.mockExistsDialogRef = this.dialog.open(this.mockExistsDialogTpl());
+          this.mockExistsDialogRef = this.dialog.open(this.mockExistsDialogTpl(), { ariaLabelledBy: 'mx-mock-exists-dialog-title' });
         } else {
           this.toast.show({ title: this.transloco.translate('common.error'), description: item.error ?? this.transloco.translate('common.operationFailed'), tone: 'error' });
         }

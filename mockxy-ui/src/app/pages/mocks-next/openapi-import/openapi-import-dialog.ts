@@ -24,6 +24,9 @@ const PREFIX_DEBOUNCE_MS = 350;
  * server a ogni modifica, così la lista mostra i path definitivi e i conteggi create/skip restano veri.
  * Aperto col viewContainerRef della pagina così vede il MocksStore page-scoped per ricaricare il catalogo.
  */
+/** Id del titolo della finestra: chi la apre lo passa ad `ariaLabelledBy`, cosi' il dialog si chiama come il titolo. */
+export const OPENAPI_IMPORT_DIALOG_TITLE_ID = 'mx-openapi-import-dialog-title';
+
 @Component({
   selector: 'mocks-next-openapi-import',
   imports: [NgIcon, UiButton, UiInput, TranslocoPipe],
@@ -33,8 +36,8 @@ const PREFIX_DEBOUNCE_MS = 350;
     <div class="flex max-h-[85vh] w-[min(92vw,680px)] flex-col overflow-hidden rounded-xl border border-border bg-card text-foreground shadow-2xl">
       <div class="flex items-center gap-2 border-b border-border px-5 py-3.5">
         <span class="grid h-7 w-7 place-items-center rounded-md bg-muted text-brand ring-1 ring-border"><ng-icon name="lucideUpload" size="0.95rem" /></span>
-        <h2 class="text-[15px] font-bold tracking-tight">{{ 'openapiImport.title' | transloco }}</h2>
-        <button ui-button variant="ghost" size="icon" class="ml-auto" (click)="close()" [disabled]="importing()"><ng-icon name="lucideX" size="0.95rem" /></button>
+        <h2 id="mx-openapi-import-dialog-title" class="text-[15px] font-bold tracking-tight">{{ 'openapiImport.title' | transloco }}</h2>
+        <button ui-button variant="ghost" size="icon" class="ml-auto" (click)="close()" [disabled]="importing()" [attr.aria-label]="'common.close' | transloco"><ng-icon name="lucideX" size="0.95rem" /></button>
       </div>
 
       <div class="flex min-h-0 flex-1 flex-col gap-4 px-5 py-4">
@@ -52,7 +55,7 @@ const PREFIX_DEBOUNCE_MS = 350;
             <ng-icon name="lucideUpload" size="1.35rem" [style.color]="dragging() ? 'var(--brand)' : null" />
             <span class="font-medium">@if (fileName()) {{{ fileName() }}} @else {{{ (dragging() ? 'openapiImport.dropToImport' : 'openapiImport.dropHint') | transloco }}}</span>
             @if (!fileName()) {
-            <span class="text-[11px] opacity-70">.json · .yaml · .yml</span>
+            <span class="text-[11px] text-muted-foreground">.json · .yaml · .yml</span>
             }
           </div>
           <input type="file" accept=".json,.yaml,.yml,application/json,application/yaml,text/yaml" class="hidden" (change)="onFileSelected($event)" />
