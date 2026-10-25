@@ -466,3 +466,17 @@ ricevono il comportamento scritto in git.
   mock destinati allo staging vanno usate con `resetAfterMs`, o evitate.
 - Gli stati alternativi (errori, liste vuote, casi limite) si provano in locale con l'app
   desktop, non in staging.
+
+### D4 — Il confine mock → reale si sposta solo via git
+
+Quando il backend rilascia un endpoint in staging, una PR disabilita (o rimuove) il mock
+corrispondente. Mockxy non introduce né la ricaduta automatica sul mock (§5.5.1) né segnali
+sui mock diventati superflui (§5.5.2).
+
+**Perché.** È coerente con l'ambiente congelato (D3): il comportamento dello staging cambia solo
+con un commit, tracciabile e revisionato. La ricaduta automatica rischierebbe di coprire `404`
+legittimi del backend proprio nei test end-to-end.
+
+**Rischio accettato.** Un mock dimenticato continua a rispondere anche dopo il rilascio del
+backend. Si gestisce con il processo del team (per esempio una voce nella checklist di rilascio
+del backend), non con il motore.
