@@ -52,8 +52,11 @@ configurato per la pura erogazione — admin spenta, proxy fallback spento, watc
 `NODE_ENV=production`. Mock e file dati arrivano a runtime come **bind mount in sola lettura**
 su `/workspace/mocks` e `/workspace/files`:
 
-- i mock si aggiornano sul filesystem del server (un `git pull`), **senza rebuild** né riavvio
-  dell'immagine;
+- i mock si aggiornano sul filesystem del server (un `git pull`), **senza rebuild**
+  dell'immagine ma con un **riavvio** del container: con watch e admin spenti il motore legge le
+  definizioni solo all'avvio. File dati e risposte di tipo file invece si rileggono a ogni
+  richiesta, quindi la sequenza sicura è **arresto, `git pull`, avvio**: a motore acceso, durante
+  il pull convivrebbero definizioni vecchie e dati nuovi;
 - per servire un altro workspace si cambiano i due mount;
 - la parte locale del workspace (`.mockxy`) **non va mai montata** ([anatomia](WORKSPACE.md)).
 
