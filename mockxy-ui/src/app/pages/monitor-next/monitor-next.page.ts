@@ -39,6 +39,7 @@ import { readBatchPartialResult } from '../../shared/read-error-message';
 import { MOCK_METHODS } from '../../mock-admin-ui.constants';
 import { listNavigationTarget, toggleListSelection } from '../../shared/list-selection';
 import { isSelectionEscape } from '../../shared/selection-escape';
+import { ResizableListWidth } from '../../shared/resizable-list-width';
 import { TrafficDetail } from '../../shared/traffic-detail';
 import { methodColor, statusClassColor, statusColor, tint } from '../../shared/traffic-format';
 
@@ -167,7 +168,7 @@ const DENSITY_STATE_KEY = 'monitor-density';
       <!-- BODY: lista + dettaglio -->
       <div class="relative z-10 flex min-h-0 flex-1">
         <!-- LISTA -->
-        <div class="flex min-h-0 shrink-0 flex-col border-r border-border" [style.width.px]="listWidth()">
+        <div class="flex min-h-0 shrink-0 flex-col border-r border-border" [style.width.px]="list.width()">
           <div class="grid grid-cols-[1fr_auto] items-center gap-2 border-b border-border px-4 py-2 text-[10.5px] font-bold uppercase tracking-[0.14em] text-muted-foreground">
             <span>{{ 'monitor.colRequest' | transloco }}</span><span>{{ 'monitor.colLatTime' | transloco }}</span>
           </div>
@@ -258,11 +259,11 @@ const DENSITY_STATE_KEY = 'monitor-density';
         <!-- divisore trascinabile: ridimensiona la lista (largh. persistita) -->
         <div
           class="relative z-20 -ml-px w-1.5 shrink-0 cursor-col-resize bg-transparent transition-colors hover:bg-brand/30"
-          (pointerdown)="startResize($event)"
-          (dblclick)="resetListWidth()"
+          (pointerdown)="list.startResize($event)"
+          (dblclick)="list.reset()"
           role="separator"
           aria-orientation="vertical"
-          [title]="'monitor.resizeHint' | transloco"
+          [title]="'common.resizeHint' | transloco"
         ></div>
 
         <!-- DETTAGLIO -->
@@ -391,8 +392,8 @@ export class MonitorNextPage {
    * Lo si dichiara sempre al server: una cattura non attiva mai niente in modo implicito.
    */
   protected readonly activateNewMocks = signal(true);
-  /** Larghezza della lista (px), ridimensionabile col divisore e persistita in localStorage (min = catalogo). */
-  protected readonly listWidth = signal(clampListWidth(readStoredListWidth()));
+  /** Larghezza della lista, ridimensionabile col divisore e ricordata (min = altre view). */
+  protected readonly list = new ResizableListWidth('mx-monitor-list-width');
 
   protected readonly search = signal('');
 
@@ -590,36 +591,7 @@ export class MonitorNextPage {
     );
   }
 
-  /** Avvia il drag del divisore: aggiorna la larghezza della lista, la persiste a fine drag. */
-  protected startResize(event: PointerEvent): void {
-    event.preventDefault();
-    const startX = event.clientX;
-    const startWidth = this.listWidth();
-    const onMove = (e: PointerEvent) => this.listWidth.set(clampListWidth(startWidth + (e.clientX - startX)));
-    const onUp = () => {
-      document.removeEventListener('pointermove', onMove);
-      document.removeEventListener('pointerup', onUp);
-      document.body.style.removeProperty('user-select');
-      try {
-        localStorage.setItem(LIST_WIDTH_KEY, String(this.listWidth()));
-      } catch {
-        /* localStorage non disponibile: ignora */
-      }
-    };
-    document.addEventListener('pointermove', onMove);
-    document.addEventListener('pointerup', onUp);
-    document.body.style.userSelect = 'none';
-  }
 
-  /** Doppio click sul divisore → larghezza di default. */
-  protected resetListWidth(): void {
-    this.listWidth.set(DEFAULT_LIST_WIDTH);
-    try {
-      localStorage.setItem(LIST_WIDTH_KEY, String(DEFAULT_LIST_WIDTH));
-    } catch {
-      /* ignora */
-    }
-  }
 
   protected toggleStatusClass(n: number): void {
     const next = new Set(this.statusClasses());
@@ -1011,25 +983,3 @@ function isObject(value: unknown): value is Record<string, unknown> {
   return value != null && typeof value === 'object';
 }
 
-
-const LIST_WIDTH_KEY = 'mx-monitor-list-width';
-const DEFAULT_LIST_WIDTH = 440;
-const MIN_LIST_WIDTH = 380; // come MIN_CATALOG_WIDTH nella view del catalogo
-
-/** Legge la larghezza lista salvata (o il default). */
-function readStoredListWidth(): number {
-  try {
-    const raw = localStorage.getItem(LIST_WIDTH_KEY);
-    const n = raw ? parseInt(raw, 10) : NaN;
-    return Number.isFinite(n) ? n : DEFAULT_LIST_WIDTH;
-  } catch {
-    return DEFAULT_LIST_WIDTH;
-  }
-}
-
-/** Vincola la larghezza tra il minimo e (viewport − spazio minimo per il dettaglio). */
-function clampListWidth(width: number): number {
-  const viewport = typeof window !== 'undefined' ? window.innerWidth : 1280;
-  const max = Math.max(MIN_LIST_WIDTH, viewport - 480);
-  return Math.round(Math.max(MIN_LIST_WIDTH, Math.min(width, max)));
-}

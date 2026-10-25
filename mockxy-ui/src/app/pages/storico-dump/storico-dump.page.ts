@@ -28,6 +28,7 @@ import { summarizeBatchAttention, type DumpCreateMocksResult, type DumpEntry, ty
 import { MOCK_METHODS } from '../../mock-admin-ui.constants';
 import { listNavigationTarget, toggleListSelection } from '../../shared/list-selection';
 import { isSelectionEscape } from '../../shared/selection-escape';
+import { ResizableListWidth } from '../../shared/resizable-list-width';
 import { TrafficDetail } from '../../shared/traffic-detail';
 import { methodColor, statusClassColor, statusColor, tint } from '../../shared/traffic-format';
 import { RESPONSE_SOURCE_ICONS, responseSourceMeta } from '../../shared/response-source';
@@ -142,7 +143,7 @@ const ROW_HEIGHT = 56;
              Se la voce attiva esce di vista scorrendo, la lista smette di indicarla (la sua riga puo'
              non esserci piu') e l'anello di fuoco passa alla lista intera; il primo tasto la riporta
              in vista, come il rientro da tastiera. -->
-        <div class="flex min-h-0 shrink-0 flex-col border-r border-border" [style.width.px]="listWidth()">
+        <div class="flex min-h-0 shrink-0 flex-col border-r border-border" [style.width.px]="list.width()">
         @if (selectionMode()) {
         <div role="status" class="mx-2 mt-2 flex shrink-0 items-center gap-2 rounded-lg bg-selection/15 py-1.5 pl-2.5 pr-1.5 text-[12px]">
           <span class="min-w-0 flex-1">
@@ -208,11 +209,11 @@ const ROW_HEIGHT = 56;
         <!-- divisore trascinabile: ridimensiona la lista (largh. persistita) -->
         <div
           class="relative z-20 -ml-px w-1.5 shrink-0 cursor-col-resize bg-transparent transition-colors hover:bg-brand/30"
-          (pointerdown)="startResize($event)"
-          (dblclick)="resetListWidth()"
+          (pointerdown)="list.startResize($event)"
+          (dblclick)="list.reset()"
           role="separator"
           aria-orientation="vertical"
-          [title]="'storico.resizeHint' | transloco"
+          [title]="'common.resizeHint' | transloco"
         ></div>
 
         <!-- DETTAGLIO della entry a fuoco (mostra anche la request, come nel monitor) -->
@@ -266,8 +267,8 @@ export class StoricoDumpPage implements OnInit {
   protected readonly creating = signal(false);
   protected readonly selectedKeys = signal<ReadonlySet<string>>(new Set());
   protected readonly focusedKey = signal<string | null>(null);
-  /** Larghezza della lista (px), ridimensionabile col divisore e persistita in localStorage (min = altre view). */
-  protected readonly listWidth = signal(clampListWidth(readStoredListWidth()));
+  /** Larghezza della lista, ridimensionabile col divisore e ricordata (min = altre view). */
+  protected readonly list = new ResizableListWidth('mx-storico-list-width');
   /** Ultima voce spuntata: l'ancora degli intervalli (shift-click, Maiuscole+Spazio). */
   private selectionAnchor: string | null = null;
   /** Tratto della lista in vista (px): dice se la riga della voce attiva si vede. */
@@ -573,36 +574,7 @@ export class StoricoDumpPage implements OnInit {
     return row.dumpKey;
   }
 
-  /** Avvia il drag del divisore: aggiorna la larghezza della lista, la persiste a fine drag. */
-  protected startResize(event: PointerEvent): void {
-    event.preventDefault();
-    const startX = event.clientX;
-    const startWidth = this.listWidth();
-    const onMove = (e: PointerEvent) => this.listWidth.set(clampListWidth(startWidth + (e.clientX - startX)));
-    const onUp = () => {
-      document.removeEventListener('pointermove', onMove);
-      document.removeEventListener('pointerup', onUp);
-      document.body.style.removeProperty('user-select');
-      try {
-        localStorage.setItem(LIST_WIDTH_KEY, String(this.listWidth()));
-      } catch {
-        /* localStorage non disponibile: ignora */
-      }
-    };
-    document.addEventListener('pointermove', onMove);
-    document.addEventListener('pointerup', onUp);
-    document.body.style.userSelect = 'none';
-  }
 
-  /** Doppio click sul divisore → larghezza di default. */
-  protected resetListWidth(): void {
-    this.listWidth.set(DEFAULT_LIST_WIDTH);
-    try {
-      localStorage.setItem(LIST_WIDTH_KEY, String(DEFAULT_LIST_WIDTH));
-    } catch {
-      /* ignora */
-    }
-  }
 
   protected methodColor(method: string): string {
     return methodColor(method);
@@ -664,26 +636,4 @@ export class StoricoDumpPage implements OnInit {
     }
     return this.transloco.translate('common.operationFailed');
   }
-}
-
-const LIST_WIDTH_KEY = 'mx-storico-list-width';
-const DEFAULT_LIST_WIDTH = 440;
-const MIN_LIST_WIDTH = 380; // come MIN_CATALOG_WIDTH / MIN_LIST_WIDTH nelle altre view
-
-/** Legge la larghezza lista salvata (o il default). */
-function readStoredListWidth(): number {
-  try {
-    const raw = localStorage.getItem(LIST_WIDTH_KEY);
-    const n = raw ? parseInt(raw, 10) : NaN;
-    return Number.isFinite(n) ? n : DEFAULT_LIST_WIDTH;
-  } catch {
-    return DEFAULT_LIST_WIDTH;
-  }
-}
-
-/** Vincola la larghezza tra il minimo e (viewport − spazio minimo per il dettaglio). */
-function clampListWidth(width: number): number {
-  const viewport = typeof window !== 'undefined' ? window.innerWidth : 1280;
-  const max = Math.max(MIN_LIST_WIDTH, viewport - 480);
-  return Math.round(Math.max(MIN_LIST_WIDTH, Math.min(width, max)));
 }
