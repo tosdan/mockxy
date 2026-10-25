@@ -187,8 +187,13 @@ percorsi dei mock, come oggi `/_admin`.
 
 #### 5.3.2 Log strutturati
 
-**Proposta.** `LOG_FORMAT=json` su stdout, con una riga per richiesta: metodo, percorso, status,
-provenienza, latenza, variante, client. È il formato che i sistemi di raccolta log si aspettano.
+**Oggi.** Già coperti: il logger scrive JSON su stdout (`src/utils/logger.js`), con una riga
+«Request completed» per richiesta che riporta metodo, percorso, provenienza (`mode`), status e
+durata (`src/app.js:1062`). Con l'admin spenta (D2) sono l'unica finestra sul traffico dello
+staging.
+
+**Proposta.** Solo arricchirli: la variante servita (file della response) e l'id dell'endpoint,
+per sapere *quale* mock ha risposto, non solo *che* ha risposto un mock.
 
 #### 5.3.3 Metriche
 
