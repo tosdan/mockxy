@@ -234,13 +234,14 @@ Il profilo staging (§5.1.1) ne fissa i default.
 
 #### 5.4.2 L'IP del client verso il backend
 
-**Oggi.** Mockxy non aggiunge `X-Forwarded-For` né `X-Forwarded-Proto` alle richieste inoltrate:
-il backend vede tutto il team come un unico client, l'IP di Mockxy. Rate limiting, audit o
-logiche per IP del backend di staging ne risentono.
+**Oggi.** Gli header `X-Forwarded-*` non sono hop-by-hop (`HOP_BY_HOP_HEADERS`,
+`src/proxy/proxy.js:87`): quelli impostati da un reverse proxy davanti a Mockxy arrivano al
+backend così come sono, con l'IP vero del client. Mockxy non aggiunge il proprio passaggio alla
+catena, e senza reverse proxy davanti il backend vede l'IP di Mockxy.
 
-**Proposta.** Aggiungere (o estendere) `X-Forwarded-For`, `-Proto`, `-Host` verso il backend,
-come fa ogni reverse proxy. Probabilmente attivo di default; da valutare l'impatto sul caso
-locale, dove oggi il backend vede `127.0.0.1`.
+**Proposta.** Nessuna, salvo una domanda concreta: nella topologia con reverse proxy il backend
+riceve già ciò che gli serve. Aggiungere il proprio passaggio a `X-Forwarded-For` conta solo per
+backend che contano i proxy fidati per posizione.
 
 #### 5.4.3 Più backend per prefisso
 
@@ -480,3 +481,24 @@ legittimi del backend proprio nei test end-to-end.
 **Rischio accettato.** Un mock dimenticato continua a rispondere anche dopo il rilascio del
 backend. Si gestisce con il processo del team (per esempio una voce nella checklist di rilascio
 del backend), non con il motore.
+
+### D5 — Dietro un reverse proxy: `TRUST_PROXY` esplicito
+
+Una nuova opzione del motore, `TRUST_PROXY` (default `false`). Attiva, Mockxy legge
+`X-Forwarded-Proto` e `X-Forwarded-Host` quando presenti:
+
+- la riscrittura dei redirect (`REWRITE_PROXY_REDIRECTS`) usa protocollo e host pubblici invece
+  di `http://` e dell'header `Host` visto da Mockxy (§5.4.1);
+- con `X-Forwarded-Proto: https`, l'adattamento dei cookie (`ADAPT_PROXY_COOKIES`) toglie solo
+  `Domain` e lascia `Secure` e `SameSite=None`, così lo staging si comporta come la produzione.
+
+Spenta, il comportamento resta quello di oggi. La documentazione aggiunge una ricetta della
+topologia tipica (reverse proxy che serve il frontend e manda `/api` a Mockxy, stessa origine,
+CORS non necessario) e il profilo staging (§5.1.1) la imposta a `true`.
+
+**Perché esplicita.** È il comportamento più conservativo e in linea con Express e strumenti
+simili: Mockxy si fida degli header di un proxy solo quando gli si dice che il proxy c'è.
+
+**Scartate.** Lettura sempre attiva (cambio di default, anche se a basso rischio); solo
+documentazione con `proxy_redirect` di nginx (non copre Traefik e Ingress, e i cookie perdono
+comunque `Secure`).
