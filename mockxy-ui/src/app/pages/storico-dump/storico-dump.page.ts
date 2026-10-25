@@ -18,12 +18,9 @@ import {
 import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
 import { UiBadge } from '../../ui/ui-badge/ui-badge';
 import { UiButton } from '../../ui/ui-button/ui-button';
-import { UiCode } from '../../ui/ui-code/ui-code';
-import { UiCollapsible } from '../../ui/ui-collapsible/ui-collapsible';
 import { UiMenu } from '../../ui/ui-menu/ui-menu';
 import { UiPageHeader } from '../../ui/ui-page-header/ui-page-header';
 import { UiSelect, type UiSelectOption } from '../../ui/ui-select/ui-select';
-import { UiTable } from '../../ui/ui-table/ui-table';
 import { UiTooltip } from '../../ui/ui-tooltip/ui-tooltip';
 import { ToastService } from '../../ui/ui-toast/ui-toast';
 import { MockAdminApiService } from '../../mock-admin-api.service';
@@ -31,6 +28,8 @@ import { summarizeBatchAttention, type DumpCreateMocksResult, type DumpEntry, ty
 import { MOCK_METHODS } from '../../mock-admin-ui.constants';
 import { listNavigationTarget, toggleListSelection } from '../../shared/list-selection';
 import { isSelectionEscape } from '../../shared/selection-escape';
+import { TrafficDetail } from '../../shared/traffic-detail';
+import { methodColor, statusClassColor, statusColor, tint } from '../../shared/traffic-format';
 import { RESPONSE_SOURCE_ICONS, responseSourceMeta } from '../../shared/response-source';
 import { readBatchPartialResult } from '../../shared/read-error-message';
 
@@ -52,6 +51,7 @@ const ROW_HEIGHT = 56;
   selector: 'app-storico-dump',
   imports: [
     DatePipe,
+    TrafficDetail,
     CdkVirtualScrollViewport,
     CdkFixedSizeVirtualScroll,
     CdkVirtualForOf,
@@ -60,12 +60,9 @@ const ROW_HEIGHT = 56;
     TranslocoPipe,
     UiBadge,
     UiButton,
-    UiCode,
-    UiCollapsible,
     UiMenu,
     UiPageHeader,
     UiSelect,
-    UiTable,
     UiTooltip,
   ],
   providers: [provideIcons({ lucideArrowLeft, lucideCheck, lucideLayers, lucideListChecks, lucidePlus, lucideSearch, lucideTrash2, lucideX, ...RESPONSE_SOURCE_ICONS })],
@@ -221,92 +218,8 @@ const ROW_HEIGHT = 56;
         <!-- DETTAGLIO della entry a fuoco (mostra anche la request, come nel monitor) -->
         <div class="relative flex min-w-0 flex-1 flex-col overflow-hidden">
           @if (focused(); as sel) {
-          <div class="flex min-h-0 flex-1 flex-col">
-            <div class="flex shrink-0 flex-wrap items-center gap-3 border-b border-border px-6 py-4">
-              <span class="font-mono text-[15px] font-bold" [style.color]="methodColor(sel.method)">{{ sel.method }}</span>
-              <span class="font-mono text-[16px] font-semibold">{{ sel.originalUrl }}</span>
-              <span class="rounded-md px-2 py-0.5 font-mono text-[13px] font-bold tabular-nums" [style.color]="statusColor(sel.status)" [style.background]="tint(statusColor(sel.status), 14)">{{ sel.status }}</span>
-              <!-- La chiave del dump (file#riga) resta nel tooltip: a chi legge serve quando, non dove. -->
-              <span class="inline-flex items-center gap-1.5 text-[12px] text-muted-foreground" [title]="sel.dumpKey">
-                <ng-icon [name]="sourceIcon(sel.source)" size="0.8rem" [style.color]="sourceColor(sel.source)" />{{ sourceLabel(sel.source) }} · {{ sel.latencyMs }} ms · {{ sel.timestamp | date: 'dd/MM/yyyy HH:mm:ss.SSS' }}
-              </span>
-            </div>
-            <div class="flex min-h-0 flex-1 flex-col overflow-y-auto mx-scroll">
-              <!-- Request · headers -->
-              <div class="shrink-0 border-b border-border">
-                <ui-collapsible [open]="false" triggerClass="bg-white/5 px-6 py-2.5 hover:bg-white/10">
-                  <div uiCollapsibleHeader class="flex items-center gap-2">
-                    <h2 class="text-[12px] font-bold uppercase tracking-[0.14em] text-foreground/80">{{ 'storico.requestHeaders' | transloco }}</h2>
-                    <ui-badge tone="neutral">{{ headerCount(sel.requestHeaders) }}</ui-badge>
-                  </div>
-                  <div class="overflow-x-auto bg-[var(--code)] mx-scroll">
-                    <table ui-table class="font-mono text-[12px]">
-                      <tbody>
-                        @for (h of headerRows(sel.requestHeaders); track h[0]) {
-                        <tr>
-                          <td class="w-[30%] whitespace-nowrap py-1.5 pl-6 pr-4 align-top font-medium text-[var(--json-key)]">{{ h[0] }}</td>
-                          <td class="break-all py-1.5 pr-6 align-top text-muted-foreground">{{ h[1] }}</td>
-                        </tr>
-                        } @empty {
-                        <tr><td class="px-6 py-2 text-muted-foreground">{{ 'common.noHeaders' | transloco }}</td></tr>
-                        }
-                      </tbody>
-                    </table>
-                  </div>
-                </ui-collapsible>
-              </div>
-
-              <!-- Request · body -->
-              <div class="shrink-0 border-b border-border">
-                <ui-collapsible [open]="false" triggerClass="bg-white/5 px-6 py-2.5 hover:bg-white/10">
-                  <div uiCollapsibleHeader class="flex items-center gap-2">
-                    <h2 class="text-[12px] font-bold uppercase tracking-[0.14em] text-foreground/80">{{ 'storico.requestBody' | transloco }}</h2>
-                    <span class="font-mono text-[11px] text-muted-foreground">{{ sel.requestBodyBytes }} B@if (sel.requestBodyTruncated) { · {{ 'storico.truncated' | transloco }}}</span>
-                  </div>
-                  @if (sel.requestBody) { <div class="px-6 py-3"><ui-code [code]="sel.requestBody" [language]="bodyLang(sel.requestBody)" /></div> }
-                  @else { <p class="px-6 py-3 text-[12.5px] text-muted-foreground">{{ 'storico.noPayload' | transloco }}</p> }
-                </ui-collapsible>
-              </div>
-
-              <!-- Response · headers -->
-              <div class="shrink-0 border-b border-border">
-                <ui-collapsible [open]="false" triggerClass="bg-white/5 px-6 py-2.5 hover:bg-white/10">
-                  <div uiCollapsibleHeader class="flex items-center gap-2">
-                    <h2 class="text-[12px] font-bold uppercase tracking-[0.14em] text-foreground/80">{{ 'storico.responseHeaders' | transloco }}</h2>
-                    <ui-badge tone="neutral">{{ headerCount(sel.responseHeaders) }}</ui-badge>
-                  </div>
-                  <div class="overflow-x-auto bg-[var(--code)] mx-scroll">
-                    <table ui-table class="font-mono text-[12px]">
-                      <tbody>
-                        @for (h of headerRows(sel.responseHeaders); track h[0]) {
-                        <tr>
-                          <td class="w-[30%] whitespace-nowrap py-1.5 pl-6 pr-4 align-top font-medium text-[var(--json-key)]">{{ h[0] }}</td>
-                          <td class="break-all py-1.5 pr-6 align-top text-muted-foreground">{{ h[1] }}</td>
-                        </tr>
-                        } @empty {
-                        <tr><td class="px-6 py-2 text-muted-foreground">{{ 'common.noHeaders' | transloco }}</td></tr>
-                        }
-                      </tbody>
-                    </table>
-                  </div>
-                </ui-collapsible>
-              </div>
-
-              <!-- Response · body: aperto di default; quando aperto riempie lo spazio residuo e scrolla
-                   internamente (così si scorre solo il body, non tutto il pannello). Comunque collassabile. -->
-              <div class="flex flex-col" [class.flex-1]="responseBodyOpen()" [style.min-height]="responseBodyOpen() ? '32rem' : null">
-                <ui-collapsible class="flex flex-col" [class.min-h-0]="responseBodyOpen()" [class.flex-1]="responseBodyOpen()"
-                                [open]="responseBodyOpen()" (openChange)="responseBodyOpen.set($event)" triggerClass="shrink-0 bg-white/5 px-6 py-2.5 hover:bg-white/10">
-                  <div uiCollapsibleHeader class="flex items-center gap-2">
-                    <h2 class="text-[12px] font-bold uppercase tracking-[0.14em] text-foreground/80">{{ 'storico.responseBody' | transloco }}</h2>
-                    <span class="font-mono text-[11px] text-muted-foreground">{{ sel.responseBodyBytes ?? 0 }} B@if (sel.responseBodyTruncated) { · {{ 'storico.truncated' | transloco }}}</span>
-                  </div>
-                  @if (sel.responseBody) { <div class="min-h-0 flex-1 overflow-y-auto mx-scroll px-6 py-3"><ui-code [code]="sel.responseBody" [language]="bodyLang(sel.responseBody)" /></div> }
-                  @else { <p class="px-6 py-3 text-[12.5px] text-muted-foreground">{{ 'storico.noResponseBody' | transloco }}</p> }
-                </ui-collapsible>
-              </div>
-            </div>
-          </div>
+          <!-- Lo stesso dettaglio del Monitor; la data serve, perche' l'archivio copre piu' giorni. -->
+          <app-traffic-detail [entry]="sel" timestampFormat="dd/MM/yyyy HH:mm:ss.SSS" [keyTitle]="sel.dumpKey" />
           } @else {
           <div class="grid h-full place-items-center px-6 text-center text-sm text-muted-foreground">
             @if (entries().length === 0 && done()) {
@@ -355,8 +268,6 @@ export class StoricoDumpPage implements OnInit {
   protected readonly focusedKey = signal<string | null>(null);
   /** Larghezza della lista (px), ridimensionabile col divisore e persistita in localStorage (min = altre view). */
   protected readonly listWidth = signal(clampListWidth(readStoredListWidth()));
-  /** Apertura della sezione Response · body: quando aperta riempie lo spazio residuo e scrolla internamente. */
-  protected readonly responseBodyOpen = signal(true);
   /** Ultima voce spuntata: l'ancora degli intervalli (shift-click, Maiuscole+Spazio). */
   private selectionAnchor: string | null = null;
   /** Tratto della lista in vista (px): dice se la riga della voce attiva si vede. */
@@ -694,15 +605,15 @@ export class StoricoDumpPage implements OnInit {
   }
 
   protected methodColor(method: string): string {
-    return `var(--method-${method.toLowerCase()})`;
+    return methodColor(method);
   }
 
   protected statusColor(status: number): string {
-    return this.statusColorClass(Math.floor(status / 100));
+    return statusColor(status);
   }
 
   protected statusColorClass(klass: number): string {
-    return klass >= 2 && klass <= 5 ? `var(--status-${klass}xx)` : 'var(--muted-foreground)';
+    return statusClassColor(klass);
   }
 
   /** Provenienza come nel Monitor: colore, etichetta e icona dallo stesso elenco. */
@@ -715,35 +626,15 @@ export class StoricoDumpPage implements OnInit {
   }
 
   protected tint(color: string, pct: number): string {
-    return `color-mix(in srgb, ${color} ${pct}%, transparent)`;
+    return tint(color, pct);
   }
 
   protected sourceLabel(source: string): string {
     return responseSourceMeta(source).label;
   }
 
-  protected bodyLang(text: string | undefined): 'json' | 'text' {
-    const trimmed = (text ?? '').trim();
-    if (!(trimmed.startsWith('{') || trimmed.startsWith('['))) return 'text';
-    try {
-      JSON.parse(trimmed);
-      return 'json';
-    } catch {
-      return 'text';
-    }
-  }
 
-  /** Numero di header (per il badge dell'accordion). */
-  protected headerCount(headers: Record<string, string | string[]> | undefined): number {
-    return headers ? Object.keys(headers).length : 0;
-  }
 
-  /** Header (request o response) ordinati come coppie [nome, valore] per la tabella key/value. */
-  protected headerRows(headers: Record<string, string | string[]> | undefined): [string, string][] {
-    return Object.entries(headers ?? {})
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([name, value]): [string, string] => [name, Array.isArray(value) ? value.join(', ') : String(value)]);
-  }
 
   protected kb(bytes: number): string {
     return (bytes / 1024).toFixed(1);

@@ -24,12 +24,9 @@ import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
 import { UiBadge } from '../../ui/ui-badge/ui-badge';
 import { UiButton } from '../../ui/ui-button/ui-button';
 import { UiCheckbox } from '../../ui/ui-checkbox/ui-checkbox';
-import { UiCode } from '../../ui/ui-code/ui-code';
-import { UiCollapsible } from '../../ui/ui-collapsible/ui-collapsible';
 import { UiMenu, UiMenuItemCheckbox } from '../../ui/ui-menu/ui-menu';
 import { UiPageHeader } from '../../ui/ui-page-header/ui-page-header';
 import { UiSelect, type UiSelectOption } from '../../ui/ui-select/ui-select';
-import { UiTable } from '../../ui/ui-table/ui-table';
 import { UiTooltip } from '../../ui/ui-tooltip/ui-tooltip';
 import { ToastService } from '../../ui/ui-toast/ui-toast';
 import { UiDialog } from '../../ui/ui-dialog/ui-dialog';
@@ -42,6 +39,8 @@ import { readBatchPartialResult } from '../../shared/read-error-message';
 import { MOCK_METHODS } from '../../mock-admin-ui.constants';
 import { listNavigationTarget, toggleListSelection } from '../../shared/list-selection';
 import { isSelectionEscape } from '../../shared/selection-escape';
+import { TrafficDetail } from '../../shared/traffic-detail';
+import { methodColor, statusClassColor, statusColor, tint } from '../../shared/traffic-format';
 
 /** Chiave (ViewStateService) della densita' del Monitor: 'compact', o assente per quella normale. */
 const DENSITY_STATE_KEY = 'monitor-density';
@@ -56,7 +55,7 @@ const DENSITY_STATE_KEY = 'monitor-density';
  */
 @Component({
   selector: 'app-monitor-next',
-  imports: [CdkMenuTrigger, DatePipe, NgIcon, TranslocoPipe, UiBadge, UiButton, UiCheckbox, UiCode, UiCollapsible, UiMenu, UiMenuItemCheckbox, UiPageHeader, UiSelect, UiTable, UiTooltip],
+  imports: [TrafficDetail, CdkMenuTrigger, DatePipe, NgIcon, TranslocoPipe, UiBadge, UiButton, UiCheckbox, UiMenu, UiMenuItemCheckbox, UiPageHeader, UiSelect, UiTooltip],
   providers: [
     provideIcons({
       lucideActivity, lucideArrowLeft, lucideCheck, lucideCopy, lucideDatabase, lucideDownload, lucideEllipsisVertical, lucideListChecks, lucideListTree,
@@ -214,7 +213,7 @@ const DENSITY_STATE_KEY = 'monitor-density';
                   <span class="mt-0.5 flex items-center gap-1.5 text-[11px] text-muted-foreground in-[.mx-compact]:hidden">
                     <ng-icon [name]="sourceIcon(row.source)" size="0.75rem" [style.color]="sourceColor(row.source)" />{{ sourceLabel(row.source) }}
                     @if (row.sequenceStep; as seq) {
-                    <span class="mx-seq-badge inline-flex items-center gap-1 rounded bg-[color-mix(in_srgb,var(--brand)_16%,transparent)] px-1 text-[10px] font-bold tracking-wide text-brand-soft" [uiTooltip]="'monitor.sequenceStepTip' | transloco"><ng-icon [name]="sequenceIcon" size="0.65rem" />SEQ {{ seq.index + 1 }}/{{ seq.count }}</span>
+                    <span class="mx-seq-badge inline-flex items-center gap-1 rounded bg-[color-mix(in_srgb,var(--brand)_16%,transparent)] px-1 text-[10px] font-bold tracking-wide text-brand-soft" [uiTooltip]="'trafficDetail.sequenceStepTip' | transloco"><ng-icon [name]="sequenceIcon" size="0.65rem" />SEQ {{ seq.index + 1 }}/{{ seq.count }}</span>
                     }
                   </span>
                 </span>
@@ -270,130 +269,29 @@ const DENSITY_STATE_KEY = 'monitor-density';
         <div class="relative flex min-w-0 flex-1 flex-col overflow-hidden">
           <div class="mx-glow"></div>
           @if (selected(); as sel) {
-          <div class="relative z-10 flex min-h-0 flex-1 flex-col">
-            <!-- header dettaglio (fisso) -->
-            <div class="flex shrink-0 flex-wrap items-center gap-3 border-b border-border px-6 py-4">
-              <span class="font-mono text-[15px] font-bold" [style.color]="methodColor(sel.method)">{{ sel.method }}</span>
-              <span class="font-mono text-[17px] font-semibold text-foreground">{{ sel.originalUrl }}</span>
-              <span class="rounded-md px-2 py-0.5 font-mono text-[13px] font-bold tabular-nums" [style.color]="statusColor(sel.status)" [style.background]="tint(statusColor(sel.status), 14)">{{ sel.status }} {{ statusText(sel.status) }}</span>
-              <span class="inline-flex items-center gap-1.5 text-[12.5px] text-muted-foreground">
-                <ng-icon [name]="sourceIcon(sel.source)" size="0.8rem" [style.color]="sourceColor(sel.source)" />{{ sourceLabel(sel.source) }} · {{ sel.latencyMs }} ms · {{ sel.timestamp | date: 'HH:mm:ss.SSS' }}
-              </span>
-              @if (sel.sequenceStep; as seq) {
-              <!-- Endpoint con sequenza: quale step ha risposto, con la variante — la progressione si legge da qui. -->
-              <span class="inline-flex items-center gap-1.5 text-[12.5px] text-muted-foreground" [uiTooltip]="'monitor.sequenceStepTip' | transloco">
-                <span class="inline-flex items-center gap-1 rounded bg-[color-mix(in_srgb,var(--brand)_16%,transparent)] px-1 text-[10.5px] font-bold tracking-wide text-brand-soft"><ng-icon [name]="sequenceIcon" size="0.7rem" />SEQ {{ seq.index + 1 }}/{{ seq.count }}</span>
-                <span class="font-mono text-[11.5px]">{{ seq.responseTitle ? seq.responseTitle + ' — ' : '' }}{{ seq.responseFile }}</span>
-              </span>
+          <!-- Testata e sezioni sono condivise con lo Storico (app-traffic-detail); qui le azioni della pagina. -->
+          <app-traffic-detail class="relative z-10" [entry]="sel">
+            <ng-container actions>
+              @if (sel.sharedStateError?.name; as sharedStateName) {
+              <button ui-button variant="outline" size="sm" (click)="goToSharedState(sharedStateName)" [uiTooltip]="'monitor.openSharedStateTip' | transloco"><ng-icon name="lucideDatabase" size="0.85rem" /> {{ 'monitor.openSharedState' | transloco }}</button>
               }
-              @if (sel.sharedStateError; as sharedError) {
-              <span class="inline-flex items-center gap-1.5 rounded-md bg-[color-mix(in_srgb,var(--status-4xx)_12%,transparent)] px-2 py-1 font-mono text-[11px] text-[var(--status-4xx)]">
-                {{ sharedError.code }}@if (sharedError.name) { · {{ sharedError.name }} }
-              </span>
+              @if (sel.source === 'mock' || sel.source === 'handler') {
+              <button ui-button variant="outline" size="sm" (click)="goToDefinition(sel)" [uiTooltip]="'monitor.goToDefinitionTip' | transloco"><ng-icon name="lucideListTree" size="0.85rem" /> {{ 'monitor.goToMock' | transloco }}</button>
+              } @else if (coveringMock(); as covering) {
+              <button ui-button variant="outline" size="sm" (click)="goToCoveringMock(covering)" [uiTooltip]="(covering.disabled ? 'monitor.coveringMockDisabledTip' : 'monitor.coveringMockTip') | transloco">
+                <ng-icon name="lucideListTree" size="0.85rem" /> {{ 'monitor.goToMock' | transloco }}
+                @if (covering.disabled) { <ui-badge tone="neutral">{{ 'monitor.coveringMockDisabledBadge' | transloco }}</ui-badge> }
+              </button>
               }
-              <span class="ml-auto flex flex-wrap items-center gap-2">
-                @if (sel.sharedStateError?.name; as sharedStateName) {
-                <button ui-button variant="outline" size="sm" (click)="goToSharedState(sharedStateName)" [uiTooltip]="'monitor.openSharedStateTip' | transloco"><ng-icon name="lucideDatabase" size="0.85rem" /> {{ 'monitor.openSharedState' | transloco }}</button>
-                }
-                @if (sel.source === 'mock' || sel.source === 'handler') {
-                <button ui-button variant="outline" size="sm" (click)="goToDefinition(sel)" [uiTooltip]="'monitor.goToDefinitionTip' | transloco"><ng-icon name="lucideListTree" size="0.85rem" /> {{ 'monitor.goToMock' | transloco }}</button>
-                } @else if (coveringMock(); as covering) {
-                <button ui-button variant="outline" size="sm" (click)="goToCoveringMock(covering)" [uiTooltip]="(covering.disabled ? 'monitor.coveringMockDisabledTip' : 'monitor.coveringMockTip') | transloco">
-                  <ng-icon name="lucideListTree" size="0.85rem" /> {{ 'monitor.goToMock' | transloco }}
-                  @if (covering.disabled) { <ui-badge tone="neutral">{{ 'monitor.coveringMockDisabledBadge' | transloco }}</ui-badge> }
-                </button>
-                }
-                <!-- Senza spunta il nuovo endpoint nasce disattivato: la risposta servita non cambia. -->
-                <label class="flex items-center gap-2 text-[12px] text-muted-foreground" [uiTooltip]="'monitor.activateNewTip' | transloco">
-                  <ui-checkbox [(checked)]="activateNewMocks" [ariaLabel]="'monitor.activateNew' | transloco" />
-                  {{ 'monitor.activateNew' | transloco }}
-                </label>
-                <button ui-button size="sm" [disabled]="creatingMock()" (click)="createMockFromEntry(sel)"><ng-icon name="lucidePlus" size="0.85rem" /> {{ 'monitor.createMockFromThis' | transloco }}</button>
-                <button ui-button variant="outline" size="sm" (click)="copyCurl(sel)"><ng-icon name="lucideCopy" size="0.85rem" /> cURL</button>
-              </span>
-            </div>
-
-            <!-- sezioni in accordion (stile dettaglio catalogo): scrolla la regione, non la pagina -->
-            <div class="min-h-0 flex-1 overflow-y-auto mx-scroll">
-              <!-- Request · headers (chiuso di default) -->
-              <div class="border-b border-border">
-                <ui-collapsible [open]="false" triggerClass="bg-white/5 px-6 py-2.5 hover:bg-white/10">
-                  <div uiCollapsibleHeader class="flex items-center gap-2">
-                    <h2 class="text-[12px] font-bold uppercase tracking-[0.14em] text-foreground/80">Request · headers</h2>
-                    <ui-badge tone="neutral">{{ headerCount(sel.requestHeaders) }}</ui-badge>
-                  </div>
-                  <div class="overflow-x-auto bg-[var(--code)] mx-scroll">
-                    <table ui-table class="font-mono text-[12px]">
-                      <tbody>
-                        @for (h of headerRows(sel.requestHeaders); track h[0]) {
-                        <tr>
-                          <td class="w-[30%] whitespace-nowrap py-1.5 pl-6 pr-4 align-top font-medium text-[var(--json-key)]">{{ h[0] }}</td>
-                          <td class="break-all py-1.5 pr-6 align-top text-muted-foreground">{{ h[1] }}</td>
-                        </tr>
-                        } @empty {
-                        <tr><td class="px-6 py-2 text-muted-foreground">{{ 'common.noHeaders' | transloco }}</td></tr>
-                        }
-                      </tbody>
-                    </table>
-                  </div>
-                </ui-collapsible>
-              </div>
-
-              <!-- Request · body (chiuso di default) -->
-              <div class="border-b border-border">
-                <ui-collapsible [open]="false" triggerClass="bg-white/5 px-6 py-2.5 hover:bg-white/10">
-                  <div uiCollapsibleHeader class="flex items-center gap-2">
-                    <h2 class="text-[12px] font-bold uppercase tracking-[0.14em] text-foreground/80">Request · body</h2>
-                    <span class="font-mono text-[11px] text-muted-foreground">{{ sel.requestBodyBytes }} B@if (sel.requestBodyTruncated) { · {{ 'monitor.truncated' | transloco }}}</span>
-                  </div>
-                  @if (sel.requestBody) {
-                  <div class="px-6 py-3"><ui-code [code]="sel.requestBody" [language]="bodyLang(sel.requestBody)" /></div>
-                  } @else {
-                  <p class="px-6 py-3 text-[12.5px] text-muted-foreground">{{ 'monitor.noRequestPayload' | transloco }}</p>
-                  }
-                </ui-collapsible>
-              </div>
-
-              <!-- Response · headers -->
-              <div class="border-b border-border">
-                <ui-collapsible [open]="false" triggerClass="bg-white/5 px-6 py-2.5 hover:bg-white/10">
-                  <div uiCollapsibleHeader class="flex items-center gap-2">
-                    <h2 class="text-[12px] font-bold uppercase tracking-[0.14em] text-foreground/80">Response · headers</h2>
-                    <ui-badge tone="neutral">{{ headerCount(sel.responseHeaders) }}</ui-badge>
-                  </div>
-                  <div class="overflow-x-auto bg-[var(--code)] mx-scroll">
-                    <table ui-table class="font-mono text-[12px]">
-                      <tbody>
-                        @for (h of headerRows(sel.responseHeaders); track h[0]) {
-                        <tr>
-                          <td class="w-[30%] whitespace-nowrap py-1.5 pl-6 pr-4 align-top font-medium text-[var(--json-key)]">{{ h[0] }}</td>
-                          <td class="break-all py-1.5 pr-6 align-top text-muted-foreground">{{ h[1] }}</td>
-                        </tr>
-                        } @empty {
-                        <tr><td class="px-6 py-2 text-muted-foreground">{{ 'common.noHeaders' | transloco }}</td></tr>
-                        }
-                      </tbody>
-                    </table>
-                  </div>
-                </ui-collapsible>
-              </div>
-
-              <!-- Response · body -->
-              <div>
-                <ui-collapsible triggerClass="bg-white/5 px-6 py-2.5 hover:bg-white/10">
-                  <div uiCollapsibleHeader class="flex items-center gap-2">
-                    <h2 class="text-[12px] font-bold uppercase tracking-[0.14em] text-foreground/80">Response · body</h2>
-                    <span class="font-mono text-[11px] text-muted-foreground">{{ sel.responseBodyBytes ?? 0 }} B@if (sel.responseBodyTruncated) { · {{ 'monitor.truncated' | transloco }}}</span>
-                  </div>
-                  @if (sel.responseBody) {
-                  <div class="px-6 py-3"><ui-code [code]="sel.responseBody" [language]="bodyLang(sel.responseBody)" /></div>
-                  } @else {
-                  <p class="px-6 py-3 text-[12.5px] text-muted-foreground">{{ 'monitor.noResponseBody' | transloco }}</p>
-                  }
-                </ui-collapsible>
-              </div>
-            </div>
-          </div>
+              <!-- Senza spunta il nuovo endpoint nasce disattivato: la risposta servita non cambia. -->
+              <label class="flex items-center gap-2 text-[12px] text-muted-foreground" [uiTooltip]="'monitor.activateNewTip' | transloco">
+                <ui-checkbox [(checked)]="activateNewMocks" [ariaLabel]="'monitor.activateNew' | transloco" />
+                {{ 'monitor.activateNew' | transloco }}
+              </label>
+              <button ui-button size="sm" [disabled]="creatingMock()" (click)="createMockFromEntry(sel)"><ng-icon name="lucidePlus" size="0.85rem" /> {{ 'monitor.createMockFromThis' | transloco }}</button>
+              <button ui-button variant="outline" size="sm" (click)="copyCurl(sel)"><ng-icon name="lucideCopy" size="0.85rem" /> cURL</button>
+            </ng-container>
+          </app-traffic-detail>
           } @else {
           <div class="grid h-full place-items-center px-6 text-center">
             <div class="max-w-sm">
@@ -1022,26 +920,18 @@ export class MonitorNextPage {
 
   // --- helper di presentazione (colori sui token, come mocks-next) ---
   protected methodColor(method: string): string {
-    return `var(--method-${method.toLowerCase()})`;
+    return methodColor(method);
   }
 
   /** Colore della classe di status (2xx–5xx); fallback neutro fuori range. */
   protected statusColorClass(klass: number): string {
-    return klass >= 2 && klass <= 5 ? `var(--status-${klass}xx)` : 'var(--muted-foreground)';
+    return statusClassColor(klass);
   }
 
   protected statusColor(status: number): string {
-    return this.statusColorClass(Math.floor(status / 100));
+    return statusColor(status);
   }
 
-  protected statusText(status: number): string {
-    const map: Record<number, string> = {
-      200: 'OK', 201: 'Created', 202: 'Accepted', 204: 'No Content', 301: 'Moved', 304: 'Not Modified',
-      400: 'Bad Request', 401: 'Unauthorized', 403: 'Forbidden', 404: 'Not Found', 409: 'Conflict',
-      422: 'Unprocessable', 429: 'Too Many', 500: 'Server Error', 502: 'Bad Gateway', 503: 'Unavailable',
-    };
-    return map[status] ?? '';
-  }
 
   protected sourceLabel(source: string): string {
     return responseSourceMeta(source).label;
@@ -1099,32 +989,11 @@ export class MonitorNextPage {
 
   /** Tinta trasparente di un colore (per fondi/bordi tenui), via color-mix. */
   protected tint(color: string, pct: number): string {
-    return `color-mix(in srgb, ${color} ${pct}%, transparent)`;
+    return tint(color, pct);
   }
 
-  /** Numero di header (per il badge dell'accordion). */
-  protected headerCount(headers: Record<string, string | string[]> | undefined): number {
-    return headers ? Object.keys(headers).length : 0;
-  }
 
-  /** Header (request o response) ordinati come coppie [nome, valore] per la tabella key/value. */
-  protected headerRows(headers: Record<string, string | string[]> | undefined): [string, string][] {
-    return Object.entries(headers ?? {})
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([name, value]): [string, string] => [name, Array.isArray(value) ? value.join(', ') : String(value)]);
-  }
 
-  /** Evidenziazione del body: JSON se è un oggetto/array valido, altrimenti testo semplice. */
-  protected bodyLang(text: string | undefined): 'json' | 'text' {
-    const t = (text ?? '').trim();
-    if (!(t.startsWith('{') || t.startsWith('['))) return 'text';
-    try {
-      JSON.parse(t);
-      return 'json';
-    } catch {
-      return 'text';
-    }
-  }
 
   /** Estrae un messaggio leggibile dagli errori HTTP o runtime; ripiega su un testo tradotto. */
   private readErrorMessage(error: unknown): string {

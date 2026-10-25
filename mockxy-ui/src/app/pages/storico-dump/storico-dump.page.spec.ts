@@ -470,26 +470,6 @@ describe('StoricoDumpPage', () => {
   });
 
   describe('helper puri', () => {
-    it('bodyLang riconosce JSON strutturato valido, altrimenti testo', () => {
-      const { c } = create();
-      expect(c.bodyLang('{"a":1}')).toBe('json');
-      expect(c.bodyLang('  [1,2] ')).toBe('json');
-      expect(c.bodyLang('{rotto')).toBe('text');
-      expect(c.bodyLang('ciao')).toBe('text');
-      expect(c.bodyLang(undefined)).toBe('text');
-    });
-
-    it('headerRows ordina per nome e appiattisce gli array', () => {
-      const { c } = create();
-      expect(c.headerRows({ zeta: 'z', alfa: ['a', 'b'] })).toEqual([
-        ['alfa', 'a, b'],
-        ['zeta', 'z'],
-      ]);
-      expect(c.headerRows(undefined)).toEqual([]);
-      expect(c.headerCount({ a: '1', b: '2' })).toBe(2);
-      expect(c.headerCount(undefined)).toBe(0);
-    });
-
     it('sourceLabel e statusColor mappano sorgenti e classi di status', () => {
       const { c } = create();
       expect(c.sourceLabel('backend')).toBe('Proxy');

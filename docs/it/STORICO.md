@@ -43,7 +43,9 @@ sfoglia con scorrimento continuo (la lettura è paginata, anche su archivi molto
 partono dalla **più recente**: scorrendo si va indietro nel tempo, e anche il menu dei file mette
 per primo il più recente. Le richieste arrivate dopo l'apertura della pagina compaiono
 ricaricandola. Ogni voce dice quando è arrivata, chi l'ha servita (con la stessa icona del
-monitor) e in quanto tempo. I filtri sono quelli del monitor (testo nel percorso o nell'URL,
+monitor) e in quanto tempo. Il dettaglio di una voce è lo stesso del monitor: richiesta e
+risposta complete, lo status col suo nome e, per un passo di sequenza, la variante che ha
+risposto; in più dice il giorno, oltre all'ora. I filtri sono quelli del monitor (testo nel percorso o nell'URL,
 metodo, classi di status, provenienza) e cercano in tutto l'archivio, non solo nelle voci già
 caricate.
 
