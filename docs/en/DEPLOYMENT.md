@@ -52,8 +52,11 @@ already configured for pure serving — admin off, proxy fallback off, watch off
 `NODE_ENV=production`. Mocks and data files arrive at runtime as **read-only bind mounts**
 on `/workspace/mocks` and `/workspace/files`:
 
-- mocks are updated on the server's filesystem (a `git pull`), **with no rebuild** and no
-  restart of the image;
+- mocks are updated on the server's filesystem (a `git pull`), **with no rebuild** of the
+  image but with a **restart** of the container: with watch and admin off, the engine reads the
+  definitions only at startup. Data files and file responses, instead, are read again on every
+  request, so the safe sequence is **stop, `git pull`, start**: with the engine running, old
+  definitions and new data would coexist during the pull;
 - to serve another workspace you change the two mounts;
 - the workspace's local part (`.mockxy`) **must never be mounted** ([anatomy](WORKSPACE.md)).
 

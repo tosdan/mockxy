@@ -1,7 +1,8 @@
 # Server standalone "mock-only": eroga i mock di un workspace, senza admin/monitor/storico.
 # L'immagine contiene SOLO il motore: si distribuisce l'applicazione, non il workspace. Mock e
 # file dati arrivano a runtime con bind mount sui punti di mount qui sotto (vedi
-# docker-compose.staging.yml) — così i mock si aggiornano senza rebuild dell'immagine.
+# docker-compose.staging.yml) — così i mock si aggiornano senza rebuild dell'immagine, con un
+# riavvio del container (watch e admin spenti: le definizioni si leggono solo all'avvio).
 FROM node:24-alpine
 
 WORKDIR /app

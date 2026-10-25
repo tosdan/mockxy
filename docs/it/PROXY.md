@@ -7,7 +7,10 @@ fallback per lavorare in modalità solo-mock.
 
 ## La decisione, richiesta per richiesta
 
-Per ogni richiesta in arrivo (esclusi i percorsi riservati `/_admin/...`):
+Il motore riserva a sé, senza distinguere maiuscole, `/_admin/api` con ogni metodo e, quando
+serve l'interfaccia (app desktop), `/_admin/ui` con `GET` e `HEAD`: lì risponde il motore stesso.
+Tutte le altre richieste, compresi gli altri percorsi sotto `/_admin` e gli altri metodi su
+`/_admin/ui`, seguono questi passi (per gli upgrade WebSocket vale [WEBSOCKET.md](WEBSOCKET.md)):
 
 1. **Controlli globali.** Con il server dei mock **spento** o in modalità **proxy totale**
    (i due interruttori globali dell'interfaccia), nessun mock, handler o middleware interviene:
