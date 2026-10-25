@@ -42,8 +42,13 @@ produces the `data("name")` snippet ready to paste into a script. Content is **v
 JSON before being written**: a malformed file is rejected without touching the disk, and
 writes are atomic.
 
-**Who uses it.** Every file shows the endpoints that reference it: handler and middleware
-sources are scanned for `data("name")` calls written as **string literals**. A reference built
+The file list works like the monitor's and the history's: a single Tab stop, the arrows (with
+Home and End) open the target file, and the divider between list and content can be dragged to
+widen it; the width is kept for the next visit.
+
+**Who uses it.** Every file shows the endpoints that reference it, and a click on one opens it in
+the catalog. Handler and middleware sources are scanned for `data("name")` calls written as
+**string literals**. A reference built
 at runtime (from a variable, by concatenation) is not detectable: "no reference found" means
 no direct one was found, not that the file is certainly unused.
 

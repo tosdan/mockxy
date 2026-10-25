@@ -1,7 +1,7 @@
 import '@angular/compiler';
 import { TestBed } from '@angular/core/testing';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
-import { provideRouter } from '@angular/router';
+import { Router, provideRouter } from '@angular/router';
 import { of, throwError } from 'rxjs';
 import { DatiPage } from './dati.page';
 import { translocoTesting } from '../../testing/transloco-testing';
@@ -374,7 +374,7 @@ describe('DatiPage', () => {
 
     it('il file aperto si segna come le righe aperte delle altre pagine', () => {
       const { fixture } = create();
-      const rows = Array.from(host(fixture).querySelectorAll('#dati-files-panel button.mx-open'));
+      const rows = Array.from(host(fixture).querySelectorAll('#dati-files-panel [role="option"].mx-open'));
       expect(rows.map((row) => row.querySelector('.truncate')?.textContent?.trim())).toEqual(['utenti']);
       expect(rows[0].getAttribute('aria-current')).toBe('true');
     });
@@ -395,6 +395,76 @@ describe('DatiPage', () => {
       button(fixture, 'Azzera tutto').click();
       await render(fixture);
       expect(document.activeElement?.textContent?.trim()).toMatch(/^Azzera 1 /);
+    });
+  });
+
+  // Come le liste del Monitor e dello Storico: un solo punto di Tab, frecce per muoversi; le schede
+  // seguono il modello ARIA; «Usato da» porta all'endpoint.
+  describe('tastiera e collegamenti', () => {
+    function attached() {
+      const created = create();
+      document.body.appendChild(created.fixture.nativeElement);
+      return created;
+    }
+    const host = (fixture: ReturnType<typeof create>['fixture']) => fixture.nativeElement as HTMLElement;
+    const options = (fixture: ReturnType<typeof create>['fixture']) => Array.from(host(fixture).querySelectorAll<HTMLElement>('[role="option"]'));
+    async function press(fixture: ReturnType<typeof create>['fixture'], target: Element, key: string) {
+      target.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
+      fixture.detectChanges();
+      await fixture.whenStable();
+    }
+
+    it('la lista dei file è un listbox con un solo punto di Tab: il file aperto', () => {
+      const { fixture } = create();
+      expect(host(fixture).querySelector('[role="listbox"]')?.getAttribute('aria-label')).toBe('File dati');
+      expect(options(fixture).map((row) => row.getAttribute('tabindex'))).toEqual(['0', '-1']);
+      expect(options(fixture).map((row) => row.getAttribute('aria-selected'))).toEqual(['true', 'false']);
+    });
+
+    it('frecce, Home e Fine aprono il file di arrivo e gli danno il fuoco', async () => {
+      const { fixture, c } = attached();
+      options(fixture)[0].focus();
+      await press(fixture, options(fixture)[0], 'ArrowDown');
+      expect(c.selectedName()).toBe('aziende');
+      expect(api.getDataFile).toHaveBeenCalledWith('aziende');
+      expect(document.activeElement).toBe(options(fixture)[1]);
+      expect(options(fixture).map((row) => row.getAttribute('tabindex'))).toEqual(['-1', '0']);
+
+      await press(fixture, options(fixture)[1], 'Home');
+      expect(c.selectedName()).toBe('utenti');
+      expect(document.activeElement).toBe(options(fixture)[0]);
+    });
+
+    it('sulle schede il Tab si ferma solo sull’attiva; le frecce passano all’altra e le danno il fuoco', async () => {
+      const { fixture, c } = attached();
+      const tabs = () => Array.from(host(fixture).querySelectorAll<HTMLElement>('[role="tab"]'));
+      expect(tabs().map((tab) => tab.getAttribute('tabindex'))).toEqual(['0', '-1']);
+
+      await press(fixture, tabs()[0], 'ArrowRight');
+      expect(c.activeTab()).toBe('runtime');
+      expect(document.activeElement).toBe(tabs()[1]);
+      expect(tabs().map((tab) => tab.getAttribute('tabindex'))).toEqual(['-1', '0']);
+
+      await press(fixture, tabs()[1], 'Home');
+      expect(c.activeTab()).toBe('files');
+      expect(document.activeElement).toBe(tabs()[0]);
+    });
+
+    it('un riferimento di «Usato da» apre l’endpoint nel catalogo', () => {
+      api.listDataFiles.mockReturnValueOnce(of({ items: [summary('utenti', { usedBy: [usage('/api/a')] })] }));
+      const { fixture } = create();
+      const navigate = vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
+      const link = host(fixture).querySelector<HTMLButtonElement>('button[aria-label="Apri GET /api/a nel catalogo"]')!;
+      link.click();
+      expect(navigate).toHaveBeenCalledWith(['/mocks'], { queryParams: { m: 'GET', p: '/api/a' } });
+    });
+
+    it('la lista si ridimensiona col divisore, partendo da 420 px', () => {
+      localStorage.removeItem('mx-dati-list-width');
+      const { fixture } = create();
+      const list = host(fixture).querySelector<HTMLElement>('#dati-files-panel > div')!;
+      expect(list.style.width).toBe('420px');
+      expect(host(fixture).querySelector('#dati-files-panel [role="separator"]')?.getAttribute('title')).toContain('Trascina');
     });
   });
 

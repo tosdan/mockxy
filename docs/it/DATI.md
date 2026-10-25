@@ -42,9 +42,13 @@ e il pulsante «copia riferimento» che produce lo snippet `data("nome")` pronto
 uno script. Il contenuto viene **validato come JSON prima di essere scritto**: un file
 malformato viene rifiutato senza toccare il disco, e le scritture sono atomiche.
 
-**Chi lo usa.** Ogni file mostra gli endpoint che lo referenziano: i sorgenti di handler e
-middleware vengono scanditi in cerca delle chiamate `data("nome")` scritte come **stringa
-letterale**. Un riferimento costruito a runtime (da variabile, per concatenazione) non è
+L'elenco dei file si usa come quelli del monitor e dello storico: un solo punto di Tab, le frecce
+(con Home e Fine) aprono il file d'arrivo, e il divisore fra elenco e contenuto si trascina per
+allargarlo; la larghezza resta per la visita successiva.
+
+**Chi lo usa.** Ogni file mostra gli endpoint che lo referenziano, e un clic su uno di essi lo
+apre nel catalogo. I sorgenti di handler e middleware vengono scanditi in cerca delle chiamate
+`data("nome")` scritte come **stringa letterale**. Un riferimento costruito a runtime (da variabile, per concatenazione) non è
 individuabile: «nessun riferimento trovato» significa che non ne è stato trovato uno diretto,
 non che il file sia certamente inutilizzato.
 
