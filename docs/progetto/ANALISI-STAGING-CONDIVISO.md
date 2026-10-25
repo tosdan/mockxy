@@ -422,3 +422,26 @@ nell'interfaccia).
 
 **Conseguenza.** §5.1.2 si riduce a chi può leggere il traffico e chi può usare le azioni
 runtime che non scrivono file; §5.6.4 (audit) esce dall'ambito.
+
+### D2 — Nello staging l'admin API è spenta
+
+Nella prima fase il profilo staging non espone l'admin API né l'interfaccia, come oggi
+l'immagine standalone: nessuna lettura (catalogo, Monitor, Storico) e nessuna azione runtime
+(interruttori, configurazione effimera, reset, push SSE/WS). Il comportamento si cambia solo con
+git (D1) e con la configurazione del deploy.
+
+**Perché.** Toglie in un colpo l'intera superficie da proteggere: niente token, niente identità,
+niente dati del traffico consultabili. Si decide in un secondo momento se e come aprire una
+consultazione.
+
+**Rimandato.** Un'interfaccia di **sola consultazione** (catalogo, Monitor, Storico, stato del
+runtime), senza azioni. Da progettare in futuro insieme a chi può vederla: le opzioni valutate
+(lettura libera, token in lettura, identità dal reverse proxy) restano in §5.1.2.
+
+**Conseguenze.**
+
+- Health (§5.3.1) e ricarica dei mock (§5.3.4) devono funzionare **fuori** dall'admin API.
+- Gli interruttori globali (§5.2.4) e l'audit (§5.6.4) escono dall'ambito; il Monitor per più
+  utenti (§5.6.2) e il quadro d'avanzamento (§5.5.3) aspettano l'interfaccia di consultazione.
+- Senza reset da admin, sequenze e stato condiviso degli handler si azzerano solo con
+  `resetAfterMs`, una ricarica o un riavvio: l'isolamento per sessione (§5.2.3) pesa di più.
