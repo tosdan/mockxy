@@ -10,6 +10,7 @@
     "sequenceStepTip": "Step della sequenza che ha servito questa richiesta"
   },
   "common": {
+    "resizeHint": "Trascina per ridimensionare · doppio click per reimpostare",
     "selectionModeLabel": "Seleziona",
     "selectionModeTitle": "Modalità selezione",
     "selectionModeHint": "clic sulle righe per spuntarle",
@@ -44,7 +45,6 @@
     "selectLoaded": "Seleziona caricate",
     "deselect": "Deseleziona",
     "loading": "Carico…",
-    "resizeHint": "Trascina per ridimensionare · doppio click per reimpostare",
     "emptyDisk": "Nessun dump su disco. Attiva \"Dump\" nel monitor per registrare.",
     "selectRow": "Seleziona una riga per vederne i dettagli.",
     "createFromFileTip": "Crea mock da tutto questo file",
@@ -63,6 +63,9 @@
     "resultUnavailable": "{{count}} non più disponibili"
   },
   "dati": {
+    "filesListAria": "File dati",
+    "openUsageTip": "Apri nel catalogo",
+    "openUsageAria": "Apri {{method}} {{path}} nel catalogo",
     "title": "Dati",
     "upload": "Carica",
     "empty": "Nessun file dati.",
@@ -338,7 +341,6 @@
     "connecting": "Connessione al monitor live…",
     "emptyNoRequests": "Nessuna request intercettata.",
     "emptyFiltered": "Nessuna request col filtro attuale.",
-    "resizeHint": "Trascina per ridimensionare · doppio click per reimpostare",
     "goToDefinitionTip": "Apri la definizione nel catalogo",
     "goToMock": "Vai al mock",
     "coveringMockTip": "Questa rotta è ora coperta da un mock del catalogo",

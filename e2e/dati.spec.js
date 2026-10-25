@@ -159,6 +159,42 @@ test.describe("E18 · Dati → handler via data()", () => {
       .toEqual(["uno", "due"]);
   });
 
+  // Una lista sola col Tab, le frecce per muoversi, e «Usato da» che porta all'endpoint.
+  test("le frecce scorrono i file, e «Usato da» apre l'endpoint nel catalogo", async ({ page, request }) => {
+    const source = `module.exports = {
+  async resolveResponse({ data }) {
+    return { jsonBody: await data("tariffe") };
+  }
+};`;
+    const created = await request.post(`${E2E_BACKEND}/_admin/api/mocks`, {
+      data: { type: "handler", definition: { method: "GET", path: "/api/legge-tariffe" }, source },
+    });
+    expect(created.status()).toBe(201);
+
+    await gotoDati(page);
+    await uploadViaUi(page, "tariffe.json", { base: 1 });
+    await uploadViaUi(page, "aliquote.json", { iva: 22 });
+    const dati = page.locator("app-dati");
+    const files = dati.getByRole("listbox", { name: "File dati" });
+    await expect(files.getByRole("option")).toHaveCount(2);
+
+    // Il Tab entra nella lista una volta sola, sul file aperto; le frecce aprono il file d'arrivo.
+    const opened = files.getByRole("option", { selected: true });
+    await opened.focus();
+    await page.keyboard.press("Home");
+    await expect(files.getByRole("option").first()).toBeFocused();
+    await expect(files.getByRole("option").first()).toHaveAttribute("aria-selected", "true");
+    await page.keyboard.press("End");
+    await expect(files.getByRole("option").last()).toBeFocused();
+    await expect(files.locator('[tabindex="0"]')).toHaveCount(1);
+
+    // «Usato da»: il riferimento apre l'endpoint nel catalogo.
+    await files.getByRole("option", { name: /tariffe/ }).click();
+    await dati.getByRole("button", { name: "Apri GET /api/legge-tariffe nel catalogo" }).click();
+    await expect(page).toHaveURL(/\/mocks/);
+    await expect(page.locator("mocks-next-detail").getByRole("heading", { name: "/api/legge-tariffe", exact: true })).toBeVisible();
+  });
+
   test("un file non-json viene rifiutato senza toccare l'elenco", async ({ page }) => {
     await gotoDati(page);
     await page.locator('app-dati input[type="file"]').setInputFiles({

@@ -16,6 +16,8 @@ import {
 } from '@ng-icons/lucide';
 import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
 import { ViewStateService } from '../../shared/view-state.service';
+import { ResizableListWidth } from '../../shared/resizable-list-width';
+import { listNavigationTarget } from '../../shared/list-selection';
 import { UiButton } from '../../ui/ui-button/ui-button';
 import { UiCheckbox } from '../../ui/ui-checkbox/ui-checkbox';
 import { UiCode } from '../../ui/ui-code/ui-code';
@@ -66,9 +68,10 @@ const SELECTED_FILE_STATE_KEY = 'dati-selected';
     >
       <!-- TESTATA: come il catalogo, nome della vista e conteggio, che e' quello della scheda aperta. -->
       <ui-page-header [title]="'viewRail.dati' | transloco">
-        <div class="flex items-center rounded-lg bg-muted p-0.5" role="tablist" [attr.aria-label]="'dati.tabsAria' | transloco">
-          <button id="dati-files-tab" type="button" role="tab" aria-controls="dati-files-panel" class="rounded-md px-3 py-1.5 text-[12px] font-semibold transition" [class.bg-card]="activeTab() === 'files'" [attr.aria-selected]="activeTab() === 'files'" (click)="switchTab('files')">{{ 'dati.filesTab' | transloco }}</button>
-          <button id="dati-runtime-tab" type="button" role="tab" aria-controls="dati-runtime-panel" class="rounded-md px-3 py-1.5 text-[12px] font-semibold transition" [class.bg-card]="activeTab() === 'runtime'" [attr.aria-selected]="activeTab() === 'runtime'" (click)="switchTab('runtime')">{{ 'dati.runtimeTab' | transloco }}</button>
+        <!-- Schede ARIA: il Tab si ferma solo su quella attiva, le frecce (e Home/Fine) passano all'altra. -->
+        <div class="flex items-center rounded-lg bg-muted p-0.5" role="tablist" [attr.aria-label]="'dati.tabsAria' | transloco" (keydown)="onTabsKeydown($event)">
+          <button id="dati-files-tab" type="button" role="tab" aria-controls="dati-files-panel" class="rounded-md px-3 py-1.5 text-[12px] font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70" [class.bg-card]="activeTab() === 'files'" [attr.aria-selected]="activeTab() === 'files'" [attr.tabindex]="activeTab() === 'files' ? 0 : -1" (click)="switchTab('files')">{{ 'dati.filesTab' | transloco }}</button>
+          <button id="dati-runtime-tab" type="button" role="tab" aria-controls="dati-runtime-panel" class="rounded-md px-3 py-1.5 text-[12px] font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70" [class.bg-card]="activeTab() === 'runtime'" [attr.aria-selected]="activeTab() === 'runtime'" [attr.tabindex]="activeTab() === 'runtime' ? 0 : -1" (click)="switchTab('runtime')">{{ 'dati.runtimeTab' | transloco }}</button>
         </div>
         <ui-badge class="whitespace-nowrap">{{ activeTab() === 'files' ? files().length : runtimeItems().length }}</ui-badge>
         @if (activeTab() === 'runtime') {
@@ -95,7 +98,7 @@ const SELECTED_FILE_STATE_KEY = 'dati-selected';
       @if (activeTab() === 'files') {
       <!-- BODY: lista + preview -->
       <div id="dati-files-panel" class="relative z-10 flex min-h-0 flex-1" role="tabpanel" aria-labelledby="dati-files-tab">
-        <div class="flex min-h-0 w-[420px] shrink-0 flex-col border-r border-border">
+        <div class="flex min-h-0 shrink-0 flex-col border-r border-border" [style.width.px]="list.width()">
           @if (files().length === 0 && !loading()) {
           <div class="flex flex-1 flex-col items-center justify-center gap-3 p-8 text-center">
             <ng-icon name="lucideFileJson" size="2rem" class="text-muted-foreground/50" />
@@ -103,14 +106,19 @@ const SELECTED_FILE_STATE_KEY = 'dati-selected';
             <p class="max-w-[32ch] text-[12px] text-muted-foreground/80">{{ 'dati.emptyHint' | transloco }}</p>
           </div>
           } @else {
-          <div class="min-h-0 flex-1 overflow-y-auto mx-scroll">
+          <!-- Lista come quelle del Monitor e dello Storico: un solo punto di Tab, il file aperto;
+               frecce, Home e Fine aprono il file di arrivo. -->
+          <div class="min-h-0 flex-1 overflow-y-auto mx-scroll" role="listbox" [attr.aria-label]="'dati.filesListAria' | transloco" (keydown)="onListKeydown($event)">
             @for (f of files(); track f.name) {
-            <button
-              type="button"
-              (click)="select(f.name)"
-              class="flex w-full items-center gap-2.5 border-b border-border-soft px-4 py-3 text-left transition hover:bg-white/[0.03]"
-              [class.mx-open]="f.name === selectedName()"
+            <div
+              role="option"
+              [attr.data-file-name]="f.name"
+              [attr.aria-selected]="f.name === selectedName()"
               [attr.aria-current]="f.name === selectedName() ? 'true' : null"
+              [attr.tabindex]="f.name === tabbableFile() ? 0 : -1"
+              (click)="select(f.name)"
+              class="flex w-full cursor-pointer select-none items-center gap-2.5 border-b border-border-soft px-4 py-3 text-left transition hover:bg-white/[0.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/70"
+              [class.mx-open]="f.name === selectedName()"
             >
               <ng-icon name="lucideFileJson" size="0.95rem" class="shrink-0 text-brand" />
               <span class="min-w-0 flex-1 truncate font-mono text-[13px]">{{ f.name }}</span>
@@ -121,11 +129,21 @@ const SELECTED_FILE_STATE_KEY = 'dati-selected';
               <span class="shrink-0 rounded-md bg-[color-mix(in_srgb,var(--status-4xx)_14%,transparent)] px-1.5 py-0.5 text-[10.5px] font-bold text-[var(--status-4xx)]" [uiTooltip]="'dati.largeFileTip' | transloco">{{ 'dati.largeFile' | transloco }}</span>
               }
               <span class="shrink-0 font-mono text-[11.5px] tabular-nums text-muted-foreground">{{ formatSize(f.sizeBytes) }}</span>
-            </button>
+            </div>
             }
           </div>
           }
         </div>
+
+        <!-- divisore trascinabile: ridimensiona la lista (largh. ricordata), come nel Monitor e nello Storico -->
+        <div
+          class="relative z-20 -ml-px w-1.5 shrink-0 cursor-col-resize bg-transparent transition-colors hover:bg-brand/30"
+          (pointerdown)="list.startResize($event)"
+          (dblclick)="list.reset()"
+          role="separator"
+          aria-orientation="vertical"
+          [title]="'common.resizeHint' | transloco"
+        ></div>
 
         <!-- PREVIEW / DETTAGLIO -->
         <div class="relative flex min-w-0 flex-1 flex-col overflow-hidden bg-muted">
@@ -195,11 +213,18 @@ const SELECTED_FILE_STATE_KEY = 'dati-selected';
               <span class="text-[11px] font-bold uppercase tracking-[0.12em] text-muted-foreground" [uiTooltip]="'dati.usedByCaveat' | transloco">{{ 'dati.usedByTitle' | transloco }}</span>
               @if (selectedUsedBy().length > 0) {
               @for (u of selectedUsedBy(); track u.id + u.type) {
-              <span class="inline-flex items-center gap-1.5 rounded-md bg-black/20 px-2 py-0.5 font-mono text-[11.5px] ring-1 ring-border">
+              <!-- Ogni riferimento apre l'endpoint nel catalogo, come «Vai al mock» nel Monitor. -->
+              <button
+                type="button"
+                class="inline-flex items-center gap-1.5 rounded-md bg-black/20 px-2 py-0.5 font-mono text-[11.5px] ring-1 ring-border transition hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70"
+                [uiTooltip]="'dati.openUsageTip' | transloco"
+                [attr.aria-label]="'dati.openUsageAria' | transloco: { method: u.method, path: u.path }"
+                (click)="openUsage(u)"
+              >
                 <span class="font-bold text-foreground">{{ u.method }}</span>
                 <span class="text-muted-foreground">{{ u.path }}</span>
                 @if (u.type === 'middleware') { <span class="text-[9.5px] font-bold uppercase tracking-wide text-type-middleware">mw</span> }
-              </span>
+              </button>
               }
               } @else {
               <span class="text-[12px] text-muted-foreground">{{ 'dati.usedByNone' | transloco }}</span>
@@ -585,6 +610,47 @@ export class DatiPage implements OnInit {
       element?.focus();
       if (select && element instanceof HTMLInputElement) element.select();
     }, { injector: this.injector });
+  }
+
+  /** Larghezza della lista dei file, ridimensionabile col divisore e ricordata. */
+  protected readonly list = new ResizableListWidth('mx-dati-list-width', 420);
+
+  /** La riga raggiungibile col Tab: il file aperto, o il primo se non ce n'e' uno. */
+  protected readonly tabbableFile = computed(() => this.selectedName() ?? this.files()[0]?.name ?? null);
+
+  /** Frecce, Home e Fine nella lista: aprono il file di arrivo e gli danno il fuoco. */
+  protected onListKeydown(event: KeyboardEvent): void {
+    if (event.ctrlKey || event.metaKey || event.altKey) return;
+    const target = listNavigationTarget(event.key, this.files().map((f) => f.name), this.selectedName());
+    if (target == null) return;
+    event.preventDefault();
+    this.select(target);
+    this.focusAfterRender(() =>
+      Array.from(this.host.nativeElement.querySelectorAll<HTMLElement>('[data-file-name]')).find(
+        (row) => row.getAttribute('data-file-name') === target,
+      ),
+    );
+  }
+
+  /** Frecce, Home e Fine sulle schede: passano all'altra e le danno il fuoco (modello ARIA). */
+  protected onTabsKeydown(event: KeyboardEvent): void {
+    const order: readonly ('files' | 'runtime')[] = ['files', 'runtime'];
+    const index = order.indexOf(this.activeTab());
+    const next =
+      event.key === 'ArrowRight' ? order[(index + 1) % order.length]
+      : event.key === 'ArrowLeft' ? order[(index - 1 + order.length) % order.length]
+      : event.key === 'Home' ? order[0]
+      : event.key === 'End' ? order[order.length - 1]
+      : null;
+    if (next == null) return;
+    event.preventDefault();
+    this.switchTab(next);
+    this.focusAfterRender(() => this.host.nativeElement.querySelector<HTMLElement>(`#dati-${next}-tab`));
+  }
+
+  /** Apre nel catalogo l'endpoint che usa il file. */
+  protected openUsage(usage: DataFileUsage): void {
+    this.router.navigate(['/mocks'], { queryParams: { m: usage.method, p: usage.path } });
   }
 
   /** Rinomina ed eliminazione si escludono: aprirne una chiude l'altra. */

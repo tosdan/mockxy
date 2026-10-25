@@ -10,6 +10,7 @@
     "sequenceStepTip": "Sequence step that served this request"
   },
   "common": {
+    "resizeHint": "Drag to resize · double-click to reset",
     "selectionModeLabel": "Select",
     "selectionModeTitle": "Selection mode",
     "selectionModeHint": "click rows to check them",
@@ -44,7 +45,6 @@
     "selectLoaded": "Select loaded",
     "deselect": "Deselect",
     "loading": "Loading…",
-    "resizeHint": "Drag to resize · double-click to reset",
     "emptyDisk": "No dump on disk. Enable \"Dump\" in the monitor to record.",
     "selectRow": "Select a row to see its details.",
     "createFromFileTip": "Create mocks from this whole file",
@@ -63,6 +63,9 @@
     "resultUnavailable": "{{count}} no longer available"
   },
   "dati": {
+    "filesListAria": "Data files",
+    "openUsageTip": "Open in the catalog",
+    "openUsageAria": "Open {{method}} {{path}} in the catalog",
     "title": "Data",
     "upload": "Upload",
     "empty": "No data files.",
@@ -338,7 +341,6 @@
     "connecting": "Connecting to live monitor…",
     "emptyNoRequests": "No requests intercepted.",
     "emptyFiltered": "No requests match the current filter.",
-    "resizeHint": "Drag to resize · double-click to reset",
     "goToDefinitionTip": "Open the definition in the catalog",
     "goToMock": "Go to mock",
     "coveringMockTip": "This route is now covered by a catalog mock",
