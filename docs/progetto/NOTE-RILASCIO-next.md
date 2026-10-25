@@ -2,6 +2,93 @@
 
 ## Prossima versione
 
+## v1.8.0
+
+Un secondo giro sull'interfaccia, pagina per pagina: il dettaglio dell'endpoint, il catalogo, il
+Monitor, lo Storico, la pagina Dati e le finestre. Le righe si spuntano senza caselle e la riga
+aperta si segna dal lato del dettaglio; Monitor e Storico condividono lo stesso dettaglio; la
+tastiera e gli screen reader trovano nomi e fuoco dove servono. Nessun cambiamento ai workspace.
+L'admin API ha una sola aggiunta compatibile: vedi [Admin API](#admin-api).
+
+Le [note per la pubblicazione, in italiano e inglese](NOTE-RILASCIO-v1.8.0.md) riassumono le
+novità rispetto alla 1.7.1.
+
+### Catalogo
+
+- **Selezione senza caselle sugli endpoint:** un clic apre l'endpoint, **Ctrl+clic** (⌘+clic su
+  Mac) lo spunta. Il pulsante **Seleziona** avvia una modalità in cui il clic spunta, finché
+  «Fine» non la chiude tenendo le spunte; **Esc** annulla da qualunque punto della pagina, tranne
+  campi, editor, menu e finestre. Maiuscole+clic non spunta più intervalli: nel catalogo si spunta
+  per endpoint o per collezione intera.
+- **Segni della spunta:** le righe spuntate hanno una tinta indaco e un bordo sinistro dello
+  stesso colore. Le collezioni tengono la casella a tre stati, in indaco; una collezione spuntata
+  in parte ha strisce e bordo tratteggiato, e il suo contatore dice quanti endpoint sono spuntati
+  sul totale.
+- **Riga aperta:** la sfumatura cresce verso destra e il bordo chiaro sta a destra, dal lato del
+  dettaglio. È lo stesso segno nel Monitor e nello Storico.
+- **Niente righe verticali dell'indentazione:** il rientro delle righe basta a leggere
+  l'annidamento.
+- **Menu «Nuovo»:** Mock, Handler e Middleware hanno le icone e i colori del tipo; a Middleware
+  mancava l'icona.
+
+### Dettaglio dell'endpoint
+
+- **Tendina delle varianti:** mostra l'icona del tipo e il titolo, e resta leggibile anche col
+  catalogo allargato; nell'elenco ogni variante ha tipo e status in una nota a destra.
+- **Riepilogo della sequenza:** ogni passo mostra il titolo della sua variante.
+- **«Duplica in…»** al posto di «Copia», e la finestra si chiama «Duplica endpoint». All'apertura
+  non mostra più un errore: suggerisce di scegliere un altro metodo o path. Un conflitto è
+  spiegato nella lingua dell'app.
+- **Chip «SEQ 2 passi»** al posto di «2 Step». Il ritardo compare solo per i mock, dove ha
+  effetto.
+
+### Monitor e Storico
+
+- **Selezione come nel catalogo:** pulsante **Seleziona**, Ctrl+clic ed Esc. Qui
+  **Maiuscole+clic** spunta ancora l'intervallo: in una lista in ordine di tempo prende una raffica
+  di richieste consecutive. Le righe spuntate hanno tinta e bordo indaco; nel Monitor, su una
+  richiesta non mockata, l'indaco prende il posto della barra ambra finché resta spuntata.
+- **Riga aperta:** segnata a destra; nel Monitor la barra ambra delle non mockate ora resta
+  visibile anche sulla riga aperta.
+- **Un dettaglio solo:** Monitor e Storico usano lo stesso pannello. Lo Storico mostra ora il
+  nome dello status, il passo di sequenza e l'errore di shared state; nel Monitor il body della
+  response riempie lo spazio e scorre per conto suo, e i titoli delle sezioni sono tradotti.
+
+### Dati
+
+- **Rinomina:** il fuoco va nel campo col nome selezionato; Esc e la conferma lo riportano alla
+  matita. Rinomina ed eliminazione si escludono, e le conferme di eliminazione e di azzeramento
+  prendono il fuoco.
+- **Tastiera:** l'elenco dei file ha un solo punto di Tab e si scorre con le frecce; le schede
+  «File dati» e «Stato runtime» si cambiano con le frecce.
+- **Elenco ridimensionabile:** come nel Monitor e nello Storico, con la larghezza ricordata.
+- **«Usato da»:** ogni riferimento apre l'endpoint nel catalogo.
+- **Stato runtime tradotto:** «pronta», «in inizializzazione».
+
+### Accessibilità e resto dell'interfaccia
+
+- **Colori delle icone:** le classi di colore sulle icone ora valgono; prima uno stile di
+  `ng-icon` le annullava.
+- **Anelli di focus** al 70% (almeno 3:1), staccati di 2 px sui controlli pieni.
+- **Finestre:** ognuna prende il nome dal suo titolo e la X si chiama «Chiudi»; i campi delle
+  impostazioni del workspace hanno le etichette collegate; la palette dei comandi è un dialog
+  solo, chiamato «Comandi».
+- **Caselle:** tutte le caselle dell'app hanno di nuovo il loro nome accessibile.
+- **Tooltip:** non resta più un tooltip orfano nell'angolo dopo il clic su un pulsante che
+  sparisce.
+- axe-core non segnala violazioni nelle pagine e nelle finestre negli stati verificati.
+
+### Admin API
+
+- **`409` per un endpoint che esiste già:** le risposte di `POST /mocks` (mock e script) e di
+  `POST /mocks/:id/copy`, anche con `dryRun`, portano `details.code: "ENDPOINT_EXISTS"`; la copia
+  aggiunge `details.existingMockId`, che la creazione aveva già. Messaggio e status non cambiano:
+  nessun client deve aggiornarsi.
+
+### Test e CI
+
+- La suite e2e (Chromium) gira in CI su ogni pull request e su ogni push su `main`.
+
 ## v1.7.1
 
 Contiene tutte le novità della [1.7.0](#v170), che non è stata pubblicata: la sua pipeline di
