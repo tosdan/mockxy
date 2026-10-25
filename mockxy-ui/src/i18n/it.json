@@ -112,6 +112,8 @@
     "runtimeEmptyHint": "Le risorse compaiono alla prima chiamata di sharedState.open() e si ricreano dal seed dopo un reset.",
     "runtimeResource": "Risorsa / seedKey",
     "runtimeStatus": "Stato",
+    "runtimeStatusReady": "pronta",
+    "runtimeStatusInitializing": "in inizializzazione",
     "runtimeSizeVersion": "Dimensione / versione",
     "runtimeLastEndpoint": "Ultimo endpoint",
     "runtimeActions": "Azioni",

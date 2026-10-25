@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, ElementRef, Injector, OnInit, afterNextRender, computed, inject, signal, viewChild } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { finalize } from 'rxjs';
 import { NgIcon, provideIcons } from '@ng-icons/core';
@@ -83,10 +83,10 @@ const SELECTED_FILE_STATE_KEY = 'dati-selected';
           } @else {
           <button ui-button variant="outline" size="sm" [disabled]="runtimeLoading()" (click)="reloadRuntime()"><ng-icon name="lucideRefreshCw" size="0.9rem" /> {{ 'dati.runtimeRefresh' | transloco }}</button>
           @if (confirmingResetAll()) {
-          <button ui-button variant="destructive" size="sm" autofocus [disabled]="runtimeBusyAll()" (click)="resetAllRuntime()"><ng-icon name="lucideRotateCcw" size="0.9rem" /> {{ 'dati.runtimeResetAllConfirm' | transloco: { count: runtimeItems().length } }}</button>
-          <button ui-button variant="outline" size="sm" (click)="confirmingResetAll.set(false)">{{ 'common.cancel' | transloco }}</button>
+          <button ui-button variant="destructive" size="sm" data-confirm-reset-all [disabled]="runtimeBusyAll()" (click)="resetAllRuntime()"><ng-icon name="lucideRotateCcw" size="0.9rem" /> {{ 'dati.runtimeResetAllConfirm' | transloco: { count: runtimeItems().length } }}</button>
+          <button ui-button variant="outline" size="sm" (click)="cancelResetAll()">{{ 'common.cancel' | transloco }}</button>
           } @else {
-          <button ui-button variant="destructive" size="sm" [disabled]="runtimeItems().length === 0 || runtimeLoading()" (click)="confirmingResetAll.set(true)"><ng-icon name="lucideRotateCcw" size="0.9rem" /> {{ 'dati.runtimeResetAll' | transloco }}</button>
+          <button ui-button variant="destructive" size="sm" data-reset-all [disabled]="runtimeItems().length === 0 || runtimeLoading()" (click)="askResetAll()"><ng-icon name="lucideRotateCcw" size="0.9rem" /> {{ 'dati.runtimeResetAll' | transloco }}</button>
           }
           }
         </ng-container>
@@ -109,7 +109,8 @@ const SELECTED_FILE_STATE_KEY = 'dati-selected';
               type="button"
               (click)="select(f.name)"
               class="flex w-full items-center gap-2.5 border-b border-border-soft px-4 py-3 text-left transition hover:bg-white/[0.03]"
-              [class.mx-selected]="f.name === selectedName()"
+              [class.mx-open]="f.name === selectedName()"
+              [attr.aria-current]="f.name === selectedName() ? 'true' : null"
             >
               <ng-icon name="lucideFileJson" size="0.95rem" class="shrink-0 text-brand" />
               <span class="min-w-0 flex-1 truncate font-mono text-[13px]">{{ f.name }}</span>
@@ -138,6 +139,7 @@ const SELECTED_FILE_STATE_KEY = 'dati-selected';
             <div class="flex shrink-0 flex-wrap items-center gap-2 border-b border-border px-6 py-3.5">
               @if (renaming()) {
               <input
+                #renameInput
                 ui-input
                 class="w-64 font-mono text-[13px]"
                 [value]="renameDraft()"
@@ -150,7 +152,7 @@ const SELECTED_FILE_STATE_KEY = 'dati-selected';
               <button ui-button variant="ghost" size="icon" (click)="cancelRename()" [uiTooltip]="'dati.renameCancelTip' | transloco" [attr.aria-label]="'dati.renameCancelTip' | transloco"><ng-icon name="lucideX" size="0.9rem" /></button>
               } @else {
               <span class="font-mono text-[15px] font-bold">{{ sel.name }}<span class="text-muted-foreground">.json</span></span>
-              <button ui-button variant="ghost" size="icon" (click)="startRename()" [uiTooltip]="'dati.renameTip' | transloco" [attr.aria-label]="'dati.renameTip' | transloco"><ng-icon name="lucidePencil" size="0.9rem" /></button>
+              <button #renameButton ui-button variant="ghost" size="icon" (click)="startRename()" [uiTooltip]="'dati.renameTip' | transloco" [attr.aria-label]="'dati.renameTip' | transloco"><ng-icon name="lucidePencil" size="0.9rem" /></button>
               }
               <span class="font-mono text-[11.5px] text-muted-foreground">{{ formatSize(sel.sizeBytes) }} · {{ formatDate(sel.updatedAt) }}</span>
 
@@ -159,10 +161,10 @@ const SELECTED_FILE_STATE_KEY = 'dati-selected';
                   <ng-icon name="lucideClipboardCopy" size="0.9rem" /> {{ 'dati.copyRef' | transloco }}
                 </button>
                 @if (confirmingDelete()) {
-                <button ui-button variant="destructive" size="sm" [disabled]="busy()" (click)="confirmDelete()"><ng-icon name="lucideTrash2" size="0.85rem" /> {{ 'dati.deleteConfirm' | transloco }}</button>
-                <button ui-button variant="outline" size="sm" (click)="confirmingDelete.set(false)">{{ 'dati.deleteCancel' | transloco }}</button>
+                <button #deleteConfirmButton ui-button variant="destructive" size="sm" [disabled]="busy()" (click)="confirmDelete()"><ng-icon name="lucideTrash2" size="0.85rem" /> {{ 'dati.deleteConfirm' | transloco }}</button>
+                <button ui-button variant="outline" size="sm" (click)="cancelDelete()">{{ 'dati.deleteCancel' | transloco }}</button>
                 } @else {
-                <button ui-button variant="destructive" size="sm" [disabled]="busy()" (click)="confirmingDelete.set(true)"><ng-icon name="lucideTrash2" size="0.85rem" /> {{ 'dati.delete' | transloco }}</button>
+                <button #deleteButton ui-button variant="destructive" size="sm" [disabled]="busy()" (click)="askDelete()"><ng-icon name="lucideTrash2" size="0.85rem" /> {{ 'dati.delete' | transloco }}</button>
                 }
               </div>
             </div>
@@ -170,7 +172,7 @@ const SELECTED_FILE_STATE_KEY = 'dati-selected';
             <!-- rinomina di un file referenziato: opzione per aggiornare anche i data() negli handler -->
             @if (renaming() && selectedUsedBy().length > 0) {
             <div class="flex shrink-0 items-center gap-2 border-b border-border bg-[color-mix(in_srgb,var(--brand)_8%,transparent)] px-6 py-2 text-[12px]">
-              <ui-checkbox [(checked)]="rewriteRefsOnRename" [attr.aria-label]="'dati.renameRewriteAria' | transloco" />
+              <ui-checkbox [(checked)]="rewriteRefsOnRename" [ariaLabel]="'dati.renameRewriteAria' | transloco" />
               <span class="text-muted-foreground">{{ 'dati.renameRewrite' | transloco: { count: selectedUsedBy().length } }}</span>
             </div>
             }
@@ -250,15 +252,15 @@ const SELECTED_FILE_STATE_KEY = 'dati-selected';
               @for (item of runtimeItems(); track item.name) {
               <tr class="border-t border-border-soft" [class.mx-selected]="item.name === selectedRuntimeName()" [attr.data-shared-state-name]="item.name">
                 <td class="px-4 py-3 align-top"><div class="font-mono text-[13px] font-bold">{{ item.name }}</div><div class="mt-1 font-mono text-[11px] text-muted-foreground">{{ item.seedKey }}</div></td>
-                <td class="px-4 py-3 align-top"><span class="rounded-md bg-muted px-2 py-1 text-[10.5px] font-bold">{{ item.status }}</span></td>
+                <td class="px-4 py-3 align-top"><span class="rounded-md bg-muted px-2 py-1 text-[10.5px] font-bold">{{ runtimeStatusLabel(item.status) | transloco }}</span></td>
                 <td class="px-4 py-3 align-top font-mono tabular-nums"><div>{{ item.sizeBytes == null ? '—' : formatSize(item.sizeBytes) }}</div><div class="mt-1 text-[11px] text-muted-foreground">v{{ item.version ?? '—' }}</div></td>
                 <td class="px-4 py-3 align-top"><div class="font-mono text-[11.5px]">{{ originLabel(item.lastAccessedBy ?? item.initializedBy) }}</div><div class="mt-1 text-[11px] text-muted-foreground">{{ formatRuntimeDate(item.lastAccessAt ?? item.initializedAt) }}</div></td>
                 <td class="px-4 py-3 text-right align-top">
                   @if (confirmingRuntimeName() === item.name) {
-                  <button ui-button variant="destructive" size="sm" autofocus [disabled]="runtimeBusyNames().has(item.name)" (click)="resetRuntime(item.name)">{{ 'dati.runtimeResetConfirm' | transloco }}</button>
-                  <button ui-button variant="ghost" size="sm" (click)="confirmingRuntimeName.set(null)">{{ 'common.cancel' | transloco }}</button>
+                  <button ui-button variant="destructive" size="sm" data-confirm-reset [disabled]="runtimeBusyNames().has(item.name)" (click)="resetRuntime(item.name)">{{ 'dati.runtimeResetConfirm' | transloco }}</button>
+                  <button ui-button variant="ghost" size="sm" (click)="cancelResetRuntime(item.name)">{{ 'common.cancel' | transloco }}</button>
                   } @else {
-                  <button ui-button variant="outline" size="sm" [disabled]="runtimeBusyNames().has(item.name)" (click)="confirmingRuntimeName.set(item.name)"><ng-icon name="lucideRotateCcw" size="0.8rem" /> {{ 'dati.runtimeReset' | transloco }}</button>
+                  <button ui-button variant="outline" size="sm" data-reset [disabled]="runtimeBusyNames().has(item.name)" (click)="askResetRuntime(item.name)"><ng-icon name="lucideRotateCcw" size="0.8rem" /> {{ 'dati.runtimeReset' | transloco }}</button>
                   }
                 </td>
               </tr>
@@ -373,6 +375,9 @@ export class DatiPage implements OnInit {
     })).subscribe({
       next: ({ reset }) => {
         this.confirmingRuntimeName.set(null);
+        // La risorsa azzerata esce dall'elenco con la sua riga, e «Aggiorna» e' disabilitato mentre
+        // l'elenco si ricarica: il fuoco va sulla scheda, che resta e risponde alle frecce.
+        this.focusAfterRender(() => this.host.nativeElement.querySelector<HTMLElement>('#dati-runtime-tab'));
         this.runtimeAnnouncement.set(this.transloco.translate(
           reset ? 'dati.runtimeResetDone' : 'dati.runtimeAlreadyAbsent',
           { name },
@@ -388,12 +393,18 @@ export class DatiPage implements OnInit {
     this.api.resetAllSharedState().pipe(finalize(() => this.runtimeBusyAll.set(false))).subscribe({
       next: ({ resetCount }) => {
         this.confirmingResetAll.set(false);
+        this.focusAfterRender(() => this.host.nativeElement.querySelector<HTMLElement>('#dati-runtime-tab'));
         this.selectedRuntimeName.set(null);
         this.runtimeAnnouncement.set(this.transloco.translate('dati.runtimeResetAllDone', { count: resetCount }));
         this.reloadRuntime();
       },
       error: (error) => this.showError(error),
     });
+  }
+
+  /** Chiave i18n dello stato di una risorsa; uno stato che il motore aggiungesse resta com'e'. */
+  protected runtimeStatusLabel(status: string): string {
+    return { ready: 'dati.runtimeStatusReady', initializing: 'dati.runtimeStatusInitializing' }[status] ?? status;
   }
 
   protected originLabel(origin: SharedStateSummary['initializedBy']): string {
@@ -407,11 +418,13 @@ export class DatiPage implements OnInit {
     return timestamp == null ? '—' : new Date(timestamp).toLocaleString();
   }
 
-  private reload(keepSelection = true): void {
+  /** `afterLoad`: da eseguire con l'elenco nuovo in pagina (per esempio, dove portare il fuoco). */
+  private reload(keepSelection = true, afterLoad?: () => void): void {
     this.loading.set(true);
     this.api.listDataFiles().pipe(finalize(() => this.loading.set(false))).subscribe({
       next: ({ items }) => {
         this.files.set(items);
+        afterLoad?.();
         const current = this.selectedName();
         if (!keepSelection || current == null || !items.some((f) => f.name === current)) {
           this.select(items[0]?.name ?? null);
@@ -553,14 +566,77 @@ export class DatiPage implements OnInit {
 
   // --- rinomina / cancellazione ---------------------------------------------------------------
 
+  private readonly injector = inject(Injector);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+  // read: ElementRef perche' sui pulsanti c'e' il componente ui-button: senza, si avrebbe lui.
+  private readonly renameInput = viewChild('renameInput', { read: ElementRef<HTMLInputElement> });
+  private readonly renameButton = viewChild('renameButton', { read: ElementRef<HTMLButtonElement> });
+  private readonly deleteButton = viewChild('deleteButton', { read: ElementRef<HTMLButtonElement> });
+  private readonly deleteConfirmButton = viewChild('deleteConfirmButton', { read: ElementRef<HTMLButtonElement> });
+
+  /**
+   * Porta il fuoco su un elemento appena disegnato. Il pulsante cliccato sparisce col clic (la
+   * matita, «Elimina»): senza, il fuoco cadeva sul body e da tastiera si perdeva il punto.
+   */
+  private focusAfterRender(target: () => ElementRef<HTMLElement> | HTMLElement | null | undefined, select = false): void {
+    afterNextRender(() => {
+      const found = target();
+      const element = found instanceof ElementRef ? found.nativeElement : found;
+      element?.focus();
+      if (select && element instanceof HTMLInputElement) element.select();
+    }, { injector: this.injector });
+  }
+
+  /** Rinomina ed eliminazione si escludono: aprirne una chiude l'altra. */
   protected startRename(): void {
+    this.confirmingDelete.set(false);
     this.renameDraft.set(this.selectedName() ?? '');
     this.rewriteRefsOnRename.set(true);
     this.renaming.set(true);
+    this.focusAfterRender(this.renameInput, true);
   }
 
   protected cancelRename(): void {
     this.renaming.set(false);
+    this.focusAfterRender(this.renameButton);
+  }
+
+  protected askDelete(): void {
+    this.renaming.set(false);
+    this.confirmingDelete.set(true);
+    this.focusAfterRender(this.deleteConfirmButton);
+  }
+
+  protected cancelDelete(): void {
+    this.confirmingDelete.set(false);
+    this.focusAfterRender(this.deleteButton);
+  }
+
+  /** Conferme dello stato runtime: stesso trattamento del fuoco, sulla riga della risorsa. */
+  private runtimeRow(name: string): HTMLElement | undefined {
+    return Array.from(this.host.nativeElement.querySelectorAll<HTMLElement>('[data-shared-state-name]')).find(
+      (row) => row.getAttribute('data-shared-state-name') === name,
+    );
+  }
+
+  protected askResetRuntime(name: string): void {
+    this.confirmingRuntimeName.set(name);
+    this.focusAfterRender(() => this.runtimeRow(name)?.querySelector<HTMLElement>('[data-confirm-reset]'));
+  }
+
+  protected cancelResetRuntime(name: string): void {
+    this.confirmingRuntimeName.set(null);
+    this.focusAfterRender(() => this.runtimeRow(name)?.querySelector<HTMLElement>('[data-reset]'));
+  }
+
+  protected askResetAll(): void {
+    this.confirmingResetAll.set(true);
+    this.focusAfterRender(() => this.host.nativeElement.querySelector<HTMLElement>('[data-confirm-reset-all]'));
+  }
+
+  protected cancelResetAll(): void {
+    this.confirmingResetAll.set(false);
+    this.focusAfterRender(() => this.host.nativeElement.querySelector<HTMLElement>('[data-reset-all]'));
   }
 
   protected confirmRename(): void {
@@ -584,7 +660,9 @@ export class DatiPage implements OnInit {
             ? this.transloco.translate('dati.toastRenamedRewritten', { count: result.referencesRewritten })
             : result.fileName;
           this.toast.show({ title: this.t('dati.toastRenamedTitle'), description, tone: 'success' });
-          this.reload();
+          // Col nome nuovo il dettaglio si ridisegna quando arriva l'elenco: il fuoco va alla matita
+          // nuova, non a quella di prima.
+          this.reload(true, () => this.focusAfterRender(this.renameButton));
         },
         error: (error) => this.showError(error),
       });
