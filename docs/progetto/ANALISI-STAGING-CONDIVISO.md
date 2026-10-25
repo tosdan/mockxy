@@ -521,3 +521,18 @@ l'aggiornamento dei mock «senza rebuild né riavvio»: con watch e admin spenti
 **Scartate.** Immagine derivata per ogni versione dei mock (build in CI a ogni modifica);
 ricarica a caldo su segnale o con watch in polling (codice nuovo e gestione dello stato
 degradato).
+
+### D7 — Health, versione dei mock e variante nei log
+
+- **Health.** `GET /_admin/health`, servito anche con l'admin API spenta (fuori dal suo router;
+  `/_admin` è già un prefisso riservato, mai mockato). `200` se il workspace è caricato senza
+  errori, `503` con i file rotti altrimenti: lo staging non risulta «sano» con un endpoint
+  mockato sparito per un file rotto arrivato dal merge (rischio introdotto da D6).
+- **Versione dei mock.** Variabile `MOCKS_VERSION`, impostata dallo script di riavvio (per esempio
+  `MOCKS_VERSION=$(git rev-parse --short HEAD)`), riportata nell'health e nel log di avvio. La
+  ricetta va nella guida del profilo staging.
+- **Log.** La riga «Request completed» riporta anche l'endpoint e la variante (file della
+  response) che hanno risposto.
+
+**Scartate per ora.** Metriche in formato Prometheus (§5.3.3): i log JSON danno le stesse
+informazioni a chi li aggrega; da riprendere se il team avrà un Prometheus da alimentare.
