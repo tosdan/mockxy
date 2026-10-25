@@ -390,8 +390,9 @@ staging» non è un'immagine nuova: è l'immagine standalone di oggi con `PROXY_
      fase di implementazione se affiancarne uno o parametrizzarlo);
    - la topologia tipica: reverse proxy che serve il frontend e manda `/api` a Mockxy, stessa
      origine, CORS non necessario, `TRUST_PROXY=true` (D5);
-   - l'aggiornamento: `git pull`, riavvio con `MOCKS_VERSION=$(git rev-parse --short HEAD)`,
-     controllo dell'health (D6, D7);
+   - l'aggiornamento: arresto del container, `git pull`, avvio con
+     `MOCKS_VERSION=$(git rev-parse --short HEAD)`, controllo dell'health (D6, D7); la variante
+     con una cartella per versione e il collegamento `current`;
    - `NODE_EXTRA_CA_CERTS` per la CA interna; header tecnici nel reverse proxy (D9);
    - l'admin spenta e perché (D2); un backend per istanza (D8);
    - le regole per i mock destinati allo staging: varianti di default in git, sequenze con
@@ -523,12 +524,24 @@ simili: Mockxy si fida degli header di un proxy solo quando gli si dice che il p
 documentazione con `proxy_redirect` di nginx (non copre Traefik e Ingress, e i cookie perdono
 comunque `Secure`).
 
-### D6 — I mock arrivano con `git pull` sul server e riavvio del container
+### D6 — I mock arrivano fermando il container, con `git pull` e un nuovo avvio
 
 Il profilo staging monta mock e file dati dal filesystem dell'host, come la standalone di oggi.
-Dopo il merge di una modifica ai mock (D1), sul server si esegue `git pull` e si riavvia il
-container. Nessun meccanismo di ricarica a caldo; il riavvio azzera anche lo stato condiviso
-degli handler e le sequenze, coerente con un ambiente congelato (D3).
+Dopo il merge di una modifica ai mock (D1), sul server si **ferma** il container, si esegue
+`git pull` e lo si **avvia** di nuovo. Nessun meccanismo di ricarica a caldo; il riavvio azzera
+anche lo stato condiviso degli handler e le sequenze, coerente con un ambiente congelato (D3).
+
+**Perché fermare prima del pull.** Definizioni dei mock e script degli handler si caricano
+all'avvio, ma i file dati (`data()`, `src/mocks/data-files.js:66`) e i file delle risposte di tipo
+file (`src/app.js:718`) si leggono dal disco a ogni richiesta. Con il motore acceso durante il
+pull convivrebbero definizioni vecchie e dati nuovi, o file a metà aggiornamento: risposte
+incoerenti o `500` in un ambiente che deve dare risultati affidabili. Un fermo di pochi secondi,
+che si manifesta come errore di connessione, è preferibile a risposte sbagliate.
+
+**Variante facoltativa.** Per un fermo più breve e un rollback immediato: checkout di ogni
+versione in una cartella propria (per esempio `releases/<commit>`), un collegamento `current`
+spostato sulla nuova, riavvio del container che monta `current`. La cartella in uso non cambia
+mai sotto il motore. La guida la cita senza imporla.
 
 **Da fare comunque.** Correggere [DEPLOYMENT.md](../it/DEPLOYMENT.md), che oggi promette
 l'aggiornamento dei mock «senza rebuild né riavvio»: con watch e admin spenti serve il riavvio.
