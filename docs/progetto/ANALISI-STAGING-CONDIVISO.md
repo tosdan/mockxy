@@ -1,13 +1,14 @@
 # Analisi — Mockxy come server di staging condiviso
 
-Stato: **analisi esplorativa, nessuna decisione presa**
+Stato: **analisi chiusa con le decisioni D1–D9 (§9); il piano risultante è in §6**
 
 Data: 25 ottobre 2026
 
 Ambito: assetto di deployment, sicurezza dell'admin API, isolamento tra sviluppatori,
 operatività, rete e instradamento, passaggio da mock a reale, monitor in team.
 
-Questo documento raccoglie cosa manca a Mockxy per servire bene un caso d'uso che oggi è
+Le sezioni 2–5 sono l'analisi esplorativa di partenza e restano come contesto delle scelte;
+dove una decisione di §9 le contraddice, vale la decisione. Questo documento raccoglie cosa manca a Mockxy per servire bene un caso d'uso che oggi è
 possibile solo forzandolo. Ogni lacuna riporta lo stato attuale verificato nel codice, perché
 conta nello scenario e una proposta di massima. Le proposte non sono specifiche: quando una voce
 viene scelta, passa in `BACKLOG-PRODOTTO.md` e riceve un design suo.
@@ -24,6 +25,10 @@ dev e dal QA, Mockxy sta tra il frontend e il backend:
 È lo scenario «Il backend non c'è ancora (e il confine si sposta)» di
 [SCENARI.md](../it/SCENARI.md), con una differenza decisiva: non è più un dev solo sulla sua
 macchina, ma **un processo condiviso, a lunga vita, usato da molte persone insieme**.
+
+Precisato durante le decisioni (D3): lo staging è un ambiente di prova end-to-end **congelato**,
+con il suo frontend deployato. Non è un banco di lavoro a cui i dev puntano il frontend locale
+per personalizzarlo; Mockxy riempie i buchi dove il frontend è più avanti del backend.
 
 ## 2. Esito in breve
 
@@ -360,47 +365,57 @@ interruttore, e quando. Ha senso solo con un'identità (§5.1.2).
 - **Concorrenza.** Nessun limite alle richieste concorrenti verso il backend: da valutare solo
   se lo staging mostra problemi reali.
 
-## 6. Priorità proposta
+## 6. Piano risultante
 
-**Fase 1 — rendere l'uso sicuro e gestibile.** Senza queste, lo scenario resta sconsigliabile.
+Le decisioni di §9 riducono il lavoro a poche modifiche al motore e a una guida. Il «profilo
+staging» non è un'immagine nuova: è l'immagine standalone di oggi con `PROXY_FALLBACK_ENABLED=true`,
+`BACKEND_URL` e `TRUST_PROXY=true`.
 
-1. Profilo staging condiviso (§5.1.1) con admin in sola lettura e niente codice via rete
-   (§5.1.3).
-2. Token sull'admin (§5.1.2) e interruttori globali dietro il livello di scrittura (§5.2.4).
-3. Health (§5.3.1) e ricarica dei mock senza riavvio, con versione servita (§5.3.4); correzione
-   di DEPLOYMENT.md.
-4. Reverse proxy: `TRUST_PROXY`, scheme dei redirect, cookie (§5.4.1); `X-Forwarded-*` verso il
-   backend (§5.4.2).
+**Motore.**
 
-**Fase 2 — renderlo comodo.**
+1. **`TRUST_PROXY`** (D5): con l'opzione attiva, redirect riscritti con protocollo e host da
+   `X-Forwarded-Proto`/`X-Forwarded-Host`; con `X-Forwarded-Proto: https` i cookie perdono solo
+   `Domain`. Nuova voce in `src/config.js`, nel censimento delle configurazioni e in `.env.example`.
+2. **`GET /_admin/health`** servito anche con l'admin spenta (D7): `200`, o `503` con i file
+   rotti del workspace; riporta `MOCKS_VERSION`.
+3. **`MOCKS_VERSION`** (D7) nell'health e nel log di avvio.
+4. **Endpoint e variante** nella riga di log «Request completed» (D7).
 
-5. Scenario e bypass per richiesta, da header o cookie (§5.2.2), con i preset di varianti.
-6. Prima il backend, poi il mock (§5.5.1).
-7. Monitor per più utenti (§5.6.2) e header della variante servita (§5.5.4).
+**Documentazione.**
 
-**Fase 3 — valore aggiunto.**
+5. **Correzione di [DEPLOYMENT.md](../it/DEPLOYMENT.md)** (D6): con watch e admin spenti, i mock
+   aggiornati richiedono il riavvio. Da fare anche da sola, è un errore di oggi.
+6. **Guida del profilo staging**, in `docs/it` e `docs/en`, con:
+   - il compose d'esempio (l'attuale `docker-compose.staging.yml` è solo-mock: da decidere in
+     fase di implementazione se affiancarne uno o parametrizzarlo);
+   - la topologia tipica: reverse proxy che serve il frontend e manda `/api` a Mockxy, stessa
+     origine, CORS non necessario, `TRUST_PROXY=true` (D5);
+   - l'aggiornamento: `git pull`, riavvio con `MOCKS_VERSION=$(git rev-parse --short HEAD)`,
+     controllo dell'health (D6, D7);
+   - `NODE_EXTRA_CA_CERTS` per la CA interna; header tecnici nel reverse proxy (D9);
+   - l'admin spenta e perché (D2); un backend per istanza (D8);
+   - le regole per i mock destinati allo staging: varianti di default in git, sequenze con
+     `resetAfterMs`, stato condiviso come database azzerato al riavvio (D3);
+   - il processo per spostare il confine: una PR che disabilita il mock quando il backend
+     rilascia l'endpoint, da legare alla checklist di rilascio del backend (D4).
 
-8. Sequenze e memoria degli handler per sessione (§5.2.3).
-9. Modalità ombra e quadro d'avanzamento (§5.5.2, §5.5.3).
-10. Più backend per prefisso (§5.4.3), log JSON e metriche (§5.3.2, §5.3.3).
+**Rimandato** (da riprendere su domanda concreta): interfaccia di sola consultazione (D2);
+scenari e isolamento per sessione (D3); ricaduta automatica sul mock e segnali sui mock superflui
+(D4); metriche (D7); più backend per prefisso (D8); header iniettati e mTLS (D9).
 
 ## 7. Domande aperte
 
-- Il profilo staging permette di modificare i mock dall'interfaccia, o il workspace si cambia
-  solo via git? La risposta decide quanto peso hanno token, audit e scrittura dei file.
-- La selezione della variante oggi scrive un file del workspace. Nel profilo staging, la
-  selezione globale ha ancora senso, o resta solo quella per sessione (§5.2.2)?
-- Per la modalità «prima il backend» (§5.5.1): quali status significano «non implementato» nei
-  backend del team? Basta un default con override per endpoint?
-- L'identità di chi usa lo staging arriva da un SSO davanti a Mockxy? Se sì, conviene fidarsi di
-  un header del reverse proxy invece di introdurre un token.
-- Un container per workspace (§5.6.1) basta, o serve davvero il multi-workspace nel motore?
+Nessuna sulle scelte di fondo: le domande della prima stesura hanno trovato risposta in D1–D4.
+Restano dettagli da sciogliere in implementazione: il compose del profilo staging (punto 6),
+e se l'health espone i nomi dei file rotti o solo il loro numero.
 
 ## 8. Fuori ambito
 
 - **Multi-tenant vero** (utenti, permessi per workspace, persistenza in database): Mockxy resta
   uno strumento di sviluppo, non un servizio gestito.
-- **Alta disponibilità e repliche** (§5.7).
+- **Alta disponibilità e repliche** (§5.7): un'istanza per ambiente di staging.
+- **Più workspace su un'istanza** (§5.6.1): con un ambiente congelato (D3) e il rilascio per
+  pull e riavvio (D6), ogni staging ha il suo container.
 - **Tunnel pubblici**: già scartati in [IDEE-FUTURE.md](IDEE-FUTURE.md) per la stessa ragione di
   sicurezza, che qui pesa ancora di più.
 
@@ -547,3 +562,11 @@ mock su più servizi, si usa un'istanza di Mockxy per servizio.
 il cuore del proxy (WebSocket in passthrough, riscrittura di redirect e cookie legate a un'unica
 origine del backend). L'idea n. 4 di [IDEE-FUTURE.md](IDEE-FUTURE.md) resta nel vivaio per
 l'uso locale.
+
+### D9 — Verso il backend: solo documentazione
+
+La guida del profilo staging documenta `NODE_EXTRA_CA_CERTS` (variabile standard di Node, con il
+file della CA montato nel container) per i backend in HTTPS con una CA interna. Eventuali header
+tecnici richiesti dal backend li aggiunge il reverse proxy davanti a Mockxy (D5), che li
+inoltra intatti. Niente header iniettati dal motore (§5.4.5) né mTLS (§5.4.4), salvo una
+domanda concreta.
