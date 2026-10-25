@@ -42,6 +42,8 @@ them with continuous scrolling (reading is paginated, even on very large archive
 start from the **newest**: scrolling goes back in time, and the file menu also lists the newest
 file first. Requests that arrive after the page is opened show up when it is reloaded. Each
 entry says when it arrived, what served it (with the monitor's icon) and how long it took. The
+detail of an entry is the monitor's: full request and response, the status with its name and,
+for a sequence step, the variant that answered; it also tells the day, besides the time. The
 filters are the monitor's (text in the path or URL, method, status classes, source) and search
 the whole archive, not only the entries already loaded.
 
