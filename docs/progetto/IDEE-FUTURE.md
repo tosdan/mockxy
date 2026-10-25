@@ -67,12 +67,32 @@ casuale in un intervallo, profili tipo "3G lento". È come si testa la resilienz
 (retry, spinner, stati di errore) senza scrivere codice. Si innesta bene sul sistema delle
 varianti (una variante di guasto estratta a sorte con un peso).
 
+### 7. Un prefisso riservato meno probabile di `/_admin`
+
+Il motore riserva per sé `/_admin/api` e `/_admin/ui`: richieste su questi percorsi non arrivano
+mai ai mock né, soprattutto, al backend. `/_admin` è però un nome plausibile per una rotta vera
+di un'applicazione, e con il proxy fallback attivo una rotta del backend sotto quel prefisso
+verrebbe inghiottita da Mockxy senza alcun segnale. Gli strumenti simili scelgono nomi che
+un'API reale non usa: WireMock `/__admin`, Vite `/@vite/` e `/__vite_ping`. Un prefisso legato
+al prodotto, per esempio `/__mockxy/`, ridurrebbe il rischio quasi a zero.
+
+È l'occasione anche per rendere il confine uniforme: oggi per HTTP sono riservati solo
+`/_admin/api` e `/_admin/ui`, il passthrough dei WebSocket rifiuta tutto `/_admin` e i mock
+WebSocket riservano solo `/_admin/api` (emerso dall'analisi in
+[ANALISI-STAGING-CONDIVISO.md](ANALISI-STAGING-CONDIVISO.md), D7). Il nuovo prefisso andrebbe
+riservato per intero, su tutti i canali.
+
+Costo: è un cambiamento incompatibile e trasversale. Tocca l'interfaccia (compilata con
+`--base-href=/_admin/ui/`), l'app desktop, l'OpenAPI dell'admin, le skill, i test di
+accettazione e la documentazione. Da valutare un periodo di transizione con il vecchio prefisso
+come alias, e una versione major o almeno una nota di migrazione esplicita.
+
 ## Piccolezze quasi gratis
 
-7. **Banner per i file rotti del workspace**: l'admin API espone già l'elenco (`loadErrors` in
+8. **Banner per i file rotti del workspace**: l'admin API espone già l'elenco (`loadErrors` in
    `GET /_admin/api/mocks`, aggiunto il 9 lug); manca solo mostrarlo nella UI invece di lasciare
    gli endpoint sparire in silenzio dal catalogo.
-8. **QR code per l'indirizzo LAN**: quando il server è esposto in rete, mostrare l'URL di rete
+9. **QR code per l'indirizzo LAN**: quando il server è esposto in rete, mostrare l'URL di rete
    con un QR da inquadrare col telefono. Chi prova il frontend da mobile lo usa ogni giorno.
 
 ## Considerate e scartate (per non riproporle senza motivo nuovo)
