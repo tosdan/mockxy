@@ -445,3 +445,24 @@ runtime), senza azioni. Da progettare in futuro insieme a chi può vederla: le o
   utenti (§5.6.2) e il quadro d'avanzamento (§5.5.3) aspettano l'interfaccia di consultazione.
 - Senza reset da admin, sequenze e stato condiviso degli handler si azzerano solo con
   `resetAfterMs`, una ricarica o un riavvio: l'isolamento per sessione (§5.2.3) pesa di più.
+
+### D3 — Lo staging è un ambiente congelato: nessun isolamento per utente
+
+**Chiarimento dello scenario.** Lo staging è un ambiente di prova end-to-end con il **suo
+frontend deployato**, non un backend a cui i dev puntano il frontend della propria macchina per
+svilupparlo. Chi lo usa riceve l'ambiente così com'è, **congelato** nella versione deployata.
+Il frontend deployato è spesso più avanti del backend: per gli endpoint che il backend non ha
+ancora, rispondono i mock. Mockxy è un **riempitivo dei buchi**, non un banco di lavoro.
+
+**Decisione.** Nessun meccanismo di isolamento o personalizzazione per utente: niente header di
+sessione, scenari per richiesta o cookie (§5.2.2, §5.2.3 fuori ambito per lo staging). Tutti
+ricevono il comportamento scritto in git.
+
+**Conseguenze sui mock destinati allo staging.**
+
+- Lo stato condiviso degli handler è accettabile: si comporta come il database di staging, e si
+  azzera al riavvio o cambiando la `seedKey` via git.
+- Le sequenze hanno un cursore unico per endpoint: con più utenti si consumano a vicenda. Nei
+  mock destinati allo staging vanno usate con `resetAfterMs`, o evitate.
+- Gli stati alternativi (errori, liste vuote, casi limite) si provano in locale con l'app
+  desktop, non in staging.
