@@ -536,3 +536,14 @@ degradato).
 
 **Scartate per ora.** Metriche in formato Prometheus (§5.3.3): i log JSON danno le stesse
 informazioni a chi li aggrega; da riprendere se il team avrà un Prometheus da alimentare.
+
+### D8 — Un solo backend per istanza
+
+Resta un `BACKEND_URL` per istanza (§5.4.3 fuori ambito). Se lo staging espone più servizi
+separatamente, lo smistamento per prefisso lo fa il reverse proxy davanti a Mockxy; se servono
+mock su più servizi, si usa un'istanza di Mockxy per servizio.
+
+**Perché.** Ogni pezzo fa il suo mestiere e il costo è zero; l'instradamento multiplo toccherebbe
+il cuore del proxy (WebSocket in passthrough, riscrittura di redirect e cookie legate a un'unica
+origine del backend). L'idea n. 4 di [IDEE-FUTURE.md](IDEE-FUTURE.md) resta nel vivaio per
+l'uso locale.
