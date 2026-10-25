@@ -502,3 +502,17 @@ simili: Mockxy si fida degli header di un proxy solo quando gli si dice che il p
 **Scartate.** Lettura sempre attiva (cambio di default, anche se a basso rischio); solo
 documentazione con `proxy_redirect` di nginx (non copre Traefik e Ingress, e i cookie perdono
 comunque `Secure`).
+
+### D6 — I mock arrivano con `git pull` sul server e riavvio del container
+
+Il profilo staging monta mock e file dati dal filesystem dell'host, come la standalone di oggi.
+Dopo il merge di una modifica ai mock (D1), sul server si esegue `git pull` e si riavvia il
+container. Nessun meccanismo di ricarica a caldo; il riavvio azzera anche lo stato condiviso
+degli handler e le sequenze, coerente con un ambiente congelato (D3).
+
+**Da fare comunque.** Correggere [DEPLOYMENT.md](../it/DEPLOYMENT.md), che oggi promette
+l'aggiornamento dei mock «senza rebuild né riavvio»: con watch e admin spenti serve il riavvio.
+
+**Scartate.** Immagine derivata per ogni versione dei mock (build in CI a ogni modifica);
+ricarica a caldo su segnale o con watch in polling (codice nuovo e gestione dello stato
+degradato).
