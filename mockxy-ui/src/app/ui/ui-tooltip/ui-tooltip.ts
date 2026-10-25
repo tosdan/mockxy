@@ -69,6 +69,9 @@ export class UiTooltip implements OnDestroy {
 
   protected scheduleShow(): void {
     clearTimeout(this.hideTimer);
+    // Hover e fuoco arrivano insieme col clic: senza cancellare il timer precedente, il primo restava
+    // orfano e apriva il tooltip dopo la distruzione del pulsante (che col clic spariva).
+    clearTimeout(this.showTimer);
     this.showTimer = setTimeout(() => this.show(), this.showDelay());
   }
 
@@ -83,7 +86,8 @@ export class UiTooltip implements OnDestroy {
   }
 
   private show(): void {
-    if (!this.text() || this.overlayRef?.hasAttached()) return;
+    // Un host staccato dalla pagina non ha dove ancorarlo: finirebbe nell'angolo, e nessuno lo chiude.
+    if (!this.text() || this.overlayRef?.hasAttached() || !this.host.nativeElement.isConnected) return;
     this.overlayRef ??= this.overlay.create({
       positionStrategy: this.overlay
         .position()
