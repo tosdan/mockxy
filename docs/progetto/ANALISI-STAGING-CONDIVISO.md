@@ -397,3 +397,28 @@ interruttore, e quando. Ha senso solo con un'identità (§5.1.2).
 - **Alta disponibilità e repliche** (§5.7).
 - **Tunnel pubblici**: già scartati in [IDEE-FUTURE.md](IDEE-FUTURE.md) per la stessa ragione di
   sicurezza, che qui pesa ancora di più.
+
+## 9. Decisioni
+
+Le questioni si affrontano una alla volta, nell'ordine in cui ogni scelta semplifica le
+successive. Ogni decisione registra l'alternativa scelta e il perché.
+
+### D1 — I mock dello staging si modificano solo via git
+
+Nel profilo staging l'admin API non scrive file del workspace: niente creazione o modifica di
+endpoint, varianti, collezioni, file dati, handler e middleware, niente «crea mock» dal Monitor
+o dallo Storico. I mock si cambiano con una PR sul repository (preparati in locale con l'app
+desktop); dopo il merge lo staging si ricarica (§5.3.4).
+
+**Perché.** È coerente con il principio della standalone (l'applicazione si distribuisce, i dati
+si montano) e con il flusso naturale di Mockxy: si scrive in locale, lo staging serve. Toglie in
+un colpo l'esecuzione di codice via rete (§5.1.3), la deriva del server rispetto a git e
+l'interferenza delle modifiche permanenti. Il bisogno di chi è in staging («questo endpoint in
+errore, solo per me») è coperto dalla scelta per sessione (§5.2.2), che non scrive niente.
+
+**Scartate.** Scrittura dall'interfaccia con token (deriva rispetto a git, commit automatici,
+audit); strato temporaneo sopra git (il più costoso, concetto nuovo nel motore e
+nell'interfaccia).
+
+**Conseguenza.** §5.1.2 si riduce a chi può leggere il traffico e chi può usare le azioni
+runtime che non scrivono file; §5.6.4 (audit) esce dall'ambito.
