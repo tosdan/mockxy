@@ -188,7 +188,8 @@ l'admin, che nella standalone è spenta.
 **Proposta.** `GET /_mockxy/health` (o simile, fuori dal namespace dei mock e senza admin) con:
 stato del registro dei mock, errori di caricamento, raggiungibilità del backend (§5.3.5). Serve
 a Docker, Kubernetes e al load balancer. Il prefisso va scelto in modo da non collidere con i
-percorsi dei mock, come oggi `/_admin`.
+percorsi dei mock: per HTTP oggi sono riservati solo `/_admin/api` e, se servita, `/_admin/ui`
+(vedi D7).
 
 #### 5.3.2 Log strutturati
 
@@ -376,7 +377,7 @@ staging» non è un'immagine nuova: è l'immagine standalone di oggi con `PROXY_
 1. **`TRUST_PROXY`** (D5): con l'opzione attiva, redirect riscritti con protocollo e host da
    `X-Forwarded-Proto`/`X-Forwarded-Host`; con `X-Forwarded-Proto: https` i cookie perdono solo
    `Domain`. Nuova voce in `src/config.js`, nel censimento delle configurazioni e in `.env.example`.
-2. **`GET /_admin/health`** servito anche con l'admin spenta (D7): `200`, o `503` con i file
+2. **`GET /_admin/api/health`** servito anche con l'admin spenta (D7): `200`, o `503` con i file
    rotti del workspace; riporta `MOCKS_VERSION`.
 3. **`MOCKS_VERSION`** (D7) nell'health e nel log di avvio.
 4. **Endpoint e variante** nella riga di log «Request completed» (D7).
@@ -385,7 +386,9 @@ staging» non è un'immagine nuova: è l'immagine standalone di oggi con `PROXY_
 
 5. **Correzione di [DEPLOYMENT.md](../it/DEPLOYMENT.md)** (D6): con watch e admin spenti, i mock
    aggiornati richiedono il riavvio. Da fare anche da sola, è un errore di oggi.
-6. **Guida del profilo staging**, in `docs/it` e `docs/en`, con:
+6. **Correzione di [PROXY.md](../it/PROXY.md)** (D7): «esclusi i percorsi riservati
+   `/_admin/...`» non è esatto; per HTTP sono riservati `/_admin/api` e, se servita, `/_admin/ui`.
+7. **Guida del profilo staging**, in `docs/it` e `docs/en`, con:
    - il compose d'esempio (l'attuale `docker-compose.staging.yml` è solo-mock: da decidere in
      fase di implementazione se affiancarne uno o parametrizzarlo);
    - la topologia tipica: reverse proxy che serve il frontend e manda `/api` a Mockxy, stessa
@@ -407,7 +410,7 @@ scenari e isolamento per sessione (D3); ricaduta automatica sul mock e segnali s
 ## 7. Domande aperte
 
 Nessuna sulle scelte di fondo: le domande della prima stesura hanno trovato risposta in D1–D4.
-Restano dettagli da sciogliere in implementazione: il compose del profilo staging (punto 6),
+Restano dettagli da sciogliere in implementazione: il compose del profilo staging (punto 7),
 e se l'health espone i nomi dei file rotti o solo il loro numero.
 
 ## 8. Fuori ambito
@@ -552,10 +555,20 @@ degradato).
 
 ### D7 — Health, versione dei mock e variante nei log
 
-- **Health.** `GET /_admin/health`, servito anche con l'admin API spenta (fuori dal suo router;
-  `/_admin` è già un prefisso riservato, mai mockato). `200` se il workspace è caricato senza
-  errori, `503` con i file rotti altrimenti: lo staging non risulta «sano» con un endpoint
-  mockato sparito per un file rotto arrivato dal merge (rischio introdotto da D6).
+- **Health.** `GET /_admin/api/health`, servito anche con l'admin API spenta. `200` se il
+  workspace è caricato senza errori, `503` con i file rotti altrimenti: lo staging non risulta
+  «sano» con un endpoint mockato sparito per un file rotto arrivato dal merge (rischio introdotto
+  da D6).
+  - **Il percorso.** Per HTTP il motore riserva solo `/_admin/api` (`src/app.js:1002`, intercettato
+    anche ad admin spenta) e, se servita, `/_admin/ui`: il resto di `/_admin` oggi si può mockare.
+    Sotto `/_admin/api` l'health non può collidere con nessun mock e non cambia la compatibilità.
+  - **Il montaggio.** La rotta si registra prima del router dell'admin, della risposta «admin
+    disattivata» e della guardia sull'header `Host`: risponde ad admin spenta e a un orchestratore
+    che chiama con l'IP del container. È un'eccezione documentata al «tutto `/_admin/api` è
+    l'admin».
+  - **Scartate.** Riservare tutto `/_admin` per HTTP (cambiamento incompatibile per i workspace
+    con mock sotto `/_admin`); `/_admin/health` con precedenza sui mock (un percorso riservato
+    isolato, la stessa incoerenza che ha prodotto il problema).
 - **Versione dei mock.** Variabile `MOCKS_VERSION`, impostata dallo script di riavvio (per esempio
   `MOCKS_VERSION=$(git rev-parse --short HEAD)`), riportata nell'health e nel log di avvio. La
   ricetta va nella guida del profilo staging.
