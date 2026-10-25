@@ -7,10 +7,10 @@ work in mock-only mode.
 
 ## The decision, request by request
 
-The engine reserves `/_admin/api` and, when it serves the UI (desktop app), `/_admin/ui` for
-itself, case-insensitively: there the engine itself answers. Every other request, including the
-other paths under `/_admin`, goes through these steps (for WebSocket upgrades see
-[WEBSOCKET.md](WEBSOCKET.md)):
+The engine reserves for itself, case-insensitively, `/_admin/api` with every method and, when it
+serves the UI (desktop app), `/_admin/ui` with `GET` and `HEAD`: there the engine itself answers.
+Every other request, including the other paths under `/_admin` and the other methods on
+`/_admin/ui`, goes through these steps (for WebSocket upgrades see [WEBSOCKET.md](WEBSOCKET.md)):
 
 1. **Global checks.** With the mock server **off** or in **full proxy** mode (the two global
    switches in the UI), no mock, handler or middleware steps in: everything goes straight to

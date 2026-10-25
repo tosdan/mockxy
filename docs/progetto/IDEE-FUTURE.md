@@ -79,8 +79,10 @@ al prodotto, per esempio `/__mockxy/`, ridurrebbe il rischio quasi a zero.
 È l'occasione anche per rendere il confine uniforme: oggi per HTTP sono riservati solo
 `/_admin/api` e `/_admin/ui`, il passthrough dei WebSocket rifiuta tutto `/_admin` e i mock
 WebSocket riservano solo `/_admin/api` (emerso dall'analisi in
-[ANALISI-STAGING-CONDIVISO.md](ANALISI-STAGING-CONDIVISO.md), D7). Il nuovo prefisso andrebbe
-riservato per intero, su tutti i canali.
+[ANALISI-STAGING-CONDIVISO.md](ANALISI-STAGING-CONDIVISO.md), D7), e `/_admin/ui` è riservato
+solo per `GET` e `HEAD`: gli altri metodi arrivano a mock e backend (emerso dalla review della
+correzione di PROXY.md). Il nuovo prefisso andrebbe riservato per intero, per ogni metodo e su
+tutti i canali.
 
 Costo: è un cambiamento incompatibile e trasversale. Tocca l'interfaccia (compilata con
 `--base-href=/_admin/ui/`), l'app desktop, l'OpenAPI dell'admin, le skill, i test di
