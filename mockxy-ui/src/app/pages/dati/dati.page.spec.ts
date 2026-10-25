@@ -311,6 +311,93 @@ describe('DatiPage', () => {
     });
   });
 
+  // Il pulsante cliccato sparisce col clic (la matita, «Elimina», «Azzera»): senza un fuoco
+  // assegnato, cadeva sul body e da tastiera si perdeva il punto.
+  describe('fuoco, conferme ed etichette', () => {
+    function attached() {
+      const created = create();
+      document.body.appendChild(created.fixture.nativeElement);
+      return created;
+    }
+    const host = (fixture: ReturnType<typeof create>['fixture']) => fixture.nativeElement as HTMLElement;
+    const button = (fixture: ReturnType<typeof create>['fixture'], name: string) =>
+      Array.from(host(fixture).querySelectorAll<HTMLButtonElement>('button')).find(
+        (b) => b.getAttribute('aria-label') === name || b.textContent?.trim() === name,
+      )!;
+    async function render(fixture: ReturnType<typeof create>['fixture']) {
+      fixture.detectChanges();
+      await fixture.whenStable();
+    }
+
+    it('Rinomina mette il fuoco nel campo col nome selezionato; Esc lo riporta sulla matita', async () => {
+      const { fixture } = attached();
+      button(fixture, 'Rinomina il file').click();
+      await render(fixture);
+      const input = host(fixture).querySelector<HTMLInputElement>('input[aria-label="Nuovo nome del file"]')!;
+      expect(document.activeElement).toBe(input);
+      expect([input.selectionStart, input.selectionEnd]).toEqual([0, 'utenti'.length]);
+
+      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      await render(fixture);
+      expect(document.activeElement).toBe(button(fixture, 'Rinomina il file'));
+    });
+
+    it('Elimina chiude la rinomina e porta il fuoco su Conferma; Annulla lo riporta su Elimina', async () => {
+      const { fixture, c } = attached();
+      button(fixture, 'Rinomina il file').click();
+      await render(fixture);
+      button(fixture, 'Elimina').click();
+      await render(fixture);
+      expect(c.renaming()).toBe(false);
+      expect(document.activeElement).toBe(button(fixture, 'Conferma'));
+
+      button(fixture, 'Annulla').click();
+      await render(fixture);
+      expect(document.activeElement).toBe(button(fixture, 'Elimina'));
+
+      // E viceversa: aprire la rinomina chiude la conferma.
+      button(fixture, 'Elimina').click();
+      await render(fixture);
+      c.startRename();
+      await render(fixture);
+      expect(c.confirmingDelete()).toBe(false);
+    });
+
+    it('la casella che aggiorna i riferimenti ha un nome', async () => {
+      api.listDataFiles.mockReturnValueOnce(of({ items: [summary('utenti', { usedBy: [usage('/api/a')] })] }));
+      const { fixture } = attached();
+      button(fixture, 'Rinomina il file').click();
+      await render(fixture);
+      const box = host(fixture).querySelector('[role="checkbox"]')!;
+      expect(box.getAttribute('aria-label')).toBeTruthy();
+    });
+
+    it('il file aperto si segna come le righe aperte delle altre pagine', () => {
+      const { fixture } = create();
+      const rows = Array.from(host(fixture).querySelectorAll('#dati-files-panel button.mx-open'));
+      expect(rows.map((row) => row.querySelector('.truncate')?.textContent?.trim())).toEqual(['utenti']);
+      expect(rows[0].getAttribute('aria-current')).toBe('true');
+    });
+
+    it('lo stato runtime è tradotto, e le conferme di azzeramento prendono il fuoco', async () => {
+      const { fixture, c } = attached();
+      c.switchTab('runtime');
+      await render(fixture);
+      expect(host(fixture).querySelector('#dati-runtime-panel tbody')?.textContent).toContain('pronta');
+
+      button(fixture, 'Azzera').click();
+      await render(fixture);
+      expect(document.activeElement?.textContent?.trim()).toBe('Conferma reset');
+      button(fixture, 'Annulla').click();
+      await render(fixture);
+      expect(document.activeElement?.textContent?.trim()).toBe('Azzera');
+
+      button(fixture, 'Azzera tutto').click();
+      await render(fixture);
+      expect(document.activeElement?.textContent?.trim()).toMatch(/^Azzera 1 /);
+    });
+  });
+
   describe('cancellazione', () => {
     it('conferma la cancellazione e ricarica senza mantenere la selezione', () => {
       const { c } = create();

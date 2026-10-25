@@ -86,6 +86,38 @@ test.describe("E18 · Dati → handler via data()", () => {
     await expect(dati.getByText("Nessun file dati.")).toBeVisible();
   });
 
+  // Da tastiera: il fuoco va nel campo col nome selezionato, quindi si scrive subito; Esc e Annulla
+  // lo riportano al pulsante da cui si era partiti. Prima cadeva sul body.
+  test("rinomina ed eliminazione si fanno da tastiera, senza perdere il fuoco", async ({ page, request }) => {
+    await gotoDati(page);
+    await uploadViaUi(page, "tariffe.json", { base: 1 });
+    const dati = page.locator("app-dati");
+    await expect(dati.getByText("const tariffe = await data('tariffe');")).toBeVisible();
+    const pencil = dati.getByRole("button", { name: "Rinomina il file" });
+
+    await pencil.click();
+    await expect(dati.getByRole("textbox", { name: "Nuovo nome del file" })).toBeFocused();
+    await page.keyboard.press("Escape");
+    await expect(pencil).toBeFocused();
+
+    await page.keyboard.press("Enter"); // riapre la rinomina dalla matita a fuoco
+    await expect(dati.getByRole("textbox", { name: "Nuovo nome del file" })).toBeFocused();
+    await page.keyboard.type("listino-tariffe"); // il nome e' selezionato: si sostituisce
+    await page.keyboard.press("Enter");
+    await expect(dati.getByText("const listinoTariffe = await data('listino-tariffe');")).toBeVisible();
+    await expect(pencil).toBeFocused();
+
+    const remove = dati.getByRole("button", { name: "Elimina", exact: true });
+    await remove.click();
+    await expect(dati.getByRole("button", { name: "Conferma", exact: true })).toBeFocused();
+    await page.keyboard.press("Tab");
+    await page.keyboard.press("Enter"); // Annulla
+    await expect(remove).toBeFocused();
+
+    const files = await (await request.get(`${E2E_BACKEND}/_admin/api/files`)).json();
+    expect(files.items.map((f) => f.name)).toEqual(["listino-tariffe"]);
+  });
+
   test("rinominare un file usato riscrive i riferimenti data() e l'endpoint continua a funzionare", async ({ page, request }) => {
     // arrange: un handler che legge data('sorgente')
     const source = `module.exports = {

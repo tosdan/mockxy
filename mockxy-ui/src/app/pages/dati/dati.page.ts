@@ -110,6 +110,7 @@ const SELECTED_FILE_STATE_KEY = 'dati-selected';
               (click)="select(f.name)"
               class="flex w-full items-center gap-2.5 border-b border-border-soft px-4 py-3 text-left transition hover:bg-white/[0.03]"
               [class.mx-open]="f.name === selectedName()"
+              [attr.aria-current]="f.name === selectedName() ? 'true' : null"
             >
               <ng-icon name="lucideFileJson" size="0.95rem" class="shrink-0 text-brand" />
               <span class="min-w-0 flex-1 truncate font-mono text-[13px]">{{ f.name }}</span>
@@ -417,11 +418,13 @@ export class DatiPage implements OnInit {
     return timestamp == null ? '—' : new Date(timestamp).toLocaleString();
   }
 
-  private reload(keepSelection = true): void {
+  /** `afterLoad`: da eseguire con l'elenco nuovo in pagina (per esempio, dove portare il fuoco). */
+  private reload(keepSelection = true, afterLoad?: () => void): void {
     this.loading.set(true);
     this.api.listDataFiles().pipe(finalize(() => this.loading.set(false))).subscribe({
       next: ({ items }) => {
         this.files.set(items);
+        afterLoad?.();
         const current = this.selectedName();
         if (!keepSelection || current == null || !items.some((f) => f.name === current)) {
           this.select(items[0]?.name ?? null);
@@ -610,8 +613,10 @@ export class DatiPage implements OnInit {
   }
 
   /** Conferme dello stato runtime: stesso trattamento del fuoco, sulla riga della risorsa. */
-  private runtimeRow(name: string): HTMLElement | null {
-    return this.host.nativeElement.querySelector(`[data-shared-state-name="${CSS.escape(name)}"]`);
+  private runtimeRow(name: string): HTMLElement | undefined {
+    return Array.from(this.host.nativeElement.querySelectorAll<HTMLElement>('[data-shared-state-name]')).find(
+      (row) => row.getAttribute('data-shared-state-name') === name,
+    );
   }
 
   protected askResetRuntime(name: string): void {
@@ -649,14 +654,15 @@ export class DatiPage implements OnInit {
       .subscribe({
         next: (result) => {
           this.renaming.set(false);
-          this.focusAfterRender(this.renameButton);
           this.setSelectedName(result.name);
           // Con riferimenti riscritti il toast lo segnala e ricorda i data() dinamici non rilevabili.
           const description = result.referencesRewritten > 0
             ? this.transloco.translate('dati.toastRenamedRewritten', { count: result.referencesRewritten })
             : result.fileName;
           this.toast.show({ title: this.t('dati.toastRenamedTitle'), description, tone: 'success' });
-          this.reload();
+          // Col nome nuovo il dettaglio si ridisegna quando arriva l'elenco: il fuoco va alla matita
+          // nuova, non a quella di prima.
+          this.reload(true, () => this.focusAfterRender(this.renameButton));
         },
         error: (error) => this.showError(error),
       });

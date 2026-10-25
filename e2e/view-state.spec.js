@@ -43,7 +43,7 @@ test.describe("E19 · stato delle view preservato tra le navigazioni", () => {
         await expect(dati.getByText(name.replace(".json", ""), { exact: true })).toBeVisible();
       }
       await dati.getByText("alfa", { exact: true }).click();
-      await expect(dati.locator(".mx-selected")).toContainText("alfa");
+      await expect(dati.locator('[aria-current="true"]')).toContainText("alfa");
 
       // Catalogo e ritorno.
       await page.getByRole("navigation", { name: "Viste" }).getByRole("link", { name: "Catalogo" }).click();
@@ -52,7 +52,7 @@ test.describe("E19 · stato delle view preservato tra le navigazioni", () => {
       await expect(page).toHaveURL(/\/dati/);
 
       // Stato ritrovato: stesso file selezionato, con l'anteprima caricata.
-      await expect(dati.locator(".mx-selected")).toContainText("alfa");
+      await expect(dati.locator('[aria-current="true"]')).toContainText("alfa");
       await expect(dati.locator("ui-code")).toContainText("alfa.json");
     } finally {
       await clearDataFiles(request);
