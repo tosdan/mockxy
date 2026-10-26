@@ -64,6 +64,24 @@ Due note per l'uso su una rete interna: il bind è già `0.0.0.0` (sicuro qui: l
 il quadro completo è in [RETE.md](RETE.md)), e se i frontend dei colleghi chiamano il server
 **dal browser, da altre origin**, serve `CORS_ENABLED=true` ([il CORS automatico](CORS.md)).
 
+### Aggiornare e controllare
+
+L'[health](ADMIN-API.md#health) `GET /_admin/api/health` risponde anche con l'admin spenta:
+`200` se il workspace si è caricato senza errori, `503` con i percorsi dei file rotti. Il compose
+d'esempio la usa come `healthcheck`, così un file rotto arrivato con il pull rende il container
+`unhealthy` invece di lasciarlo «sano» con un endpoint mancante. `MOCKS_VERSION` dice quale
+versione dei mock sta rispondendo; il compose la passa al container:
+
+```bash
+docker compose -f docker-compose.staging.yml stop
+git pull
+MOCKS_VERSION=$(git rev-parse --short HEAD) docker compose -f docker-compose.staging.yml up -d
+curl -s http://localhost:3000/_admin/api/health
+```
+
+I messaggi d'errore dei file rotti non sono nell'health, ma nel log di avvio
+(`docker compose -f docker-compose.staging.yml logs mockxy`).
+
 ## Dietro un reverse proxy
 
 Spesso Mockxy non è esposto direttamente: davanti c'è un reverse proxy (nginx, Traefik, un

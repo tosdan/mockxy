@@ -65,6 +65,25 @@ is off — the full picture is in [RETE.md](RETE.md)), and if your colleagues' f
 server **from the browser, from other origins**, you need `CORS_ENABLED=true`
 ([automatic CORS](CORS.md)).
 
+### Updating and checking
+
+The [health check](ADMIN-API.md#health) `GET /_admin/api/health` answers with the admin API off
+too: `200` when the workspace loaded without errors, `503` with the paths of the broken files.
+The sample compose uses it as its `healthcheck`, so a broken file that came with the pull makes
+the container `unhealthy` instead of leaving it "healthy" with an endpoint missing.
+`MOCKS_VERSION` tells which version of the mocks is answering; the compose passes it to the
+container:
+
+```bash
+docker compose -f docker-compose.staging.yml stop
+git pull
+MOCKS_VERSION=$(git rev-parse --short HEAD) docker compose -f docker-compose.staging.yml up -d
+curl -s http://localhost:3000/_admin/api/health
+```
+
+The error messages of broken files are not in the health check but in the startup log
+(`docker compose -f docker-compose.staging.yml logs mockxy`).
+
 ## Behind a reverse proxy
 
 Mockxy is often not exposed directly: a reverse proxy (nginx, Traefik, an Ingress) sits in
