@@ -31,6 +31,14 @@ When to turn it off: to observe the backend's original `Set-Cookie` headers thro
 or in the rare case of cookies shared across multiple subdomains reached through a DNS alias
 pointing at Mockxy.
 
+**Behind a reverse proxy over https.** If the browser reaches Mockxy through a reverse proxy
+that serves the site over https, removing `Secure` and `SameSite=None` is no longer needed, and
+would make the staging differ from production precisely on cookies. With
+**`TRUST_PROXY=true`** and `X-Forwarded-Proto: https` the adaptation removes **only `Domain`**,
+which names the backend rather than the public host; `Secure` and `SameSite=None` stay. With
+the proxy over http, or without `TRUST_PROXY`, the adaptation is the one described above. See
+[DEPLOYMENT.md](DEPLOYMENT.md#behind-a-reverse-proxy).
+
 ## How a session works through Mockxy
 
 1. The login **must go through Mockxy**: to the browser, cookies belong to the host it talks

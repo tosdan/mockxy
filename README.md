@@ -392,6 +392,7 @@ All configuration goes through environment variables (or a `.env` file; start fr
 | `CORS_ENABLED`                 | `false`                        | Automatic CORS handling for browser frontends on another origin (see below)                                                                            |
 | `ADAPT_PROXY_COOKIES`          | `true`                         | Adapts the proxied backend's `Set-Cookie` to the topology with Mockxy in the middle (see below)                                                        |
 | `REWRITE_PROXY_REDIRECTS`      | `true`                         | Rewrites proxied redirects pointing at the backend, so the browser stays on Mockxy (see below)                                                         |
+| `TRUST_PROXY`                  | `false`                        | Behind a reverse proxy: redirects and adapted cookies follow `X-Forwarded-Proto` and `X-Forwarded-Host` (see below)                                    |
 | `ADMIN_API_ENABLED`            | `true` in dev, `false` in prod | Enables the admin API under `/_admin/api`                                                                                                              |
 | `UI_DIST_DIR`                  | —                              | Folder of the compiled UI to serve under `/_admin/ui` (used by the desktop app)                                                                        |
 | `DEV_WATCH`                    | `true`                         | Hot reload of mocks on file changes (never active in production)                                                                                       |
@@ -420,6 +421,8 @@ On desktop, the same values are stored per-workspace settings. See
 **Cookies and sessions through the proxy.** For a cookie session to work, the login must go through Mockxy and the backend's `Set-Cookie` must survive the trip: by default (`ADAPT_PROXY_COOKIES`, the «Adapt proxied cookies» switch) Mockxy removes the attributes the browser would reject coming from Mockxy over http — `Domain`, `Secure`, `SameSite=None` — without touching name, value and the rest. The full session journey and the remaining limits (cross-site cookies over http: use the token) are in [docs/en/COOKIE.md](docs/en/COOKIE.md).
 
 **Redirects through the proxy.** An absolute backend redirect to its own address would take the browser out of Mockxy (and out of cookies, CORS and the proxy): by default (`REWRITE_PROXY_REDIRECTS`, the «Rewrite proxied redirects» switch) `Location` values pointing at the `BACKEND_URL` origin are mapped back to Mockxy's address, preserving path and query; relative redirects and those to third-party hosts (SSO, CDN) pass through untouched. Details in [docs/en/REDIRECT.md](docs/en/REDIRECT.md).
+
+**Behind a reverse proxy.** When a reverse proxy (nginx, Traefik, an Ingress) sits in front of Mockxy and serves the site over https, `TRUST_PROXY=true` makes Mockxy read `X-Forwarded-Proto` and `X-Forwarded-Host`: rewritten redirects point at the public https address and adapted cookies keep `Secure` and `SameSite=None`. Off by default, because without a proxy in front anyone can send those headers. Details in [docs/en/DEPLOYMENT.md](docs/en/DEPLOYMENT.md#behind-a-reverse-proxy).
 
 ## Admin API
 

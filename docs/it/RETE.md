@@ -51,6 +51,9 @@ Due confini deliberati del controllo:
 - sul bind di rete *senza* allowlist il controllo non si applica: gli host legittimi non
   sarebbero prevedibili, e su quel bind vale già l'avviso di esposizione.
 
+Il controllo guarda sempre l'header `Host`, anche con `TRUST_PROXY=true`: `X-Forwarded-Host`
+è un header che una pagina ostile può impostare, e non deve poter aprire l'admin.
+
 ## Promemoria per il caso LAN
 
 Esporre il server per i colleghi tipicamente significa: bind di rete, **admin spenta** (o rete

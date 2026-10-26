@@ -32,6 +32,14 @@ Quando spegnerlo: per osservare i `Set-Cookie` originali del backend attraverso 
 caso raro di cookie condivisi tra più sottodomini raggiunti attraverso un alias DNS che punta a
 Mockxy.
 
+**Dietro un reverse proxy in https.** Se il browser raggiunge Mockxy attraverso un reverse proxy
+che serve il sito in https, togliere `Secure` e `SameSite=None` non serve più, e renderebbe lo
+staging diverso dalla produzione proprio sui cookie. Con **`TRUST_PROXY=true`** e
+`X-Forwarded-Proto: https` l'adattamento toglie **solo `Domain`**, che nomina il backend e non
+l'host pubblico; `Secure` e `SameSite=None` restano. Con il proxy in http, o senza
+`TRUST_PROXY`, l'adattamento è quello descritto sopra. Vedi
+[DEPLOYMENT.md](DEPLOYMENT.md#dietro-un-reverse-proxy).
+
 ## Come funziona una sessione attraverso Mockxy
 
 1. Il login **deve passare da Mockxy**: per il browser i cookie appartengono all'host con cui

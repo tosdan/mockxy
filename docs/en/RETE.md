@@ -50,6 +50,9 @@ Two deliberate boundaries of the check:
 - on the network bind *without* an allowlist the check doesn't apply: the legitimate hosts
   wouldn't be predictable, and on that bind the exposure warning already applies.
 
+The check always looks at the `Host` header, even with `TRUST_PROXY=true`: `X-Forwarded-Host`
+is a header a hostile page can set, and it must not be able to open the admin.
+
 ## Reminder for the LAN case
 
 Exposing the server for your colleagues typically means: network bind, **admin off** (or a
