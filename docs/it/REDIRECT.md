@@ -38,3 +38,32 @@ sono interpretabili, la riscrittura semplicemente non si attiva e tutto passa co
 
 Quando spegnerla: per osservare i redirect originali del backend attraverso il proxy — per
 esempio quando si sta debuggando proprio la catena di redirect di staging.
+
+## Dietro un reverse proxy
+
+Se davanti a Mockxy c'è un reverse proxy (nginx, Traefik, un Ingress) che serve il sito in
+https, il browser non parla con Mockxy: l'header `Host` può essere quello interno, e lo schema
+`http` è sbagliato. Il redirect riscritto manderebbe il browser su `http://`, con un salto in più
+nel caso migliore, la richiesta in chiaro o bloccata da HSTS nel peggiore.
+
+Con **`TRUST_PROXY=true`** la riscrittura usa l'indirizzo pubblico, dagli header che il proxy
+imposta:
+
+- **`X-Forwarded-Proto`** per lo schema (`http` o `https`);
+- **`X-Forwarded-Host`** per host e porta; se manca, resta l'header `Host` (nginx lo passa con
+  `proxy_set_header Host $http_host`).
+
+```
+richiesta:  GET /login   Host: mockxy:3000
+            X-Forwarded-Proto: https   X-Forwarded-Host: staging.app
+backend:    Location: http://backend:8080/home
+al client:  Location: https://staging.app/home
+```
+
+Con più proxy in catena vale il primo valore di ogni header, quello del proxy rivolto al
+client. Un valore non valido (uno schema diverso da `http`/`https`, un host con percorso o
+credenziali) viene ignorato, e si ricade su `http` e sull'header `Host`.
+
+L'opzione è spenta di default: senza un proxy davanti quegli header li può mandare chiunque.
+Il danno resterebbe confinato alla risposta di chi li manda, ma la fiducia va data solo a un
+proxy che c'è davvero. Il quadro del deployment è in [DEPLOYMENT.md](DEPLOYMENT.md#dietro-un-reverse-proxy).

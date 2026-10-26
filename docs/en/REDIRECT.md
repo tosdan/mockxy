@@ -38,3 +38,32 @@ cannot be parsed, the rewriting simply doesn't kick in and everything passes as 
 
 When to turn it off: to observe the backend's original redirects through the proxy — for
 example when you are debugging the staging redirect chain itself.
+
+## Behind a reverse proxy
+
+If a reverse proxy (nginx, Traefik, an Ingress) sits in front of Mockxy and serves the site over
+https, the browser is not talking to Mockxy: the `Host` header may be the internal one, and the
+`http` scheme is wrong. The rewritten redirect would send the browser to `http://`: one extra
+hop at best, a cleartext or HSTS-blocked request at worst.
+
+With **`TRUST_PROXY=true`** the rewriting uses the public address, from the headers the proxy
+sets:
+
+- **`X-Forwarded-Proto`** for the scheme (`http` or `https`);
+- **`X-Forwarded-Host`** for host and port; when it is missing, the `Host` header stays (nginx
+  passes it with `proxy_set_header Host $http_host`).
+
+```
+request:    GET /login   Host: mockxy:3000
+            X-Forwarded-Proto: https   X-Forwarded-Host: staging.app
+backend:    Location: http://backend:8080/home
+to client:  Location: https://staging.app/home
+```
+
+With several proxies in a chain, the first value of each header wins: the one from the proxy
+facing the client. An invalid value (a scheme other than `http`/`https`, a host with a path or
+credentials) is ignored, and the rewriting falls back on `http` and the `Host` header.
+
+The option is off by default: without a proxy in front, anyone can send those headers. The
+damage would stay confined to the sender's own response, but trust belongs only to a proxy that
+is really there. The deployment picture is in [DEPLOYMENT.md](DEPLOYMENT.md#behind-a-reverse-proxy).

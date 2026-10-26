@@ -63,3 +63,30 @@ su `/workspace/mocks` e `/workspace/files`:
 Due note per l'uso su una rete interna: il bind è già `0.0.0.0` (sicuro qui: l'admin è spenta —
 il quadro completo è in [RETE.md](RETE.md)), e se i frontend dei colleghi chiamano il server
 **dal browser, da altre origin**, serve `CORS_ENABLED=true` ([il CORS automatico](CORS.md)).
+
+## Dietro un reverse proxy
+
+Spesso Mockxy non è esposto direttamente: davanti c'è un reverse proxy (nginx, Traefik, un
+Ingress) che serve il sito in https e gli manda le chiamate API. In quel caso impostare
+**`TRUST_PROXY=true`**: Mockxy legge `X-Forwarded-Proto` e `X-Forwarded-Host`, e
+
+- i [redirect riscritti](REDIRECT.md#dietro-un-reverse-proxy) puntano all'indirizzo pubblico in
+  https invece che a `http://` e all'host interno;
+- i [cookie adattati](COOKIE.md) su https conservano `Secure` e `SameSite=None`, e perdono solo
+  `Domain`.
+
+Il proxy deve impostare quegli header. Con nginx, per esempio:
+
+```nginx
+location /api/ {
+    proxy_pass http://mockxy:3000;
+    proxy_set_header Host $http_host;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header X-Forwarded-Host $http_host;
+}
+```
+
+`$http_host` e non `$host`: `$host` perde la porta, e su una porta diversa da 443 il redirect
+riscritto la perderebbe a sua volta. Se il proxy serve anche il frontend sulla stessa origine, il [CORS](CORS.md) non serve.
+L'opzione non tocca la guardia dell'admin API, che guarda sempre l'header `Host`
+([RETE.md](RETE.md)). Senza un proxy davanti lasciarla spenta: quegli header li manda chiunque.
