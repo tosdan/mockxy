@@ -14,14 +14,24 @@ describe("GET /_admin/api/health", () => {
   let workspaceDir;
   let mocksDir;
   let runtime;
+  let savedMocksVersion;
 
   beforeEach(async () => {
+    // La versione dei mock arriva anche dall'ambiente: un MOCKS_VERSION della shell che lancia i
+    // test non deve cambiarne l'esito.
+    savedMocksVersion = process.env.MOCKS_VERSION;
+    delete process.env.MOCKS_VERSION;
     workspaceDir = await createTempDir("health-");
     mocksDir = path.join(workspaceDir, "mocks");
     await fs.promises.mkdir(mocksDir, { recursive: true });
   });
 
   afterEach(async () => {
+    if (savedMocksVersion === undefined) {
+      delete process.env.MOCKS_VERSION;
+    } else {
+      process.env.MOCKS_VERSION = savedMocksVersion;
+    }
     await fs.promises.chmod(mocksDir, 0o755).catch(() => {});
     await removeDir(workspaceDir);
   });
