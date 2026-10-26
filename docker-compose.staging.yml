@@ -8,6 +8,15 @@ services:
       dockerfile: Dockerfile.standalone
     ports:
       - "${MOCKXY_HOST_PORT:-3000}:3000"
+    environment:
+      # Versione dei mock serviti, da passare all'avvio: MOCKS_VERSION=$(git rev-parse --short HEAD)
+      - MOCKS_VERSION=${MOCKS_VERSION:-}
+    # L'health risponde anche ad admin spenta: 503 se un file del workspace non si carica.
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:3000/_admin/api/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
     volumes:
       - ./workspace/mocks:/workspace/mocks:ro
       - ./workspace/files:/workspace/files:ro

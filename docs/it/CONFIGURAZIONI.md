@@ -38,6 +38,7 @@ impostabile per-workspace dall'app desktop.
 | `adaptProxyCookies` | `ADAPT_PROXY_COOKIES` | `true` | Adatta i `Set-Cookie` proxati: rimuove `Domain`, `Secure` e `SameSite=None` così i cookie di sessione si legano all'host di Mockxy e sopravvivono su http; nome/valore e altri attributi intatti | ✅ |
 | `rewriteProxyRedirects` | `REWRITE_PROXY_REDIRECTS` | `true` | Riscrive i `Location` dei redirect proxati che puntano all'origin del backend verso l'host con cui il client ha raggiunto Mockxy (path e query preservati); relativi e host terzi intatti | ✅ |
 | `trustProxy` | `TRUST_PROXY` | `false` | Dietro un reverse proxy: legge `X-Forwarded-Proto` e `X-Forwarded-Host` (primo valore, ignorati se non validi). I redirect riscritti usano protocollo e host pubblici; su https i cookie adattati perdono solo `Domain`. Non tocca la guardia dell'admin API, che resta sull'header `Host` ([REDIRECT](REDIRECT.md), [COOKIE](COOKIE.md)) | ❌ |
+| `mocksVersion` | `MOCKS_VERSION` | — | Versione dei mock serviti, testo libero (per esempio il commit del workspace) passato da chi avvia il motore: compare in [`GET /_admin/api/health`](ADMIN-API.md#health) e nel log di avvio | ❌ |
 | `globalDelayMs` | `MOCKXY_DELAY` · `--delay` · `npm_config_delay` | `0` | Ritardo (ms) applicato ai mock senza `delayMs` proprio | ✅ |
 | `delayAllRequests` | `MOCKXY_DELAY_ALL` · `--delay-all` · `npm_config_delay_all` | `false` | Applica il ritardo globale anche alle richieste proxate | ✅ |
 | `requestTimeoutMs` | `REQUEST_TIMEOUT_MS` | `15000` | Timeout (ms) verso backend/handler | ✅ |

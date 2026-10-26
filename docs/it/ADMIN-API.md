@@ -16,7 +16,8 @@ scrivere.
 ## Quando risponde e come si protegge
 
 - Attiva con `ADMIN_API_ENABLED` (default: attiva in sviluppo, spenta in produzione). Da
-  spenta, ogni rotta risponde `404` con un messaggio esplicito.
+  spenta, ogni rotta risponde `404` con un messaggio esplicito, tranne
+  [`GET /health`](#health), che risponde sempre.
 - Il namespace `/_admin/api` è **riservato**: un metodo o un percorso che non compare qui
   sotto risponde `404` con `details.code: "ADMIN_ROUTE_NOT_FOUND"`. Non prosegue mai nel
   serving dei mock né nel proxy verso il backend, e un mock dichiarato sotto `/_admin/api` non
@@ -286,12 +287,37 @@ la forma della `201`, conteggi compresi.
 
 | Metodo e percorso | Cosa fa |
 |---|---|
+| `GET /health` | se il workspace è caricato senza errori, per orchestratori e load balancer; [dettagli](#health) |
 | `GET /info` | chi risponde e su cosa: `version`, `runtimeId` e `startedAt` (nuovi a ogni avvio), `workspace` (`id`, `root`, `mocksDir`, `filesDir` canonici; `root` solo dall'app desktop), `listener` realmente in ascolto, `watcher` (`state` fra `disabled`, `starting`, `ready`, `error`) e `revisions` (`catalog`, `server`, `dump`, `diagnostics`, `config`). Le revisioni partono da 1 e crescono quando la risorsa cambia: servono a sapere cosa rileggere, non sono precondizioni di scrittura. Non scansiona il workspace |
 | `GET /config` | configurazione di avvio, effettiva e override: `{ runtimeId, startup, effective, overrides, persisted }`, con le sole nove chiavi modificabili a runtime (`backendUrl` è `null` senza backend). Nessun'altra variabile d'ambiente; `persisted` è sempre `false` e `runtimeId` cambia a ogni avvio |
 | `PATCH /config` | override effimeri delle nove chiavi — body `{ set?, unset? }`; [regole](#configurazione-effimera) |
 | `GET /runtime/status` | esito dell'ultimo caricamento del workspace, `200` anche se degradato o fallito: `lastAttempt` (`id`, istanti, `reasons` fra `startup`, `admin`, `watcher`, `status` `applied`, `degraded` o `failed`), `lastAppliedAttemptId`, `errors` per file (`endpointId`, `filePath`, `message`, `serving`: `retained` se resta servita la versione precedente, `missing` se nulla la serve), `warnings` (`code`, `endpointId`, `filePath`, `message`) e `fatalError`. Gli avvisi sono problemi che non impediscono il caricamento — un handler o middleware importato da un altro script, o un problema di `mocks/package.json` come una modifica che richiede il riavvio — e non cambiano `status`: un tentativo con soli avvisi resta `applied`. Solo l'ultimo tentativo, senza storico |
 | `POST /scripts/validate` | validazione completa degli [script del workspace](HANDLER.md#il-contratto-degli-script): carica tutti gli handler e middleware, anche degli endpoint disabilitati e delle varianti non selezionate, e risponde `200` con `{ ok, mocksDir, scripts, errors, warnings }`; body `{}`. Qui le violazioni del contratto sono errori (`code`, `filePath`, `line` e `column` quando indicano un punto del sorgente, `message`). Non installa rotte e non tocca `state`, `sharedState`, sequenze o stream. Senza server: `node index.js validate [workspace]` ([dettagli](HANDLER.md#il-contratto-degli-script)) |
 | `GET /openapi.yaml` | il [contratto](#la-descrizione-leggibile-dalle-macchine) della versione in esecuzione, come `application/yaml` |
+
+### Health
+
+`GET /health` (anche `HEAD`) è l'unica rotta sotto `/_admin/api` che non fa parte dell'admin:
+risponde **anche con l'admin spenta**, e la guardia sull'header `Host` non la ferma, così un
+orchestratore la chiama con l'indirizzo del container. Serve a Docker, Kubernetes e ai load
+balancer per sapere se il workspace servito è completo.
+
+```json
+{ "status": "degraded", "mockxyVersion": "1.8.0", "mocksVersion": "a1b2c3d",
+  "errors": [{ "filePath": "ordini/GET.endpoint.json" }] }
+```
+
+- **`200`** con `status: "ok"` quando l'ultimo caricamento ha installato il workspace senza
+  errori.
+- **`503`** con `status: "degraded"` quando qualche file non si è caricato (il suo endpoint non
+  è servito, o è servito da una versione precedente), o quando l'ultima ricarica è fallita del
+  tutto. Gli avvisi non cambiano lo stato.
+- **`errors`** riporta solo i percorsi dei file rotti, relativi alla cartella dei mock: i
+  messaggi restano nel log del server, perché possono citare il contenuto dei file o percorsi
+  del server. Con l'admin attiva la diagnosi completa è in `GET /runtime/status`.
+- **`mocksVersion`** è il testo libero di `MOCKS_VERSION` con cui il motore è partito (per
+  esempio il commit del workspace), `null` se non impostato; compare anche nel log di avvio.
+  **`mockxyVersion`** è la versione del motore.
 
 ### Configurazione effimera
 

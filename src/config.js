@@ -311,6 +311,9 @@ function loadConfig(overrides = {}) {
       overrides.rewriteProxyRedirects ?? process.env.REWRITE_PROXY_REDIRECTS,
       DEFAULT_REWRITE_PROXY_REDIRECTS
     ),
+    // Versione dei mock serviti (es. il commit del workspace), passata da chi avvia il motore:
+    // compare nell'health e nel log di avvio. Testo libero, assente = null.
+    mocksVersion: normalizeString(overrides.mocksVersion ?? process.env.MOCKS_VERSION) ?? null,
     // Protocollo e host pubblici da X-Forwarded-Proto/X-Forwarded-Host, per redirect e cookie
     // adattati. Solo variabile d'ambiente: è una scelta di deployment, non di workspace.
     trustProxy: parseBoolean(

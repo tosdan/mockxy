@@ -446,6 +446,7 @@ async function startServer(options = {}) {
       adminApiEnabled: runtime.config.adminApiEnabled,
       proxyFallbackEnabled: runtime.config.proxyFallbackEnabled,
       trustProxy: runtime.config.trustProxy,
+      mocksVersion: runtime.config.mocksVersion,
       proxyMiddlewareCount: runtime.proxyMiddlewareRegistry.routeGroups.length,
       watchEnabled: runtime.config.watchEnabled,
     });
