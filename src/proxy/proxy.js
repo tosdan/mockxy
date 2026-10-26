@@ -139,15 +139,19 @@ function sanitizeRequestHeaders(headers, host, preferIdentityEncoding = false) {
 // L'adattamento rimuove Domain (il cookie diventa host-only sull'host di Mockxy), Secure e
 // SameSite=None (rimosso Secure, None verrebbe rifiutato; si ricade sul default Lax, adeguato
 // ai flussi same-site di sviluppo). Nome e valore del cookie non vengono mai toccati.
-function adaptProxyCookie(cookieValue) {
+// Quando il client ci raggiunge in https (dietro un reverse proxy, vedi resolvePublicOrigin)
+// Secure e SameSite=None restano: il browser li accetta, e lo staging si comporta come la
+// produzione. Domain va tolto comunque, perché nomina il backend e non l'host pubblico.
+function adaptProxyCookie(cookieValue, { keepSecure = false } = {}) {
   const [nameValue, ...attributes] = String(cookieValue).split(";");
   const keptAttributes = attributes.filter((attribute) => {
     // Tollerante su maiuscole e spazi attorno all'uguale ("Domain = x", "SameSite = None"):
     // formati sciatti ma visti in giro, e un attributo non riconosciuto qui passerebbe intero.
     const normalized = attribute.trim().toLowerCase();
-    return normalized !== "secure" &&
-      !/^samesite\s*=\s*none$/.test(normalized) &&
-      !/^domain\s*=/.test(normalized);
+    if (/^domain\s*=/.test(normalized)) {
+      return false;
+    }
+    return keepSecure || (normalized !== "secure" && !/^samesite\s*=\s*none$/.test(normalized));
   });
   return [nameValue, ...keptAttributes].join(";");
 }
@@ -155,11 +159,12 @@ function adaptProxyCookie(cookieValue) {
 // Hook su setHeader (stile dell'hook CORS su writeHead in app.js): intercetta i Set-Cookie in
 // uscita qualunque percorso del proxy li scriva — passthrough in streaming o risposta
 // bufferizzata dei middleware — senza dover passare la config lungo la catena.
-function installProxyCookieAdapter(res) {
+function installProxyCookieAdapter(res, options) {
   const originalSetHeader = res.setHeader;
+  const adapt = (cookieValue) => adaptProxyCookie(cookieValue, options);
   res.setHeader = function adaptingSetHeader(name, value) {
     if (String(name).toLowerCase() === "set-cookie") {
-      const adapted = Array.isArray(value) ? value.map(adaptProxyCookie) : adaptProxyCookie(value);
+      const adapted = Array.isArray(value) ? value.map(adapt) : adapt(value);
       return originalSetHeader.call(this, name, adapted);
     }
     return originalSetHeader.call(this, name, value);
@@ -171,10 +176,11 @@ function installProxyCookieAdapter(res) {
 // uscire il browser da Mockxy: le richieste successive parlerebbero direttamente col backend,
 // perdendo proxy, cookie adattati e policy CORS. Quando l'origin del Location coincide con
 // quella del backend configurato, schema+host+porta vengono sostituiti con l'host con cui il
-// client ha raggiunto Mockxy (header Host, schema http: Mockxy non fa TLS), preservando path,
+// client ha raggiunto Mockxy (header Host e schema http, perché Mockxy non fa TLS; dietro un
+// reverse proxy con trustProxy quelli pubblici, vedi resolvePublicOrigin), preservando path,
 // query e fragment. I Location relativi sono già corretti e passano intatti; quelli verso host
 // TERZI (SSO esterni, CDN) pure: riscriverli romperebbe flussi legittimi.
-function rewriteProxyLocation(locationValue, backendOrigin, requestHost) {
+function rewriteProxyLocation(locationValue, backendOrigin, publicOrigin) {
   let target;
   try {
     target = new URL(String(locationValue));
@@ -185,29 +191,75 @@ function rewriteProxyLocation(locationValue, backendOrigin, requestHost) {
   if (target.origin !== backendOrigin) {
     return locationValue;
   }
-  return `http://${requestHost}${target.pathname}${target.search}${target.hash}`;
+  return `${publicOrigin.protocol}://${publicOrigin.host}${target.pathname}${target.search}${target.hash}`;
 }
 
 // Hook su setHeader, come l'adattamento dei cookie: intercetta i Location in uscita qualunque
-// percorso del proxy li scriva. Se backendUrl o Host non sono interpretabili non installa nulla.
-function installProxyRedirectRewriter(req, res, backendUrl) {
+// percorso del proxy li scriva. Se backendUrl o l'host pubblico non sono interpretabili non
+// installa nulla.
+function installProxyRedirectRewriter(res, backendUrl, publicOrigin) {
   let backendOrigin;
   try {
     backendOrigin = new URL(backendUrl).origin;
   } catch {
     return;
   }
-  const requestHost = req.headers.host;
-  if (typeof requestHost !== "string" || requestHost === "") {
+  if (publicOrigin.host == null) {
     return;
   }
   const originalSetHeader = res.setHeader;
   res.setHeader = function rewritingSetHeader(name, value) {
     if (String(name).toLowerCase() === "location" && typeof value === "string") {
-      return originalSetHeader.call(this, name, rewriteProxyLocation(value, backendOrigin, requestHost));
+      return originalSetHeader.call(this, name, rewriteProxyLocation(value, backendOrigin, publicOrigin));
     }
     return originalSetHeader.call(this, name, value);
   };
+}
+
+// --- Indirizzo pubblico con cui il client ci ha raggiunto (config.trustProxy) ---
+// Dietro un reverse proxy il browser parla con il proxy, non con Mockxy: protocollo e host che
+// ha usato arrivano in X-Forwarded-Proto e X-Forwarded-Host. Contano solo con trustProxy,
+// perché senza un proxy davanti li manda chiunque; altrimenti valgono http e l'header Host,
+// come sempre. Con più proxy in catena vale il primo valore, quello del proxy rivolto al
+// client. Un valore non valido viene ignorato e si ricade su http e Host.
+function resolvePublicOrigin(req, trustProxy) {
+  const origin = {
+    protocol: "http",
+    host: typeof req.headers.host === "string" && req.headers.host !== "" ? req.headers.host : null,
+  };
+  if (!trustProxy) {
+    return origin;
+  }
+  const forwardedProto = firstForwardedValue(req.headers["x-forwarded-proto"])?.toLowerCase();
+  if (forwardedProto === "http" || forwardedProto === "https") {
+    origin.protocol = forwardedProto;
+  }
+  const forwardedHost = firstForwardedValue(req.headers["x-forwarded-host"]);
+  if (forwardedHost != null && isHostWithOptionalPort(forwardedHost)) {
+    origin.host = forwardedHost;
+  }
+  return origin;
+}
+
+// Primo elemento di un header X-Forwarded-* (Node unisce i duplicati con ", ").
+function firstForwardedValue(value) {
+  if (typeof value !== "string") {
+    return null;
+  }
+  const first = value.split(",")[0].trim();
+  return first === "" ? null : first;
+}
+
+// Solo host e porta: niente percorso, credenziali o spazi, che finirebbero dentro il Location.
+function isHostWithOptionalPort(value) {
+  if (/[\s/?#@\\]/.test(value)) {
+    return false;
+  }
+  try {
+    return new URL(`http://${value}`).pathname === "/";
+  } catch {
+    return false;
+  }
 }
 
 // Copies upstream response headers to the downstream response while preserving arrays like
@@ -720,11 +772,12 @@ function destroyStream(stream, error) {
 // Proxies unmatched requests to the configured backend while handling timeouts and client aborts.
 function forwardToBackend(req, res, config, logger, proxyMiddlewareRegistry) {
   return new Promise((resolve) => {
+    const publicOrigin = resolvePublicOrigin(req, config.trustProxy === true);
     if (config.adaptProxyCookies !== false) {
-      installProxyCookieAdapter(res);
+      installProxyCookieAdapter(res, { keepSecure: publicOrigin.protocol === "https" });
     }
     if (config.rewriteProxyRedirects !== false) {
-      installProxyRedirectRewriter(req, res, config.backendUrl);
+      installProxyRedirectRewriter(res, config.backendUrl, publicOrigin);
     }
     const targetUrl = new URL(req.originalUrl || req.url, config.backendUrl);
     const client = targetUrl.protocol === "https:" ? https : http;

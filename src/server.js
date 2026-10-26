@@ -445,6 +445,7 @@ async function startServer(options = {}) {
       uiServed: Boolean(runtime.config.uiDistDir),
       adminApiEnabled: runtime.config.adminApiEnabled,
       proxyFallbackEnabled: runtime.config.proxyFallbackEnabled,
+      trustProxy: runtime.config.trustProxy,
       proxyMiddlewareCount: runtime.proxyMiddlewareRegistry.routeGroups.length,
       watchEnabled: runtime.config.watchEnabled,
     });

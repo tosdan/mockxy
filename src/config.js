@@ -26,6 +26,10 @@ const DEFAULT_ADAPT_PROXY_COOKIES = true;
 // giro), mai desiderabile in questa topologia. I Location relativi e quelli verso host terzi
 // (SSO esterni, CDN) passano comunque intatti.
 const DEFAULT_REWRITE_PROXY_REDIRECTS = true;
+// Fiducia negli header X-Forwarded-* SPENTA di default: senza un reverse proxy davanti li manda
+// chiunque. Si accende quando Mockxy sta dietro un proxy (nginx, Traefik, un Ingress) che li
+// imposta: redirect e cookie adattati seguono allora protocollo e host pubblici.
+const DEFAULT_TRUST_PROXY = false;
 const DEFAULT_MONITOR_DUMP_INTERVAL_MS = 30000;
 const DEFAULT_MONITOR_DUMP_THRESHOLD = 100;
 const DEFAULT_MONITOR_DUMP_MAX_FILE_BYTES = 50 * 1024 * 1024;
@@ -306,6 +310,12 @@ function loadConfig(overrides = {}) {
     rewriteProxyRedirects: parseBoolean(
       overrides.rewriteProxyRedirects ?? process.env.REWRITE_PROXY_REDIRECTS,
       DEFAULT_REWRITE_PROXY_REDIRECTS
+    ),
+    // Protocollo e host pubblici da X-Forwarded-Proto/X-Forwarded-Host, per redirect e cookie
+    // adattati. Solo variabile d'ambiente: è una scelta di deployment, non di workspace.
+    trustProxy: parseBoolean(
+      overrides.trustProxy ?? process.env.TRUST_PROXY,
+      DEFAULT_TRUST_PROXY
     ),
     // Fallback null, non undefined: undefined farebbe scattare il default `false` di
     // parseBoolean e un flag assente spegnerebbe l'admin anche in development.
