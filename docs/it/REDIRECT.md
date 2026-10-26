@@ -51,7 +51,7 @@ imposta:
 
 - **`X-Forwarded-Proto`** per lo schema (`http` o `https`);
 - **`X-Forwarded-Host`** per host e porta; se manca, resta l'header `Host` (nginx lo passa con
-  `proxy_set_header Host $host`).
+  `proxy_set_header Host $http_host`).
 
 ```
 richiesta:  GET /login   Host: mockxy:3000

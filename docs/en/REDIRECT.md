@@ -51,7 +51,7 @@ sets:
 
 - **`X-Forwarded-Proto`** for the scheme (`http` or `https`);
 - **`X-Forwarded-Host`** for host and port; when it is missing, the `Host` header stays (nginx
-  passes it with `proxy_set_header Host $host`).
+  passes it with `proxy_set_header Host $http_host`).
 
 ```
 request:    GET /login   Host: mockxy:3000

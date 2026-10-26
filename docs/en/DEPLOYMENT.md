@@ -81,12 +81,13 @@ The proxy must set those headers. With nginx, for example:
 ```nginx
 location /api/ {
     proxy_pass http://mockxy:3000;
-    proxy_set_header Host $host;
+    proxy_set_header Host $http_host;
     proxy_set_header X-Forwarded-Proto $scheme;
-    proxy_set_header X-Forwarded-Host $host;
+    proxy_set_header X-Forwarded-Host $http_host;
 }
 ```
 
-If the proxy also serves the frontend on the same origin, [CORS](CORS.md) is not needed. The
+`$http_host` rather than `$host`: `$host` drops the port, and on a port other than 443 the
+rewritten redirect would drop it too. If the proxy also serves the frontend on the same origin, [CORS](CORS.md) is not needed. The
 option leaves the admin API guard alone, which always looks at the `Host` header
 ([RETE.md](RETE.md)). Without a proxy in front leave it off: anyone can send those headers.

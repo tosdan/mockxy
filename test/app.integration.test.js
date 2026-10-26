@@ -1300,7 +1300,7 @@ describe("app integration", () => {
     });
 
     test("with trustProxy and only X-Forwarded-Proto, the host stays the Host header", async () => {
-      // nginx con `proxy_set_header Host $host` passa l'host pubblico in Host.
+      // nginx con `proxy_set_header Host $http_host` passa l'host pubblico in Host.
       const app = await buildApp({ trustProxy: true, backendHandler: redirectToBackend });
       const response = await request(app)
         .get("/not-mocked")
