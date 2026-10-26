@@ -80,10 +80,11 @@ info:
     development tool for a trusted machine, not a public surface:
 
     - It is enabled by `ADMIN_API_ENABLED` (default: on outside production). When disabled,
-      every route answers `404` with an explicit message.
+      every route answers `404` with an explicit message, except `GET /health`.
     - When the server is bound to loopback (the default) a **DNS-rebinding guard** rejects
       requests whose `Host` header is not a loopback name — additional names go in
-      `ADMIN_ALLOWED_HOSTS`. Requests to the mocks themselves are never filtered.
+      `ADMIN_ALLOWED_HOSTS`. Requests to the mocks themselves are never filtered, and neither
+      is `GET /health`.
     - Mutations require an explicit JSON content type, which is also the CSRF defense: a
       cross-origin request carrying `application/json` triggers a preflight and dies there. The
       OpenAPI import accepts YAML too but rejects `text/plain` with `415` for the same reason.
@@ -2087,6 +2088,39 @@ paths:
         "400": { $ref: "#/components/responses/BadRequest" }
 
   # ────────────────────────────────── Runtime ─────────────────────────────────
+  /health:
+    get:
+      tags: [Runtime]
+      operationId: getHealth
+      summary: Whether the workspace loaded without errors, for orchestrators and load balancers
+      description: |
+        The one route under this prefix that is not part of the admin API: it answers with the
+        admin API disabled too, and the DNS-rebinding guard does not apply to it, so a container
+        orchestrator can call it by the container's address. `HEAD` answers with the same status.
+
+        - `200` with `status: ok` when the last load installed the workspace with no errors.
+        - `503` with `status: degraded` when some files did not load (their endpoints are not
+          served, or are served by a previous version), or when the last reload failed as a whole.
+          Warnings never change the status.
+        - `errors` lists only the paths of the broken files, relative to the mocks folder: the
+          messages stay in the server log, because they may quote file contents or server paths.
+          `GET /runtime/status` has the full diagnostics when the admin API is on.
+        - `mocksVersion` is the free-text `MOCKS_VERSION` the engine was started with (for
+          example the workspace commit), `null` when unset.
+      responses:
+        "200":
+          description: The workspace loaded without errors
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Health" }
+              example: { status: ok, mockxyVersion: 1.8.0, mocksVersion: a1b2c3d, errors: [] }
+        "503":
+          description: Some files did not load, or the last reload failed
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Health" }
+              example: { status: degraded, mockxyVersion: 1.8.0, mocksVersion: a1b2c3d, errors: [{ filePath: orders/GET.endpoint.json }] }
+
   /info:
     get:
       tags: [Runtime]
@@ -2849,6 +2883,24 @@ components:
         line: { type: integer }
         column: { type: integer }
         message: { type: string }
+    Health:
+      type: object
+      required: [status, mockxyVersion, mocksVersion, errors]
+      properties:
+        status: { type: string, enum: [ok, degraded] }
+        mockxyVersion: { type: string, description: Version of the running Mockxy engine. }
+        mocksVersion:
+          type: [string, "null"]
+          description: The `MOCKS_VERSION` the engine was started with, `null` when unset.
+        errors:
+          type: array
+          description: Broken files of the installed workspace, by path only.
+          items:
+            type: object
+            required: [filePath]
+            properties:
+              filePath: { type: string, description: "Path relative to the mocks folder." }
+
     RuntimeStatus:
       type: object
       required: [runtimeId, lastAttempt, lastAppliedAttemptId, errors, warnings, fatalError]

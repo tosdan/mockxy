@@ -2,6 +2,7 @@ const fs = require("fs");
 const path = require("path");
 const express = require("express");
 const { createAdminApiRouter, sendAdminApiDisabled } = require("./admin/admin-api");
+const { createHealthRouter } = require("./health");
 const { createMissingBackendUrlMessage } = require("./config");
 const { createDataFileReader } = require("./mocks/data-files");
 const {
@@ -998,6 +999,8 @@ function createApp({
   // Accessor lazy per i file dati JSON: passato al contesto di handler (qui) e middleware (proxy).
   const dataFileReader = createDataFileReader(config?.filesDir);
 
+  // L'health precede admin e guardia: risponde anche ad admin spenta e senza Host di loopback.
+  app.use("/_admin/api", createHealthRouter({ runtimeStatus, config }));
   if (config?.adminApiEnabled !== false) {
     app.use("/_admin/api", createAdminHostGuard(config), createAdminApiRouter({ config, runtimeConfig, runtimeIdentity, runtimeStatus, catalogRevision, watcherStatus, listener, registry, proxyMiddlewareRegistry, reloadRuntime, requestMonitor, serverState, monitorDump, sequenceStates, handlerStates, sharedStates, sseConnections, wsConnections }));
   } else {
