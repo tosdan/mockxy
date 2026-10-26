@@ -143,3 +143,30 @@ describe("loadConfig — abilitazione dell'admin API", () => {
     }
   });
 });
+
+describe("loadConfig — fiducia nel reverse proxy", () => {
+  let saved;
+
+  beforeEach(() => {
+    saved = process.env.TRUST_PROXY;
+    delete process.env.TRUST_PROXY;
+  });
+
+  afterEach(() => {
+    if (saved === undefined) {
+      delete process.env.TRUST_PROXY;
+    } else {
+      process.env.TRUST_PROXY = saved;
+    }
+  });
+
+  test("trustProxy è spenta per default", () => {
+    expect(loadConfig({}).trustProxy).toBe(false);
+  });
+
+  test("trustProxy viene letta dall'ambiente e dagli override", () => {
+    process.env.TRUST_PROXY = "true";
+    expect(loadConfig({}).trustProxy).toBe(true);
+    expect(loadConfig({ trustProxy: false }).trustProxy).toBe(false);
+  });
+});

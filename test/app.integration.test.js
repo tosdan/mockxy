@@ -67,6 +67,7 @@ describe("app integration", () => {
     proxyFallbackEnabled = true,
     adaptProxyCookies = true,
     rewriteProxyRedirects = true,
+    trustProxy = false,
     requestMonitor,
   } = {}) {
     backend = await startBackendServer(backendHandler || ((req, res) => {
@@ -94,6 +95,7 @@ describe("app integration", () => {
       proxyFallbackEnabled,
       adaptProxyCookies,
       rewriteProxyRedirects,
+      trustProxy,
     };
 
     return createApp({
@@ -1255,6 +1257,108 @@ describe("app integration", () => {
 
     expect(response.status).toBe(302);
     expect(response.headers["location"]).toBe(backendLocation);
+  });
+
+  describe("behind a reverse proxy (trustProxy)", () => {
+    const redirectToBackend = (req, res) => {
+      res.statusCode = 302;
+      res.setHeader("Location", `${backend.url}/nuova/rotta?a=1`);
+      res.end();
+    };
+    const backendCookies = (req, res) => {
+      res.statusCode = 200;
+      res.setHeader("content-type", "application/json");
+      res.setHeader("Set-Cookie", [
+        "sessione=abc123; Path=/; Domain=staging.example; Secure; HttpOnly; SameSite=None",
+        "pref=compact; Path=/; SameSite=Lax",
+      ]);
+      res.end(JSON.stringify({ backend: true }));
+    };
+
+    test("without trustProxy, X-Forwarded-* are ignored: http and the Host header as today", async () => {
+      // Senza un proxy davanti questi header li manda chiunque: non devono cambiare nulla.
+      const app = await buildApp({ backendHandler: redirectToBackend });
+      const response = await request(app)
+        .get("/not-mocked")
+        .set("Host", "mockxy.test:3199")
+        .set("X-Forwarded-Proto", "https")
+        .set("X-Forwarded-Host", "staging.app");
+
+      expect(response.headers["location"]).toBe("http://mockxy.test:3199/nuova/rotta?a=1");
+    });
+
+    test("with trustProxy, the redirect takes the public protocol and host", async () => {
+      const app = await buildApp({ trustProxy: true, backendHandler: redirectToBackend });
+      const response = await request(app)
+        .get("/not-mocked")
+        .set("Host", "mockxy:3000")
+        .set("X-Forwarded-Proto", "https")
+        .set("X-Forwarded-Host", "staging.app");
+
+      expect(response.status).toBe(302);
+      expect(response.headers["location"]).toBe("https://staging.app/nuova/rotta?a=1");
+    });
+
+    test("with trustProxy and only X-Forwarded-Proto, the host stays the Host header", async () => {
+      // nginx con `proxy_set_header Host $host` passa l'host pubblico in Host.
+      const app = await buildApp({ trustProxy: true, backendHandler: redirectToBackend });
+      const response = await request(app)
+        .get("/not-mocked")
+        .set("Host", "staging.app")
+        .set("X-Forwarded-Proto", "https");
+
+      expect(response.headers["location"]).toBe("https://staging.app/nuova/rotta?a=1");
+    });
+
+    test("with several proxies in a chain, the first value wins", async () => {
+      const app = await buildApp({ trustProxy: true, backendHandler: redirectToBackend });
+      const response = await request(app)
+        .get("/not-mocked")
+        .set("Host", "mockxy:3000")
+        .set("X-Forwarded-Proto", "https, http")
+        .set("X-Forwarded-Host", "staging.app:8443, ingress.internal");
+
+      expect(response.headers["location"]).toBe("https://staging.app:8443/nuova/rotta?a=1");
+    });
+
+    test.each([
+      ["an unknown protocol", { "X-Forwarded-Proto": "ftp" }, "http://mockxy:3000/nuova/rotta?a=1"],
+      ["a host with a path", { "X-Forwarded-Host": "evil.example/phish" }, "http://mockxy:3000/nuova/rotta?a=1"],
+      ["a host with credentials", { "X-Forwarded-Host": "user@evil.example" }, "http://mockxy:3000/nuova/rotta?a=1"],
+      ["an empty value", { "X-Forwarded-Proto": " ", "X-Forwarded-Host": "" }, "http://mockxy:3000/nuova/rotta?a=1"],
+    ])("with trustProxy, %s is ignored", async (_label, headers, expected) => {
+      const app = await buildApp({ trustProxy: true, backendHandler: redirectToBackend });
+      const response = await request(app).get("/not-mocked").set("Host", "mockxy:3000").set(headers);
+
+      expect(response.headers["location"]).toBe(expected);
+    });
+
+    test("with trustProxy over https, cookies lose only Domain and keep Secure and SameSite=None", async () => {
+      const app = await buildApp({ trustProxy: true, backendHandler: backendCookies });
+      const response = await request(app).get("/not-mocked").set("X-Forwarded-Proto", "https");
+
+      expect(response.headers["set-cookie"]).toEqual([
+        "sessione=abc123; Path=/; Secure; HttpOnly; SameSite=None",
+        "pref=compact; Path=/; SameSite=Lax",
+      ]);
+    });
+
+    test("with trustProxy over http, cookies are adapted as today", async () => {
+      const app = await buildApp({ trustProxy: true, backendHandler: backendCookies });
+      const response = await request(app).get("/not-mocked").set("X-Forwarded-Proto", "http");
+
+      expect(response.headers["set-cookie"]).toEqual([
+        "sessione=abc123; Path=/; HttpOnly",
+        "pref=compact; Path=/; SameSite=Lax",
+      ]);
+    });
+
+    test("without trustProxy, X-Forwarded-Proto: https does not keep Secure", async () => {
+      const app = await buildApp({ backendHandler: backendCookies });
+      const response = await request(app).get("/not-mocked").set("X-Forwarded-Proto", "https");
+
+      expect(response.headers["set-cookie"][0]).toBe("sessione=abc123; Path=/; HttpOnly");
+    });
   });
 
   test("GET /mocked filter compares scalars as strings (numbers and booleans)", async () => {
