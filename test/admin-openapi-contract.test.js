@@ -4,6 +4,7 @@ const path = require("path");
 const express = require("express");
 const yaml = require("js-yaml");
 const { createAdminApiRouter } = require("../src/admin/admin-api");
+const { createHealthRouter } = require("../src/health");
 const { findSplitFlowMappings } = require("../scripts/validate-admin-openapi");
 
 const SPEC_PATH = path.join(__dirname, "..", "src", "admin", "admin-api.openapi.yaml");
@@ -23,6 +24,15 @@ function listRouterOperations(router) {
     .filter((layer) => layer.route)
     .flatMap((layer) => Object.keys(layer.route.methods)
       .map((method) => normalizeOperation(method, layer.route.path)));
+}
+
+// Le operazioni servite sotto /_admin/api: il router admin e l'health, che sta in un router suo
+// montato prima dell'admin.
+function listServedOperations() {
+  return [
+    ...listRouterOperations(createAdminApiRouter({ config: {}, sharedStates: {} })),
+    ...listRouterOperations(createHealthRouter()),
+  ];
 }
 
 function listSpecOperations(spec) {
@@ -92,11 +102,10 @@ describe("Admin API OpenAPI contract", () => {
 
   // Guardia su metodi e percorsi: non verifica payload, status o comportamenti, che restano
   // compito dei test di integrazione delle singole rotte.
-  test("ogni operazione del router admin è documentata nell'OpenAPI e viceversa", () => {
-    const router = createAdminApiRouter({ config: {}, sharedStates: {} });
+  test("ogni operazione servita sotto /_admin/api è documentata nell'OpenAPI e viceversa", () => {
     const spec = yaml.safeLoad(fs.readFileSync(SPEC_PATH, "utf8"));
 
-    expect(diffOperations(listRouterOperations(router), listSpecOperations(spec))).toEqual({
+    expect(diffOperations(listServedOperations(), listSpecOperations(spec))).toEqual({
       missingFromSpec: [],
       missingFromRouter: [],
     });
@@ -134,11 +143,10 @@ describe("Admin API OpenAPI contract", () => {
   });
 
   test("un'operazione HEAD presente solo nello spec reale emerge dal confronto", () => {
-    const router = createAdminApiRouter({ config: {}, sharedStates: {} });
     const spec = yaml.safeLoad(fs.readFileSync(SPEC_PATH, "utf8"));
     spec.paths["/spec-only-probe"] = { head: { responses: {} } };
 
-    expect(diffOperations(listRouterOperations(router), listSpecOperations(spec)).missingFromRouter)
+    expect(diffOperations(listServedOperations(), listSpecOperations(spec)).missingFromRouter)
       .toEqual(["HEAD /spec-only-probe"]);
   });
 
