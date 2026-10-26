@@ -8,7 +8,7 @@ const { MockRegistry } = require("../src/mocks/mock-registry");
 const { ProxyMiddlewareRegistry } = require("../src/proxy/proxy-middleware-registry");
 const { RequestMonitorStore } = require("../src/monitoring/request-monitor");
 const { SseConnectionStore } = require("../src/mocks/sse-connections");
-const { createNoopLogger, createTempDir, removeDir, waitFor } = require("./helpers");
+const { createMemoryLogger, createNoopLogger, createTempDir, removeDir, waitFor } = require("./helpers");
 
 // Serving delle varianti sse: stream con copione, push manuale, loop, heartbeat e pulizia.
 // I test consumano lo stream con fetch su un server reale (supertest non regge stream infiniti).
@@ -60,7 +60,7 @@ describe("sse serving", () => {
     );
   }
 
-  async function startApp({ sseHeartbeatMs, requestMonitor } = {}) {
+  async function startApp({ sseHeartbeatMs, requestMonitor, logger } = {}) {
     const { mockRouteGroups, handlerRouteGroups, proxyMiddlewareRouteGroups, sequenceRouteGroups, sseRouteGroups, loadErrors } =
       await loadEndpointRouteGroups(mocksDir);
     expect(loadErrors).toEqual([]);
@@ -69,7 +69,7 @@ describe("sse serving", () => {
     const app = createApp({
       registry: new MockRegistry(routeGroups),
       config: { requestTimeoutMs: 5000, proxyFallbackEnabled: false, sseHeartbeatMs },
-      logger: createNoopLogger(),
+      logger: logger || createNoopLogger(),
       proxyMiddlewareRegistry: new ProxyMiddlewareRegistry(proxyMiddlewareRouteGroups),
       requestMonitor: requestMonitor || new RequestMonitorStore(),
       sseConnections,
@@ -241,5 +241,26 @@ describe("sse serving", () => {
     const entry = requestMonitor.listEntries()[0];
     expect(entry.source).toBe("sse");
     expect(entry.matchedRoutePath).toBe("/api/feed");
+  });
+
+  test("alla chiusura dello stream la riga «Request completed» riporta endpoint e variante", async () => {
+    await writeSseEndpoint({
+      script: [{ afterMs: 0, event: "hello", data: 1 }],
+      onEnd: "keep-open",
+    });
+    const logger = createMemoryLogger();
+    await startApp({ logger });
+
+    const stream = await openStream("/api/feed");
+    await stream.readUntil((b) => b.includes("event: hello"));
+    stream.abort();
+
+    const isCompleted = (entry) => entry.message === "Request completed.";
+    await waitFor(() => logger.entries.info.some(isCompleted));
+    expect(logger.entries.info.find(isCompleted).fields).toEqual(expect.objectContaining({
+      mode: "sse",
+      endpoint: "/api/feed",
+      variant: "001.response.json",
+    }));
   });
 });
