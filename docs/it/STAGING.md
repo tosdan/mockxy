@@ -48,6 +48,8 @@ map $http_upgrade $connection_upgrade { default upgrade; '' close; }
 server {
     listen 443 ssl;
     server_name staging.example.internal;
+    ssl_certificate     /etc/nginx/certs/staging.crt;
+    ssl_certificate_key /etc/nginx/certs/staging.key;
     root /srv/frontend;
 
     location / {
@@ -77,6 +79,8 @@ server {
   intatto.
 
 ## Avvio
+
+Dal checkout di Mockxy, dove c'è il compose:
 
 ```bash
 export BACKEND_URL=http://backend-staging:8080
@@ -143,12 +147,12 @@ ha la sua cartella e un collegamento `current` punta a quella in uso. La cartell
 cambia mai sotto il motore.
 
 ```bash
-cd /srv/mockxy-mocks                       # contiene repo/, releases/ e current
-git -C repo fetch
-SHA=$(git -C repo rev-parse --short origin/main)
-git -C repo worktree add --detach "../releases/$SHA" "$SHA"
-ln -sfn "releases/$SHA" current
-MOCKXY_WORKSPACE=/srv/mockxy-mocks/current MOCKS_VERSION=$SHA \
+MOCKS=/srv/mockxy-mocks                     # contiene repo/, releases/ e current
+git -C "$MOCKS/repo" fetch
+SHA=$(git -C "$MOCKS/repo" rev-parse --short origin/main)
+git -C "$MOCKS/repo" worktree add --detach "$MOCKS/releases/$SHA" "$SHA"
+ln -sfn "releases/$SHA" "$MOCKS/current"
+MOCKXY_WORKSPACE="$MOCKS/current" MOCKS_VERSION=$SHA \
   docker compose -f docker-compose.staging-proxy.yml up -d --wait
 ```
 
