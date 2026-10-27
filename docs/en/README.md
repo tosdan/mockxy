@@ -82,6 +82,9 @@ relevant page in the same round as the code.
   stateful frontend GET→POST→GET flow, and the hard-to-reproduce case.
 - [Wiring up the frontend](FRONTEND.md) — dev-server proxy or direct cross-origin calls:
   what each route requires and how to verify that everything goes through Mockxy.
+- [Mockxy in a shared staging](STAGING.md) — the profile with the proxy towards the real backend
+  and the admin API off: reverse proxy in front, starting, updating mocks with the health check,
+  reading traffic from the logs, rules for shared mocks and how to move the boundary with a PR.
 - [Troubleshooting](TROUBLESHOOTING.md) — symptom by symptom, area by area, with the
   toolbox (`x-mock-source`, monitor, logs) and pointers to the detail pages.
 - [Configuration](CONFIGURAZIONI.md) — the complete census: every engine option, its
