@@ -967,6 +967,29 @@ function respondWithCorsPreflight(req, res) {
   res.status(204).end();
 }
 
+// Quale definizione del workspace ha dato forma alla risposta, per la riga «Request completed»:
+// con l'admin spenta (staging condiviso) i log sono l'unica finestra sul traffico. Solo quando una
+// variante ha risposto: un miss su un percorso noto con un altro metodo non nomina l'endpoint.
+// Il passo di sequenza conta da 1, come nell'interfaccia.
+function describeServedEndpoint(req, mode) {
+  if (mode === "middleware") {
+    const middleware = req._proxyMiddlewareMeta;
+    return middleware?.responseFile != null
+      ? { endpoint: middleware.routePath, variant: middleware.responseFile }
+      : {};
+  }
+  if (req._responseFile == null) {
+    return {};
+  }
+  return {
+    endpoint: req._matchedRoutePath,
+    variant: req._responseFile,
+    ...(req._sequenceStep != null
+      ? { sequenceStep: `${req._sequenceStep.index + 1}/${req._sequenceStep.count}` }
+      : {}),
+  };
+}
+
 function createApp({
   registry,
   config,
@@ -1068,6 +1091,7 @@ function createApp({
         mode: completedMode,
         status: res.statusCode,
         durationMs: Date.now() - start,
+        ...describeServedEndpoint(req, completedMode),
       });
 
       // I preflight risolti dal gestore CORS automatico sono plumbing del browser, non traffico
@@ -1148,6 +1172,7 @@ function createApp({
       // Endpoint con sequenza: quale step ha risposto (indice/totale, variante) finisce nella
       // voce del monitor — senza, la progressione di una sequenza sarebbe invisibile.
       req._sequenceStep = decision.sequenceStep;
+      req._responseFile = decision.response.selectedResponseFile;
       await respondWithMock(req, res, decision.response, config.globalDelayMs, config.caseInsensitiveFilters, {
         params: decision.params,
         logger,
@@ -1159,6 +1184,7 @@ function createApp({
       req._responseMode = "handler";
       req._matchedRoutePath = decision.routePath;
       req._sequenceStep = decision.sequenceStep;
+      req._responseFile = decision.handler.selectedResponseFile;
       await respondWithHandler(
         req,
         res,
@@ -1178,6 +1204,7 @@ function createApp({
     if (decision.mode === "sse") {
       req._responseMode = "sse";
       req._matchedRoutePath = decision.routePath;
+      req._responseFile = decision.sse.selectedResponseFile;
       // config.sseHeartbeatMs è un knob non documentato (test e casi limite): default 15s.
       respondWithSse(req, res, decision, sseConnections, config.sseHeartbeatMs);
       return;
@@ -1188,6 +1215,7 @@ function createApp({
     if (decision.mode === "ws") {
       req._responseMode = "ws-upgrade-required";
       req._matchedRoutePath = decision.routePath;
+      req._responseFile = decision.ws.selectedResponseFile;
       res.status(426);
       res.setHeader(TECH_HEADER, "ws");
       res.setHeader("upgrade", "websocket");

@@ -11,7 +11,7 @@ const { ProxyMiddlewareRegistry } = require("../src/proxy/proxy-middleware-regis
 const { RequestMonitorStore } = require("../src/monitoring/request-monitor");
 const { SequenceStateStore } = require("../src/mocks/sequence-state");
 const { HandlerStateStore } = require("../src/mocks/handler-state");
-const { createNoopLogger, createTempDir, removeDir, waitFor } = require("./helpers");
+const { createMemoryLogger, createNoopLogger, createTempDir, removeDir, waitFor } = require("./helpers");
 
 // Serving delle sequenze di varianti: gli step vengono scelti a request-time dal cursore
 // (SequenceStateStore) e serviti secondo la loro natura (mock o handler).
@@ -77,7 +77,7 @@ describe("sequence serving", () => {
     return { type: "mock", title: "", status, headers: {}, delayMs: 0, body };
   }
 
-  async function buildApp({ sequenceStates, requestMonitor, handlerStates } = {}) {
+  async function buildApp({ sequenceStates, requestMonitor, handlerStates, logger } = {}) {
     const { mockRouteGroups, handlerRouteGroups, proxyMiddlewareRouteGroups, sequenceRouteGroups, loadErrors } =
       await loadEndpointRouteGroups(mocksDir);
     expect(loadErrors).toEqual([]);
@@ -86,7 +86,7 @@ describe("sequence serving", () => {
     return createApp({
       registry,
       config: { requestTimeoutMs: 5000, proxyFallbackEnabled: false },
-      logger: createNoopLogger(),
+      logger: logger || createNoopLogger(),
       proxyMiddlewareRegistry: new ProxyMiddlewareRegistry(proxyMiddlewareRouteGroups),
       requestMonitor: requestMonitor || new RequestMonitorStore(),
       handlerStates,
@@ -123,6 +123,36 @@ describe("sequence serving", () => {
       expect(done.status).toBe(200);
       expect(done.body).toEqual({ status: "completed" });
     }
+  });
+
+  test("la riga «Request completed» riporta la variante del passo e il passo contato da 1", async () => {
+    await writeSequenceEndpoint({
+      folder: "ordini",
+      routePath: "/api/ordini/:id",
+      responses: {
+        "001.response.json": mockResponse({ status: "pending" }, 202),
+        "002.response.json": mockResponse({ status: "shipped" }),
+      },
+      sequence: {
+        steps: [
+          { response: "001.response.json", times: 1 },
+          { response: "002.response.json" },
+        ],
+      },
+    });
+    const logger = createMemoryLogger();
+    const app = await buildApp({ logger });
+
+    await request(app).get("/api/ordini/7");
+    await request(app).get("/api/ordini/7");
+
+    const lines = logger.entries.info
+      .filter((entry) => entry.message === "Request completed.")
+      .map(({ fields }) => ({ endpoint: fields.endpoint, variant: fields.variant, sequenceStep: fields.sequenceStep }));
+    expect(lines).toEqual([
+      { endpoint: "/api/ordini/:id", variant: "001.response.json", sequenceStep: "1/2" },
+      { endpoint: "/api/ordini/:id", variant: "002.response.json", sequenceStep: "2/2" },
+    ]);
   });
 
   test("uno step può essere un handler: risponde con la sua logica e i suoi param", async () => {

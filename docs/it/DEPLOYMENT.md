@@ -82,6 +82,15 @@ curl -s http://localhost:3000/_admin/api/health
 I messaggi d'errore dei file rotti non sono nell'health, ma nel log di avvio
 (`docker compose -f docker-compose.staging.yml logs mockxy`).
 
+Con l'admin spenta il traffico si legge dagli stessi log, che sono JSON su stdout: ogni richiesta
+chiude con una riga «Request completed». `mode` è la [provenienza](PROXY.md#da-dove-è-arrivata-la-risposta-x-mock-source) della risposta
+(`mock`, `handler`, `middleware`, `backend`, …); quando ha risposto una variante del workspace,
+`endpoint` e `variant` dicono quale, e `sequenceStep` il passo di una sequenza:
+
+```json
+{"time":"…","level":"info","msg":"Request completed.","method":"GET","path":"/api/ordini/7","mode":"mock","status":202,"durationMs":3,"endpoint":"/api/ordini/:id","variant":"001.response.json","sequenceStep":"1/2"}
+```
+
 ## Dietro un reverse proxy
 
 Spesso Mockxy non è esposto direttamente: davanti c'è un reverse proxy (nginx, Traefik, un

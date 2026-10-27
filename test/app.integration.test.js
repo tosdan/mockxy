@@ -2471,4 +2471,108 @@ describe("app integration", () => {
     const afterClearResponse = await request(app).get("/_admin/api/monitoring/requests");
     expect(afterClearResponse.body.items).toEqual([]);
   });
+
+  describe("riga di log «Request completed»", () => {
+    function completedLines() {
+      return logger.entries.info
+        .filter((entry) => entry.message === "Request completed.")
+        .map((entry) => entry.fields);
+    }
+
+    test("un mock riporta endpoint e variante che hanno risposto", async () => {
+      logger = createMemoryLogger();
+      await writeMock({ mocksDir, folder: "users", method: "GET", routePath: "/api/users/:id" });
+      const app = await buildApp({ customLogger: logger });
+
+      await request(app).get("/api/users/42");
+
+      expect(completedLines()).toEqual([{
+        method: "GET",
+        path: "/api/users/42",
+        mode: "mock",
+        status: 200,
+        durationMs: expect.any(Number),
+        endpoint: "/api/users/:id",
+        variant: "001.response.json",
+      }]);
+    });
+
+    test("un handler riporta endpoint e variante", async () => {
+      logger = createMemoryLogger();
+      await writeHandler({
+        mocksDir,
+        folder: "orders",
+        method: "POST",
+        source: `module.exports = {
+  method: "POST",
+  path: "/api/orders",
+  resolveResponse() {
+    return { status: 201, jsonBody: { created: true } };
+  }
+};
+`,
+      });
+      const app = await buildApp({ customLogger: logger });
+
+      await request(app).post("/api/orders").send({});
+
+      expect(completedLines()).toEqual([expect.objectContaining({
+        mode: "handler",
+        status: 201,
+        endpoint: "/api/orders",
+        variant: "001.response.json",
+      })]);
+    });
+
+    test("un proxy middleware riporta il proprio endpoint e la variante", async () => {
+      logger = createMemoryLogger();
+      await writeProxyMiddleware({
+        mocksDir,
+        folder: "products",
+        method: "GET",
+        source: `module.exports = {
+  method: "GET",
+  path: "/api/products",
+  async transformResponse({ body }) {
+    return { body: { ...body, flagged: true } };
+  }
+};
+`,
+      });
+      const app = await buildApp({ customLogger: logger });
+
+      await request(app).get("/api/products");
+
+      expect(completedLines()).toEqual([expect.objectContaining({
+        mode: "middleware",
+        endpoint: "/api/products",
+        variant: "001.response.json",
+      })]);
+    });
+
+    test("il backend senza mock né middleware non nomina endpoint né variante", async () => {
+      logger = createMemoryLogger();
+      const app = await buildApp({ customLogger: logger });
+
+      await request(app).get("/api/not-mocked");
+
+      const [line] = completedLines();
+      expect(line.mode).toBe("backend");
+      expect(line).not.toHaveProperty("endpoint");
+      expect(line).not.toHaveProperty("variant");
+    });
+
+    test("un miss su un percorso mockato con un altro metodo non nomina l'endpoint", async () => {
+      logger = createMemoryLogger();
+      await writeMock({ mocksDir, folder: "items", method: "GET", routePath: "/api/items" });
+      const app = await buildApp({ customLogger: logger, proxyFallbackEnabled: false });
+
+      await request(app).delete("/api/items");
+
+      const [line] = completedLines();
+      expect(line.mode).toBe("mock-only");
+      expect(line).not.toHaveProperty("endpoint");
+      expect(line).not.toHaveProperty("variant");
+    });
+  });
 });

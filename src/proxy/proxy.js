@@ -793,6 +793,7 @@ function forwardToBackend(req, res, config, logger, proxyMiddlewareRegistry) {
       ? {
         routePath: middlewareDecision.routePath,
         filePath: middlewareDecision.middleware?.sourceFilePath || middlewareDecision.middleware?.configFilePath,
+        responseFile: middlewareDecision.middleware?.selectedResponseFile,
       }
       : undefined;
     const options = {
