@@ -45,6 +45,9 @@ matures, the boundary moves **one area at a time**:
 - for the quick comparison "how does the backend behave on *everything*?" there's the [full
   proxy](CONTROLLI.md), which suspends the mocks without losing them.
 
+If the same boundary lives in a staging used by the whole team, the walkthrough is in
+[STAGING.md](STAGING.md): mocks arrive through a PR and the boundary moves the same way.
+
 ### “The frontend must already exercise GET → POST → GET”
 
 A static response is not enough when the frontend creates an item and expects it in the next

@@ -9,6 +9,10 @@ Besides the [desktop app](DESKTOP.md), Mockxy runs in three ways. The compass fo
 | Proxy fallback | yes | yes | **no** (mock-only) |
 | Hot reload of mocks | yes | yes | no |
 
+For a shared staging, with mocks where the backend is not there yet and the real backend
+elsewhere, there is a profile of the standalone image with the proxy on: the guide is
+[STAGING.md](STAGING.md).
+
 In all cases the engine's configuration goes **through environment variables only** (or CLI):
 the complete census is in [CONFIGURAZIONI.md](CONFIGURAZIONI.md), and the `.env.example` file
 documents every variable — including host ports, which only concern Docker Compose.
@@ -63,7 +67,8 @@ on `/workspace/mocks` and `/workspace/files`:
 Two notes for use on an internal network: the bind is already `0.0.0.0` (safe here: the admin
 is off — the full picture is in [RETE.md](RETE.md)), and if your colleagues' frontends call the
 server **from the browser, from other origins**, you need `CORS_ENABLED=true`
-([automatic CORS](CORS.md)).
+([automatic CORS](CORS.md)). With the proxy towards a real backend there is a separate compose,
+`docker-compose.staging-proxy.yml`, described in [STAGING.md](STAGING.md).
 
 ### Updating and checking
 

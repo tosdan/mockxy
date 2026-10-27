@@ -83,6 +83,9 @@ la pagina pertinente nello stesso giro del codice.
   frontend GET→POST→GET stateful e il caso difficile da riprodurre.
 - [Collegare il frontend](FRONTEND.md) — proxy del dev server o chiamata diretta cross-origin:
   cosa serve per ciascuna strada e come verificare che tutto passi da Mockxy.
+- [Mockxy in uno staging condiviso](STAGING.md) — il profilo con il proxy verso il backend vero e
+  l'admin spenta: reverse proxy davanti, avvio, aggiornamento dei mock con l'health, lettura del
+  traffico dai log, regole per i mock condivisi e come spostare il confine con una PR.
 - [Risoluzione dei problemi](TROUBLESHOOTING.md) — sintomo per sintomo, area per area, con la
   cassetta degli attrezzi (`x-mock-source`, monitor, log) e i rimandi alle pagine.
 - [Configurazioni](CONFIGURAZIONI.md) — censimento completo: ogni opzione del motore, la
