@@ -45,6 +45,9 @@ matura, il confine si sposta **una zona alla volta**:
 - per il confronto rapido «come si comporta il backend su *tutto*?» c'è il [proxy
   totale](CONTROLLI.md), che sospende i mock senza perderli.
 
+Se lo stesso confine vive in uno staging usato da tutto il team, il percorso è in
+[STAGING.md](STAGING.md): i mock arrivano con una PR e il confine si sposta allo stesso modo.
+
 ### «Il frontend deve già provare un flusso GET → POST → GET»
 
 Una risposta statica non basta quando il frontend crea un elemento e si aspetta di ritrovarlo

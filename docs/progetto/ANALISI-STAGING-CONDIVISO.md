@@ -1,6 +1,7 @@
 # Analisi — Mockxy come server di staging condiviso
 
-Stato: **analisi chiusa con le decisioni D1–D9 (§9); il piano risultante è in §6**
+Stato: **analisi chiusa con le decisioni D1–D9 (§9); il piano di §6 è realizzato** (guida:
+[STAGING.md](../it/STAGING.md))
 
 Data: 25 ottobre 2026
 
@@ -409,9 +410,10 @@ scenari e isolamento per sessione (D3); ricaduta automatica sul mock e segnali s
 
 ## 7. Domande aperte
 
-Nessuna sulle scelte di fondo: le domande della prima stesura hanno trovato risposta in D1–D4.
-Restano dettagli da sciogliere in implementazione: il compose del profilo staging (punto 7),
-e se l'health espone i nomi dei file rotti o solo il loro numero.
+Nessuna. Le domande della prima stesura hanno trovato risposta in D1–D4; i dettagli rimasti
+per l'implementazione si sono chiusi così: il profilo staging ha un compose suo, affiancato a
+quello solo-mock (`docker-compose.staging-proxy.yml`); l'health espone i percorsi dei file rotti,
+senza i messaggi d'errore, che restano nel log di avvio.
 
 ## 8. Fuori ambito
 

@@ -460,6 +460,8 @@ Funziona anche su un clone fresco senza `.env` (il file è facoltativo: se c'è 
 
 C'è poi un'immagine **standalone** (`Dockerfile.standalone`, usata da `docker-compose.staging.yml`) che serve *solo* i mock: niente API di amministrazione, niente monitor, niente proxy fallback. È pensata per ambienti di test condivisi o demo su un server. L'immagine contiene **solo il motore** — si distribuisce l'applicazione, non il workspace: i mock e i **file dati** della pagina Dati si montano a runtime come bind mount (il compose di esempio monta `workspace/mocks` e `workspace/files` in sola lettura), così gli handler che usano `data()` funzionano e i mock si aggiornano senza rebuild, con un riavvio del container (arresto, `git pull`, avvio: vedi [docs/it/DEPLOYMENT.md](docs/it/DEPLOYMENT.md)). La parte locale del workspace (`.mockxy`: impostazioni dell'app desktop e traffico catturato) non va montata: le impostazioni per-workspace sono lette solo dall'app desktop — la versione headless si configura esclusivamente con variabili d'ambiente.
 
+Per uno staging condiviso, con il backend vero dove c'è e i mock dove manca, la stessa immagine gira con il proxy acceso (`docker-compose.staging-proxy.yml`): reverse proxy davanti, admin spenta, aggiornamento dei mock con l'health. La guida è [docs/it/STAGING.md](docs/it/STAGING.md).
+
 ## App desktop
 
 Mockxy è disponibile anche come **app desktop per Windows** (Electron): un singolo eseguibile portable, senza installazione, con server e interfaccia già integrati. Barra dei workspace, porte, dialog delle impostazioni e pacchetto sono in [docs/it/DESKTOP.md](docs/it/DESKTOP.md).

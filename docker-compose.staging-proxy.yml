@@ -1,0 +1,34 @@
+# Profilo "staging condiviso": la stessa immagine standalone (admin, monitor e watch spenti), ma
+# con il proxy fallback verso il backend vero. Risponde il mock dove c'è, il backend altrove.
+# Guida completa: docs/it/STAGING.md. Avvio:
+#   BACKEND_URL=http://backend:8080 MOCKS_VERSION=$(git -C ./workspace rev-parse --short HEAD) \
+#     docker compose -f docker-compose.staging-proxy.yml up -d --wait
+services:
+  mockxy:
+    build:
+      context: .
+      dockerfile: Dockerfile.standalone
+    # Solo sul loopback dell'host: lo raggiunge il reverse proxy sulla stessa macchina. Con
+    # TRUST_PROXY gli header X-Forwarded-* li deve mandare solo lui.
+    ports:
+      - "127.0.0.1:${MOCKXY_HOST_PORT:-3000}:3000"
+    environment:
+      - PROXY_FALLBACK_ENABLED=true
+      - "BACKEND_URL=${BACKEND_URL:?BACKEND_URL è obbligatorio, l'indirizzo del backend di staging}"
+      - TRUST_PROXY=true
+      # Versione dei mock serviti, da passare all'avvio: MOCKS_VERSION=$(git rev-parse --short HEAD)
+      - MOCKS_VERSION=${MOCKS_VERSION:-}
+      # Backend in https con una CA interna: montare il certificato e indicarlo a Node.
+      # - NODE_EXTRA_CA_CERTS=/certs/ca.pem
+    # L'health risponde anche ad admin spenta: 503 se un file del workspace non si carica.
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:3000/_admin/api/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+      start_interval: 1s
+    volumes:
+      - ${MOCKXY_WORKSPACE:-./workspace}/mocks:/workspace/mocks:ro
+      - ${MOCKXY_WORKSPACE:-./workspace}/files:/workspace/files:ro
+      # - ./certs/ca.pem:/certs/ca.pem:ro
