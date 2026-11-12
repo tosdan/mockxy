@@ -2,6 +2,79 @@
 
 ## Prossima versione
 
+## v1.9.0
+
+Mockxy come server di uno staging condiviso: i mock dove il backend non arriva ancora, il
+backend vero altrove, dietro un reverse proxy in https e con l'admin spenta. Tre aggiunte al
+motore (`TRUST_PROXY`, l'health con `MOCKS_VERSION`, endpoint e variante nel log delle richieste),
+un compose per il profilo e la guida [STAGING.md](../it/STAGING.md). Tutto riguarda l'esecuzione
+headless e Docker: l'interfaccia e l'app desktop non cambiano. Nessun cambiamento ai workspace;
+l'admin API non cambia, e l'health è una rotta nuova sotto il suo prefisso: vedi [Health e
+versione dei mock](#health-e-versione-dei-mock).
+
+### Staging condiviso
+
+- **Guida [STAGING.md](../it/STAGING.md):** il profilo (proxy fallback acceso, admin spenta, porta
+  solo sul loopback), la topologia con nginx davanti a frontend e API sulla stessa origine,
+  l'avvio, l'aggiornamento dei mock con la variante a una cartella per versione, la lettura del
+  traffico dai log, le regole per i mock condivisi da molte persone e lo spostamento del confine
+  tra mock e backend.
+- **Compose `docker-compose.staging-proxy.yml`:** l'immagine standalone con
+  `PROXY_FALLBACK_ENABLED=true` e `TRUST_PROXY=true`; `BACKEND_URL` obbligatorio, senza il
+  compose si ferma con un messaggio; workspace configurabile con `MOCKXY_WORKSPACE`; un
+  `healthcheck` con cui `up -d --wait` torna in pochi secondi. Il compose solo-mock
+  `docker-compose.staging.yml` resta e passa anch'esso `MOCKS_VERSION`, con il suo `healthcheck`.
+- **Aggiornare i mock dell'immagine standalone** richiede un riavvio del container, non solo un
+  `git pull`: con watch e admin spenti le definizioni si leggono solo all'avvio. La sequenza
+  sicura è arresto, pull, avvio ([DEPLOYMENT.md](../it/DEPLOYMENT.md#immagine-standalone)); prima
+  la documentazione diceva il contrario.
+
+### Dietro un reverse proxy
+
+- **`TRUST_PROXY=true`:** Mockxy legge `X-Forwarded-Proto` e `X-Forwarded-Host`. I redirect
+  riscritti puntano all'indirizzo pubblico in https invece che a `http://` e all'host interno; i
+  cookie adattati su https conservano `Secure` e `SameSite=None` e perdono solo `Domain`.
+- **Header:** con più proxy in catena vale il primo valore; i valori non validi si ignorano.
+  `Forwarded` (RFC 7239) non si legge.
+- **Spenta di default:** senza un proxy davanti quegli header li manda chiunque. Solo variabile
+  d'ambiente, non un'impostazione della desktop. La guardia dell'admin API sull'header `Host` non
+  guarda mai `X-Forwarded-Host`.
+- La ricetta nginx è in [DEPLOYMENT.md](../it/DEPLOYMENT.md#dietro-un-reverse-proxy).
+
+### Health e versione dei mock
+
+- **`GET /_admin/api/health`** (anche `HEAD`) risponde anche con l'admin spenta e senza la guardia
+  sull'header `Host`, per gli orchestratori: `200` con `status: "ok"` se il workspace si è
+  caricato senza errori, `503` con `status: "degraded"` se un file non si è caricato o l'ultima
+  ricarica è fallita. Gli avvisi non cambiano lo stato.
+- **Campi:** `mockxyVersion`, `mocksVersion` ed `errors`, con i soli percorsi dei file rotti; i
+  messaggi restano nel log di avvio. Con l'admin accesa `GET /runtime/status` dà la diagnostica
+  completa.
+- **`MOCKS_VERSION`:** testo libero, di solito `$(git rev-parse --short HEAD)` passato all'avvio;
+  compare nell'health e nella riga «Mockxy started», che riporta anche `trustProxy`.
+- **Contratto:** la rotta è nel file OpenAPI, come unica voce sotto il prefisso che non fa parte
+  dell'admin API; il test di contratto confronta il file con tutto ciò che il motore serve sotto
+  `/_admin/api`. Il prefisso era già riservato: nessun workspace poteva mockare quel percorso.
+- [ADMIN-API.md](../it/ADMIN-API.md#health).
+
+### Log delle richieste
+
+- **La riga «Request completed»** dice quale endpoint e quale variante hanno risposto: `endpoint`
+  (il pattern della rotta), `variant` (il file della risposta) e, per le sequenze,
+  `sequenceStep` (`"2/3"`, contato da 1 come nell'interfaccia).
+- **Quando compaiono:** mock, handler, SSE (alla chiusura dello stream), il `426` di un endpoint
+  WebSocket chiamato in HTTP e i middleware del proxy, con il loro endpoint e la loro variante.
+  Mancano per il backend, il preflight CORS, il backend non configurato e un metodo non mockato
+  su un percorso noto. Gli altri campi della riga e il Monitor non cambiano.
+
+### Documentazione
+
+- **Percorsi riservati:** [PROXY.md](../it/PROXY.md) diceva riservato ogni percorso `/_admin/...`.
+  In HTTP il motore riserva solo `/_admin/api`, con ogni metodo, e `/_admin/ui` con `GET` e
+  `HEAD` quando serve l'interfaccia; il resto si mocka o va al backend come ogni altra richiesta.
+- **Istruzioni per gli agent** (`.github/instructions/project-base.instructions.md`): descrivono
+  le convenzioni reali del progetto, non più PrimeNG e un README per modulo.
+
 ## v1.8.0
 
 Un secondo giro sull'interfaccia, pagina per pagina: il dettaglio dell'endpoint, il catalogo, il
