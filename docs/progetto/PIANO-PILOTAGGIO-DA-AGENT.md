@@ -1,12 +1,12 @@
 # Piano — Mockxy pilotabile da agent e test tramite API
 
-Data: 26 settembre 2026. Aggiornamento: 27 settembre 2026. Stato: **piano e contratti di implementazione definiti; implementazione non iniziata**.
+Data: 26 settembre 2026. Aggiornamento: 27 settembre 2026. Stato: **realizzato: S0–S8 completati e rilasciati nella 1.4.0** (tabella del §2).
 
 Base della diagnosi iniziale: `ace8860c9d5b2d019147e0a090bad9ab1c0d5713`.
 Base aggiornata verificata dopo pull/rebase: `33fbfcc7de3e03611067b9eb04939708ef2d6dc6` (versione 1.3.2). I sei commit intermedi non cambiano i contratti del motore; valutazione d’impatto registrata in fondo alla review.
 Fonti: [analisi aggiornata](ANALISI-PILOTAGGIO-DA-AGENT.md) e [review con arbitraggio D01–D04](REVIEW-ANALISI-PILOTAGGIO-DA-AGENT.md).
 
-Il §13 fissa i contratti osservabili e i casi limite dei passi S0–S8. È parte vincolante del piano, insieme ai criteri di accettazione: nomi, default, status ed effetti non sono alternative lasciate a chi implementa. D01–D04 restano prevalenti. Le API nuove descritte qui sono **da implementare**, non disponibili nella base esaminata.
+Il §13 fissa i contratti osservabili e i casi limite dei passi S0–S8. È parte vincolante del piano, insieme ai criteri di accettazione: nomi, default, status ed effetti non sono alternative lasciate a chi implementa. D01–D04 restano prevalenti. Le API descritte qui non esistevano nella base esaminata; oggi sono nel motore dalla 1.4.0.
 
 Restano liberi struttura dei moduli, nomi interni, organizzazione dei test e ottimizzazioni che preservano questi contratti. Un limite scoperto nel codice che richieda un comportamento diverso va riportato nel piano prima di cambiare il contratto; non va risolto con un default implicito.
 

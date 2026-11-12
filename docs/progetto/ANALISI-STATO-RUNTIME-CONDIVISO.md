@@ -1,7 +1,7 @@
 # Piano definitivo — Stato runtime condiviso tra handler
 
-Stato: **specifica definitiva dopo adversarial review, implementata nel branch
-`feat/shared-runtime-state`**
+Stato: **specifica definitiva dopo adversarial review, implementata e rilasciata nella 1.3.0**
+([#17](https://github.com/tosdan/mockxy/pull/17))
 
 Data: 16 agosto 2026
 

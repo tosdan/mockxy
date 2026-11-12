@@ -1,6 +1,6 @@
 # Stato della pubblicazione del repository
 
-Stato aggiornato al 29 luglio 2026.
+Stato aggiornato al 12 novembre 2026.
 
 `https://github.com/tosdan/mockxy` è il repository pubblico definitivo del progetto. Non
 esiste più un passaggio futuro verso un secondo repository pubblico: codice, issue, tag,
@@ -39,9 +39,10 @@ verifica inoltre che le versioni dei tre package e dei rispettivi lockfile siano
 ## Suite di accettazione
 
 La suite black-box vive in `tosdan/mockxy-acceptance-tests` ed è richiamata dalla workflow
-`.github/workflows/acceptance.yml`. Se quel repository è privato, il secret
-`ACCEPTANCE_REPO_TOKEN` deve avere soltanto il permesso di lettura dei contenuti. Se diventa
-pubblico, la workflow può usare il token GitHub predefinito.
+`.github/workflows/acceptance.yml`. Il repository è pubblico, quindi la workflow funziona con il
+token GitHub predefinito. Il secret `ACCEPTANCE_REPO_TOKEN`, se impostato, ha la precedenza e deve
+avere soltanto il permesso di lettura dei contenuti: serve solo se il repository tornasse
+privato.
 
 Fixture, credenziali e dati della suite di accettazione seguono le stesse regole di audit del
 repository principale.

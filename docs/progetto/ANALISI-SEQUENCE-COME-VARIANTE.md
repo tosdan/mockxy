@@ -1,6 +1,8 @@
 # Piano definitivo — Sequence come variante di response
 
-Stato: **specifica pronta per l'implementazione**
+Stato: **implementata e rilasciata nella 1.3.0**; l'avanzamento è nella
+[checklist](CHECKLIST-SEQUENCE-COME-VARIANTE.md), il design risultante in
+[DESIGN-SEQUENZE.md](DESIGN-SEQUENZE.md)
 
 Data: 11 agosto 2026
 

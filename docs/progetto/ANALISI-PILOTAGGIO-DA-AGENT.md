@@ -1,6 +1,7 @@
 # Analisi — Mockxy pilotabile da un agent AI: parità tra GUI e admin API
 
-Stato: **diagnosi aggiornata dopo review e arbitraggio; implementazione non iniziata**
+Stato: **diagnosi conclusa dopo review e arbitraggio; implementata con i passi S0–S8 del
+[piano](PIANO-PILOTAGGIO-DA-AGENT.md), rilasciati nella 1.4.0**
 
 Analisi iniziale: 25 settembre 2026. Aggiornamento: 27 settembre 2026.
 

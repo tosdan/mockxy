@@ -1,7 +1,7 @@
 # Piano operativo: aggiornamenti e distribuzione desktop
 
 Stato del piano: **attivo**
-Ultimo aggiornamento: 1 agosto 2026
+Ultimo aggiornamento: 12 novembre 2026
 
 Questo documento è la checklist operativa per:
 
@@ -30,7 +30,7 @@ sempre lo stato reale dell'implementazione.
 | Ordine | Obiettivo | Stato | Dipende da |
 |---:|---|---|---|
 | 0 | Fondamenta della pubblicazione | In corso | — |
-| 1 | Notifica di un aggiornamento disponibile | In corso | obiettivo 0 |
+| 1 | Notifica di un aggiornamento disponibile | In corso: implementata, manca la prova da una build precedente | obiettivo 0 |
 | 2 | Build e pubblicazione Microsoft Store | In pausa dopo il prototipo AppX | account Partner Center |
 | 3 | Altre build Windows e Linux | In corso: NSIS collaudato, deb configurato | obiettivi 0 e 1 |
 | 4 | Aggiornamenti automatici e formati aggiuntivi | Da iniziare | artefatti della fase 3 |
@@ -58,7 +58,8 @@ anche le relative verifiche dettagliate.
       build.
 - [x] Collaudare installazione, primo avvio, reinstallazione, disinstallazione e conservazione dei
       dati utente.
-- [ ] Collaudare un vero upgrade N → N+1 alla prossima versione.
+- [ ] Collaudare un vero upgrade N → N+1, con gli installer di due tag consecutive costruiti con
+      `npm run dist:electron:nsis`.
 - [x] Documentare firma assente, possibile avviso SmartScreen e aggiornamento inizialmente
       manuale.
 - [x] Committare il checkpoint NSIS prima di iniziare i pacchetti Linux.
@@ -81,15 +82,19 @@ anche le relative verifiche dettagliate.
 - [ ] Eseguire smoke test manuali su almeno una macchina Windows e una Linux prima della
       pubblicazione.
 
-### E. Pubblicare la release successiva e chiudere la prova della notifica
+### E. Chiudere la prova della notifica e pubblicare le nuove distribuzioni
 
-- [ ] Scegliere la nuova versione in base alle modifiche effettive; `v1.3.0` è la candidata se
-      introduce le nuove distribuzioni.
-- [ ] Integrare note di rilascio e tabella comparativa dei formati.
-- [ ] Pubblicare la release soltanto dopo il collaudo della draft.
-- [ ] Avviare la `v1.2.0` e verificare che proponga la nuova release stabile.
+Dalla 1.3.0 alla 1.9.0 le release sono uscite con le sole portable e AppImage. La prova della
+notifica non dipende dalle nuove distribuzioni: basta una build stabile precedente all'ultima
+pubblicata.
+
+- [ ] Avviare una build stabile precedente all'ultima pubblicata, per esempio la `v1.8.0` dopo la
+      pubblicazione della `v1.9.0`, e verificare che proponga la nuova release.
 - [ ] Verificare apertura della pagina corretta e «Ignora questa versione».
 - [ ] Chiudere i criteri ancora aperti dell'obiettivo 1.
+- [ ] Includere le nuove distribuzioni nella prima release dopo il punto D, con note e tabella
+      comparativa dei formati.
+- [ ] Pubblicare quella release soltanto dopo il collaudo della draft.
 
 ### F. Introdurre gli aggiornamenti automatici compatibili
 
@@ -138,7 +143,8 @@ l'app a un servizio remoto.
       `https://github.com/tosdan/mockxy/releases`.
 - [x] Decidere se `tosdan/mockxy` è il repository definitivo o un riferimento temporaneo.
 - [x] Aggiungere i metadati `repository`, `homepage` e `bugs` ai `package.json` pertinenti.
-- [ ] Decidere il valore pubblico del metadato `author`.
+- [x] Decidere il valore pubblico del metadato `author`: `Mockxy` (registro decisioni, 1 ago
+      2026).
 - [x] Usare inizialmente un solo canale, `stable`.
 - [x] Stabilire la convenzione dei tag: `v<major>.<minor>.<patch>`.
 - [x] Stabilire che draft e prerelease GitHub non siano proposti agli utenti `stable`.
@@ -254,11 +260,11 @@ implementazione deve funzionare anche con la portable.
 - [x] Documentare il controllo remoto nelle pagine desktop italiane e inglesi.
 - [x] Documentare frequenza, dati richiesti e modalità per disattivarlo, se presente.
 - [x] Specificare che la prima versione notifica soltanto e non installa.
-- [ ] Inserire la funzionalità nelle note di rilascio.
+- [x] Inserire la funzionalità nelle note di rilascio ([1.2.0](NOTE-RILASCIO-v1.2.0.md)).
 - [x] Pubblicare la prima release stabile che include il checker (`v1.2.0`) e verificare che
       riconosca la versione pubblicata come corrente.
-- [ ] Verificare il flusso end-to-end «aggiornamento disponibile» da `v1.2.0` alla prima
-      release stabile successiva.
+- [ ] Verificare il flusso end-to-end «aggiornamento disponibile» da una release stabile alla
+      successiva (punto E).
 
 ### Criteri di accettazione dell'obiettivo 1
 
@@ -574,4 +580,7 @@ Questa fase non deve ritardare la notifica dell'obiettivo 1 né la prima pubblic
 Generare il pacchetto deb su Linux, ispezionarne control file, contenuto e launcher, quindi
 collaudare installazione, menu, recupero, workspace, server, log, preferenze e rimozione su Ubuntu
 24.04 LTS e Debian 13. Non introdurre rpm nello stesso checkpoint. L'upgrade reale NSIS N → N+1
-resta una verifica differita alla prossima versione.
+si può collaudare con gli installer di due tag già pubblicate.
+
+A costo quasi nullo, e prima del deb, si può chiudere la prova della notifica del punto E: una
+build `v1.8.0` dopo la pubblicazione della `v1.9.0`.

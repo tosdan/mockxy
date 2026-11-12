@@ -2,7 +2,7 @@
 
 ## Stato del documento
 
-Piano adottato l'8 ottobre 2026. Raccoglie la direzione concordata fra il proprietario di Mockxy e gli agenti che hanno analizzato il problema (Opus e due istanze di Codex/Astra), con le verifiche sui workspace reali. Il confronto tecnico è chiuso senza obiezioni aperte.
+Piano adottato l'8 ottobre 2026 e realizzato nella 1.6.0 ([#45](https://github.com/tosdan/mockxy/pull/45)). Raccoglie la direzione concordata fra il proprietario di Mockxy e gli agenti che hanno analizzato il problema (Opus e due istanze di Codex/Astra), con le verifiche sui workspace reali. Il confronto tecnico è chiuso senza obiezioni aperte.
 
 Le analisi e il prototipo sono basati sulla versione 1.5.0, commit `c81d9b01acb88729ed5b36b820ce7fc274397332`, che coincide con il `main` da cui parte l'implementazione.
 
