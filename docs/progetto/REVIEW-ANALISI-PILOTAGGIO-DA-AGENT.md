@@ -6,7 +6,7 @@ Controvalutazione del primo giro: **Opus**, 26 settembre 2026 (sezione «Giro 1 
 Seconda valutazione: **Codex**, 26 settembre 2026 (sezione «Giro 2 — Codex»)\
 Riscontro del secondo giro: **Opus**, 26 settembre 2026 (sezione «Giro 2 — Opus»)\
 Chiusura confermata: **Codex e Opus**, 26 settembre 2026; sintesi conclusiva in fondo al documento.\
-Stato: **confronto e arbitraggio conclusi; D01–D04 consolidate. Analisi aggiornata e piano separato redatto; implementazione non iniziata. Le proposte precedenti di ripristino protetto sono superate da D04**\
+Stato: **confronto e arbitraggio conclusi; D01–D04 consolidate. Analisi aggiornata e piano separato redatto, poi realizzato (S0–S8, nella 1.4.0). Le proposte precedenti di ripristino protetto sono superate da D04**\
 Arbitro e decisore finale: **Dani**
 
 Documento esaminato: [ANALISI-PILOTAGGIO-DA-AGENT.md](ANALISI-PILOTAGGIO-DA-AGENT.md).

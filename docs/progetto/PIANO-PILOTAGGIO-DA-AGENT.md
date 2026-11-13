@@ -1,12 +1,12 @@
 # Piano — Mockxy pilotabile da agent e test tramite API
 
-Data: 26 settembre 2026. Aggiornamento: 27 settembre 2026. Stato: **piano e contratti di implementazione definiti; implementazione non iniziata**.
+Data: 26 settembre 2026. Aggiornamento: 27 settembre 2026. Stato: **realizzato: S0–S8 completati e rilasciati nella 1.4.0** (tabella del §2).
 
 Base della diagnosi iniziale: `ace8860c9d5b2d019147e0a090bad9ab1c0d5713`.
 Base aggiornata verificata dopo pull/rebase: `33fbfcc7de3e03611067b9eb04939708ef2d6dc6` (versione 1.3.2). I sei commit intermedi non cambiano i contratti del motore; valutazione d’impatto registrata in fondo alla review.
 Fonti: [analisi aggiornata](ANALISI-PILOTAGGIO-DA-AGENT.md) e [review con arbitraggio D01–D04](REVIEW-ANALISI-PILOTAGGIO-DA-AGENT.md).
 
-Il §13 fissa i contratti osservabili e i casi limite dei passi S0–S8. È parte vincolante del piano, insieme ai criteri di accettazione: nomi, default, status ed effetti non sono alternative lasciate a chi implementa. D01–D04 restano prevalenti. Le API nuove descritte qui sono **da implementare**, non disponibili nella base esaminata.
+Il §13 fissa i contratti osservabili e i casi limite dei passi S0–S8. È parte vincolante del piano, insieme ai criteri di accettazione: nomi, default, status ed effetti non sono alternative lasciate a chi implementa. D01–D04 restano prevalenti. Le API descritte qui non esistevano nella base esaminata; oggi sono nel motore dalla 1.4.0.
 
 Restano liberi struttura dei moduli, nomi interni, organizzazione dei test e ottimizzazioni che preservano questi contratti. Un limite scoperto nel codice che richieda un comportamento diverso va riportato nel piano prima di cambiare il contratto; non va risolto con un default implicito.
 
@@ -81,7 +81,7 @@ Il controllo sulle chiamate della UI resta una convenzione verificabile: include
 
 **Migrazione da dichiarare nello stesso passo:** il fix del default accende l'admin in development anche per chi finora avviava senza flag e si affidava al comportamento difettoso. Il [Dockerfile di sviluppo](../../Dockerfile) imposta `HOST=0.0.0.0`; senza compose, flag esplicito o `NODE_ENV=production`, il nuovo default rende quindi l'admin raggiungibile attraverso le porte pubblicate. Su bind non loopback la guardia Host interviene solo se è configurata un'allowlist esplicita. Documentare `ADMIN_API_ENABLED=false` per mantenere l'admin spenta, e il port mapping su loopback per l'uso locale. Verificare l'avviso all'avvio già presente. La [standalone](../../Dockerfile.standalone) e i compose dei test che impostano il flag esplicitamente devono mantenere il comportamento scelto. Il 404 conclusivo riserva il namespace admin e interrompe eventuali dipendenze dal precedente fallthrough: dichiararlo nelle note, senza conservarlo come compatibilità.
 
-**Punti del codice:** [config.js](../../src/config.js), [admin-api.js](../../src/admin/admin-api.js), [app.js](../../src/app.js), [OpenAPI](../admin-api.openapi.yaml), [test del contratto](../../test/admin-openapi-contract.test.js).
+**Punti del codice:** [config.js](../../src/config.js), [admin-api.js](../../src/admin/admin-api.js), [app.js](../../src/app.js), [OpenAPI](../../src/admin/admin-api.openapi.yaml), [test del contratto](../../test/admin-openapi-contract.test.js).
 
 **Accettazione:**
 
@@ -150,7 +150,7 @@ Distinguere revisioni per catalogo, modalità server, dump, diagnostica e config
 
 Il primo GET distingue valori di avvio, effettivi e override runtime (§13, C2/C8). La provenienza dettagliata CLI/env/default è esclusa da questa consegna.
 
-**Distribuzione dello spec:** spostare la fonte canonica da `docs/admin-api.openapi.yaml` a `src/admin/admin-api.openapi.yaml` durante S2. È un percorso pianificato, non ancora esistente. [.dockerignore](../../.dockerignore) esclude `docs/`, mentre Docker include `src/` ed Electron copia `../src`: la collocazione proposta copre entrambi i pacchetti. Risolvere il file rispetto al modulo server, senza dipendere dalla cwd o dal checkout. Mantenere una sola fonte modificabile; aggiornare insieme lo script [validate-admin-openapi.js](../../scripts/validate-admin-openapi.js), i test di parità, i link delle guide IT/EN, le reference degli skill e gli esempi correnti dell'analisi. I documenti storici possono conservare il vecchio percorso qualificato come storico; non mantenere una seconda copia in `docs/`: aggiornare i collegamenti alla fonte in `src/`.
+**Distribuzione dello spec:** spostare la fonte canonica da `docs/admin-api.openapi.yaml` a `src/admin/admin-api.openapi.yaml` durante S2, fatto con [#24](https://github.com/tosdan/mockxy/pull/24). [.dockerignore](../../.dockerignore) esclude `docs/`, mentre Docker include `src/` ed Electron copia `../src`: la collocazione proposta copre entrambi i pacchetti. Risolvere il file rispetto al modulo server, senza dipendere dalla cwd o dal checkout. Mantenere una sola fonte modificabile; aggiornare insieme lo script [validate-admin-openapi.js](../../scripts/validate-admin-openapi.js), i test di parità, i link delle guide IT/EN, le reference degli skill e gli esempi correnti dell'analisi. I documenti storici possono conservare il vecchio percorso qualificato come storico; non mantenere una seconda copia in `docs/`: aggiornare i collegamenti alla fonte in `src/`.
 
 **Accettazione:** handler invalido all'avvio e dopo reload visibile via API; caso con rotta mantenuta e caso senza rotta; errore risolto; nuovo `runtimeId` dopo restart; identità corretta anche con più runtime; spec leggibile sia nel layout Electron sia nell'immagine Docker di sviluppo senza checkout o `docs/`, uguale alla fonte validata. Nella standalone il file può essere presente, ma la rotta deve restare disabilitata con l'admin. La GUI userà questa diagnostica in S4.
 

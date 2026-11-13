@@ -9,21 +9,12 @@ implementate o scartate con decisione esplicita.
 
 Già coperto da Mockxy e quindi fuori lista: proxy verso il backend con fallback, ritardo
 configurabile (per mock e globale), gestione CORS, adattamento cookie, riscrittura redirect,
-reload a caldo dei mock, cattura del traffico → mock, import OpenAPI.
+reload a caldo dei mock, cattura del traffico → mock, import OpenAPI, segnaposto dinamici nei
+body (il [templating](DESIGN-TEMPLATING.md), ex idea 1), segnale dei file rotti del workspace
+nella barra di stato (ex idea 8). I numeri delle idee restanti non cambiano: altri documenti li
+citano.
 
-## In cima (le tre a miglior rapporto valore/costo)
-
-### 1. Segnaposto dinamici nei body dei mock
-
-Oggi tra il mock statico e l'handler JavaScript non c'è niente in mezzo: se la risposta di
-`/api/utenti/:id` deve contenere l'id richiesto invece di un valore fisso, serve un handler.
-Strumenti come json-server e Mockoon offrono segnaposto direttamente nel body:
-`{"id": "{{params.id}}", "creato": "{{now}}"}`. È il buco osservato nel collaudo del 9 lug
-(il mock nato dalla cattura di un POST che rigioca per sempre l'eco vecchia; il body statico
-anche cambiando id nel percorso). Coprirebbe gran parte dei casi in cui oggi serve un handler,
-con un decimo dello sforzo per l'utente. Da definire: set minimo dei segnaposto (params, query,
-header della richiesta, timestamp; eventuali generatori casuali con parsimonia — vale il
-principio dell'import OpenAPI: base solida da ritoccare, non dati perfetti).
+## In cima (miglior rapporto valore/costo)
 
 ### 2. Scenari di varianti attivabili in un colpo
 
@@ -91,9 +82,6 @@ come alias, e una versione major o almeno una nota di migrazione esplicita.
 
 ## Piccolezze quasi gratis
 
-8. **Banner per i file rotti del workspace**: l'admin API espone già l'elenco (`loadErrors` in
-   `GET /_admin/api/mocks`, aggiunto il 9 lug); manca solo mostrarlo nella UI invece di lasciare
-   gli endpoint sparire in silenzio dal catalogo.
 9. **QR code per l'indirizzo LAN**: quando il server è esposto in rete, mostrare l'URL di rete
    con un QR da inquadrare col telefono. Chi prova il frontend da mobile lo usa ogni giorno.
 

@@ -25,16 +25,14 @@ nuovo comportamento e aggiornamento richiesto ai client. Aggiornare GUI e contra
 motore, coordinando anche guide e skill distribuiti separatamente. Gli agent, gli script e i test
 sono client dell’API e non vanno considerati automaticamente allineati alla versione dell’app.
 
-Quando disponibili nel runtime, `/info` e `/openapi.yaml` sotto `/_admin/api` sono i riferimenti
-per versione e contratto; la loro introduzione è prevista da S2 del
-[piano agent/API](PIANO-PILOTAGGIO-DA-AGENT.md). Un client non deve presumere che una rotta descritta
-nel proprio skill sia già disponibile in un motore precedente.
+`/info` e `/openapi.yaml` sotto `/_admin/api` sono i riferimenti per versione e contratto; esistono
+dalla 1.4.0, introdotti da S2 del [piano agent/API](PIANO-PILOTAGGIO-DA-AGENT.md). Un client non
+deve presumere che una rotta descritta nel proprio skill sia già disponibile in un motore
+precedente.
 
-I cambiamenti che incidono sull’esposizione dell’admin, come il default di abilitazione di S0,
-richiedono una nota esplicita e le istruzioni per mantenere il comportamento precedente,
-indipendentemente dal numero di versione. Il piano S0–S8 non prevede incompatibilità dei workspace:
-le sue modifiche API possono essere rilasciate come minor; questa regola non assegna già il numero
-né impone di pubblicare ogni passo separatamente.
+I cambiamenti che incidono sull’esposizione dell’admin, come il default di abilitazione introdotto
+da S0, richiedono una nota esplicita e le istruzioni per mantenere il comportamento precedente,
+indipendentemente dal numero di versione.
 
 **Eccezione registrata: 1.6.0.** La 1.6.0 ritira l'import dalla radice dei mock introdotto nella
 1.5.0 (`require("_shared/…")`), sostituito dall'alias `#shared/`. È un'incompatibilità per i
