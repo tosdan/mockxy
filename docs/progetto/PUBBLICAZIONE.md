@@ -52,13 +52,16 @@ repository principale.
 La workflow `.github/workflows/release.yml` parte esclusivamente dal push di un tag
 `v<major>.<minor>.<patch>`. Prima di creare qualsiasi release:
 
-1. aggiornare la versione con `npm run version:patch`, `version:minor` o `version:major`;
+1. su un branch `release/<versione>`, aggiornare la versione con `npm run version:patch`,
+   `version:minor` o `version:major`;
 2. completare note e documentazione della release;
-3. committare tutte le modifiche e verificare che la working tree sia pulita;
-4. eseguire localmente almeno `npm run check:versions`;
-5. creare il tag corrispondente alla versione, per esempio `git tag v1.2.0`;
-6. pubblicare prima il commit e poi il tag: `git push origin main` e
-   `git push origin v1.2.0`.
+3. eseguire localmente almeno `npm run check:versions`;
+4. unire la pull request «Release <versione>» con squash merge;
+5. su `main` aggiornato e con la working tree pulita, creare il tag sul commit di squash, per
+   esempio `git tag v1.2.0`;
+6. pubblicare solo quel tag: `git push origin v1.2.0`.
+
+I comandi completi sono nella [procedura di rilascio](PROCEDURA-RILASCIO.md).
 
 La workflow rifiuta tag non stabili, tag diversi dalla versione dei package o versioni
 disallineate tra root, UI ed Electron. Poi esegue:

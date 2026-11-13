@@ -47,18 +47,27 @@ prerelease come `1.4.0-beta.1`.
 
 ## 2. Preparare il contenuto della release
 
-Prima del bump:
+La release passa da una pull request, come ogni altra modifica. Prima del bump:
 
-1. verificare che tutte le modifiche destinate alla release siano già committate;
-2. aggiornare documentazione e note in
-   [`NOTE-RILASCIO-next.md`](NOTE-RILASCIO-next.md);
-3. controllare che il branch locale sia quello da pubblicare e sia aggiornato rispetto a `main`;
-4. verificare che non ci siano file estranei, credenziali, workspace reali o dati personali.
+1. verificare che tutte le modifiche destinate alla release siano già in `main`;
+2. partire da `main` aggiornato e creare il branch della release:
 
-`NOTE-RILASCIO-next.md` è una sorgente editoriale: la workflow genera automaticamente una prima
-versione delle note GitHub, ma non importa quel file nella release. Prima della pubblicazione si
-devono quindi integrare manualmente nella bozza le informazioni che non compaiono nelle note
-generate.
+   ```bash
+   git checkout main
+   git pull --ff-only
+   git checkout -b release/1.3.2
+   ```
+
+3. scrivere le note dettagliate in [`NOTE-RILASCIO-next.md`](NOTE-RILASCIO-next.md), in una
+   nuova sezione `## v1.3.2`, subito sotto `## Prossima versione`;
+4. scrivere le note di pubblicazione in `NOTE-RILASCIO-v1.3.2.md`, in italiano e in inglese, con i
+   link ai documenti alla tag (`blob/v1.3.2/...`), gli allegati attesi e il confronto con la
+   release precedente;
+5. verificare che non ci siano file estranei, credenziali, workspace reali o dati personali.
+
+Le note sono sorgenti editoriali: la workflow genera una prima versione delle note GitHub, ma non
+importa questi file nella release. Il testo di `NOTE-RILASCIO-v<versione>.md` si incolla a mano
+nella bozza (§8). I link alla tag funzionano solo dopo il suo push (§6).
 
 ## 3. Aggiornare le versioni
 
@@ -109,42 +118,43 @@ npm run test:e2e
 La pipeline ripeterà comunque test del motore, test Electron, test UI ed E2E Chromium prima di
 costruire gli artefatti.
 
-## 5. Creare il commit di release
+## 5. Creare il commit e la pull request di release
 
-Aggiungere esplicitamente i sei file di versione e le eventuali note o modifiche alla
-documentazione, quindi creare un commit dedicato:
+Sul branch `release/1.3.2`, aggiungere esplicitamente i sei file di versione e le note, quindi
+creare un commit dedicato:
 
-```powershell
+```bash
 git add package.json package-lock.json
 git add mockxy-ui/package.json mockxy-ui/package-lock.json
 git add electron/package.json electron/package-lock.json
-git add docs/progetto/NOTE-RILASCIO-next.md
+git add docs/progetto/NOTE-RILASCIO-next.md docs/progetto/NOTE-RILASCIO-v1.3.2.md
 git commit -m "release 1.3.2"
+git push -u origin release/1.3.2
 ```
 
-Se le note non sono cambiate, l'ultimo `git add` non è necessario. Prima del tag la working tree
-deve essere pulita:
-
-```powershell
-git status --short
-```
-
-Il comando non deve produrre righe.
+Aprire la pull request «Release 1.3.2» verso `main` e, a CI verde, unirla con **squash merge**.
+Il commit di squash su `main` è il commit della release.
 
 ## 6. Creare e pubblicare il tag
 
-Il tag deve corrispondere esattamente alla versione presente nei package:
+Aggiornare `main` e controllare che l'ultimo commit sia lo squash della pull request di release:
 
-```powershell
-git tag v1.3.2
+```bash
+git checkout main
+git pull --ff-only
+git log -1 --oneline        # release 1.3.2 (#N)
+git status --short          # nessuna riga
 ```
 
-Pubblicare prima il commit e poi il singolo tag:
+Il tag va su quel commit e deve corrispondere esattamente alla versione presente nei package:
 
-```powershell
-git push origin main
+```bash
+npm run check:release-tag -- v1.3.2
+git tag v1.3.2
 git push origin v1.3.2
 ```
+
+`main` è già pubblicato dal merge: non serve, e non va fatto, un push diretto su `main`.
 
 Non usare `git push --tags`: potrebbe pubblicare tag locali non destinati alla release.
 
@@ -177,7 +187,8 @@ Prima di premere **Publish release**:
 3. verificare i checksum;
 4. provare la portable su Windows e l'AppImage su Linux;
 5. verificare almeno apertura workspace, ripristino sessione e notifica aggiornamenti;
-6. rivedere titolo e note generate, integrandole con le note curate per la release;
+6. rivedere il titolo e incollare nella bozza il testo di `NOTE-RILASCIO-v<versione>.md`, al
+   posto delle note generate o insieme a esse;
 7. controllare che versione e nomi degli allegati siano corretti;
 8. pubblicare manualmente la bozza dalla pagina GitHub.
 
@@ -247,13 +258,14 @@ Le prime tag allineate sono le `v1.4.2`, create dopo la release.
 ## Checklist rapida
 
 - [ ] Funzionalità e correzioni committate.
-- [ ] Note e documentazione aggiornate.
+- [ ] Documentazione aggiornata.
 - [ ] Versioni incrementate con lo script npm.
 - [ ] `check:versions` e `check:release-tag` superati.
 - [ ] Test locali completati.
-- [ ] Commit `release x.y.z` creato.
-- [ ] Working tree pulita.
-- [ ] Tag `vx.y.z` creato e pubblicato dopo il commit.
+- [ ] Note dettagliate e note di pubblicazione `NOTE-RILASCIO-vx.y.z.md` scritte.
+- [ ] Pull request «Release x.y.z» unita con squash merge.
+- [ ] `main` locale aggiornato e working tree pulita.
+- [ ] Tag `vx.y.z` creato sul commit di squash e pubblicato da solo.
 - [ ] Pipeline completamente verde.
 - [ ] Checksum e smoke test degli artefatti completati.
 - [ ] Note della bozza riviste.
