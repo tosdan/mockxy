@@ -280,7 +280,7 @@
     "portInUse": "Port {{port}} is already in use. Choose another one.",
     "portUnavailable": "Port unavailable",
     "backendUrl": "Backend URL",
-    "backendUrlHint": "Real backend URL to proxy non-mocked requests to. Empty = mock-only.",
+    "backendUrlHint": "Real backend URL to proxy non-mocked requests to. A path in the URL (e.g. /service/v1) comes before the path of every forwarded request. Empty = mock-only.",
     "backendUrlInvalid": "Invalid URL: use an absolute address, e.g. http://localhost:8080.",
     "exposeNetwork": "Reachable from the whole network",
     "exposeNetworkWarning": "⚠ When on, the app listens on 0.0.0.0 and is reachable by anyone on the network. The admin API creates handlers and runs code: whoever reaches this port can execute code on this machine. Use only on trusted networks, at your own risk.",

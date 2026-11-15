@@ -2,6 +2,7 @@ const http = require("http");
 const https = require("https");
 const { isProxyFallbackEnabled } = require("../app");
 const { sanitizeRequestHeaders, serializeError } = require("./proxy");
+const { resolveBackendTarget, toOriginForm } = require("./backend-target");
 const { readStreamToBuffer } = require("../utils/http-body-utils");
 
 // Cap prudenziale sul body di una risposta upstream NON-101 (es. un 401 all'handshake): sono
@@ -75,7 +76,9 @@ function createUpgradeHandler({ runtimeConfig, serverState, logger }) {
     const requestPath = String(req.url || "");
     // Senza distinguere maiuscole, come il mount Express dell'admin: `/_ADMIN/API/...` non deve
     // sfuggire alla guardia e raggiungere il backend.
-    if (requestPath.toLowerCase().startsWith("/_admin")) {
+    // Sul percorso, non sul request-target grezzo: la forma assoluta (`GET http://x/_admin/...`)
+    // comincerebbe per lo schema.
+    if (toOriginForm(requestPath).toLowerCase().startsWith("/_admin")) {
       writeSocketResponse(socket, 404, "Not Found", "The admin API has no upgrade endpoints.", {
         code: "ADMIN_ROUTE_NOT_FOUND",
       });
@@ -90,7 +93,7 @@ function createUpgradeHandler({ runtimeConfig, serverState, logger }) {
       return;
     }
 
-    const targetUrl = new URL(requestPath, config.backendUrl);
+    const targetUrl = resolveBackendTarget(requestPath, config.backendUrl);
     const client = targetUrl.protocol === "https:" ? https : http;
     // La sanitizzazione toglie gli hop-by-hop (Connection/Upgrade inclusi): per la tratta verso
     // il backend vanno ricreati, perché l'upgrade è proprio una negoziazione per-tratta.

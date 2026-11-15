@@ -22,8 +22,14 @@ Three attributes are removed from every `Set-Cookie` in transit from the backend
 - **`SameSite=None`** — without `Secure` it is rejected in turn; once removed, the cookie
   falls back to the `Lax` default, adequate for same-site development flows.
 
-**The cookie's name and value are never touched**, and the other attributes (`Path`,
-`HttpOnly`, `Expires`, `Max-Age`, the other `SameSite` values) pass through intact. The
+When `BACKEND_URL` has a **path** (`https://gateway.example/service/v1`, or the context path
+of a Java application) **`Path`** is adapted too: the backend writes `Path=/service/v1`, but
+the browser asks Mockxy for `/users` and would never send that cookie back. The prefix is
+removed (`Path=/service/v1` → `Path=/`, `Path=/service/v1/area` → `Path=/area`); a `Path`
+outside the prefix stays as it is. Without a path in `BACKEND_URL`, `Path` is not touched.
+
+**The cookie's name and value are never touched**, and the other attributes (`HttpOnly`,
+`Expires`, `Max-Age`, the other `SameSite` values) pass through intact. The
 parsing is tolerant of the sloppy formats seen in the wild (uppercase, spaces around the
 equals sign). Mocks are not involved: the adaptation only concerns proxied responses.
 

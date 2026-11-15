@@ -34,8 +34,28 @@ fallback» switch in the workspace settings (desktop app); the backend with `BAC
 
 ## What gets forwarded
 
-The URL towards the backend is the configured base plus the request's path and query, as they
-are. Request headers all pass through except the *hop-by-hop* ones (`Connection`,
+The URL towards the backend is the configured base plus the request's path and query. **Only
+path and query** are taken from the request: scheme, host and port are always those of
+`BACKEND_URL`, however the request is written (`//other-host/x`, `/\other-host/x`,
+`GET http://other-host/x` stay paths on the backend). A request therefore cannot carry the
+cookies and the `Authorization` it comes with anywhere else.
+
+If `BACKEND_URL` has a **path**, that path comes before the requested one, like nginx's
+`proxy_pass` with a URI:
+
+```
+BACKEND_URL=https://gateway.example/service/v1
+request:        GET /users?page=2
+to the backend: GET https://gateway.example/service/v1/users?page=2
+```
+
+Mocks stay on the paths the client asks Mockxy for (`/users`), and `..` segments do not climb
+above the `BACKEND_URL` path. On the way back the prefix is removed from
+[redirects](REDIRECT.md#when-backend_url-has-a-path) and from the
+[cookie `Path`](COOKIE.md#what-gets-adapted). The same holds for forwarded
+[WebSocket upgrades](WEBSOCKET.md).
+
+Request headers all pass through except the *hop-by-hop* ones (`Connection`,
 `Transfer-Encoding` and the like, which belong to the single leg); `Host` is rewritten to the
 backend's. The body travels **streaming**, without buffering: large uploads don't take up
 memory.
