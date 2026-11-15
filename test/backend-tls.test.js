@@ -1,4 +1,3 @@
-const fs = require("fs");
 const http = require("http");
 const https = require("https");
 const path = require("path");
@@ -11,12 +10,26 @@ const {
   readBackendCertificateAuthorities,
 } = require("../src/proxy/backend-tls");
 const { createMemoryLogger, createTempDir, removeDir } = require("./helpers");
+const { writeTestCertificates } = require("./tls-test-certificates");
 
-const FIXTURES = path.join(__dirname, "fixtures", "tls");
+const CHILD_SCRIPT = path.join(__dirname, "fixtures", "proxy-through-https-backend.js");
 
 // Backend in https: di chi si fida il proxy, e cosa risponde quando non si fida. Il backend di
-// prova presenta un certificato firmato da una CA privata che nessun archivio conosce.
+// prova presenta un certificato firmato da una CA privata che nessun archivio conosce, generata
+// a ogni esecuzione (nel repository non entrano chiavi né certificati).
 describe("backend https: fiducia nel certificato", () => {
+  let certificatesDir;
+  let certificates;
+
+  beforeAll(async () => {
+    certificatesDir = await createTempDir("backend-tls-certs-");
+    certificates = writeTestCertificates(certificatesDir);
+  });
+
+  afterAll(async () => {
+    await removeDir(certificatesDir);
+  });
+
   describe("autorità di certificazione", () => {
     test("alle CA di Node si aggiungono quelle del sistema, senza doppioni", () => {
       const asked = [];
@@ -96,10 +109,7 @@ describe("backend https: fiducia nel certificato", () => {
       mocksDir = await createTempDir("backend-tls-");
       logger = createMemoryLogger();
       backend = https.createServer(
-        {
-          key: fs.readFileSync(path.join(FIXTURES, "server.key")),
-          cert: fs.readFileSync(path.join(FIXTURES, "server.pem")),
-        },
+        { key: certificates.key, cert: certificates.cert },
         (req, res) => {
           res.setHeader("content-type", "application/json");
           res.end(JSON.stringify({ reached: "https backend", url: req.url }));
@@ -222,7 +232,7 @@ describe("backend https: fiducia nel certificato", () => {
       delete env.NODE_USE_SYSTEM_CA;
       delete env.NODE_OPTIONS;
       return new Promise((resolve, reject) => {
-        execFile(process.execPath, [path.join(FIXTURES, "proxy-once.js")], { env, timeout: 20000 }, (error, stdout, stderr) => {
+        execFile(process.execPath, [CHILD_SCRIPT, certificatesDir], { env, timeout: 20000 }, (error, stdout, stderr) => {
           if (error) {
             reject(new Error(`${error.message}\n${stderr}`));
             return;
@@ -237,13 +247,13 @@ describe("backend https: fiducia nel certificato", () => {
     });
 
     test("NODE_EXTRA_CA_CERTS continua a valere", async () => {
-      expect(await proxyOnce({ NODE_EXTRA_CA_CERTS: path.join(FIXTURES, "ca.pem") })).toEqual({ status: 200 });
+      expect(await proxyOnce({ NODE_EXTRA_CA_CERTS: certificates.caFile })).toEqual({ status: 200 });
     });
 
     // L'archivio di sistema si può simulare solo dove Node lo legge dai percorsi di OpenSSL.
     const onLinux = process.platform === "linux" ? test : test.skip;
     onLinux("una CA dell'archivio di sistema viene accettata", async () => {
-      expect(await proxyOnce({ SSL_CERT_FILE: path.join(FIXTURES, "ca.pem") })).toEqual({ status: 200 });
+      expect(await proxyOnce({ SSL_CERT_FILE: certificates.caFile })).toEqual({ status: 200 });
     });
   });
 });

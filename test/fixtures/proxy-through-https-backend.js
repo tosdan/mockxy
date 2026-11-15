@@ -1,13 +1,16 @@
 // Processo figlio di test/backend-tls.test.js: le CA di cui Node si fida si decidono all'avvio
 // del processo (NODE_EXTRA_CA_CERTS, archivio di sistema), quindi ogni combinazione va provata
 // in un processo suo. Avvia un backend https con il certificato di prova, il motore davanti, fa
-// una richiesta e stampa lo status ricevuto.
+// una richiesta e stampa lo status ricevuto. La cartella con certificato e chiave del backend
+// (server.pem, server.key) arriva come primo argomento.
 const fs = require("fs");
 const http = require("http");
 const https = require("https");
 const os = require("os");
 const path = require("path");
-const { startServer } = require("../../../src/server");
+const { startServer } = require("../../src/server");
+
+const certificatesDir = process.argv[2];
 
 const silentLogger = { debug() {}, info() {}, warn() {}, error() {} };
 
@@ -15,8 +18,8 @@ const silentLogger = { debug() {}, info() {}, warn() {}, error() {} };
   const workDir = fs.mkdtempSync(path.join(os.tmpdir(), "mockxy-tls-child-"));
   const backend = https.createServer(
     {
-      key: fs.readFileSync(path.join(__dirname, "server.key")),
-      cert: fs.readFileSync(path.join(__dirname, "server.pem")),
+      key: fs.readFileSync(path.join(certificatesDir, "server.key")),
+      cert: fs.readFileSync(path.join(certificatesDir, "server.pem")),
     },
     (_req, res) => res.end("ok")
   );
