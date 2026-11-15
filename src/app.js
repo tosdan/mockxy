@@ -24,6 +24,7 @@ const {
 } = require("./mocks/mock-template");
 const { formatSseMessage, SseConnectionStore } = require("./mocks/sse-connections");
 const { runWithTimeout } = require("./utils/run-with-timeout");
+const { isScriptBlockedError, runScript } = require("./mocks/script-execution");
 const { ServerStateStore } = require("./server-state");
 const { setNoCacheHeaders } = require("./utils/cache");
 const { isSharedStateError } = require("./mocks/shared-state");
@@ -463,15 +464,37 @@ async function respondWithHandler(
       : { state: {}, callCount: 1, firstRequestAt: Date.now() };
     let handlerResult;
     try {
+      // Lo script gira nel processo del motore: il timer qui sotto copre le attese, il tempo
+      // massimo di runScript il codice sincrono, che un timer non potrebbe interrompere.
       handlerResult = await runWithTimeout(
-        () => decision.handler.resolveResponse(buildHandlerContext(
-          req,
-          decision,
-          requestSnapshot,
-          dataFileReader,
-          handlerRuntime,
-          sharedStateRequest.api
-        )),
+        () => {
+          try {
+            return runScript(
+              {
+                kind: "handler",
+                method: decision.handler.method,
+                path: decision.handler.path,
+                filePath: decision.handler.sourceFilePath || decision.handler.configFilePath,
+              },
+              () => decision.handler.resolveResponse(buildHandlerContext(
+                req,
+                decision,
+                requestSnapshot,
+                dataFileReader,
+                handlerRuntime,
+                sharedStateRequest.api
+              )),
+              requestTimeoutMs
+            );
+          } catch (error) {
+            if (isScriptBlockedError(error)) {
+              // L'interruzione salta i `finally` attraversati, anche quelli dello stato
+              // condiviso: va rimesso a posto qui, nello stesso callback.
+              sharedStates.recoverFromInterruptedScript?.();
+            }
+            throw error;
+          }
+        },
         requestTimeoutMs,
         {
           code: "HANDLER_TIMEOUT",
@@ -527,6 +550,15 @@ async function respondWithHandler(
       res.status(413).json({
         error: "Payload Too Large",
         message: `Handler request body exceeded ${MAX_HANDLER_REQUEST_BODY_BYTES} bytes.`,
+      });
+      return;
+    }
+
+    if (isScriptBlockedError(error)) {
+      res.status(504).json({
+        error: "Handler Timeout",
+        message: `The local handler kept the server busy for ${error.budgetMs}ms with synchronous code and was interrupted.`,
+        details: { code: "HANDLER_BLOCKED" },
       });
       return;
     }

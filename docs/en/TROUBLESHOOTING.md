@@ -58,7 +58,14 @@ file). Below, the recurring symptoms by area.
   `data is not defined`, the script is missing `data` among the destructured context
   fields: the signature must be e.g. `resolveResponse({ params, data })`.
 - **`504 Handler Timeout`** — almost always a promise that never resolves (a fetch without a
-  timeout); the file is named in the log.
+  timeout); the file is named in the log. With `details.code: HANDLER_BLOCKED` it is instead
+  synchronous code that never ended (a loop, a regex): the script was interrupted.
+- **The server answers nothing any more** after a request to a handler or a middleware — a
+  loop that never ends *after* an `await`, the one case the engine cannot interrupt
+  ([why](HANDLER.md#the-script-runs-inside-the-server-process)): restart it, and fix the loop.
+- **In the log: «A workspace script failed outside its request»** — a script threw an error
+  inside a timer, a callback or a promise nobody awaits. The server kept running; the `script`
+  and `endpoint` fields say where it comes from.
 - **`413 Payload Too Large`** — the request body exceeds 2 MB: the handler isn't even
   executed.
 - **`409 Shared State Conflict`** — the resource was reset during the request, or one handler

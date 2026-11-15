@@ -26,6 +26,9 @@ const MESSAGES = {
     removeRecentConfirm: "Rimuovi",
     startupFailedTitle: "Avvio fallito",
     unexpectedErrorTitle: "Errore imprevisto",
+    scriptErrorTitle: "Errore in uno script del workspace",
+    scriptErrorDetail: (script, endpoint) =>
+      `Uno script ha lanciato un errore fuori dalla sua richiesta (in un timer, in un callback o in una promise non attesa). L'app e i workspace restano attivi.\n\nScript: ${script}${endpoint ? `\nEndpoint: ${endpoint}` : ""}`,
   },
   en: {
     cancel: "Cancel",
@@ -50,6 +53,9 @@ const MESSAGES = {
     removeRecentConfirm: "Remove",
     startupFailedTitle: "Startup failed",
     unexpectedErrorTitle: "Unexpected error",
+    scriptErrorTitle: "Error in a workspace script",
+    scriptErrorDetail: (script, endpoint) =>
+      `A script threw an error outside its request (in a timer, a callback or a promise nobody awaits). The app and the workspaces keep running.\n\nScript: ${script}${endpoint ? `\nEndpoint: ${endpoint}` : ""}`,
   },
 };
 

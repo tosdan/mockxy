@@ -27,7 +27,7 @@ function requireEngineModule(subpath) {
     throw error;
   }
 }
-const { startServer, WORKSPACE_SETTING_DEFAULTS } = requireEngineModule("server");
+const { startServer, WORKSPACE_SETTING_DEFAULTS, describeCurrentScriptFault } = requireEngineModule("server");
 const { createLogger } = requireEngineModule("utils/logger");
 const { teeErrors } = require("./error-log");
 
@@ -140,4 +140,10 @@ async function startDesktopServer({
   return { runtime, port: resolvedPort, url };
 }
 
-module.exports = { findFreePort, isPortFree, startDesktopServer, WORKSPACE_SETTING_DEFAULTS };
+module.exports = {
+  describeCurrentScriptFault,
+  findFreePort,
+  isPortFree,
+  startDesktopServer,
+  WORKSPACE_SETTING_DEFAULTS,
+};

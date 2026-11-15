@@ -87,5 +87,10 @@ risposta che il backend ha già prodotto.
 Il `502` resta riservato ai problemi veri di comunicazione col backend (irraggiungibile, errore
 durante la lettura della risposta).
 
+Lo script gira nel processo del server, come gli handler: anche il codice sincrono che non
+finisce viene interrotto allo scadere del timeout (fino al primo `await`), e un errore lanciato
+fuori dalla richiesta viene registrato senza fermare il server. I dettagli e i limiti sono in
+[HANDLER.md](HANDLER.md#lo-script-gira-nel-processo-del-server).
+
 I middleware lavorano su richieste proxate, quindi il [ritardo globale esteso al
 proxy](RITARDI.md) si applica anche a loro.

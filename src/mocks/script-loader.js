@@ -2,6 +2,7 @@ const fs = require("fs");
 const path = require("path");
 const Module = require("module");
 const { canonicalRoot, prepareScriptPackage } = require("./script-package");
+const { runWithScriptOrigin } = require("./script-execution");
 
 const ENTRYPOINT_PATTERN = /\.(handler|middleware)\.js$/;
 
@@ -101,7 +102,9 @@ function loadScriptModule(filePath, mocksDir) {
   const scriptModule = new Module(filePath);
   scriptModule.filename = filePath;
   scriptModule.paths = Module._nodeModulePaths(path.dirname(filePath));
-  scriptModule._compile(source, filePath);
+  // Il codice di primo livello è dello script: un timer che avvia qui e che poi lancia deve
+  // risultare suo, non del motore (vedi script-execution.js).
+  runWithScriptOrigin({ kind: "script-load", filePath }, () => scriptModule._compile(source, filePath));
   const loadedModule = scriptModule.exports;
   const definition = loadedModule?.default || loadedModule;
   return { definition, moduleRecord: scriptModule };

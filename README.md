@@ -291,7 +291,7 @@ module.exports = {
 
 The context includes the Express request, path parameters, query, headers and body (raw, textual or already parsed as JSON). The result specifies `status`, optional `headers` and a textual `body` **or** a `jsonBody`. Handlers can be created and edited from the UI too, with starter templates. The full contract — context, result format, errors and limits — is in [docs/en/HANDLER.md](docs/en/HANDLER.md).
 
-Handler execution shares the same timeout as backend requests (`REQUEST_TIMEOUT_MS`, default 15 seconds): a handler that doesn't produce a response in time — a promise that never resolves, a fetch without a timeout — gets a **504** with the error logged, instead of leaving the request hanging.
+Handler execution shares the same timeout as backend requests (`REQUEST_TIMEOUT_MS`, default 15 seconds): a handler that doesn't produce a response in time — a promise that never resolves, a fetch without a timeout — gets a **504** with the error logged, instead of leaving the request hanging. The same goes for synchronous code that never ends (a loop), which is interrupted up to the first `await`; the limits are in [docs/en/HANDLER.md](docs/en/HANDLER.md#the-script-runs-inside-the-server-process).
 
 ### Reusing saved data: `data()`
 

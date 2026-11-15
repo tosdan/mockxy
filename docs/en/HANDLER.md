@@ -329,8 +329,47 @@ with the full detail (message and stack) in the **server log**:
 - **timeout** — the script gets the same timeout as requests to the backend
   (`requestTimeoutMs`): once exceeded, the response is `504 Handler Timeout`. A promise that
   never resolves doesn't leave the request hanging;
+- **synchronous code that never ends** (a `while (true)`, a regex that blows up) → the script
+  is **interrupted** when the same timeout expires and the response is `504 Handler Timeout`
+  with `details.code: HANDLER_BLOCKED`. Until then the server answers nothing else: see
+  [below](#the-script-runs-inside-the-server-process);
 - **request body over 2 MB** → `413 Payload Too Large`.
 
 Script validation (the file exists, `resolveResponse` is present) instead happens as early as
 endpoint load time, with the per-endpoint degradation described in the [endpoint file
 page](ENDPOINT.md).
+
+### The script runs inside the server process
+
+Handlers and [middleware](MIDDLEWARE.md) have no process of their own: they run inside the
+engine, on the same thread that serves the other requests, the admin API and, in the desktop
+app, the window and the other open workspaces. Two consequences, and what the engine does to
+contain them.
+
+**Synchronous code that keeps the thread busy.** While a script computes without ever yielding,
+no other request is served and no timer fires, not even the timeout's. That is why the
+synchronous stretch has a time limit of its own, the same `requestTimeoutMs`: once exceeded,
+execution is interrupted from outside and the server answers again. Three things to know:
+
+- the limit covers the code **up to the first `await`** (the whole function, if it is
+  synchronous). A loop that never ends **after** an `await` — for example after
+  `await data(...)` or `await sharedState.open(...)` — cannot be interrupted: the server stays
+  blocked and has to be restarted. Keep heavy computation before the first `await`, or split it;
+- the interruption is abrupt: the script's `finally` blocks do not run. The
+  [shared state](#shared-runtime-state) stays consistent (an interrupted `mutate` saves
+  nothing), but a resource the script opened on its own stays as it was;
+- the script's top-level code, run at load time, has no time limit.
+
+**Errors thrown outside the request.** A `throw` inside a `setTimeout`, an event callback or a
+promise the script does not await does not go through the request: it would reach the process
+as an unhandled error, and Node terminates on its own. The engine recognises that the error
+descends from a workspace script and contains it:
+
+- **headless** (`node index.js`, Docker): an `error` line in the log, with `script` (the
+  file), `endpoint` and the stack, and the server keeps running. An error that does *not* come
+  from a script stays fatal, as before;
+- **desktop app**: an «Error in a workspace script» dialog with the file and the endpoint, and
+  the same line in the [error log](DESKTOP.md); the app and the workspaces keep running.
+
+The response of the request that started that timer has already left: the error shows only in
+the log.

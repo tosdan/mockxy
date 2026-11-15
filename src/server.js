@@ -19,6 +19,7 @@ const { RequestMonitorStore } = require("./monitoring/request-monitor");
 const { ServerStateStore } = require("./server-state");
 const { MonitorDumpWriter } = require("./monitoring/monitor-dump");
 const { createUpgradeHandler } = require("./proxy/upgrade-proxy");
+const { describeCurrentScriptFault } = require("./script-fault-guard");
 const { createRuntimeIdentity } = require("./runtime-identity");
 const { RuntimeConfigStore } = require("./runtime-config");
 const { RELOAD_REASONS, RuntimeStatusStore } = require("./runtime-status");
@@ -569,6 +570,7 @@ module.exports = {
   createServerRuntime,
   startServer,
   startMockWatcher,
-  // Ri-esposto per il wrapper desktop, che carica il motore da qui (vedi electron/desktop-server.js).
+  // Ri-esposti per il wrapper desktop, che carica il motore da qui (vedi electron/desktop-server.js).
   WORKSPACE_SETTING_DEFAULTS,
+  describeCurrentScriptFault,
 };

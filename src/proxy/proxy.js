@@ -6,6 +6,7 @@ const { setNoCacheHeaders } = require("../utils/cache");
 const { createDataFileReader } = require("../mocks/data-files");
 const { isValidHttpStatus } = require("../utils/http-body-utils");
 const { runWithTimeout } = require("../utils/run-with-timeout");
+const { runScript } = require("../mocks/script-execution");
 const {
   backendPathPrefix,
   resolveBackendTarget,
@@ -770,17 +771,27 @@ async function handleBufferedProxyResponse(
     // A questo punto la risposta upstream è già stata letta per intero: nessun timeout di
     // rete può più intervenire, quindi la corsa col timer è l'unica difesa contro un
     // transformResponse che non risolve mai.
+    // Il timer copre le attese; il tempo massimo di runScript il codice sincrono dello script,
+    // che un timer non potrebbe interrompere (vedi script-execution.js).
     const transformedResponse = await runWithTimeout(
-      () => middlewareConfig.transformResponse({
-        req,
-        targetUrl: targetUrl.toString(),
-        status: upstreamResponse.status,
-        headers: cloneHeaders(upstreamResponse.headers),
-        bodyBuffer: Buffer.from(upstreamResponse.bodyBuffer),
-        bodyText: upstreamResponse.bodyText,
-        jsonBody: upstreamResponse.jsonBody,
-        data: dataFileReader || createDataFileReader(undefined),
-      }),
+      () => runScript(
+        {
+          kind: "middleware",
+          path: middlewareConfig.path,
+          filePath: middlewareConfig.sourceFilePath || middlewareConfig.configFilePath,
+        },
+        () => middlewareConfig.transformResponse({
+          req,
+          targetUrl: targetUrl.toString(),
+          status: upstreamResponse.status,
+          headers: cloneHeaders(upstreamResponse.headers),
+          bodyBuffer: Buffer.from(upstreamResponse.bodyBuffer),
+          bodyText: upstreamResponse.bodyText,
+          jsonBody: upstreamResponse.jsonBody,
+          data: dataFileReader || createDataFileReader(undefined),
+        }),
+        requestTimeoutMs
+      ),
       requestTimeoutMs,
       {
         code: "MIDDLEWARE_TIMEOUT",

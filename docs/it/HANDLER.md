@@ -331,8 +331,47 @@ servizio, con il dettaglio completo (messaggio e stack) nel **log del server**:
 - **timeout** — lo script ha a disposizione lo stesso timeout delle richieste verso il backend
   (`requestTimeoutMs`): superato, la risposta è `504 Handler Timeout`. Una promise che non
   risolve mai non lascia la richiesta appesa;
+- **codice sincrono che non finisce** (un `while (true)`, una regex che esplode) → lo script
+  viene **interrotto** allo scadere dello stesso timeout e la risposta è `504 Handler Timeout`
+  con `details.code: HANDLER_BLOCKED`. Fino a quel momento il server non risponde ad altro:
+  vedi [sotto](#lo-script-gira-nel-processo-del-server);
 - **body della richiesta oltre 2 MB** → `413 Payload Too Large`.
 
 La validazione dello script (esistenza del file, presenza di `resolveResponse`) avviene invece
 già al caricamento dell'endpoint, con la degradazione per-endpoint descritta nella [pagina sul
 file endpoint](ENDPOINT.md).
+
+### Lo script gira nel processo del server
+
+Handler e [middleware](MIDDLEWARE.md) non hanno un processo loro: girano dentro il motore,
+sullo stesso thread che serve le altre richieste, l'admin API e, nell'app desktop, la finestra
+e gli altri workspace aperti. Due conseguenze, e quello che il motore fa per contenerle.
+
+**Codice sincrono che tiene occupato il thread.** Finché uno script calcola senza mai cedere
+il controllo, nessun'altra richiesta viene servita e nessun timer scatta, nemmeno quello del
+timeout. Per questo il tratto sincrono ha un tempo massimo a parte, lo stesso
+`requestTimeoutMs`: superato, l'esecuzione viene interrotta da fuori e il server torna a
+rispondere. Tre cose da sapere:
+
+- il tempo massimo copre il codice **fino al primo `await`** (tutta la funzione, se è
+  sincrona). Un ciclo che non finisce **dopo** un `await` — per esempio dopo `await data(...)`
+  o `await sharedState.open(...)` — non è interrompibile: il server resta bloccato e va
+  riavviato. Il calcolo pesante conviene tenerlo prima del primo `await`, o spezzarlo;
+- l'interruzione è brusca: i `finally` dello script non vengono eseguiti. Lo
+  [stato condiviso](#stato-runtime-condiviso) resta coerente (un `mutate` interrotto non
+  salva nulla), ma una risorsa che lo script aveva aperto per conto suo resta com'era;
+- il codice di primo livello dello script, eseguito al caricamento, non ha tempo massimo.
+
+**Errori lanciati fuori dalla richiesta.** Un `throw` dentro un `setTimeout`, un callback di
+evento o una promise che lo script non attende non passa dalla richiesta: arriverebbe al
+processo come errore non gestito, e Node di suo termina. Il motore riconosce che l'errore
+discende da uno script del workspace e lo confina:
+
+- **headless** (`node index.js`, Docker): una riga `error` nel log, con `script` (il file),
+  `endpoint` e lo stack, e il server continua. Un errore che *non* viene da uno script resta
+  fatale, come prima;
+- **app desktop**: un dialogo «Errore in uno script del workspace» con il file e l'endpoint,
+  e la stessa riga nel [log degli errori](DESKTOP.md); l'app e i workspace restano attivi.
+
+La risposta della richiesta che aveva avviato quel timer è già partita: l'errore si vede solo
+nel log.
