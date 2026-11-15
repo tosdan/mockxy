@@ -8,7 +8,7 @@ fallback per lavorare in modalità solo-mock.
 ## La decisione, richiesta per richiesta
 
 Il motore riserva a sé, senza distinguere maiuscole, `/_admin/api` con ogni metodo e, quando
-serve l'interfaccia (app desktop), `/_admin/ui` con `GET` e `HEAD`: lì risponde il motore stesso.
+serve l'interfaccia (app desktop, o headless con una build accanto al motore), `/_admin/ui` con `GET` e `HEAD`: lì risponde il motore stesso.
 Tutte le altre richieste, compresi gli altri percorsi sotto `/_admin` e gli altri metodi su
 `/_admin/ui`, seguono questi passi (per gli upgrade WebSocket vale [WEBSOCKET.md](WEBSOCKET.md)):
 

@@ -54,7 +54,7 @@ can also be set per-workspace from the desktop app.
 | `mocksDir` | `MOCKS_DIR` | `mocks` | Folder of the mock definitions | ❌ (derived from the workspace) |
 | `filesDir` | `FILES_DIR` | `files` | Folder of the JSON data files for `data()` (Data page) | ❌ (derived from the workspace) |
 | `monitorDumpDir` | `MONITOR_DUMP_DIR` | `monitor-dump` | Folder of the monitor dumps | ❌ (derived: `<workspace>/.mockxy/monitor-dump`) |
-| `uiDistDir` | `UI_DIST_DIR` | — | Folder of the compiled UI to serve under `/_admin/ui` | ❌ (set by the desktop app) |
+| `uiDistDir` | `UI_DIST_DIR` | — | Folder of the compiled UI to serve under `/_admin/ui`. If it is not set and the admin API is on, `node index.js` serves the build it finds next to the engine: `ui/` (the `Dockerfile.app` image) or `mockxy-ui/dist/mockxy-ui/browser` (after `npm run build:ui`) — see [DEPLOYMENT](DEPLOYMENT.md#the-ui) | ❌ (set by the desktop app) |
 | `devWatch` / `watchEnabled` | `DEV_WATCH` | `true` (not in production) | Automatic mock reloading in development | ❌ |
 | `watchUsePolling` | `CHOKIDAR_USEPOLLING` | `false` | Polling watcher (for Docker/network folders) | ❌ |
 | `nodeEnv` | `NODE_ENV` | `development` | Environment; `production` disables watch and (by default) the admin API | ❌ |

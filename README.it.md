@@ -125,11 +125,15 @@ cd mockxy
 
 npm install              # dipendenze del server
 npm run install:frontend # dipendenze dell'interfaccia web
+npm run build:ui         # compila l'interfaccia, una volta (e dopo ogni aggiornamento)
 cp .env.example .env     # raccomandato: configurazione locale di partenza
 
-npm run dev:backend      # server su http://localhost:3000
-npm run dev:frontend     # interfaccia su http://localhost:4207 (in un secondo terminale)
+npm run dev:backend      # server e interfaccia su http://localhost:3000
 ```
+
+L'interfaccia compilata la serve il motore stesso, sotto `/_admin/ui/`: un solo processo, una
+sola porta. All'avvio il log dice l'indirizzo (`Web interface available.`), o come ottenerla se
+la build manca.
 
 Il file `.env` è tecnicamente facoltativo, ma **raccomandato per ogni uso headless reale**:
 prima di avviare controlla almeno `BACKEND_URL` e `PORT`. Senza configurazione Mockxy ascolta
@@ -142,9 +146,11 @@ curl http://localhost:3000/api/hello
 # {"hello":"world", ...}
 ```
 
-Poi apri **http://localhost:4207** per gestire i mock dall'interfaccia web.
+Poi apri **http://localhost:3000/_admin/ui/** per gestire i mock dall'interfaccia web.
 
-> In alternativa puoi partire con [Docker](#docker) (`docker compose up`) o con l'[app desktop](#app-desktop), che non richiede nessuna installazione.
+> In alternativa puoi partire con [Docker](#docker), che non richiede né Node né la compilazione dell'interfaccia (`docker compose -f docker-compose.app.yml up --build`), o con l'[app desktop](#app-desktop), che non richiede nessuna installazione.
+
+> Per lavorare sull'interfaccia stessa c'è `npm run dev:frontend`: la serve su http://localhost:4207 con ricaricamento automatico, in un secondo terminale.
 
 ## Usare Mockxy nel tuo progetto
 
@@ -397,7 +403,7 @@ Tutta la configurazione passa da variabili d'ambiente (o da un file `.env`; part
 | `TRUST_PROXY`                  | `false`                        | Dietro un reverse proxy: redirect e cookie adattati seguono `X-Forwarded-Proto` e `X-Forwarded-Host` (vedi sotto)                                                              |
 | `MOCKS_VERSION`                | —                              | Versione dei mock serviti (es. il commit), riportata dall'health `GET /_admin/api/health` e nel log di avvio                                                                   |
 | `ADMIN_API_ENABLED`            | `true` in dev, `false` in prod | Abilita l'API di amministrazione sotto `/_admin/api`                                                                                                                           |
-| `UI_DIST_DIR`                  | —                              | Cartella della UI compilata da servire sotto `/_admin/ui` (usata dall'app desktop)                                                                                             |
+| `UI_DIST_DIR`                  | —                              | Cartella dell'interfaccia compilata da servire sotto `/_admin/ui`. Senza, con l'admin accesa, `node index.js` serve quella che trova accanto al motore (`npm run build:ui`) |
 | `DEV_WATCH`                    | `true`                         | Ricarica a caldo dei mock alla modifica dei file (mai attiva in produzione)                                                                                                    |
 | `CHOKIDAR_USEPOLLING`          | `false`                        | Watcher in polling invece che a eventi nativi: serve dove gli eventi non arrivano (Docker, cartelle di rete)                                                                   |
 | `REQUEST_TIMEOUT_MS`           | `15000`                        | Timeout verso il backend (fino ai primi header di risposta: gli stream avviati non hanno timeout di inattività) e per l'esecuzione degli handler locali e dei middleware proxy |
@@ -451,14 +457,23 @@ L'API è abilitata di default solo in sviluppo ed è pensata per l'uso in locale
 
 ## Docker
 
-Il confronto tra le vie di esecuzione (diretta, compose di sviluppo, immagine standalone) è in [docs/it/DEPLOYMENT.md](docs/it/DEPLOYMENT.md). Per l'ambiente di sviluppo completo (server + interfaccia web):
+Il confronto tra le vie di esecuzione (diretta, Mockxy in un container, compose di sviluppo, immagine standalone) è in [docs/it/DEPLOYMENT.md](docs/it/DEPLOYMENT.md). Per **usare** Mockxy senza installare Node né compilare l'interfaccia:
+
+```bash
+docker compose -f docker-compose.app.yml up --build
+# server e interfaccia su http://localhost:3000 (interfaccia sotto /_admin/ui/)
+```
+
+Un solo container con motore, API di amministrazione e interfaccia già compilata (`Dockerfile.app`). Il workspace è la cartella `./workspace` (o quella indicata da `MOCKXY_WORKSPACE`), montata dal filesystem locale: i mock restano file normali, modificabili a mano e versionabili. La porta è pubblicata solo su `127.0.0.1`, perché l'API di amministrazione scrive file ed esegue codice.
+
+Per **sviluppare** Mockxy stesso, con l'interfaccia in ricaricamento automatico:
 
 ```bash
 docker compose up
 # server su http://localhost:3000, interfaccia su http://localhost:4207
 ```
 
-Funziona anche su un clone fresco senza `.env` (il file è facoltativo: se c'è viene letto, altrimenti valgono i default); serve Docker Compose v2.24 o successivo. I mock restano montati dal filesystem locale, quindi ricarica a caldo e versionamento in git funzionano come nell'esecuzione diretta.
+Entrambi funzionano anche su un clone fresco senza `.env` (il file è facoltativo: se c'è viene letto, altrimenti valgono i default); serve Docker Compose v2.24 o successivo. I mock restano montati dal filesystem locale, quindi ricarica a caldo e versionamento in git funzionano come nell'esecuzione diretta.
 
 C'è poi un'immagine **standalone** (`Dockerfile.standalone`, usata da `docker-compose.staging.yml`) che serve *solo* i mock: niente API di amministrazione, niente monitor, niente proxy fallback. È pensata per ambienti di test condivisi o demo su un server. L'immagine contiene **solo il motore** — si distribuisce l'applicazione, non il workspace: i mock e i **file dati** della pagina Dati si montano a runtime come bind mount (il compose di esempio monta `workspace/mocks` e `workspace/files` in sola lettura), così gli handler che usano `data()` funzionano e i mock si aggiornano senza rebuild, con un riavvio del container (arresto, `git pull`, avvio: vedi [docs/it/DEPLOYMENT.md](docs/it/DEPLOYMENT.md)). La parte locale del workspace (`.mockxy`: impostazioni dell'app desktop e traffico catturato) non va montata: le impostazioni per-workspace sono lette solo dall'app desktop — la versione headless si configura esclusivamente con variabili d'ambiente.
 

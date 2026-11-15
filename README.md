@@ -125,11 +125,15 @@ cd mockxy
 
 npm install              # server dependencies
 npm run install:frontend # web UI dependencies
+npm run build:ui         # compiles the web UI, once (and after every update)
 cp .env.example .env     # recommended: starting local configuration
 
-npm run dev:backend      # server on http://localhost:3000
-npm run dev:frontend     # web UI on http://localhost:4207 (in a second terminal)
+npm run dev:backend      # server and web UI on http://localhost:3000
 ```
+
+The compiled UI is served by the engine itself, under `/_admin/ui/`: one process, one port. At
+startup the log gives the address (`Web interface available.`), or says how to get the UI if
+the build is missing.
 
 The `.env` file is technically optional, but **recommended for any real headless use**:
 before starting, review at least `BACKEND_URL` and `PORT`. Without configuration Mockxy
@@ -142,7 +146,11 @@ curl http://localhost:3000/api/hello
 # {"hello":"world", ...}
 ```
 
-Then open **http://localhost:4207** to manage your mocks from the web UI.
+Then open **http://localhost:3000/_admin/ui/** to manage your mocks from the web UI.
+
+> Alternatively you can start with [Docker](#docker), which needs neither Node nor compiling the UI (`docker compose -f docker-compose.app.yml up --build`), or with the [desktop app](#desktop-app), which needs no installation at all.
+
+> To work on the UI itself there is `npm run dev:frontend`: it serves it on http://localhost:4207 with automatic reload, in a second terminal.
 
 > Alternatively you can start with [Docker](#docker) (`docker compose up`) or with the [desktop app](#desktop-app), which requires no installation at all.
 
@@ -396,7 +404,7 @@ All configuration goes through environment variables (or a `.env` file; start fr
 | `TRUST_PROXY`                  | `false`                        | Behind a reverse proxy: redirects and adapted cookies follow `X-Forwarded-Proto` and `X-Forwarded-Host` (see below)                                    |
 | `MOCKS_VERSION`                | —                              | Version of the served mocks (e.g. the commit), reported by the `GET /_admin/api/health` health check and in the startup log                            |
 | `ADMIN_API_ENABLED`            | `true` in dev, `false` in prod | Enables the admin API under `/_admin/api`                                                                                                              |
-| `UI_DIST_DIR`                  | —                              | Folder of the compiled UI to serve under `/_admin/ui` (used by the desktop app)                                                                        |
+| `UI_DIST_DIR`                  | —                              | Folder of the compiled UI to serve under `/_admin/ui`. Without it, with the admin API on, `node index.js` serves the one it finds next to the engine (`npm run build:ui`) |
 | `DEV_WATCH`                    | `true`                         | Hot reload of mocks on file changes (never active in production)                                                                                       |
 | `CHOKIDAR_USEPOLLING`          | `false`                        | Polling watcher instead of native events: needed where events don't arrive (Docker, network shares)                                                    |
 | `REQUEST_TIMEOUT_MS`           | `15000`                        | Timeout towards the backend (up to the first response headers: started streams have no inactivity timeout) and for local handlers and proxy middleware |
@@ -450,14 +458,23 @@ The API is enabled by default only in development and is designed for local use:
 
 ## Docker
 
-The comparison of the ways to run Mockxy (direct, development compose, standalone image) is in [docs/en/DEPLOYMENT.md](docs/en/DEPLOYMENT.md). For the full development environment (server + web UI):
+The comparison of the ways to run Mockxy (direct, Mockxy in one container, development compose, standalone image) is in [docs/en/DEPLOYMENT.md](docs/en/DEPLOYMENT.md). To **use** Mockxy without installing Node or compiling the UI:
+
+```bash
+docker compose -f docker-compose.app.yml up --build
+# server and web UI on http://localhost:3000 (UI under /_admin/ui/)
+```
+
+One container with the engine, the admin API and the UI already compiled (`Dockerfile.app`). The workspace is the `./workspace` folder (or the one named by `MOCKXY_WORKSPACE`), mounted from the local filesystem: mocks stay ordinary files you can edit by hand and version. The port is published on `127.0.0.1` only, because the admin API writes files and runs code.
+
+To **develop** Mockxy itself, with the UI on automatic reload:
 
 ```bash
 docker compose up
 # server on http://localhost:3000, web UI on http://localhost:4207
 ```
 
-It works on a fresh clone without a `.env` too (the file is optional: it's read if present, otherwise defaults apply); Docker Compose v2.24 or later is required. Mocks stay mounted from the local filesystem, so hot reload and git versioning work just like the direct run.
+Both work on a fresh clone without a `.env` too (the file is optional: it's read if present, otherwise defaults apply); Docker Compose v2.24 or later is required. Mocks stay mounted from the local filesystem, so hot reload and git versioning work just like the direct run.
 
 There is also a **standalone** image (`Dockerfile.standalone`, used by `docker-compose.staging.yml`) that serves *only* the mocks: no admin API, no monitor, no proxy fallback. It's designed for shared test environments or demos on a server. The image contains **the engine only** — you distribute the application, not the workspace: mocks and the Data page's **data files** are mounted at runtime as bind mounts (the sample compose mounts `workspace/mocks` and `workspace/files` read-only), so handlers using `data()` keep working and mocks update without a rebuild, with a container restart (stop, `git pull`, start: see [docs/en/DEPLOYMENT.md](docs/en/DEPLOYMENT.md)). The workspace's local part (`.mockxy`: desktop app settings and captured traffic) must not be mounted: per-workspace settings are read only by the desktop app — the headless flavor is configured exclusively through environment variables.
 

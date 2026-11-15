@@ -1,13 +1,13 @@
 # Running Mockxy: the deployment paths
 
-Besides the [desktop app](DESKTOP.md), Mockxy runs in three ways. The compass for choosing:
+Besides the [desktop app](DESKTOP.md), Mockxy runs in four ways. The compass for choosing:
 
-| | Direct run | Development Docker | Standalone image |
-|---|---|---|---|
-| What it's for | development on your own machine | same purpose, without local Node | serving mocks to others (intranet, demos) |
-| Admin API + UI | yes | yes | **no** |
-| Proxy fallback | yes | yes | **no** (mock-only) |
-| Hot reload of mocks | yes | yes | no |
+| | Direct run | Mockxy in one container | Development Docker | Standalone image |
+|---|---|---|---|---|
+| What it's for | using Mockxy on your own machine | the same, without Node or a build | developing Mockxy itself | serving mocks to others (intranet, demos) |
+| Admin API + UI | yes | yes, one port | yes, UI on automatic reload | **no** |
+| Proxy fallback | yes | yes | yes | **no** (mock-only) |
+| Hot reload of mocks | yes | yes | yes | no |
 
 For a shared staging, with mocks where the backend is not there yet and the real backend
 elsewhere, there is a profile of the standalone image with the proxy on: the guide is
@@ -36,10 +36,66 @@ they do not replace an explicit configuration choice.
 With `NODE_ENV=production` mock watching turns off and the admin API is disabled by default:
 the right setup for a process that only has to serve.
 
+### The UI
+
+The web UI is a compiled application the engine serves by itself under **`/_admin/ui/`**, on
+the same port as the mocks and the admin API: no second process is needed. It has to be built
+once, and again after every update of the repository:
+
+```bash
+npm run install:frontend   # UI dependencies
+npm run build:ui           # compiles it into mockxy-ui/dist/mockxy-ui/browser
+node index.js              # then: http://localhost:3000/_admin/ui/
+```
+
+At startup `node index.js` looks for the build next to the engine and serves it, with nothing
+to configure; the log gives the address (`Web interface available.`) or, if the build is
+missing or was made for another base path, says how to get it. Three points:
+
+- it applies with the **admin API on**: with `NODE_ENV=production` or
+  `ADMIN_API_ENABLED=false` the UI is not served, because without the API it would have
+  nothing to show;
+- `UI_DIST_DIR` still rules: if it is set, the engine serves that folder and looks for
+  nothing else;
+- when the UI is served, `GET` and `HEAD` on `/_admin/ui` no longer reach the backend
+  ([PROXY.md](PROXY.md)).
+
+`npm run dev:frontend` (port `4207`, with automatic reload) remains the way for those working
+on the UI itself.
+
+## Mockxy in one container
+
+```bash
+docker compose -f docker-compose.app.yml up --build
+# then: http://localhost:3000/_admin/ui/
+```
+
+`Dockerfile.app` builds an image with the engine and the UI **already compiled**: the way to
+use Mockxy without installing Node or the Angular dependencies. One container, one port. As
+for the other images, **the application is distributed, the workspace is mounted**:
+
+- the workspace is `./workspace`, or the folder named by `MOCKXY_WORKSPACE`, mounted on
+  `/workspace`: mocks, data files and the Monitor archives stay files on the local
+  filesystem, editable by hand and versionable. Hand edits are reloaded (the watcher works in
+  polling mode, as on any mounted volume);
+- the container runs as an unprivileged user (`node`, uid 1000): on Linux the files created
+  from the UI belong to that user. With a different uid on the host, add
+  `user: "<uid>:<gid>"` to the service;
+- the port is published **on `127.0.0.1` only**: the admin API writes files and runs code, and
+  has no authentication. To expose it on a network, remove `127.0.0.1:` from the compose file,
+  knowing what you expose ([RETE.md](RETE.md)) and adding the name you use to
+  `ADMIN_ALLOWED_HOSTS`;
+- a backend running on the host machine is reached with
+  `BACKEND_URL=http://host.docker.internal:8080` (the compose file makes it available on
+  Linux too); the host port is changed with `MOCKXY_HOST_PORT`.
+
+The image is not published to a registry: it is built from the repository.
+
 ## Development Docker
 
-`docker compose up` starts the complete environment: the engine (host port `3000`) and the UI
-with automatic reload (host port `4207`). Here too `.env` is technically optional but
+`docker compose up` starts the environment for **developing Mockxy**: the engine (host port
+`3000`) and the UI with automatic reload (host port `4207`), both from source. For plain use
+[one container](#mockxy-in-one-container) is enough. Here too `.env` is technically optional but
 recommended for real use; host ports can be changed with `MOCKXY_HOST_PORT` and
 `MOCKXY_UI_HOST_PORT`.
 

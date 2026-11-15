@@ -1,13 +1,13 @@
 # Eseguire Mockxy: le vie di deployment
 
-Oltre all'[app desktop](DESKTOP.md), Mockxy si esegue in tre modi. La bussola per scegliere:
+Oltre all'[app desktop](DESKTOP.md), Mockxy si esegue in quattro modi. La bussola per scegliere:
 
-| | Esecuzione diretta | Docker di sviluppo | Immagine standalone |
-|---|---|---|---|
-| A cosa serve | sviluppo sulla propria macchina | stesso scopo, senza Node locale | servire mock ad altri (Intranet, demo) |
-| Admin API + interfaccia | sì | sì | **no** |
-| Proxy fallback | sì | sì | **no** (solo mock) |
-| Ricarica a caldo dei mock | sì | sì | no |
+| | Esecuzione diretta | Mockxy in un container | Docker di sviluppo | Immagine standalone |
+|---|---|---|---|---|
+| A cosa serve | usare Mockxy sulla propria macchina | lo stesso, senza Node né build | sviluppare Mockxy stesso | servire mock ad altri (Intranet, demo) |
+| Admin API + interfaccia | sì | sì, una sola porta | sì, interfaccia in ricaricamento automatico | **no** |
+| Proxy fallback | sì | sì | sì | **no** (solo mock) |
+| Ricarica a caldo dei mock | sì | sì | sì | no |
 
 Per uno staging condiviso, con i mock dove il backend non arriva ancora e il backend vero
 altrove, c'è un profilo dell'immagine standalone con il proxy acceso: la guida è
@@ -36,10 +36,65 @@ prima prova, non sostituiscono una scelta esplicita della configurazione.
 Con `NODE_ENV=production` il watch dei mock si spegne e l'admin API è disattivata di default:
 è l'assetto giusto per un processo che deve solo servire.
 
+### L'interfaccia
+
+L'interfaccia web è un'applicazione compilata che il motore serve da sé sotto
+**`/_admin/ui/`**, sulla stessa porta dei mock e dell'admin API: non serve un secondo
+processo. Va costruita una volta, e di nuovo dopo ogni aggiornamento del repository:
+
+```bash
+npm run install:frontend   # dipendenze dell'interfaccia
+npm run build:ui           # la compila in mockxy-ui/dist/mockxy-ui/browser
+node index.js              # poi: http://localhost:3000/_admin/ui/
+```
+
+All'avvio `node index.js` cerca la build accanto al motore e la serve, senza configurare
+nulla; il log dice l'indirizzo (`Web interface available.`) oppure, se la build manca o è stata
+fatta per un altro percorso base, come ottenerla. Tre precisazioni:
+
+- vale con l'**admin API accesa**: con `NODE_ENV=production` o `ADMIN_API_ENABLED=false`
+  l'interfaccia non viene servita, perché senza API non avrebbe nulla da mostrare;
+- `UI_DIST_DIR` continua a comandare: se è impostata, il motore serve quella cartella e non
+  cerca altro;
+- quando l'interfaccia è servita, `GET` e `HEAD` su `/_admin/ui` non raggiungono più il
+  backend ([PROXY.md](PROXY.md)).
+
+`npm run dev:frontend` (porta `4207`, con ricaricamento automatico) resta la via per chi
+lavora sull'interfaccia stessa.
+
+## Mockxy in un container
+
+```bash
+docker compose -f docker-compose.app.yml up --build
+# poi: http://localhost:3000/_admin/ui/
+```
+
+`Dockerfile.app` costruisce un'immagine con il motore e l'interfaccia **già compilata**: è la
+via per usare Mockxy senza installare Node né le dipendenze di Angular. Un solo container, una
+sola porta. Come per le altre immagini, **l'applicazione si distribuisce, il workspace si
+monta**:
+
+- il workspace è `./workspace`, o la cartella indicata da `MOCKXY_WORKSPACE`, montata su
+  `/workspace`: mock, file dati e archivi del Monitor restano file sul filesystem locale,
+  modificabili a mano e versionabili. Le modifiche fatte a mano vengono ricaricate (il watcher
+  lavora in polling, come su ogni volume montato);
+- il container gira come utente non privilegiato (`node`, uid 1000): su Linux i file creati
+  dall'interfaccia appartengono a quell'utente. Con un uid diverso sull'host si aggiunge
+  `user: "<uid>:<gid>"` al servizio;
+- la porta è pubblicata **solo su `127.0.0.1`**: l'admin API scrive file ed esegue codice, e non
+  ha autenticazione. Per esporla in rete si toglie `127.0.0.1:` dal compose, sapendo cosa si
+  espone ([RETE.md](RETE.md)) e aggiungendo il nome usato ad `ADMIN_ALLOWED_HOSTS`;
+- un backend che gira sulla macchina host si raggiunge con
+  `BACKEND_URL=http://host.docker.internal:8080` (il compose lo rende disponibile anche su
+  Linux); la porta host si cambia con `MOCKXY_HOST_PORT`.
+
+L'immagine non viene pubblicata in un registry: si costruisce dal repository.
+
 ## Docker di sviluppo
 
-`docker compose up` avvia l'ambiente completo: il motore (porta host `3000`) e l'interfaccia
-con ricaricamento automatico (porta host `4207`). Anche qui il `.env` è tecnicamente
+`docker compose up` avvia l'ambiente per **sviluppare Mockxy**: il motore (porta host `3000`)
+e l'interfaccia con ricaricamento automatico (porta host `4207`), entrambi dal sorgente. Per
+il solo uso basta [un container](#mockxy-in-un-container). Anche qui il `.env` è tecnicamente
 facoltativo ma raccomandato per un uso reale; le porte host si cambiano con
 `MOCKXY_HOST_PORT` e `MOCKXY_UI_HOST_PORT`.
 

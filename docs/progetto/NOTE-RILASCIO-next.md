@@ -89,6 +89,22 @@ Dettagli e limiti in [HANDLER.md](../it/HANDLER.md#lo-script-gira-nel-processo-d
   anteprima, e la decompressione non aveva un tetto. Ora l'anteprima è limitata anche per
   loro, e un contenuto che si gonfierebbe oltre il limite di cattura non viene decompresso.
 
+### Interfaccia fuori dall'app desktop
+
+- **Una porta sola, senza `ng serve`.** Fuori dall'app desktop l'interfaccia si otteneva solo
+  tenendo acceso il server di sviluppo di Angular in un secondo terminale. Ora `node index.js`
+  serve da sé, sotto `/_admin/ui/`, la build che trova accanto al motore (`npm run build:ui`,
+  una volta), e all'avvio il log dice l'indirizzo, o come ottenerla se manca. Vale con l'admin
+  API accesa; `UI_DIST_DIR`, se impostata, continua a comandare.
+- **Mockxy in un container.** `docker compose -f docker-compose.app.yml up --build` avvia
+  motore, admin API e interfaccia già compilata in un solo container (`Dockerfile.app`), senza
+  installare Node né Angular. Il workspace si monta dal filesystem locale; la porta è
+  pubblicata solo su `127.0.0.1`. Dettagli in
+  [DEPLOYMENT.md](../it/DEPLOYMENT.md#mockxy-in-un-container).
+- **Da sapere all'aggiornamento:** chi ha già una build dell'interfaccia in
+  `mockxy-ui/dist` (per esempio dopo i test e2e) e l'admin accesa si ritrova l'interfaccia
+  servita sotto `/_admin/ui/`; le richieste `GET` a quel percorso non arrivano più al backend.
+
 ### Cambiamenti dell'admin API
 
 - Le voci del Monitor hanno `responseBodyRetained`: l'anteprima è troncata ma la risposta
