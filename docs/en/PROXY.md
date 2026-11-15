@@ -66,9 +66,39 @@ default — adapt the response to the topology with Mockxy in the middle: the `S
 adaptation (`ADAPT_PROXY_COOKIES`), the rewriting of redirects pointing at the backend
 (`REWRITE_PROXY_REDIRECTS`) and, when enabled, the engine's CORS policy (`CORS_ENABLED`).
 
+## Https backends
+
+With an `https` `BACKEND_URL` the proxy verifies the backend's certificate, as a browser does.
+It trusts:
+
+- the certificate authorities Node ships with;
+- those of the **operating system's trust store** (Windows, macOS, the OpenSSL paths on
+  Linux): the corporate CA installed on the machine, which the browser already accepts, works
+  for Mockxy too with nothing to configure. The store is read at startup;
+- those in the file named by **`NODE_EXTRA_CA_CERTS`** (a PEM file, a standard Node variable):
+  the way to go for a container, where the CA is not in the system store.
+
+  ```bash
+  docker run -v ./corporate-ca.pem:/certs/ca.pem:ro -e NODE_EXTRA_CA_CERTS=/certs/ca.pem …
+  ```
+
+A certificate none of these knows — typically the **self-signed** one of a local backend — is
+rejected, and the response is a `502` that says so (see below). For a backend you trust anyway
+the verification can be turned off: `VERIFY_BACKEND_CERTIFICATE=false` (headless) or the
+«Verify the backend certificate» switch in the workspace settings. When off, the proxy accepts
+**any** certificate, even an expired one or one issued for another name: the engine reports it
+in the log at startup. It applies to forwarded [WebSocket upgrades](WEBSOCKET.md) too. It is a
+startup setting: it cannot be changed at runtime through the admin API.
+
 ## Errors and timeouts
 
 - **Unreachable backend** (connection refused, DNS failure) → `502 Bad Gateway`.
+- **Backend certificate not verified** → `502 Bad Gateway`, with a body that names the problem
+  instead of the network: `details.code` is `BACKEND_CERTIFICATE_NOT_VERIFIED` and
+  `details.reason` is Node's code (`UNABLE_TO_VERIFY_LEAF_SIGNATURE` for an unknown CA,
+  `DEPTH_ZERO_SELF_SIGNED_CERT` for a self-signed one, `CERT_HAS_EXPIRED`,
+  `ERR_TLS_CERT_ALTNAME_INVALID` for a name that does not match). The log line carries
+  `errorType: certificate_not_verified`. Remedies in [Https backends](#https-backends).
 - **Timeout** (`requestTimeoutMs`): covers connecting, sending the request and waiting for the
   **first response headers**. Once exceeded, the response is still `502`. Once the response has
   started, the timeout **no longer applies**: a stream can stay silent for minutes or last for

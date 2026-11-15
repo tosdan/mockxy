@@ -37,6 +37,7 @@ can also be set per-workspace from the desktop app.
 | `corsEnabled` | `CORS_ENABLED` | `false` | The engine's CORS handling: answers preflights and sets the headers (origin reflected, credentials allowed) on every response served, overriding the policy of captured mocks and of the proxied backend. Only needed for direct cross-origin browser calls | ✅ |
 | `adaptProxyCookies` | `ADAPT_PROXY_COOKIES` | `true` | Adapts proxied `Set-Cookie` headers: removes `Domain`, `Secure` and `SameSite=None` so session cookies bind to Mockxy's host and survive over http; name/value and other attributes untouched | ✅ |
 | `rewriteProxyRedirects` | `REWRITE_PROXY_REDIRECTS` | `true` | Rewrites the `Location` of proxied redirects pointing at the backend's origin towards the host the client used to reach Mockxy (path and query preserved); relative ones and third-party hosts untouched | ✅ |
+| `verifyBackendCertificate` | `VERIFY_BACKEND_CERTIFICATE` | `true` | With an https backend, verifies the certificate against the CAs of Node, of the system trust store and of `NODE_EXTRA_CA_CERTS`; `false` = accepts any certificate (local self-signed backend). Fixed at startup ([PROXY](PROXY.md#https-backends)) | ✅ |
 | `trustProxy` | `TRUST_PROXY` | `false` | Behind a reverse proxy: reads `X-Forwarded-Proto` and `X-Forwarded-Host` (first value, ignored when invalid). Rewritten redirects use the public protocol and host; over https adapted cookies lose only `Domain`. It leaves the admin API guard alone, which stays on the `Host` header ([REDIRECT](REDIRECT.md), [COOKIE](COOKIE.md)) | ❌ |
 | `mocksVersion` | `MOCKS_VERSION` | — | Version of the served mocks, free text (for example the workspace commit) passed by whoever starts the engine: it appears in [`GET /_admin/api/health`](ADMIN-API.md#health) and in the startup log | ❌ |
 | `globalDelayMs` | `MOCKXY_DELAY` · `--delay` · `npm_config_delay` | `0` | Delay (ms) applied to mocks without their own `delayMs` | ✅ |
@@ -84,6 +85,7 @@ Persisted fields:
 - `port`, `backendUrl`, `host` — the workspace's networking (`host`: `127.0.0.1` loopback vs `0.0.0.0` whole network, at the user's own risk).
 - `caseInsensitiveFilters` — case-insensitive filters.
 - `proxyFallbackEnabled` — proxy fallback on a mock miss.
+- `verifyBackendCertificate` — verification of an https backend's certificate.
 - `globalDelayMs`, `delayAllRequests` — simulated latency.
 - `requestTimeoutMs` — backend/handler timeout.
 - `monitorDumpIntervalMs`, `monitorDumpThreshold`, `monitorDumpMaxFileBytes`, `monitorDumpMaxTotalBytes`

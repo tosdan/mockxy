@@ -201,6 +201,7 @@ async function launchEngine(root) {
     corsEnabled: ws.corsEnabled,
     adaptProxyCookies: ws.adaptProxyCookies,
     rewriteProxyRedirects: ws.rewriteProxyRedirects,
+    verifyBackendCertificate: ws.verifyBackendCertificate,
     globalDelayMs: ws.globalDelayMs,
     delayAllRequests: ws.delayAllRequests,
     requestTimeoutMs: ws.requestTimeoutMs,
@@ -445,6 +446,7 @@ function setupIpc() {
       "corsEnabled",
       "adaptProxyCookies",
       "rewriteProxyRedirects",
+      "verifyBackendCertificate",
       "delayAllRequests",
     ];
     const NUM_SETTINGS_MIN = {

@@ -11,6 +11,11 @@ const {
   resolveBackendTarget,
   stripBackendPathPrefix,
 } = require("./backend-target");
+const {
+  backendTlsOptions,
+  certificateErrorPayload,
+  isCertificateError,
+} = require("./backend-tls");
 
 const TECH_HEADER = "x-mock-source";
 
@@ -26,6 +31,12 @@ function classifyUpstreamError(error) {
 
   if (error.message === "client_aborted") {
     return "client_aborted";
+  }
+
+  // Il backend ha risposto alla connessione ma il suo certificato non passa la verifica: non è
+  // un problema di rete, e chi legge il log deve poterlo distinguere.
+  if (isCertificateError(error)) {
+    return "certificate_not_verified";
   }
 
   switch (error.code) {
@@ -662,14 +673,19 @@ function resolveProxyMiddlewareResponse(upstreamResponse, transformResult) {
   };
 }
 
-// Sends a generated proxy error payload for connectivity or buffering failures.
-function sendBadGatewayResponse(res, source = "backend") {
+// Sends a generated proxy error payload for connectivity or buffering failures. Un certificato
+// rifiutato ha un corpo suo: il backend è raggiungibile, è la fiducia che manca.
+function sendBadGatewayResponse(res, source = "backend", error) {
   setNoCacheHeaders(res);
   res.setHeader(TECH_HEADER, source);
-  res.status(502).json({
-    error: "Bad Gateway",
-    message: "Unable to reach upstream backend.",
-  });
+  res.status(502).json(
+    isCertificateError(error)
+      ? certificateErrorPayload(error)
+      : {
+        error: "Bad Gateway",
+        message: "Unable to reach upstream backend.",
+      }
+  );
 }
 
 // Writes a fully materialized downstream response after a proxy middleware has been applied.
@@ -855,6 +871,7 @@ function forwardToBackend(req, res, config, logger, proxyMiddlewareRegistry) {
       method: req.method,
       path: `${targetUrl.pathname}${targetUrl.search}`,
       headers: sanitizeRequestHeaders(req.headers, targetUrl.host, middlewareDecision.matched),
+      ...backendTlsOptions(config, targetUrl),
     };
 
     let settled = false;
@@ -933,7 +950,7 @@ function forwardToBackend(req, res, config, logger, proxyMiddlewareRegistry) {
 
     upstreamReq.on("error", (error) => {
       if (!shouldSkipErrorResponse(res, error)) {
-        sendBadGatewayResponse(res);
+        sendBadGatewayResponse(res, "backend", error);
       } else if (!res.destroyed && !res.writableEnded) {
         // A header già inviati non c'è più uno status da mandare: la chiusura sporca è l'unico
         // segnale di troncamento che il client può percepire (end() lo maschererebbe da

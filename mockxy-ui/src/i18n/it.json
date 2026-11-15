@@ -301,6 +301,8 @@
     "adaptCookiesHint": "Rimuove gli attributi Domain, Secure e SameSite=None dai Set-Cookie inoltrati dal backend reale, così i cookie di sessione si legano a questo server e sopravvivono su http. Disattivalo per osservare i Set-Cookie originali del backend. Cambiandolo il server del workspace riparte.",
     "rewriteRedirects": "Riscrivi i redirect del proxy",
     "rewriteRedirectsHint": "Quando un redirect proxato punta all'indirizzo del backend, riscrive l'header Location verso questo server così il browser resta su Mockxy (flussi di login, redirect da slash finale). I redirect relativi e verso host terzi passano intatti. Cambiandolo il server del workspace riparte.",
+    "verifyBackendCertificate": "Verifica il certificato del backend",
+    "verifyBackendCertificateHint": "Con un backend in https, il certificato viene controllato contro le autorità di certificazione di Node e del sistema operativo. Disattivalo solo per un backend di cui ti fidi comunque, come uno locale con certificato autofirmato: il proxy accetterà qualunque certificato. Cambiandolo il server del workspace riparte.",
     "globalDelay": "Ritardo globale (ms)",
     "globalDelayHint": "Ritardo applicato a ogni mock che non ha un delayMs proprio. 0 = nessun ritardo. Cambiandolo il server del workspace riparte.",
     "delayAll": "Ritardo anche sul proxy",

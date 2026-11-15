@@ -58,7 +58,7 @@ test.describe("finestre · nome e chiusura", () => {
       const workspace = {
         root: "/tmp/ws", name: "Demo", title: null, port: 3000, backendUrl: "http://localhost:8080", host: "127.0.0.1",
         caseInsensitiveFilters: false, proxyFallbackEnabled: true, corsEnabled: true, adaptProxyCookies: true,
-        rewriteProxyRedirects: true, globalDelayMs: 0, delayAllRequests: false, requestTimeoutMs: 30000,
+        rewriteProxyRedirects: true, verifyBackendCertificate: true, globalDelayMs: 0, delayAllRequests: false, requestTimeoutMs: 30000,
         monitorDumpIntervalMs: 30000, monitorDumpThreshold: 100, monitorDumpMaxFileBytes: 52428800, monitorDumpMaxTotalBytes: 1073741824,
       };
       window.desktop = {
@@ -78,6 +78,8 @@ test.describe("finestre · nome e chiusura", () => {
     for (const label of ["Titolo", "Porta", "Backend URL", "Ritardo globale (ms)", "Timeout backend (ms)", "Cadenza flush (ms)", "Soglia flush (voci)", "Dimensione max per file (byte)", "Tetto totale cartella (byte)"]) {
       await expect(dialog.getByLabel(label, { exact: true }), label).toBeVisible();
     }
+    // La verifica del certificato del backend è un interruttore, acceso finché non lo si spegne.
+    await expect(dialog.getByRole("switch", { name: "Verifica il certificato del backend" })).toBeChecked();
     await closesByName(page, "Impostazioni workspace");
 
     await settings.click();

@@ -24,6 +24,8 @@ export interface WorkspaceInfo {
   adaptProxyCookies: boolean;
   /** Riscrive i Location dei redirect proxati che puntano al backend, così il browser resta su Mockxy. */
   rewriteProxyRedirects: boolean;
+  /** Verifica il certificato di un backend https; false = accetta qualunque certificato. */
+  verifyBackendCertificate: boolean;
   /** Ritardo globale in ms applicato ai mock senza delayMs proprio; 0 = nessun ritardo. */
   globalDelayMs: number;
   /** Applica il ritardo globale anche alle richieste proxate. */
@@ -60,6 +62,8 @@ export interface WorkspacePatch {
   adaptProxyCookies?: boolean;
   /** Riscrittura dei Location dei redirect proxati (locale). Il motore riparte se cambia. */
   rewriteProxyRedirects?: boolean;
+  /** Verifica del certificato del backend https (locale). Il motore riparte se cambia. */
+  verifyBackendCertificate?: boolean;
   /** Ritardo globale in ms (locale). Il motore riparte se cambia. */
   globalDelayMs?: number;
   /** Applica il ritardo anche alle richieste proxate (locale). Il motore riparte se cambia. */

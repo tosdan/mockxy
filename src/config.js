@@ -26,6 +26,11 @@ const DEFAULT_ADAPT_PROXY_COOKIES = true;
 // giro), mai desiderabile in questa topologia. I Location relativi e quelli verso host terzi
 // (SSO esterni, CDN) passano comunque intatti.
 const DEFAULT_REWRITE_PROXY_REDIRECTS = true;
+// Verifica del certificato di un backend https ATTIVA di default: il proxy si fida delle CA di
+// Node e di quelle dell'archivio di sistema, come il browser sulla stessa macchina. Si spegne
+// per un backend di cui ci si fida comunque ma che nessun archivio conosce: tipicamente uno
+// locale con certificato autofirmato.
+const DEFAULT_VERIFY_BACKEND_CERTIFICATE = true;
 // Fiducia negli header X-Forwarded-* SPENTA di default: senza un reverse proxy davanti li manda
 // chiunque. Si accende quando Mockxy sta dietro un proxy (nginx, Traefik, un Ingress) che li
 // imposta: redirect e cookie adattati seguono allora protocollo e host pubblici.
@@ -46,6 +51,7 @@ const WORKSPACE_SETTING_DEFAULTS = Object.freeze({
   corsEnabled: DEFAULT_CORS_ENABLED,
   adaptProxyCookies: DEFAULT_ADAPT_PROXY_COOKIES,
   rewriteProxyRedirects: DEFAULT_REWRITE_PROXY_REDIRECTS,
+  verifyBackendCertificate: DEFAULT_VERIFY_BACKEND_CERTIFICATE,
   globalDelayMs: DEFAULT_GLOBAL_DELAY_MS,
   delayAllRequests: DEFAULT_DELAY_ALL_REQUESTS,
   requestTimeoutMs: DEFAULT_TIMEOUT_MS,
@@ -310,6 +316,12 @@ function loadConfig(overrides = {}) {
     rewriteProxyRedirects: parseBoolean(
       overrides.rewriteProxyRedirects ?? process.env.REWRITE_PROXY_REDIRECTS,
       DEFAULT_REWRITE_PROXY_REDIRECTS
+    ),
+    // Verifica del certificato di un backend https (proxy e tunnel di upgrade). Fissata
+    // all'avvio: non è tra le chiavi modificabili a runtime dall'admin API.
+    verifyBackendCertificate: parseBoolean(
+      overrides.verifyBackendCertificate ?? process.env.VERIFY_BACKEND_CERTIFICATE,
+      DEFAULT_VERIFY_BACKEND_CERTIFICATE
     ),
     // Versione dei mock serviti (es. il commit del workspace), passata da chi avvia il motore:
     // compare nell'health e nel log di avvio. Testo libero, assente = null.

@@ -68,9 +68,39 @@ la risposta alla topologia con Mockxy in mezzo: l'adattamento dei `Set-Cookie`
 (`ADAPT_PROXY_COOKIES`), la riscrittura dei redirect verso il backend
 (`REWRITE_PROXY_REDIRECTS`) e, quando abilitata, la policy CORS del motore (`CORS_ENABLED`).
 
+## Backend in https
+
+Con un `BACKEND_URL` in `https` il proxy verifica il certificato del backend, come fa un
+browser. Si fida di:
+
+- le autorità di certificazione che Node porta con sé;
+- quelle dell'**archivio del sistema operativo** (Windows, macOS, i percorsi di OpenSSL su
+  Linux): la CA aziendale installata sulla macchina, che il browser già accetta, vale anche
+  per Mockxy senza configurare nulla. L'archivio viene letto all'avvio;
+- quelle dei file indicati in **`NODE_EXTRA_CA_CERTS`** (un file PEM, variabile standard di
+  Node): è la strada per un container, dove la CA non è nell'archivio di sistema.
+
+  ```bash
+  docker run -v ./ca-aziendale.pem:/certs/ca.pem:ro -e NODE_EXTRA_CA_CERTS=/certs/ca.pem …
+  ```
+
+Un certificato che nessuna di queste conosce — tipicamente quello **autofirmato** di un backend
+locale — viene rifiutato, e la risposta è un `502` che lo dice (vedi sotto). Per un backend di
+cui ci si fida comunque la verifica si spegne: `VERIFY_BACKEND_CERTIFICATE=false` (headless) o
+l'interruttore «Verifica il certificato del backend» nelle impostazioni del workspace. Da
+spenta il proxy accetta **qualunque** certificato, anche scaduto o emesso per un altro nome:
+all'avvio il motore lo segnala nel log. Vale anche per gli [upgrade WebSocket](WEBSOCKET.md)
+inoltrati. È un'impostazione di avvio: non si cambia a runtime dall'admin API.
+
 ## Errori e timeout
 
 - **Backend irraggiungibile** (connessione rifiutata, DNS fallito) → `502 Bad Gateway`.
+- **Certificato del backend non verificato** → `502 Bad Gateway`, con un corpo che nomina il
+  problema invece della rete: `details.code` vale `BACKEND_CERTIFICATE_NOT_VERIFIED` e
+  `details.reason` il codice di Node (`UNABLE_TO_VERIFY_LEAF_SIGNATURE` per una CA
+  sconosciuta, `DEPTH_ZERO_SELF_SIGNED_CERT` per un autofirmato, `CERT_HAS_EXPIRED`,
+  `ERR_TLS_CERT_ALTNAME_INVALID` per un nome che non corrisponde). Nel log la riga ha
+  `errorType: certificate_not_verified`. Rimedi in [Backend in https](#backend-in-https).
 - **Timeout** (`requestTimeoutMs`): copre connessione, invio della richiesta e attesa dei
   **primi header di risposta**. Superato, la risposta è ancora `502`. Una volta che la risposta
   è iniziata, il timeout **non si applica più**: uno stream può tacere per minuti o durare ore

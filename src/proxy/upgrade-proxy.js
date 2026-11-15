@@ -3,6 +3,7 @@ const https = require("https");
 const { isProxyFallbackEnabled } = require("../app");
 const { sanitizeRequestHeaders, serializeError } = require("./proxy");
 const { resolveBackendTarget, toOriginForm } = require("./backend-target");
+const { backendTlsOptions, certificateErrorPayload, isCertificateError } = require("./backend-tls");
 const { readStreamToBuffer } = require("../utils/http-body-utils");
 
 // Cap prudenziale sul body di una risposta upstream NON-101 (es. un 401 all'handshake): sono
@@ -108,6 +109,7 @@ function createUpgradeHandler({ runtimeConfig, serverState, logger }) {
       method: req.method,
       path: `${targetUrl.pathname}${targetUrl.search}`,
       headers,
+      ...backendTlsOptions(config, targetUrl),
     });
 
     const logContext = {
@@ -167,6 +169,11 @@ function createUpgradeHandler({ runtimeConfig, serverState, logger }) {
       logger.warn("Upgrade tunnel failed.", { ...logContext, ...serializeError(error) });
       if (tunnelEstablished) {
         socket.destroy();
+        return;
+      }
+      if (isCertificateError(error)) {
+        const payload = certificateErrorPayload(error);
+        writeSocketResponse(socket, 502, payload.error, payload.message, payload.details);
         return;
       }
       writeSocketResponse(socket, 502, "Bad Gateway", "The backend refused or dropped the upgrade connection.");

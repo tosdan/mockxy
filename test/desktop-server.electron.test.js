@@ -58,6 +58,20 @@ describe("desktop-server (avvio del motore per l'app desktop)", () => {
     expect(result.url).toBe(`http://127.0.0.1:${captured.configOverrides.port}/_admin/ui/`);
   });
 
+  test("la verifica del certificato del backend arriva al motore com'è nel workspace", async () => {
+    const captured = [];
+    const startServerFn = async (options) => {
+      captured.push(options.configOverrides.verifyBackendCertificate);
+      return { shutdown: async () => {} };
+    };
+
+    await startDesktopServer({ mocksDir: "/ws/mocks", verifyBackendCertificate: false, startServerFn });
+    // Assente nel workspace: il motore applica il suo default (acceso).
+    await startDesktopServer({ mocksDir: "/ws/mocks", startServerFn });
+
+    expect(captured).toEqual([false, undefined]);
+  });
+
   test("usa la porta esplicita quando fornita", async () => {
     let captured;
     const startServerFn = async (options) => {

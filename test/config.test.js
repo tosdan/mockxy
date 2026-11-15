@@ -1,5 +1,5 @@
 const path = require("path");
-const { loadConfig } = require("../src/config");
+const { loadConfig, WORKSPACE_SETTING_DEFAULTS } = require("../src/config");
 
 describe("loadConfig — serving dell'interfaccia e host", () => {
   const SAVED_ENV = {};
@@ -168,5 +168,38 @@ describe("loadConfig — fiducia nel reverse proxy", () => {
     process.env.TRUST_PROXY = "true";
     expect(loadConfig({}).trustProxy).toBe(true);
     expect(loadConfig({ trustProxy: false }).trustProxy).toBe(false);
+  });
+});
+
+describe("loadConfig — verifica del certificato del backend", () => {
+  let saved;
+
+  beforeEach(() => {
+    saved = process.env.VERIFY_BACKEND_CERTIFICATE;
+    delete process.env.VERIFY_BACKEND_CERTIFICATE;
+  });
+
+  afterEach(() => {
+    if (saved === undefined) {
+      delete process.env.VERIFY_BACKEND_CERTIFICATE;
+    } else {
+      process.env.VERIFY_BACKEND_CERTIFICATE = saved;
+    }
+  });
+
+  test("è attiva per default, anche con un valore non riconosciuto", () => {
+    expect(loadConfig({}).verifyBackendCertificate).toBe(true);
+    process.env.VERIFY_BACKEND_CERTIFICATE = "forse";
+    expect(loadConfig({}).verifyBackendCertificate).toBe(true);
+  });
+
+  test("viene letta dall'ambiente e dagli override", () => {
+    process.env.VERIFY_BACKEND_CERTIFICATE = "false";
+    expect(loadConfig({}).verifyBackendCertificate).toBe(false);
+    expect(loadConfig({ verifyBackendCertificate: true }).verifyBackendCertificate).toBe(true);
+  });
+
+  test("è tra le impostazioni di workspace, con default acceso", () => {
+    expect(WORKSPACE_SETTING_DEFAULTS.verifyBackendCertificate).toBe(true);
   });
 });
