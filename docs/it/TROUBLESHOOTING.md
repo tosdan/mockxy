@@ -42,6 +42,11 @@ incriminato). Qui sotto, i sintomi ricorrenti per area.
 - **`502 Bad Gateway`** — backend irraggiungibile **oppure** timeout: il timeout copre solo
   fino ai primi header di risposta ([semantica completa](PROXY.md)). Un backend morto a metà
   stream si manifesta come errore di rete lato client (troncamento esplicito), non come 502.
+- **`502` con `details.code: BACKEND_CERTIFICATE_NOT_VERIFIED`** — il backend in https c'è, ma
+  il suo certificato non passa la verifica. CA privata: va nell'archivio del sistema operativo
+  o in `NODE_EXTRA_CA_CERTS`. Certificato autofirmato di un backend locale: si spegne la
+  verifica (`VERIFY_BACKEND_CERTIFICATE=false`, o «Verifica il certificato del backend» nelle
+  impostazioni del workspace). Vedi [Backend in https](PROXY.md#backend-in-https).
 
 ## Handler e middleware
 

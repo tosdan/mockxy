@@ -78,6 +78,8 @@ test.describe("finestre · nome e chiusura", () => {
     for (const label of ["Titolo", "Porta", "Backend URL", "Ritardo globale (ms)", "Timeout backend (ms)", "Cadenza flush (ms)", "Soglia flush (voci)", "Dimensione max per file (byte)", "Tetto totale cartella (byte)"]) {
       await expect(dialog.getByLabel(label, { exact: true }), label).toBeVisible();
     }
+    // La verifica del certificato del backend è un interruttore, acceso finché non lo si spegne.
+    await expect(dialog.getByRole("switch", { name: "Verifica il certificato del backend" })).toBeChecked();
     await closesByName(page, "Impostazioni workspace");
 
     await settings.click();

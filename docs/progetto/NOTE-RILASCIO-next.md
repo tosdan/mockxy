@@ -37,6 +37,23 @@
   `BACKEND_URL` veniva ignorato) lo vedrebbe ora raddoppiato: va tolto da `BACKEND_URL`. Con
   `BACKEND_URL` senza percorso non cambia nulla.
 
+### Backend in https
+
+- **Vale la CA che il sistema già conosce.** Il proxy si fidava solo delle autorità incluse in
+  Node: un backend con il certificato di una CA aziendale, installata nel sistema e accettata
+  dal browser, attraverso Mockxy dava `502`. Ora alle CA di Node si aggiungono quelle
+  dell'archivio del sistema operativo; `NODE_EXTRA_CA_CERTS` continua a valere, ed è la strada
+  per un container.
+- **`VERIFY_BACKEND_CERTIFICATE`** e, nelle impostazioni del workspace, **«Verifica il
+  certificato del backend»**: accesa di default; spenta, il proxy accetta qualunque
+  certificato, per un backend locale autofirmato. All'avvio il motore lo segnala nel log. È
+  un'impostazione di avvio, non modificabile a runtime dall'admin API.
+- **Un `502` che dice cosa non va.** Un certificato rifiutato rispondeva «Unable to reach
+  upstream backend», come un backend spento. Ora il corpo nomina il certificato, con
+  `details.code: BACKEND_CERTIFICATE_NOT_VERIFIED` e il codice di Node in `details.reason`;
+  nel log `errorType` vale `certificate_not_verified`. Dettagli in
+  [PROXY.md](../it/PROXY.md#backend-in-https).
+
 ### Cambiamenti dell'admin API
 
 - `applyListQuery` (booleano) è accettato in `POST /mocks` e `PUT /mocks/{id}` dentro `config`,

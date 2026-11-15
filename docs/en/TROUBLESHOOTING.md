@@ -43,6 +43,12 @@ file). Below, the recurring symptoms by area.
 - **`502 Bad Gateway`** — backend unreachable **or** timeout: the timeout only covers up to
   the first response headers ([full semantics](PROXY.md)). A backend that dies mid-stream
   shows up as a network error on the client side (explicit truncation), not as a 502.
+- **`502` with `details.code: BACKEND_CERTIFICATE_NOT_VERIFIED`** — the https backend is
+  there, but its certificate does not pass verification. Private CA: it goes into the
+  operating system's trust store or into `NODE_EXTRA_CA_CERTS`. Self-signed certificate of a
+  local backend: turn the verification off (`VERIFY_BACKEND_CERTIFICATE=false`, or «Verify the
+  backend certificate» in the workspace settings). See
+  [Https backends](PROXY.md#https-backends).
 
 ## Handlers and middleware
 

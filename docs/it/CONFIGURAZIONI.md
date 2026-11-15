@@ -37,6 +37,7 @@ impostabile per-workspace dall'app desktop.
 | `corsEnabled` | `CORS_ENABLED` | `false` | Gestione CORS del motore: risponde ai preflight e imposta gli header (origin riflessa, credenziali ammesse) su ogni risposta servita, sovrascrivendo la policy dei mock catturati e del backend proxato. Serve solo per chiamate browser cross-origin dirette | ✅ |
 | `adaptProxyCookies` | `ADAPT_PROXY_COOKIES` | `true` | Adatta i `Set-Cookie` proxati: rimuove `Domain`, `Secure` e `SameSite=None` così i cookie di sessione si legano all'host di Mockxy e sopravvivono su http; nome/valore e altri attributi intatti | ✅ |
 | `rewriteProxyRedirects` | `REWRITE_PROXY_REDIRECTS` | `true` | Riscrive i `Location` dei redirect proxati che puntano all'origin del backend verso l'host con cui il client ha raggiunto Mockxy (path e query preservati); relativi e host terzi intatti | ✅ |
+| `verifyBackendCertificate` | `VERIFY_BACKEND_CERTIFICATE` | `true` | Con un backend in https verifica il certificato contro le CA di Node, dell'archivio di sistema e di `NODE_EXTRA_CA_CERTS`; `false` = accetta qualunque certificato (backend locale autofirmato). Fissata all'avvio ([PROXY](PROXY.md#backend-in-https)) | ✅ |
 | `trustProxy` | `TRUST_PROXY` | `false` | Dietro un reverse proxy: legge `X-Forwarded-Proto` e `X-Forwarded-Host` (primo valore, ignorati se non validi). I redirect riscritti usano protocollo e host pubblici; su https i cookie adattati perdono solo `Domain`. Non tocca la guardia dell'admin API, che resta sull'header `Host` ([REDIRECT](REDIRECT.md), [COOKIE](COOKIE.md)) | ❌ |
 | `mocksVersion` | `MOCKS_VERSION` | — | Versione dei mock serviti, testo libero (per esempio il commit del workspace) passato da chi avvia il motore: compare in [`GET /_admin/api/health`](ADMIN-API.md#health) e nel log di avvio | ❌ |
 | `globalDelayMs` | `MOCKXY_DELAY` · `--delay` · `npm_config_delay` | `0` | Ritardo (ms) applicato ai mock senza `delayMs` proprio | ✅ |
@@ -84,6 +85,7 @@ Campi persistiti:
 - `port`, `backendUrl`, `host` — rete del workspace (`host`: `127.0.0.1` loopback vs `0.0.0.0` tutta la rete, a rischio dell'utente).
 - `caseInsensitiveFilters` — filtri case-insensitive.
 - `proxyFallbackEnabled` — proxy fallback su mock-miss.
+- `verifyBackendCertificate` — verifica del certificato di un backend https.
 - `globalDelayMs`, `delayAllRequests` — latenza simulata.
 - `requestTimeoutMs` — timeout backend/handler.
 - `monitorDumpIntervalMs`, `monitorDumpThreshold`, `monitorDumpMaxFileBytes`, `monitorDumpMaxTotalBytes`
