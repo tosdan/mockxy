@@ -289,6 +289,11 @@ async function createServerRuntime({ configOverrides = {}, logger: extLogger } =
       "BACKEND_URL is not configured. Mocks and local handlers work normally, but requests that fall through to the backend (proxy fallback) or use proxy middleware will return 501 until BACKEND_URL is set."
     );
   }
+  if (config.verifyBackendCertificate === false) {
+    logger.warn(
+      "Backend certificate verification is off (VERIFY_BACKEND_CERTIFICATE=false): the proxy accepts whatever certificate the backend presents. Keep it off only for backends you trust by other means, such as a local one with a self-signed certificate."
+    );
+  }
   const runtimeStatus = new RuntimeStatusStore({ runtimeId: runtimeIdentity.runtimeId, mocksDir: config.mocksDir });
   const catalogRevision = new CatalogRevisionTracker({ mocksDir: config.mocksDir });
   // Stato del watcher e indirizzo realmente in ascolto, riportati da GET /info.
@@ -446,6 +451,7 @@ async function startServer(options = {}) {
       adminApiEnabled: runtime.config.adminApiEnabled,
       proxyFallbackEnabled: runtime.config.proxyFallbackEnabled,
       trustProxy: runtime.config.trustProxy,
+      verifyBackendCertificate: runtime.config.verifyBackendCertificate,
       mocksVersion: runtime.config.mocksVersion,
       proxyMiddlewareCount: runtime.proxyMiddlewareRegistry.routeGroups.length,
       watchEnabled: runtime.config.watchEnabled,
