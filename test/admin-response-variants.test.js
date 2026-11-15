@@ -218,6 +218,30 @@ describe("varianti inattive", () => {
       expect(await served()).toEqual({ step: 1 });
     });
 
+    test("applyListQuery: false si scrive, si conserva tra gli aggiornamenti e true lo toglie dal file", async () => {
+      const file = path.join(responsesDir(), "001.response.json");
+      const readFile = async () => JSON.parse(await fs.promises.readFile(file, "utf8"));
+      const update = (payload) => request(app).put(`/_admin/api/mocks/${ID}/responses/001.response.json`).send(payload);
+
+      expect((await update({ body: [{ id: 1 }, { id: 2 }, { id: 3 }], applyListQuery: false })).status).toBe(200);
+      expect((await readFile()).applyListQuery).toBe(false);
+      expect((await request(app).get("/items?page=0&size=2")).body).toHaveLength(3);
+      expect((await readDetail()).config.applyListQuery).toBe(false);
+
+      // Un aggiornamento che non lo nomina non lo riaccende.
+      expect((await update({ status: 200 })).status).toBe(200);
+      expect((await readFile()).applyListQuery).toBe(false);
+
+      expect((await update({ applyListQuery: true })).status).toBe(200);
+      expect(await readFile()).not.toHaveProperty("applyListQuery");
+      expect((await request(app).get("/items?page=0&size=2")).body).toHaveLength(2);
+      expect((await readDetail()).config.applyListQuery).toBe(true);
+
+      const invalid = await update({ applyListQuery: "no" });
+      expect(invalid.status).toBe(400);
+      expect(invalid.body.message).toBe("applyListQuery must be a boolean.");
+    });
+
     test("aggiornare una variante inattiva che referenzia un asset assente è rifiutato e ripristinato", async () => {
       await create({ type: "mock", title: "Da file", status: 200, body: {}, select: false });
       const variantPath = path.join(responsesDir(), "002.response.json");

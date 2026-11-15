@@ -256,6 +256,7 @@ async function buildAdminMockDetail(mocksDir, filePath) {
       headers: response.headers == null ? {} : response.headers,
       delayMs: response.delayMs || 0,
       templated: response.templated === true,
+      applyListQuery: response.applyListQuery !== false,
     };
     if (response.file != null) {
       const payloadPath = resolvePayloadPath(responseDir, response.file);

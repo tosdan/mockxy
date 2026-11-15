@@ -810,7 +810,11 @@ async function respondWithMock(req, res, mockResponse, globalDelayMs = 0, caseIn
     return;
   }
 
-  const payload = buildMockPayload(body, req, caseInsensitiveFilters);
+  // `applyListQuery: false` serve il body così com'è, con qualunque query: niente filtri, niente
+  // pagina, e un eventuale x-total-count dichiarato dal mock passa intatto.
+  const payload = mockResponse.applyListQuery === false
+    ? { body, totalCount: undefined }
+    : buildMockPayload(body, req, caseInsensitiveFilters);
   if (payload.totalCount != null) {
     res.setHeader("X-Total-Count", String(payload.totalCount));
   }

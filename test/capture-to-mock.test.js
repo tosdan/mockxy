@@ -25,6 +25,7 @@ describe("trasformazione cattura → mock", () => {
       status: 200,
       headers: { "content-type": "application/json; charset=utf-8" },
       delayMs: 0,
+      applyListQuery: false,
       body: { id: 42 },
       incomplete: false,
       issue: null,

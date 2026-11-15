@@ -500,4 +500,26 @@ describe("sequence serving", () => {
     expect(paged.headers["x-total-count"]).toBe("3");
     expect(paged.body).toEqual([{ id: 1 }, { id: 2 }]);
   });
+
+  test("uno step con applyListQuery false serve la sua lista intera", async () => {
+    await writeSequenceEndpoint({
+      folder: "lista",
+      routePath: "/api/lista",
+      responses: {
+        "001.response.json": { ...mockResponse([{ id: 1 }, { id: 2 }, { id: 3 }]), applyListQuery: false },
+        "002.response.json": mockResponse([]),
+      },
+      sequence: {
+        steps: [
+          { response: "001.response.json", times: 1 },
+          { response: "002.response.json" },
+        ],
+      },
+    });
+    const app = await buildApp();
+
+    const paged = await request(app).get("/api/lista?page=0&size=2");
+    expect(paged.headers["x-total-count"]).toBeUndefined();
+    expect(paged.body).toEqual([{ id: 1 }, { id: 2 }, { id: 3 }]);
+  });
 });
