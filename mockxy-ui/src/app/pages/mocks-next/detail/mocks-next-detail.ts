@@ -438,6 +438,25 @@ const METHOD_TONES: ReadonlySet<string> = new Set(['get', 'post', 'put', 'delete
               />
             </span>
             }
+            <!-- Stesso motivo del Template: con la lista davanti, sapere se una query la taglierà
+                 cambia quello che ci si aspetta dalla risposta. Le catture nascono con lo stato spento. -->
+            @if (listQueryApplies()) {
+            <span
+              class="inline-flex items-center gap-2 rounded-md px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.1em] ring-1 transition"
+              [class]="listQuery() ? 'bg-brand/15 text-brand-soft ring-brand/40' : 'text-muted-foreground ring-border'"
+              [uiTooltip]="'detail.listQueryTip' | transloco"
+              [showDelay]="250"
+            >
+              {{ 'detail.listQueryLabel' | transloco }}
+              <ui-switch
+                [checked]="listQuery()"
+                [disabled]="!d.editable || busy()"
+                size="sm"
+                (checkedChange)="onListQueryChange($event)"
+                [ariaLabel]="'detail.listQueryLabel' | transloco"
+              />
+            </span>
+            }
           </div>
           <div class="min-h-0 flex-1 overflow-y-auto px-6 py-4 mx-scroll">
             @if (body().kind === 'file') {
@@ -692,6 +711,38 @@ export class MocksNextDetail {
     this.store.saveResponse({ type: 'mock', status: this.selectedStatus() ?? 200, templated });
   }
 
+  /** Flag `applyListQuery` della variante selezionata: filtri e paginazione automatici attivi. */
+  protected readonly listQuery = computed(() => this.detail()?.config?.applyListQuery !== false);
+
+  /**
+   * Solo dove l'automatismo può agire: una variante `mock` il cui body JSON è una lista — un
+   * array, o un oggetto con una sola proprietà array al primo livello (la stessa regola del
+   * motore). Su ogni altro body l'interruttore non cambierebbe nulla.
+   */
+  protected readonly listQueryApplies = computed(() => {
+    const d = this.detail();
+    if (d?.type !== 'mock' || this.body().kind !== 'json') {
+      return false;
+    }
+    const raw = d.body ?? d.response ?? null;
+    if (Array.isArray(raw)) {
+      return true;
+    }
+    if (raw == null || typeof raw !== 'object') {
+      return false;
+    }
+    return Object.values(raw as Record<string, unknown>).filter((value) => Array.isArray(value)).length === 1;
+  });
+
+  /** Accende o spegne filtri e paginazione con una PUT parziale, come il Template. */
+  protected onListQueryChange(applyListQuery: boolean): void {
+    const d = this.detail();
+    if (!d?.editable || applyListQuery === this.listQuery()) {
+      return;
+    }
+    this.store.saveResponse({ type: 'mock', status: this.selectedStatus() ?? 200, applyListQuery });
+  }
+
   protected readonly pathCopied = signal(false);
 
   protected onPathCopied(copied: boolean): void {
@@ -858,6 +909,7 @@ export class MocksNextDetail {
       body: payloadType === 'file' ? '' : this.body().text,
       scriptType,
       templated: d.config?.templated === true,
+      applyListQuery: d.config?.applyListQuery !== false,
       fileName: payloadType === 'file' ? d.fileInfo?.name || d.bodyFile || d.file || '' : '',
     });
     this.responseSeed = this.responseSnapshot();

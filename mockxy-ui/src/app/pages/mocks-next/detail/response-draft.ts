@@ -28,6 +28,8 @@ export interface DraftSeed {
   body: string;
   scriptType: DraftScriptType;
   templated?: boolean;
+  /** Filtri e paginazione automatici delle liste: assente vale acceso. */
+  applyListQuery?: boolean;
   /** Nome dell'asset della variante file-backed seminata (mostrato nel form di modifica). */
   fileName?: string;
 }
@@ -60,6 +62,7 @@ export function seedFromVariant(read: ResponseVariantRead): DraftSeed | null {
     body: payloadType === 'file' ? '' : typeof body === 'string' ? body : body == null ? '' : JSON.stringify(body, null, 2),
     scriptType: null,
     templated: response['templated'] === true,
+    applyListQuery: response['applyListQuery'] !== false,
     fileName: typeof file === 'string' ? file : '',
   };
 }
@@ -81,6 +84,11 @@ export class ResponseDraft {
   readonly scriptType = signal<DraftScriptType>(null);
   /** Templating del body/header ({{params.x}}, ...): opt-in per variante mock (mai per i file). */
   readonly templated = signal(false);
+  /**
+   * Filtri e paginazione automatici sulle liste JSON (?chiave=valore, ?page&size): accesi salvo
+   * scelta contraria. Spenti, il body esce così com'è — lo stato in cui nascono le catture.
+   */
+  readonly applyListQuery = signal(true);
   /** File scelto in creazione (modalità File): caricato sulla response solo dopo che è stata creata. */
   readonly file = signal<File | null>(null);
   /** Preset response in attesa di conferma quando il body corrente non è vuoto/di default. */
@@ -117,6 +125,7 @@ export class ResponseDraft {
     this.body.set(seed.body);
     this.scriptType.set(seed.scriptType);
     this.templated.set(seed.templated === true);
+    this.applyListQuery.set(seed.applyListQuery !== false);
     this.currentFileName.set(seed.fileName ?? '');
     this.clearTransient();
   }
@@ -141,6 +150,7 @@ export class ResponseDraft {
       this.body.set('{\n  \n}');
     }
     this.templated.set(false);
+    this.applyListQuery.set(true);
     this.currentFileName.set('');
     this.clearTransient();
   }
@@ -249,7 +259,7 @@ export class ResponseDraft {
     }
     const body = this.parsedBody();
     if (body === INVALID_BODY) return null;
-    return { type: 'mock', title, status: this.status() ?? 0, headers: this.headersObject(), delayMs: this.delay(), body, templated: this.templated() };
+    return { type: 'mock', title, status: this.status() ?? 0, headers: this.headersObject(), delayMs: this.delay(), body, templated: this.templated(), applyListQuery: this.applyListQuery() };
   }
 
   /**
@@ -267,7 +277,7 @@ export class ResponseDraft {
     }
     const body = this.parsedBody();
     if (body === INVALID_BODY) return null;
-    return { type: 'mock', title, status: this.status() ?? 0, headers: this.headersObject(), delayMs: this.delay(), body, templated: this.templated() };
+    return { type: 'mock', title, status: this.status() ?? 0, headers: this.headersObject(), delayMs: this.delay(), body, templated: this.templated(), applyListQuery: this.applyListQuery() };
   }
 
   private parsedBody(): unknown {

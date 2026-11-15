@@ -496,6 +496,8 @@
     "copyEndpointTip": "Create a new endpoint with another method or path, starting from this one",
     "templatedLabel": "Template",
     "templatedTip": "Replaces placeholders in body and headers: params.id, query.x, headers.x, body.field, now, uuid, randomInt 1 10 — inside double braces. Type filter: params.id | number.",
+    "listQueryLabel": "Filters & paging",
+    "listQueryTip": "On: query parameters filter and paginate the list (?key=value, ?page=0&size=10). Off: the body is served as it is. Mocks created from captured traffic start off, because they already are the answer to a query.",
     "editResponse": "Edit response",
     "newResponseTitle": "New {{type}} response",
     "save": "Save",

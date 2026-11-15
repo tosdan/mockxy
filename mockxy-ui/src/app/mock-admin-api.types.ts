@@ -148,6 +148,8 @@ export interface MockConfig {
   delayMs?: number;
   /** Templating del body/header ({{params.x}}, ...): opt-in per variante mock. */
   templated?: boolean;
+  /** Filtri e paginazione automatici delle liste: attivi salvo `false` (lo stato delle catture). */
+  applyListQuery?: boolean;
 }
 
 /** Uno step di una sequenza di varianti: quale response e per quanto (times XOR forMs). */
@@ -426,6 +428,8 @@ export interface ResponseMockUpdateRequest {
   body?: unknown;
   /** Templating del body/header ({{params.x}}, ...): opt-in per variante. */
   templated?: boolean;
+  /** Filtri e paginazione automatici delle liste: `false` serve il body così com'è. */
+  applyListQuery?: boolean;
 }
 
 export interface ResponseScriptUpdateRequest {
