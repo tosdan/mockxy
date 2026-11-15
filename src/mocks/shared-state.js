@@ -817,6 +817,15 @@ class SharedStateStore {
     this._clearWaiters(entry);
   }
 
+  // Uno script interrotto mentre teneva occupato il server (script-execution.js) non esegue i
+  // `finally` che attraversa: se era dentro un mutator, il marcatore qui sotto resterebbe
+  // acceso e ogni accesso successivo verrebbe rifiutato come rientrante, fino al riavvio. Il
+  // draft del mutator non era ancora stato salvato, quindi lo stato è quello di prima. Un
+  // initializer interrotto non lascia nulla: la sua voce cade alla chiusura del contesto.
+  recoverFromInterruptedScript() {
+    this.activeMutator = null;
+  }
+
   closeRequestContext(context) {
     if (context == null || context.closed) {
       return;

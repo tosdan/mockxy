@@ -1,5 +1,6 @@
 const { parseCliArgs } = require("./src/config");
 const { startServer } = require("./src/server");
+const { installScriptFaultGuard } = require("./src/script-fault-guard");
 
 async function bootstrap() {
   const argv = process.argv.slice(2);
@@ -9,7 +10,13 @@ async function bootstrap() {
     return;
   }
   const configOverrides = parseCliArgs(argv);
-  await startServer({ configOverrides });
+  // Un errore lanciato da uno script del workspace fuori dalla sua richiesta non deve spegnere
+  // il server. La guardia va messa prima dell'avvio (gli script si caricano lì); fino a quando
+  // il runtime non ha un logger, scrive su stderr.
+  let logger = { error: (message, fields) => console.error(message, fields) };
+  installScriptFaultGuard({ getLogger: () => logger });
+  const runtime = await startServer({ configOverrides });
+  logger = runtime.logger;
 }
 
 bootstrap().catch((error) => {
