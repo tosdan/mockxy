@@ -41,8 +41,10 @@ class ScriptBlockedError extends Error {
 
 // Chiama `fn` e ne restituisce il risultato (anche una promise); se il suo codice sincrono
 // supera il tempo massimo lo interrompe e lancia ScriptBlockedError. Attenzione: l'interruzione
-// non esegue i `finally` attraversati, nemmeno quelli del motore: chi offre agli script API con
-// callback deve saper tornare a uno stato coerente (vedi SharedStateStore).
+// non esegue i `finally` attraversati, nemmeno quelli del motore, e un AsyncLocalStorage in cui
+// lo script era entrato resta impostato fino alla fine del callback in corso. Chi offre agli
+// script API con callback deve saper tornare a uno stato coerente: vedi
+// SharedStateStore.recoverFromInterruptedScript, da chiamare nello stesso callback.
 function invokeWithSyncBudget(fn, budgetMs) {
   if (!Number.isFinite(budgetMs) || budgetMs <= 0) {
     return fn();
@@ -62,8 +64,8 @@ function invokeWithSyncBudget(fn, budgetMs) {
 }
 
 // Esegue una funzione di uno script del workspace: origine ricordata per tutto ciò che la
-// chiamata avvia (timer, promise), tempo massimo sul tratto sincrono. Uscendo, il contesto
-// asincrono torna quello di prima anche dopo un'interruzione.
+// chiamata avvia (timer, promise), tempo massimo sul tratto sincrono. Uscendo, l'origine torna
+// quella di prima anche dopo un'interruzione.
 function runScript(origin, fn, syncBudgetMs) {
   return scriptOrigins.run(origin, () => invokeWithSyncBudget(fn, syncBudgetMs));
 }

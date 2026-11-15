@@ -23,6 +23,10 @@ describe("dialog messages", () => {
       expect(messages.initDetail("C:/ws", ".mockxy")).toEqual(expect.stringContaining(".mockxy"));
       expect(messages.closeMessage("il-mio-ws")).toContain("il-mio-ws");
       expect(messages.removeRecentMessage("il-mio-ws")).toContain("il-mio-ws");
+      expect(messages.scriptErrorDetail("/ws/mocks/a/001.handler.js", "GET /a")).toContain("/ws/mocks/a/001.handler.js");
+      expect(messages.scriptErrorDetail("/ws/mocks/a/001.handler.js", "GET /a")).toContain("GET /a");
+      // Il caricamento di uno script non ha un endpoint: la riga non compare.
+      expect(messages.scriptErrorDetail("/ws/mocks/a/001.handler.js", undefined)).not.toContain("undefined");
     }
   });
 

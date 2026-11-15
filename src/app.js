@@ -467,35 +467,40 @@ async function respondWithHandler(
       // Lo script gira nel processo del motore: il timer qui sotto copre le attese, il tempo
       // massimo di runScript il codice sincrono, che un timer non potrebbe interrompere.
       handlerResult = await runWithTimeout(
-        () => runScript(
-          {
-            kind: "handler",
-            method: decision.handler.method,
-            path: decision.handler.path,
-            filePath: decision.handler.sourceFilePath || decision.handler.configFilePath,
-          },
-          () => decision.handler.resolveResponse(buildHandlerContext(
-            req,
-            decision,
-            requestSnapshot,
-            dataFileReader,
-            handlerRuntime,
-            sharedStateRequest.api
-          )),
-          requestTimeoutMs
-        ),
+        () => {
+          try {
+            return runScript(
+              {
+                kind: "handler",
+                method: decision.handler.method,
+                path: decision.handler.path,
+                filePath: decision.handler.sourceFilePath || decision.handler.configFilePath,
+              },
+              () => decision.handler.resolveResponse(buildHandlerContext(
+                req,
+                decision,
+                requestSnapshot,
+                dataFileReader,
+                handlerRuntime,
+                sharedStateRequest.api
+              )),
+              requestTimeoutMs
+            );
+          } catch (error) {
+            if (isScriptBlockedError(error)) {
+              // L'interruzione salta i `finally` attraversati, anche quelli dello stato
+              // condiviso: va rimesso a posto qui, nello stesso callback.
+              sharedStates.recoverFromInterruptedScript?.();
+            }
+            throw error;
+          }
+        },
         requestTimeoutMs,
         {
           code: "HANDLER_TIMEOUT",
           message: `Handler timed out after ${requestTimeoutMs}ms.`,
         }
       );
-    } catch (error) {
-      if (isScriptBlockedError(error)) {
-        // L'interruzione salta i `finally` attraversati, anche quelli dello stato condiviso.
-        sharedStates.recoverFromInterruptedScript?.();
-      }
-      throw error;
     } finally {
       // A return, throw or timeout ends the request-scoped capability before response building.
       sharedStateRequest.close();

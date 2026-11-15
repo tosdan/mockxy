@@ -13,7 +13,13 @@
 const fs = require("fs");
 const path = require("path");
 const { app, BrowserWindow, Menu, dialog, ipcMain, net, screen, shell } = require("electron");
-const { findFreePort, isPortFree, startDesktopServer, WORKSPACE_SETTING_DEFAULTS } = require("./desktop-server");
+const {
+  describeCurrentScriptFault,
+  findFreePort,
+  isPortFree,
+  startDesktopServer,
+  WORKSPACE_SETTING_DEFAULTS,
+} = require("./desktop-server");
 const { decideNavigation, decideWindowOpen } = require("./navigation-guard");
 const { getDialogMessages } = require("./dialog-messages");
 const {
@@ -151,7 +157,24 @@ function scheduleAutomaticUpdateCheck(win) {
 // Gli imprevisti del processo principale finiscono nel file: in pacchetto non c'è una console
 // che li mostri. Registrare l'handler sostituisce il dialogo di default di Electron: lo
 // rimpiazziamo con un errorBox equivalente, e come col default l'app resta viva.
+// Gli script dei workspace girano in questo processo: un loro errore lanciato fuori dalla
+// richiesta (timer, callback, promise non attesa) arriva qui. Il motore ne ricorda l'origine,
+// così il log e il dialogo dicono quale script è stato, invece di un generico errore dell'app.
 process.on("uncaughtException", (error) => {
+  const scriptFault = describeCurrentScriptFault();
+  if (scriptFault) {
+    errorLog.logError("workspace-script-error", error, scriptFault);
+    console.error("Errore in uno script del workspace:", scriptFault, error);
+    try {
+      dialog.showErrorBox(
+        dialogText().scriptErrorTitle,
+        `${dialogText().scriptErrorDetail(scriptFault.script || scriptFault.scriptKind, scriptFault.endpoint)}\n\n${String((error && error.stack) || error)}`
+      );
+    } catch {
+      /* dialoghi non disponibili (app in chiusura): resta il file */
+    }
+    return;
+  }
   errorLog.logError("uncaught-exception", error);
   console.error("Eccezione non gestita nel processo principale:", error);
   try {
@@ -161,7 +184,12 @@ process.on("uncaughtException", (error) => {
   }
 });
 process.on("unhandledRejection", (reason) => {
-  errorLog.logError("unhandled-rejection", reason instanceof Error ? reason : String(reason));
+  const scriptFault = describeCurrentScriptFault();
+  errorLog.logError(
+    scriptFault ? "workspace-script-rejection" : "unhandled-rejection",
+    reason instanceof Error ? reason : String(reason),
+    scriptFault || undefined
+  );
 });
 
 // Lingua dell'interfaccia: quella salvata, oppure — al primo avvio in assoluto — quella di sistema
