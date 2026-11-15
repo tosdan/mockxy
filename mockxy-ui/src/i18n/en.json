@@ -5,6 +5,7 @@
     "responseHeaders": "Response · headers",
     "responseBody": "Response · body",
     "truncated": "truncated",
+    "truncatedRetained": "preview truncated · a mock created from here gets the whole body",
     "noRequestPayload": "No payload received.",
     "noResponseBody": "No body in the response.",
     "sequenceStepTip": "Sequence step that served this request"

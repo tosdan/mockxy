@@ -359,7 +359,9 @@ async function createServerRuntime({ configOverrides = {}, logger: extLogger } =
   // calcolata più tardi, assorbirebbe nella base una modifica esterna successiva all'avvio,
   // lasciando alla revisione 1 un client che aveva già letto il catalogo precedente.
   await catalogRevision.refresh();
-  const requestMonitor = new RequestMonitorStore(undefined, logger);
+  const requestMonitor = new RequestMonitorStore(undefined, logger, {
+    captureMaxBodyBytes: config.monitorCaptureMaxBodyBytes,
+  });
   const serverState = new ServerStateStore();
   const monitorDump = new MonitorDumpWriter({
     dumpDir: config.monitorDumpDir,

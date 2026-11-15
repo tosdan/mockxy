@@ -11,7 +11,7 @@ const { TECH_HEADER } = require("../proxy/proxy");
 // Marcatore letterale condiviso con la GUI: la ricerca "[da completare]" nel catalogo trova ogni
 // bozza incompleta, in qualunque lingua dell'interfaccia.
 const INCOMPLETE_MARKER = "[da completare]";
-const INCOMPLETE_DESCRIPTION = `${INCOMPLETE_MARKER} body non catturato (binario/oltre 156KB)`;
+const INCOMPLETE_DESCRIPTION = `${INCOMPLETE_MARKER} body non catturato (binario o oltre il limite di cattura)`;
 
 // Header che il server calcola o che descrivono il trasporto del body originale: nel mock
 // sarebbero incompatibili col body ricostruito. Più l'header tecnico con cui Mockxy dichiara chi

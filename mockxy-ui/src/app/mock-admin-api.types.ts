@@ -571,6 +571,8 @@ export interface RequestMonitorEntry {
   responseBody?: string;
   responseBodyBytes?: number;
   responseBodyTruncated?: boolean;
+  /** Anteprima troncata, ma il Monitor conserva la risposta completa: il mock creato da qui è completo. */
+  responseBodyRetained?: boolean;
 }
 
 export interface SharedStateErrorMetadata {

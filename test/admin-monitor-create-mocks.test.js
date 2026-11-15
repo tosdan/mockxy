@@ -239,6 +239,34 @@ describe("POST /monitoring/requests/create-mocks e Storico", () => {
     expect(res.body.counts.incomplete).toBe(2);
   });
 
+  test("una risposta più grande dell'anteprima diventa un mock completo, non una bozza", async () => {
+    const utenti = Array.from({ length: 3000 }, (_, index) => ({ id: index + 1, nome: `Utente ${index + 1}`, nota: "x".repeat(60) }));
+    const body = JSON.stringify(utenti);
+    expect(body.length).toBeGreaterThan(156 * 1024);
+    const id = capture({ path: "/utenti", body });
+
+    // Nel Monitor la voce ha l'anteprima troncata e dichiara che la risposta è conservata.
+    const entry = (await request(app).get("/_admin/api/monitoring/requests")).body.items.find((item) => item.id === id);
+    expect(entry).toMatchObject({ responseBodyTruncated: true, responseBodyRetained: true });
+
+    const res = await createMocks({ ids: [id], onConflict: "skip", newEndpointEnabled: true });
+
+    expect(res.body.items[0]).toMatchObject({ writeOutcome: "created", captureOutcome: "complete", warnings: [] });
+    expect(res.body.counts.incomplete).toBe(0);
+    const served = await request(app).get("/utenti");
+    expect(served.status).toBe(200);
+    expect(served.body).toEqual(utenti);
+    expect((await detailOf(res.body.items[0].id)).endpoint.description).not.toMatch(/da completare/);
+
+    // La richiesta appena servita è traffico vero: passa dalla cattura in uscita del motore,
+    // non da una voce costruita a mano, e vale lo stesso.
+    const real = (await request(app).get("/_admin/api/monitoring/requests")).body.items.find((item) => item.source === "mock" && item.path === "/utenti");
+    expect(real).toMatchObject({ responseBodyTruncated: true, responseBodyRetained: true, responseBodyBytes: body.length });
+    const again = await createMocks({ ids: [real.id], onConflict: "add-variant", selectAddedVariants: true, newEndpointEnabled: true });
+    expect(again.body.items[0]).toMatchObject({ writeOutcome: "variant_added", captureOutcome: "complete", warnings: [] });
+    expect((await request(app).get("/utenti")).body).toEqual(utenti);
+  });
+
   // Codex, #35: un body JSON null si conserva, non diventa {}.
   test("una risposta JSON null diventa un mock che serve null", async () => {
     const id = capture({ path: "/nothing", body: "null" });

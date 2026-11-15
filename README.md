@@ -406,6 +406,7 @@ All configuration goes through environment variables (or a `.env` file; start fr
 | `MONITOR_DUMP_THRESHOLD`       | `100`                          | Early write when N requests are queued                                                                                                                 |
 | `MONITOR_DUMP_MAX_FILE_BYTES`  | `52428800`                     | Maximum size of each archive file (50 MB, then rotation)                                                                                               |
 | `MONITOR_DUMP_MAX_TOTAL_BYTES` | `1073741824`                   | Cap on the archive folder total (1 GB): beyond it, oldest files are deleted; `0` = never                                                               |
+| `MONITOR_CAPTURE_MAX_BODY_BYTES` | `5242880`                    | Whole response (5 MB) the Monitor keeps in memory to create a mock when the 156 KB preview is truncated; `0` turns it off |
 
 To simulate a slow network, use the `.env` file:
 

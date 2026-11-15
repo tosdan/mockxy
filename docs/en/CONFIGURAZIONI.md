@@ -47,6 +47,7 @@ can also be set per-workspace from the desktop app.
 | `monitorDumpThreshold` | `MONITOR_DUMP_THRESHOLD` | `100` | Pending entries that force a flush ahead of the cadence | ✅ |
 | `monitorDumpMaxFileBytes` | `MONITOR_DUMP_MAX_FILE_BYTES` | `52428800` (50 MB) | Maximum size of each dump file (then rotation) | ✅ |
 | `monitorDumpMaxTotalBytes` | `MONITOR_DUMP_MAX_TOTAL_BYTES` | `1073741824` (1 GB) | Total cap on the dump folder; `0` = pruning disabled | ✅ |
+| `monitorCaptureMaxBodyBytes` | `MONITOR_CAPTURE_MAX_BODY_BYTES` | `5242880` (5 MB) | Whole response the Monitor keeps in memory to create a mock from an entry with a truncated preview; `0` = keeps nothing ([MONITOR](MONITOR.md)) | ❌ |
 | `adminApiEnabled` | `ADMIN_API_ENABLED` | dev: `true`, prod: `false` | Enables the `/_admin/api` admin API (mocks, monitor, etc.) | ❌ (desktop forces `true`) |
 | `adminAllowedHosts` | `ADMIN_ALLOWED_HOSTS` | `[]` | Extra hosts allowed in the Host header towards the admin API (DNS-rebinding guard), besides loopback names | ❌ |
 | `logLevel` | `LOG_LEVEL` | `info` | Minimum logger level | ❌ |

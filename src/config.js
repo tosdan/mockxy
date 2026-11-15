@@ -40,6 +40,9 @@ const DEFAULT_MONITOR_DUMP_THRESHOLD = 100;
 const DEFAULT_MONITOR_DUMP_MAX_FILE_BYTES = 50 * 1024 * 1024;
 // Tetto sul totale della cartella dei dump (1GB): generoso di proposito, 0 = pruning disattivato.
 const DEFAULT_MONITOR_DUMP_MAX_TOTAL_BYTES = 1024 * 1024 * 1024;
+// Risposta completa che il Monitor conserva in memoria per creare un mock da una voce la cui
+// anteprima (156 KB) è troncata: 5 MB per risposta, 0 = nessuna conservazione.
+const DEFAULT_MONITOR_CAPTURE_MAX_BODY_BYTES = 5 * 1024 * 1024;
 
 // Unica fonte dei default delle impostazioni per-workspace dell'app desktop: il wrapper Electron
 // li importa (via src/server) per mostrare i valori effettivi nella dialog e riconoscere i cambi
@@ -383,6 +386,11 @@ function loadConfig(overrides = {}) {
     ),
     monitorDumpDir:
       overrides.monitorDumpDir ?? path.resolve(baseDir, process.env.MONITOR_DUMP_DIR || "monitor-dump"),
+    // Solo variabile d'ambiente: nell'app desktop vale il default.
+    monitorCaptureMaxBodyBytes: parseNumber(
+      overrides.monitorCaptureMaxBodyBytes ?? process.env.MONITOR_CAPTURE_MAX_BODY_BYTES,
+      DEFAULT_MONITOR_CAPTURE_MAX_BODY_BYTES
+    ),
     monitorDumpIntervalMs: parseNumber(
       overrides.monitorDumpIntervalMs ?? process.env.MONITOR_DUMP_INTERVAL_MS,
       DEFAULT_MONITOR_DUMP_INTERVAL_MS

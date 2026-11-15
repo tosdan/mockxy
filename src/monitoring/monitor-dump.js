@@ -19,6 +19,16 @@ function sanitizeForFilename(value) {
   return String(value).replace(/[:.]/g, "-");
 }
 
+// La voce come va su disco. La risposta completa che il Monitor conserva in memoria per creare
+// un mock non entra nei dump: l'archivio ha solo l'anteprima, quindi l'indicatore si toglie.
+function toDumpRecord(entry) {
+  if (entry == null || !("responseBodyRetained" in entry)) {
+    return entry;
+  }
+  const { responseBodyRetained: _retained, ...record } = entry;
+  return record;
+}
+
 /**
  * Scrive su disco lo storico del traffico catturato dal monitor, in formato NDJSON append-only.
  *
@@ -141,7 +151,7 @@ class MonitorDumpWriter {
       const batch = this.pending;
       this.pending = [];
       taken = batch.length;
-      const lines = batch.map((entry) => `${JSON.stringify(entry)}\n`).join("");
+      const lines = batch.map((entry) => `${JSON.stringify(toDumpRecord(entry))}\n`).join("");
       this.writing = this.writing.then(() => this._append(lines, batch.length));
     }
     await this.writing;

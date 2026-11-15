@@ -103,6 +103,14 @@ describe('TrafficDetail', () => {
     expect(text()).toContain('26 B · troncato');
   });
 
+  it('anteprima troncata con la risposta conservata: dice che il mock creato da lì è completo', () => {
+    const { fixture, text } = create();
+    fixture.componentInstance.entry.set({ ...ENTRY, responseBodyTruncated: true, responseBodyRetained: true });
+    fixture.detectChanges();
+
+    expect(text()).toContain('26 B · anteprima troncata · un mock creato da qui ha il body completo');
+  });
+
   it('il body della response è aperto e riempie lo spazio; chiuso, smette di farlo', () => {
     const { fixture, host } = create();
     const section = () => host.querySelectorAll('ui-collapsible')[3].parentElement as HTMLElement;

@@ -407,6 +407,7 @@ Tutta la configurazione passa da variabili d'ambiente (o da un file `.env`; part
 | `MONITOR_DUMP_THRESHOLD`       | `100`                          | Scrittura anticipata al raggiungimento di N richieste in coda                                                                                                                  |
 | `MONITOR_DUMP_MAX_FILE_BYTES`  | `52428800`                     | Dimensione massima di ogni file di archivio (50 MB, poi rotazione)                                                                                                             |
 | `MONITOR_DUMP_MAX_TOTAL_BYTES` | `1073741824`                   | Tetto sul totale della cartella archivi (1 GB): oltre, elimina i file più vecchi; `0` = mai                                                                                    |
+| `MONITOR_CAPTURE_MAX_BODY_BYTES` | `5242880`                    | Risposta completa (5 MB) che il Monitor conserva in memoria per creare un mock quando l'anteprima da 156 KB è troncata; `0` la disattiva |
 
 Per simulare una rete lenta si possono usare il file `.env`:
 

@@ -38,11 +38,20 @@ request body or stack.
   `X-Api-Key`, `X-Auth-Token` — are **masked** (`***`) already at capture time: secrets enter
   neither the view nor the on-disk archives. The rest of the payload, though, can still
   contain personal data: that's why the archives stay out of git.
-- Bodies are captured up to **156 KB** each: beyond that, the preview is truncated (and the
-  entry says so, along with the real byte count).
-- **Compressed** payloads are decompressed for the preview; if the capture is truncated,
-  decompression isn't possible and a placeholder with the size remains. **Binary** payloads
-  show a placeholder with the byte count. JSON is reformatted for readability.
+- Of each body the entry carries a **preview** of up to **156 KB** of readable content: beyond
+  that, the preview is truncated (and the entry says so, along with the real byte count). The
+  preview is what reaches the interface and ends up in the archives, which is why it stays
+  small.
+- When the preview of a **response** is truncated, the Monitor keeps aside, in memory, the
+  **whole response** up to **5 MB** (`MONITOR_CAPTURE_MAX_BODY_BYTES`): it is there to
+  [create a complete mock](#from-traffic-to-mock) from that entry, which says so next to the
+  size. Kept responses take at most 64 MB in all: beyond that, the oldest are let go, and
+  those entries fall back to the preview alone. Binary responses, those over 5 MB and request
+  bodies are not kept.
+- **Compressed** payloads are decompressed, and count for their decompressed size; one that
+  would inflate beyond the capture limit is not decompressed and a placeholder with the size
+  remains, as when the capture is truncated. **Binary** payloads show a placeholder with the
+  byte count. JSON is reformatted for readability.
 
 ## When it records
 
@@ -95,9 +104,12 @@ the response. The carry-over rules:
 
 - **masked** headers don't end up in the mock (no fossilized `***`), and neither do the ones
   the server recomputes on its own (`Content-Length` and the like);
-- a body that **can't be reconstructed** — binary, or truncated because it exceeded the
-  capture threshold — still produces the mock, but as a **skeleton to complete**, flagged in
-  the description;
+- a response larger than the preview becomes a **complete** mock as long as the Monitor keeps
+  its content (up to 5 MB, see above): the mock is made from the whole response, not from
+  what the preview shows;
+- a body that **can't be reconstructed** — binary, over the capture limit, or of an entry
+  whose response is no longer kept — still produces the mock, but as a **skeleton to
+  complete**, flagged in the description;
 - the mock starts with the **automatic filters and pagination off** (`applyListQuery: false`):
   the captured response already is the one given to a specific query, and the mock returns it
   as it is whatever the query. You turn them back on with the variant's "Filters & paging"

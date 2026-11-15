@@ -72,8 +72,28 @@ alla richiesta:
 
 Dettagli e limiti in [HANDLER.md](../it/HANDLER.md#lo-script-gira-nel-processo-del-server).
 
+### Monitor: risposte più grandi dell'anteprima
+
+- **Il mock creato da una risposta grande è completo.** Oltre 156 KB il Monitor troncava il
+  body, e il mock creato da quella voce nasceva vuoto, con «[da completare]»: proprio per le
+  risposte ricche di dati, quelle che più conviene catturare. Ora l'anteprima resta a 156 KB,
+  ma quando è troncata il Monitor conserva a parte la risposta completa, fino a 5 MB
+  (`MONITOR_CAPTURE_MAX_BODY_BYTES`, `0` per disattivare), e il mock nasce da quella. La voce
+  lo dichiara accanto alla dimensione.
+- **Memoria.** Le risposte conservate stanno solo in memoria, per al più 64 MB in tutto: le
+  più vecchie si lasciano andare, e quelle voci tornano alla sola anteprima. Non vanno
+  all'interfaccia né negli archivi: dallo Storico una risposta oltre i 156 KB resta uno
+  scheletro da completare.
+- **Risposte compresse.** Contano per quanto sono grandi decompresse: prima una risposta gzip
+  da pochi KB poteva portare nella voce, verso l'interfaccia e nel dump, megabyte di
+  anteprima, e la decompressione non aveva un tetto. Ora l'anteprima è limitata anche per
+  loro, e un contenuto che si gonfierebbe oltre il limite di cattura non viene decompresso.
+
 ### Cambiamenti dell'admin API
 
+- Le voci del Monitor hanno `responseBodyRetained`: l'anteprima è troncata ma la risposta
+  completa è conservata, e `POST /monitoring/requests/create-mocks` usa quella. Assente nei
+  record dei dump.
 - `applyListQuery` (booleano) è accettato in `POST /mocks` e `PUT /mocks/{id}` dentro `config`,
   e in `POST`/`PUT /mocks/{id}/responses`; il dettaglio dell'endpoint lo riporta in
   `config.applyListQuery`. Un campo assente in un aggiornamento conserva il valore corrente.

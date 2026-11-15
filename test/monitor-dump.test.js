@@ -67,6 +67,27 @@ describe("monitor dump writer", () => {
     expect(entries[0].responseHeaders).toMatchObject({ "content-type": "application/json" });
   });
 
+  test("nel dump va l'anteprima: la risposta completa conservata in memoria non c'entra, e nemmeno il suo indicatore", async () => {
+    dumper = new MonitorDumpWriter({ dumpDir, threshold: 1000 });
+    dumper.start(store);
+    const bodyBuffer = Buffer.from(JSON.stringify(Array.from({ length: 4000 }, (_, id) => ({ id, nota: "x".repeat(60) }))));
+    const recorded = store.recordRequest({
+      req: { method: "GET", path: "/grande", originalUrl: "/grande", url: "/grande", headers: {} },
+      res: { statusCode: 200, getHeaders: () => ({ "content-type": "application/json" }) },
+      startedAt: 1000,
+      completedAt: 1010,
+      source: "backend",
+      responseCapture: { snapshot: () => ({ bodyBuffer, totalBytes: bodyBuffer.length, truncated: false }) },
+    });
+    await dumper.flush();
+
+    expect(recorded.responseBodyRetained).toBe(true);
+    const { entries } = await readDump(dumpDir);
+    expect(entries[0]).toMatchObject({ path: "/grande", responseBodyTruncated: true, responseBodyBytes: bodyBuffer.length });
+    expect(entries[0]).not.toHaveProperty("responseBodyRetained");
+    expect(entries[0].responseBody.length).toBeLessThan(157 * 1024);
+  });
+
   test("ignora l'evento clear: non aggiunge entry e non svuota il pending", async () => {
     dumper = new MonitorDumpWriter({ dumpDir, threshold: 1000 });
     dumper.start(store);
