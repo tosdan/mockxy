@@ -98,6 +98,10 @@ Le regole di travaso:
   quelli che il server ricalcola da sé (`Content-Length` e simili);
 - un body **non ricostruibile** — binario, o troncato perché oltre la soglia di cattura —
   produce comunque il mock, ma come **scheletro da completare**, marcato nella descrizione;
+- il mock nasce con **filtri e paginazione automatici spenti** (`applyListQuery: false`): la
+  risposta catturata è già quella data a una query precisa, e il mock la restituisce com'è con
+  qualunque query. Si riaccendono dall'interruttore «Filtri e pagine» della variante
+  ([LISTE.md](LISTE.md#spegnerli-su-un-mock));
 - gli header CORS della risposta catturata viaggiano nel mock come tutti gli altri: con
   l'opzione [CORS automatico](CORS.md) attiva è la policy del motore a vincere su di essi;
 - se per quella rotta e metodo **l'endpoint esiste già**, invece di un errore l'app propone di

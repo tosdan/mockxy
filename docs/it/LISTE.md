@@ -37,6 +37,32 @@ return {
 al solo `body` rende invalido il risultato dell'handler. Se il JSON non ha una delle forme lista
 qui sotto, il flag non lo modifica.
 
+## Spegnerli su un mock
+
+Una variante `mock` può dichiarare **`applyListQuery: false`**: il body viene servito così
+com'è, con qualunque query — nessun filtro, nessuna pagina, e un eventuale `x-total-count`
+dichiarato negli header passa intatto. Assente o `true`, l'automatismo resta attivo.
+
+```json
+{
+  "type": "mock",
+  "status": 200,
+  "applyListQuery": false,
+  "body": { "content": [{ "id": 21 }, { "id": 22 }], "totalElements": 57 }
+}
+```
+
+Nell'interfaccia è l'interruttore **«Filtri e pagine»**: nel form di modifica della variante e,
+quando il body è una lista, nella testata del body accanto a «Template».
+
+I mock **creati dal traffico catturato** (Monitor e Storico) nascono con l'interruttore
+**spento**. Una risposta catturata è già la pagina, o il risultato filtrato, che il backend ha
+dato a quella query; il mock però vive sul percorso senza query, quindi alla stessa richiesta
+l'automatismo taglierebbe una seconda volta un body già tagliato: la pagina 2 di dieci elementi
+ne restituirebbe zero, e così una ricerca «contiene» (il filtro automatico è per uguaglianza).
+Spento, il mock risponde quello che ha catturato. Quando la cattura è invece la lista intera e
+la si vuole filtrare e paginare in locale, basta riaccenderlo.
+
 ## I filtri
 
 Ogni parametro di query **il cui nome coincide con una chiave di primo livello di almeno un

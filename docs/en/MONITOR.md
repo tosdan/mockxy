@@ -98,6 +98,10 @@ the response. The carry-over rules:
 - a body that **can't be reconstructed** — binary, or truncated because it exceeded the
   capture threshold — still produces the mock, but as a **skeleton to complete**, flagged in
   the description;
+- the mock starts with the **automatic filters and pagination off** (`applyListQuery: false`):
+  the captured response already is the one given to a specific query, and the mock returns it
+  as it is whatever the query. You turn them back on with the variant's "Filters & paging"
+  switch ([LISTE.md](LISTE.md#turning-them-off-on-a-mock));
 - the CORS headers of the captured response travel in the mock like all the others: with the
   [Automatic CORS](CORS.md) option on, it's the engine's policy that wins over them;
 - if for that route and method **the endpoint already exists**, instead of an error the app

@@ -44,6 +44,9 @@ but any name ending in `.response.json` is valid, as long as it is a plain file 
   absent, the global delay (if any) applies.
 - **`templated`** — optional, default `false`: enables [templating](#templating) of the
   `{{...}}` placeholders in body and headers. Not allowed on `file`-backed responses.
+- **`applyListQuery`** — optional, default `true`: with `false` a list body is served as it is,
+  without the [automatic filters and pagination](LISTE.md#turning-them-off-on-a-mock). It is the
+  value mocks created from captured traffic are written with.
 - **`body`** or **`file`** — exactly one of the two:
   - **JSON `body`** (object, array, number, boolean) — served as JSON. If it is an array, or an
     object with a single top-level array, the response takes part in automatic pagination and

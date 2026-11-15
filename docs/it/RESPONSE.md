@@ -44,6 +44,9 @@ ma qualunque nome che termini in `.response.json` è valido, purché sia un semp
   assente, vale l'eventuale ritardo globale.
 - **`templated`** — facoltativo, default `false`: attiva il [templating](#il-templating) dei
   placeholder `{{...}}` nel body e negli header. Non ammesso sulle risposte con payload `file`.
+- **`applyListQuery`** — facoltativo, default `true`: con `false` un body lista viene servito
+  così com'è, senza [filtri e paginazione automatici](LISTE.md#spegnerli-su-un-mock). È il
+  valore con cui nascono i mock creati dal traffico catturato.
 - **`body`** oppure **`file`** — esattamente uno dei due:
   - **`body` JSON** (oggetto, array, numero, booleano) — servito come JSON. Se è un array, o un
     oggetto con un solo array di primo livello, la risposta partecipa a paginazione e filtri
