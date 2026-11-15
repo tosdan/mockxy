@@ -1,0 +1,26 @@
+# Contesto di build di Dockerfile.app (ha la precedenza su .dockerignore per quel Dockerfile).
+# A differenza delle altre immagini qui serve il sorgente dell'interfaccia, che viene compilata
+# nel primo stadio; tutto il resto resta fuori come sempre.
+**/node_modules
+**/dist
+**/.angular
+npm-debug.log*
+coverage
+.git
+.github
+.claude
+.agents
+.env
+.dogfood
+electron
+test
+e2e
+# Il workspace non entra MAI nelle immagini: si distribuisce l'applicazione, non i dati.
+workspace
+workspace-vu-ish
+workspace-test
+docs
+archived
+Dockerfile*
+docker-compose*.yml
+.dockerignore

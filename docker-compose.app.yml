@@ -1,0 +1,37 @@
+# Mockxy completo in un container: motore, admin API e interfaccia web su una sola porta.
+#
+#   docker compose -f docker-compose.app.yml up --build
+#   poi: http://localhost:3000/_admin/ui/
+#
+# Il workspace sta sul filesystem locale (default ./workspace, altrimenti MOCKXY_WORKSPACE):
+# mock, file dati e archivi del Monitor restano file normali, modificabili a mano e versionabili.
+# Per sviluppare Mockxy stesso (interfaccia con ricaricamento automatico) c'è docker-compose.yml;
+# per servire solo i mock ad altri, docker-compose.staging.yml.
+services:
+  mockxy:
+    build:
+      context: .
+      dockerfile: Dockerfile.app
+    ports:
+      # Solo sul loopback dell'host: l'admin API scrive file ed esegue codice, e non ha
+      # autenticazione. Per esporla in rete va tolto "127.0.0.1:", sapendo cosa si espone
+      # (docs/it/RETE.md) e aggiungendo il nome o l'IP usato ad ADMIN_ALLOWED_HOSTS.
+      - "127.0.0.1:${MOCKXY_HOST_PORT:-3000}:3000"
+    env_file:
+      # Facoltativo: BACKEND_URL e le altre opzioni del motore (vedi .env.example).
+      - path: .env
+        required: false
+    environment:
+      # Fissati dall'immagine, ripetuti qui perché un .env pensato per l'uso da riga di comando
+      # non li sposti: nel container il bind è 0.0.0.0 e il workspace sta sotto /workspace.
+      HOST: "0.0.0.0"
+      PORT: "3000"
+      MOCKS_DIR: "/workspace/mocks"
+      FILES_DIR: "/workspace/files"
+      MONITOR_DUMP_DIR: "/workspace/.mockxy/monitor-dump"
+    volumes:
+      - "${MOCKXY_WORKSPACE:-./workspace}:/workspace"
+    extra_hosts:
+      # Su Linux host.docker.internal non esiste da sé: serve a raggiungere un backend che gira
+      # sulla macchina host (BACKEND_URL=http://host.docker.internal:8080).
+      - "host.docker.internal:host-gateway"
