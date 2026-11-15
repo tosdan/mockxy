@@ -392,7 +392,8 @@ function createAdminApiRouter({ config, runtimeConfig = new RuntimeConfigStore(c
       throw createAdminError(409, 'The runtime restarted: these request ids belong to another runtime.', { code: 'RUNTIME_CHANGED', runtimeId });
     }
     const captures = ids.map((id) => {
-      const entry = requestMonitor?.getEntry(id);
+      // Con la risposta completa, quando il Monitor l'ha conservata: non con l'anteprima.
+      const entry = requestMonitor?.getCaptureEntry(id);
       return { ref: { requestId: id }, entry: entry == null ? null : structuredClone(entry) };
     });
     const result = await createMocksFromMonitor({

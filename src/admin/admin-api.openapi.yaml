@@ -1390,8 +1390,11 @@ paths:
         The in-memory history of served requests, capped to the last few hundred entries.
         Requests to `/_admin/api` are never recorded, and automatic CORS preflights are filtered
         out as browser plumbing. Sensitive headers (`authorization`, `cookie`, `set-cookie`, …)
-        are masked as `***`; bodies are captured up to ~156 KB and flagged as truncated beyond
-        that. The monitor is not an archive: for durable capture use the dump.
+        are masked as `***`; body previews hold up to ~156 KB of readable content and are flagged
+        as truncated beyond that. For a truncated response preview the monitor also keeps the
+        whole response in memory, up to `MONITOR_CAPTURE_MAX_BODY_BYTES` (5 MB by default), so a
+        mock created from that entry is complete: `responseBodyRetained` says so. The monitor is
+        not an archive: for durable capture use the dump, which stores previews only.
 
         **Without a query string** the answer is `{ items }`: every entry, full, **most recent
         first** — unchanged from earlier versions.
@@ -1542,7 +1545,9 @@ paths:
         - **Route and method:** the captured `matchedRoutePath` when present and not `n/d`, otherwise
           the request path; the method in uppercase. No parametric route is inferred.
         - **Status and delay:** the captured status; `delayMs` 0.
-        - **Body:** empty → `{}`; valid JSON → the parsed value; other text → the string. A truncated
+        - **Body:** empty → `{}`; valid JSON → the parsed value; other text → the string. An entry
+          with a truncated preview and `responseBodyRetained` uses the whole response the monitor
+          kept, not the preview. A truncated
           body or a `[binary payload: …]`/`[compressed payload: …]` placeholder → `{}`, and the draft
           is **incomplete**: a new endpoint gets the description `[da completare] …`, an added variant
           the title prefix `[da completare]`, and the item the warning `INCOMPLETE_CAPTURE` with
@@ -4141,6 +4146,12 @@ components:
         responseBody: { type: string }
         responseBodyBytes: { type: integer }
         responseBodyTruncated: { type: boolean }
+        responseBodyRetained:
+          type: boolean
+          description: |
+            The preview is truncated but the monitor still holds the whole response, so a mock
+            created from this entry is complete. It turns `false` when the response is let go to
+            make room for newer ones. Absent in dump records, which store previews only.
 
     MonitorStreamEvent:
       oneOf:

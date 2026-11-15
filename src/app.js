@@ -1102,7 +1102,9 @@ function createApp({
     const monitoring = serverState.isMonitoring();
     const candidate = isMonitoringCandidate(req.path);
     const requestCapture = monitoring && candidate ? startRequestCapture(req) : null;
-    const responseCapture = monitoring && candidate ? startResponseCapture(res) : null;
+    const responseCapture = monitoring && candidate
+      ? startResponseCapture(res, requestMonitor?.captureMaxBodyBytes)
+      : null;
     req._responseMode = "proxy";
 
     logger.info("Request received.", {

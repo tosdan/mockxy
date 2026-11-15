@@ -308,7 +308,7 @@ describe("admin API", () => {
       // Lo skeleton riceve la descrizione "[da completare]" già in fase di create (single-call, niente update separato).
       const binItem = mocks.body.items.find((i) => i.path === "/api/bin");
       const binDetail = await request(app).get(`/_admin/api/mocks/${binItem.id}`);
-      expect(binDetail.body.endpoint.description).toBe("[da completare] body non catturato (binario/oltre 156KB)");
+      expect(binDetail.body.endpoint.description).toBe("[da completare] body non catturato (binario o oltre il limite di cattura)");
     });
 
     test("create-mocks: selezione mancante → 400", async () => {

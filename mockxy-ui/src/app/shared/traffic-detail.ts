@@ -90,7 +90,7 @@ import { bodyLanguage, headerCount, headerRows, methodColor, statusColor, status
                         [open]="responseBodyOpen()" (openChange)="responseBodyOpen.set($event)" triggerClass="shrink-0 bg-white/5 px-6 py-2.5 hover:bg-white/10">
           <div uiCollapsibleHeader class="flex items-center gap-2">
             <h2 class="text-[12px] font-bold uppercase tracking-[0.14em] text-foreground/80">{{ 'trafficDetail.responseBody' | transloco }}</h2>
-            <span class="font-mono text-[11px] text-muted-foreground">{{ e.responseBodyBytes ?? 0 }} B@if (e.responseBodyTruncated) { · {{ 'trafficDetail.truncated' | transloco }}}</span>
+            <span class="font-mono text-[11px] text-muted-foreground">{{ e.responseBodyBytes ?? 0 }} B@if (e.responseBodyTruncated) { · {{ (e.responseBodyRetained ? 'trafficDetail.truncatedRetained' : 'trafficDetail.truncated') | transloco }}}</span>
           </div>
           @if (e.responseBody) {
           <div class="min-h-0 flex-1 overflow-y-auto mx-scroll px-6 py-3"><ui-code [code]="e.responseBody" [language]="bodyLanguage(e.responseBody)" /></div>

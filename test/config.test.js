@@ -203,3 +203,30 @@ describe("loadConfig — verifica del certificato del backend", () => {
     expect(WORKSPACE_SETTING_DEFAULTS.verifyBackendCertificate).toBe(true);
   });
 });
+
+describe("loadConfig — risposta completa conservata dal Monitor", () => {
+  let saved;
+
+  beforeEach(() => {
+    saved = process.env.MONITOR_CAPTURE_MAX_BODY_BYTES;
+    delete process.env.MONITOR_CAPTURE_MAX_BODY_BYTES;
+  });
+
+  afterEach(() => {
+    if (saved === undefined) {
+      delete process.env.MONITOR_CAPTURE_MAX_BODY_BYTES;
+    } else {
+      process.env.MONITOR_CAPTURE_MAX_BODY_BYTES = saved;
+    }
+  });
+
+  test("5 MB per default", () => {
+    expect(loadConfig({}).monitorCaptureMaxBodyBytes).toBe(5 * 1024 * 1024);
+  });
+
+  test("viene letta dall'ambiente e dagli override; 0 la spegne", () => {
+    process.env.MONITOR_CAPTURE_MAX_BODY_BYTES = "1048576";
+    expect(loadConfig({}).monitorCaptureMaxBodyBytes).toBe(1048576);
+    expect(loadConfig({ monitorCaptureMaxBodyBytes: 0 }).monitorCaptureMaxBodyBytes).toBe(0);
+  });
+});
