@@ -97,7 +97,7 @@ describe('ResponseDraft', () => {
         body: '{"a":1}',
         scriptType: null,
       });
-      expect(draft.buildUpdatePayload()).toEqual({ type: 'mock', title: 'ok', status: 201, headers: { 'x-a': '1' }, delayMs: 7, body: { a: 1 }, templated: false });
+      expect(draft.buildUpdatePayload()).toEqual({ type: 'mock', title: 'ok', status: 201, headers: { 'x-a': '1' }, delayMs: 7, body: { a: 1 }, templated: false, applyListQuery: true });
     });
 
     it('update con JSON rotto → null (il salvataggio non parte)', () => {
@@ -123,7 +123,7 @@ describe('ResponseDraft', () => {
 
     it('update testo: il body resta stringa grezza', () => {
       draft.seedForEdit({ title: 't', status: 200, delay: 0, headers: [], payloadType: 'text', body: 'non json {', scriptType: null });
-      expect(draft.buildUpdatePayload()).toEqual({ type: 'mock', title: 't', status: 200, headers: {}, delayMs: 0, body: 'non json {', templated: false });
+      expect(draft.buildUpdatePayload()).toEqual({ type: 'mock', title: 't', status: 200, headers: {}, delayMs: 0, body: 'non json {', templated: false, applyListQuery: true });
     });
 
     it('templated: seminato dalla response, incluso nel payload; mai in modalità file', () => {
@@ -135,6 +135,28 @@ describe('ResponseDraft', () => {
       // File-mode: il campo non parte (i payload file non si templano).
       draft.seedForEdit({ title: '', status: 200, delay: 0, headers: [], payloadType: 'file', body: '', scriptType: null, templated: true });
       expect(draft.buildUpdatePayload()).not.toHaveProperty('templated');
+    });
+
+    it('applyListQuery: acceso salvo false nel seme, incluso nel payload; mai in modalità file', () => {
+      const seed = { title: '', status: 200, delay: 0, headers: [], payloadType: 'json' as const, body: '[]', scriptType: null };
+      draft.seedForEdit(seed);
+      expect(draft.applyListQuery()).toBe(true);
+      expect(draft.buildUpdatePayload()).toEqual(expect.objectContaining({ applyListQuery: true }));
+
+      // Lo stato in cui nasce una cattura: il form lo conserva, non lo riaccende salvando.
+      draft.seedForEdit({ ...seed, applyListQuery: false });
+      expect(draft.applyListQuery()).toBe(false);
+      expect(draft.buildUpdatePayload()).toEqual(expect.objectContaining({ applyListQuery: false }));
+      expect(draft.buildCreatePayload()).toEqual(expect.objectContaining({ applyListQuery: false }));
+
+      draft.seedForEdit({ ...seed, payloadType: 'file', body: '', applyListQuery: false });
+      expect(draft.buildUpdatePayload()).not.toHaveProperty('applyListQuery');
+    });
+
+    it('applyListQuery: seedForCreate riparte acceso', () => {
+      draft.applyListQuery.set(false);
+      draft.seedForCreate('mock');
+      expect(draft.applyListQuery()).toBe(true);
     });
 
     it('templated: seedForCreate riparte spento', () => {

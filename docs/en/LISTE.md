@@ -37,6 +37,32 @@ return {
 `body`, makes the handler result invalid. If the JSON does not have one of the list shapes
 below, the flag leaves it unchanged.
 
+## Turning them off on a mock
+
+A `mock` variant can declare **`applyListQuery: false`**: the body is served as it is, whatever
+the query — no filter, no page, and an `x-total-count` declared in the headers passes through
+untouched. Absent or `true`, the automatism stays on.
+
+```json
+{
+  "type": "mock",
+  "status": 200,
+  "applyListQuery": false,
+  "body": { "content": [{ "id": 21 }, { "id": 22 }], "totalElements": 57 }
+}
+```
+
+In the UI it is the **"Filters & paging"** switch: in the variant's edit form and, when the body
+is a list, in the body header next to "Template".
+
+Mocks **created from captured traffic** (Monitor and History) start with the switch **off**. A
+captured response already is the page, or the filtered result, the backend gave to that query;
+the mock, though, lives on the path without the query, so on the same request the automatism
+would cut an already cut body a second time: page 2 of ten items would return none, and so
+would a "contains" search (the automatic filter is an equality). Off, the mock answers what it
+captured. When the capture is the whole list instead, and you want to filter and paginate it
+locally, turn the switch back on.
+
 ## Filters
 
 Every query parameter **whose name matches a top-level key of at least one

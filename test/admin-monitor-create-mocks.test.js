@@ -132,6 +132,38 @@ describe("POST /monitoring/requests/create-mocks e Storico", () => {
     expect((await request(app).get("/items")).body).toEqual({ v: "captured" });
   });
 
+  test("una lista catturata con una query si rivede intera: filtri e paginazione automatici nascono spenti", async () => {
+    // Pagina 2 di una lista, e una ricerca «contiene»: il mock vive su /users senza query, e con
+    // l'automatismo acceso la stessa richiesta taglierebbe di nuovo un body già tagliato.
+    const pagina = { content: [{ id: 21, name: "Mario" }, { id: 22, name: "Marco" }], totalElements: 57 };
+    const id = capture({ path: "/users", body: JSON.stringify(pagina) });
+
+    const res = await createMocks({ ids: [id], onConflict: "skip", newEndpointEnabled: true });
+    expect(res.body.items[0]).toMatchObject({ writeOutcome: "created", runtimeOutcome: "applied" });
+
+    const paged = await request(app).get("/users?page=2&size=2");
+    expect(paged.body).toEqual(pagina);
+    expect(paged.headers["x-total-count"]).toBeUndefined();
+    expect((await request(app).get("/users?name=mar")).body).toEqual(pagina);
+
+    const file = JSON.parse(await fs.promises.readFile(path.join(mocksDir, "users", "GET.responses", "001.response.json"), "utf8"));
+    expect(file.applyListQuery).toBe(false);
+    expect((await detailOf(res.body.items[0].id)).config.applyListQuery).toBe(false);
+  });
+
+  test("anche la variante aggiunta a un endpoint esistente nasce con l'automatismo delle liste spento", async () => {
+    const itemsId = encodeMockId("items/GET.endpoint.json");
+    const id = capture({ path: "/items", matchedRoutePath: "/items", body: '[{"id":3},{"id":4}]' });
+
+    const res = await createMocks({ ids: [id], onConflict: "add-variant", selectAddedVariants: true, newEndpointEnabled: true });
+    const variant = (await request(app).get(`/_admin/api/mocks/${itemsId}/responses/${res.body.items[0].responseFile}`)).body;
+    expect(variant.response.applyListQuery).toBe(false);
+    expect((await request(app).get("/items?page=1&size=2")).body).toEqual([{ id: 3 }, { id: 4 }]);
+    // La variante di partenza non cambia: l'assenza del campo vale acceso.
+    const original = (await request(app).get(`/_admin/api/mocks/${itemsId}/responses/001.response.json`)).body;
+    expect(original.response.applyListQuery).toBeUndefined();
+  });
+
   test("la variante catturata non eredita il templating della variante selezionata", async () => {
     const itemsId = encodeMockId("items/GET.endpoint.json");
     const templated = await request(app).put(`/_admin/api/mocks/${itemsId}/responses/001.response.json`).send({ type: "mock", templated: true });

@@ -120,6 +120,9 @@ async function createAdminEndpointFromMock(mocksDir, payload, reloadRuntime) {
     // loader, e sostituirlo cambierebbe la risposta catturata o dichiarata.
     body: payload?.body === undefined ? {} : payload.body,
   };
+  if (isListQueryDisabled(configInput, null)) {
+    response.applyListQuery = false;
+  }
   const backups = [await readBackup(endpointPath), await readBackup(responsePath)];
 
   const relativePath = toPosixRelativePath(path.relative(mocksDir, endpointPath));
@@ -364,6 +367,9 @@ function buildNewTypedResponse(responseDir, responseFileName, payload, endpoint)
     if (normalizeTemplatedFlag(payload, null)) {
       nextResponse.templated = true;
     }
+    if (isListQueryDisabled(payload, null)) {
+      nextResponse.applyListQuery = false;
+    }
     return { nextResponse, assetCopies: [], assetWrites: [] };
   }
 
@@ -446,6 +452,19 @@ function normalizeTemplatedFlag(payload, response) {
   return response?.templated === true;
 }
 
+// Flag applyListQuery della variante mock (filtri e paginazione automatici delle liste): stessa
+// regola di templated — dal payload quando presente (validato), altrimenti conservato. Restituisce
+// true quando l'automatismo è SPENTO, l'unico caso che si scrive nel file: l'assenza vale acceso.
+function isListQueryDisabled(payload, response) {
+  if (Object.prototype.hasOwnProperty.call(payload || {}, "applyListQuery")) {
+    if (payload.applyListQuery != null && typeof payload.applyListQuery !== "boolean") {
+      throw createAdminError(400, "applyListQuery must be a boolean.");
+    }
+    return payload.applyListQuery === false;
+  }
+  return response?.applyListQuery === false;
+}
+
 function buildUpdatedEndpointResponse(response, payload, endpoint) {
   const requestedType = payload?.type || response.type;
   if (requestedType !== response.type) {
@@ -464,6 +483,9 @@ function buildUpdatedEndpointResponse(response, payload, endpoint) {
     };
     if (normalizeTemplatedFlag(payload, response)) {
       nextResponse.templated = true;
+    }
+    if (isListQueryDisabled(payload, response)) {
+      nextResponse.applyListQuery = false;
     }
 
     const payloadHasBody = Object.prototype.hasOwnProperty.call(payload || {}, "body");
@@ -1293,6 +1315,9 @@ async function updateAdminMock(mocksDir, id, payload, reloadRuntime, scenarioSta
     };
     if (normalizeTemplatedFlag(payload?.config, response)) {
       nextResponse.templated = true;
+    }
+    if (isListQueryDisabled(payload?.config, response)) {
+      nextResponse.applyListQuery = false;
     }
   }
 

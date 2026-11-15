@@ -57,6 +57,7 @@ async function writeMock({
   fileName,
   delayMs = 0,
   templated,
+  applyListQuery,
 }) {
   const mockDir = path.join(mocksDir, folder);
   await fs.promises.mkdir(mockDir, { recursive: true });
@@ -84,6 +85,9 @@ async function writeMock({
   };
   if (templated != null) {
     response.templated = templated;
+  }
+  if (applyListQuery != null) {
+    response.applyListQuery = applyListQuery;
   }
 
   if (servesFile) {

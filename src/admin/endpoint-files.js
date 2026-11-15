@@ -140,6 +140,9 @@ function normalizeEndpointResponse(response, responseFilePath, responseFiles) {
     if (response.templated != null && typeof response.templated !== "boolean") {
       throw createAdminError(400, "response.templated must be a boolean.");
     }
+    if (response.applyListQuery != null && typeof response.applyListQuery !== "boolean") {
+      throw createAdminError(400, "response.applyListQuery must be a boolean.");
+    }
 
     const hasBody = Object.prototype.hasOwnProperty.call(response, "body");
     const hasFile = Object.prototype.hasOwnProperty.call(response, "file");

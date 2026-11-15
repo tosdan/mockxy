@@ -496,6 +496,8 @@
     "copyEndpointTip": "Crea un nuovo endpoint con un altro metodo o path, a partire da questo",
     "templatedLabel": "Template",
     "templatedTip": "Sostituisce i placeholder nel body e negli header: params.id, query.x, headers.x, body.campo, now, uuid, randomInt 1 10 — tra doppie graffe. Filtro dei tipi: params.id | number.",
+    "listQueryLabel": "Filtri e pagine",
+    "listQueryTip": "Acceso: i parametri della query filtrano e paginano la lista (?chiave=valore, ?page=0&size=10). Spento: il body viene servito così com'è. I mock creati dal traffico catturato nascono spenti, perché sono già la risposta a una query.",
     "editResponse": "Modifica response",
     "newResponseTitle": "Nuova response {{type}}",
     "save": "Salva",

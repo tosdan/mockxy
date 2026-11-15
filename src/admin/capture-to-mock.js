@@ -75,6 +75,12 @@ function parseCapturedBody(value) {
  * presente e diverso da `n/d`) altrimenti il path richiesto, metodo maiuscolo, stesso status,
  * nessun ritardo. Un body troncato o non testuale non si spaccia per fedele: diventa un oggetto
  * vuoto e la bozza è marcata incompleta. Nessuna inferenza di route parametriche.
+ *
+ * Filtri e paginazione automatici delle liste nascono spenti (`applyListQuery: false`): il body
+ * è già la pagina, o il risultato filtrato, che il backend ha dato a quella query. Il mock vive
+ * sul path senza query, quindi alla stessa richiesta il motore li riapplicherebbe a un body già
+ * tagliato — la pagina 2 di 10 elementi ne restituirebbe zero, una ricerca «contiene» pure
+ * (il filtro automatico è per uguaglianza). Una cattura risponde quello che ha catturato.
  */
 function buildMockFromCapture(entry) {
   const issue = captureBodyIssue(entry);
@@ -84,6 +90,7 @@ function buildMockFromCapture(entry) {
     status: entry.status,
     headers: captureResponseHeaders(entry.responseHeaders),
     delayMs: 0,
+    applyListQuery: false,
     body: issue == null ? parseCapturedBody(entry.responseBody) : {},
     incomplete: issue != null,
     issue,
@@ -229,8 +236,10 @@ async function createMocksFromCaptures({ mocksDir, captures, options, source, re
           headers: mock.headers,
           delayMs: mock.delayMs,
           body: mock.body,
-          // Una variante nuova parte dalla selezionata: senza questo erediterebbe il templating.
+          // Una variante nuova parte dalla selezionata: senza questi erediterebbe il templating
+          // e l'automatismo delle liste.
           templated: false,
+          applyListQuery: mock.applyListQuery,
           select: options.selectAddedVariants,
         }, noReload, scenarioStates);
         const served = options.selectAddedVariants && destination.enabled;
@@ -256,6 +265,7 @@ async function createMocksFromCaptures({ mocksDir, captures, options, source, re
           headers: mock.headers,
           bodyFile: "001.response.json",
           delayMs: mock.delayMs,
+          applyListQuery: mock.applyListQuery,
         },
         body: mock.body,
         ...(mock.incomplete ? { description: INCOMPLETE_DESCRIPTION } : {}),

@@ -645,6 +645,64 @@ describe("app integration", () => {
     expect(response.headers["x-mock-source"]).toBe("mock");
   });
 
+  test("applyListQuery false serve la lista così com'è, con qualunque query", async () => {
+    // Il caso della cattura: il body è già la pagina 2 che il backend ha dato a ?page=2&size=2.
+    const pagina = { content: [{ id: 5, nome: "Mario" }, { id: 6, nome: "Marco" }], totalElements: 9 };
+    await writeMock({
+      mocksDir,
+      folder: "mocked",
+      method: "GET",
+      routePath: "/mocked",
+      headers: { "x-total-count": "9" },
+      body: pagina,
+      applyListQuery: false,
+    });
+
+    const app = await buildApp();
+    const paged = await request(app).get("/mocked?page=2&size=2");
+    const searched = await request(app).get("/mocked?nome=mar");
+
+    expect(paged.status).toBe(200);
+    expect(paged.body).toEqual(pagina);
+    // Il conteggio dichiarato dal mock passa intatto: l'automatismo non lo ricalcola.
+    expect(paged.headers["x-total-count"]).toBe("9");
+    expect(searched.body).toEqual(pagina);
+    expect(paged.headers["x-mock-source"]).toBe("mock");
+  });
+
+  test("applyListQuery true o assente lascia attivi filtri e paginazione", async () => {
+    await writeMock({
+      mocksDir,
+      folder: "mocked",
+      method: "GET",
+      routePath: "/mocked",
+      body: [{ id: 1 }, { id: 2 }, { id: 3 }],
+      applyListQuery: true,
+    });
+
+    const app = await buildApp();
+    const response = await request(app).get("/mocked?page=1&size=2");
+
+    expect(response.body).toEqual([{ id: 3 }]);
+    expect(response.headers["x-total-count"]).toBe("3");
+  });
+
+  test("applyListQuery non booleano: la response non carica", async () => {
+    await writeMock({
+      mocksDir,
+      folder: "mocked",
+      method: "GET",
+      routePath: "/mocked",
+      body: [{ id: 1 }],
+      applyListQuery: "no",
+    });
+
+    const { loadErrors } = await loadEndpointRouteGroups(mocksDir);
+
+    expect(loadErrors).toHaveLength(1);
+    expect(loadErrors[0].message).toMatch(/applyListQuery must be a boolean/);
+  });
+
   test("GET /mocked treats page as zero-based index", async () => {
     await writeMock({
       mocksDir,

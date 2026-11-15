@@ -2,6 +2,28 @@
 
 ## Prossima versione
 
+### Mock dal traffico catturato
+
+- **Una lista catturata si rivede intera.** Il mock creato da una cattura vive sul percorso
+  senza query, e alla stessa richiesta i filtri e la paginazione automatici tagliavano una
+  seconda volta un body che era già la pagina, o il risultato filtrato, dato dal backend: la
+  cattura di `?page=2&size=10` rispondeva con zero elementi, e così una ricerca «contiene»
+  (`?nome=mar`), senza alcun segnale. Ora i mock creati dal Monitor e dallo Storico nascono con
+  l'automatismo spento e rispondono quello che hanno catturato.
+- **`applyListQuery` sulle varianti `mock`:** `false` serve un body lista così com'è, con
+  qualunque query; assente o `true` vale il comportamento di sempre, quindi i workspace
+  esistenti non cambiano. I mock già creati da una cattura con una versione precedente restano
+  com'erano: si spengono dall'interruttore. Dettagli in
+  [LISTE.md](../it/LISTE.md#spegnerli-su-un-mock).
+- **Interruttore «Filtri e pagine»:** nel form di modifica della variante e, quando il body è
+  una lista, nella testata del body accanto a «Template».
+
+### Cambiamenti dell'admin API
+
+- `applyListQuery` (booleano) è accettato in `POST /mocks` e `PUT /mocks/{id}` dentro `config`,
+  e in `POST`/`PUT /mocks/{id}/responses`; il dettaglio dell'endpoint lo riporta in
+  `config.applyListQuery`. Un campo assente in un aggiornamento conserva il valore corrente.
+
 ## v1.9.0
 
 Mockxy come server di uno staging condiviso: i mock dove il backend non arriva ancora, il

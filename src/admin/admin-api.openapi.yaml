@@ -1067,7 +1067,7 @@ paths:
         Partial update of one variant: absent fields keep their current value. The variant
         **type cannot change** (`400`).
 
-        - `mock`: `status`, `headers`, `delayMs`, `title`, `templated`, and `body`. Sending an
+        - `mock`: `status`, `headers`, `delayMs`, `title`, `templated`, `applyListQuery`, and `body`. Sending an
           explicit `body` on a file-backed variant switches it back to an inline payload and
           drops the orphaned asset; `templated` is not supported on file payloads.
         - `sse` / `ws`: the payload is merged onto the current script/rules/presets and then
@@ -3375,6 +3375,9 @@ components:
                 headers: { $ref: "#/components/schemas/Headers" }
                 delayMs: { type: integer }
                 templated: { type: boolean }
+                applyListQuery:
+                  type: boolean
+                  description: "Whether the automatic list filters and pagination apply to this payload (`true` unless the variant declares `false`)."
             body:
               description: "`mock` only, inline payloads: the payload itself (any JSON value, or a string for text payloads)."
             fileInfo:
@@ -3654,6 +3657,7 @@ components:
                 disabled: { type: boolean, default: false }
                 headers: { $ref: "#/components/schemas/Headers" }
                 delayMs: { type: integer, minimum: 0, default: 0 }
+                applyListQuery: { type: boolean, default: true, description: "`false` serves a list payload as it is, without the automatic query filters and pagination." }
             body:
               description: The payload — any JSON value; a string produces a text payload. Defaults to an empty object.
             description:
@@ -3710,6 +3714,7 @@ components:
                 headers: { $ref: "#/components/schemas/Headers" }
                 delayMs: { type: integer, minimum: 0 }
                 templated: { type: boolean }
+                applyListQuery: { type: boolean, description: "`false` serves a list payload as it is, without the automatic query filters and pagination. The current value is kept when absent." }
             body:
               description: New payload; the current one is kept when absent.
             expectedRevision:
@@ -3770,6 +3775,7 @@ components:
                 headers: { $ref: "#/components/schemas/Headers" }
                 delayMs: { type: integer, minimum: 0, default: 0 }
                 templated: { type: boolean }
+                applyListQuery: { type: boolean, default: true, description: "`false` serves a list payload as it is, without the automatic query filters and pagination." }
                 body:
                   description: The payload — any JSON value. Defaults to an empty object.
             - type: object
@@ -3830,6 +3836,7 @@ components:
         headers: { allOf: [{ $ref: "#/components/schemas/Headers" }], description: "`mock` only — replaces the whole map." }
         delayMs: { type: integer, minimum: 0, description: "`mock` only." }
         templated: { type: boolean, description: "`mock` only; not supported on file payloads." }
+        applyListQuery: { type: boolean, description: "`mock` only: `false` serves a list payload as it is, without the automatic query filters and pagination. Defaults to `true`; mocks created from captured traffic are written with `false`." }
         body: { description: "`mock` only. Sending it turns a file-backed variant back into an inline one." }
         source: { type: string, description: "`handler`/`middleware` only: the new module source." }
         retryMs: { type: [integer, "null"], description: "`sse` only." }

@@ -68,6 +68,17 @@ import type { ResponseDraft } from './response-draft';
           </span>
         </div>
         }
+        @if (draft().payloadType() === 'json') {
+        <!-- Filtri e paginazione automatici delle liste: accesi di default, spenti sulle catture
+             (il body è già la risposta a una query). Riguarda solo i body JSON. -->
+        <div class="flex flex-col gap-1.5" [uiTooltip]="'detail.listQueryTip' | transloco">
+          <label class="text-[12px] font-bold uppercase tracking-[0.14em] text-foreground/80">{{ 'detail.listQueryLabel' | transloco }}</label>
+          <span class="inline-flex h-9 items-center gap-2">
+            <ui-switch [checked]="draft().applyListQuery()" (checkedChange)="draft().applyListQuery.set($event)" size="sm" [ariaLabel]="'detail.listQueryLabel' | transloco" />
+            <code class="font-mono text-[11px] text-muted-foreground">{{ listQueryExample }}</code>
+          </span>
+        </div>
+        }
       </div>
 
       @if (draft().pendingPreset(); as p) {
@@ -213,6 +224,7 @@ export class MocksNextResponseForm {
   readonly draft = input.required<ResponseDraft>();
   /** Esempio mostrato accanto al toggle Template (le doppie graffe non si scrivono nel template Angular). */
   protected readonly templateExample = '{{params.id}} · {{query.x}}';
+  protected readonly listQueryExample = '?page=0&size=10';
   /** True in creazione: il file scelto resta in bozza invece di essere caricato subito. */
   readonly creating = input(false);
   /** File scelto in MODIFICA: il padre lo carica subito sulla response corrente. */

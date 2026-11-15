@@ -202,6 +202,9 @@ function validateMockResponse(response, filePath, responseDir) {
   if (response.templated != null && typeof response.templated !== "boolean") {
     throw new Error(`Invalid response ${filePath}: templated must be a boolean`);
   }
+  if (response.applyListQuery != null && typeof response.applyListQuery !== "boolean") {
+    throw new Error(`Invalid response ${filePath}: applyListQuery must be a boolean`);
+  }
   validateHeaders(response.headers, filePath);
 
   const hasBody = Object.prototype.hasOwnProperty.call(response, "body");
@@ -367,6 +370,10 @@ async function loadResponseByName(endpoint, endpointFilePath, responseFileName, 
 
     result.payloadType = typeof response.body === "string" ? "text" : "json";
     result.body = response.body;
+    // Filtri e paginazione automatici delle liste (vedi buildMockPayload in app.js): attivi
+    // salvo `applyListQuery: false`. Una risposta catturata è già la pagina o il risultato
+    // filtrato che il backend ha dato a quella query: riapplicarli la svuoterebbe.
+    result.applyListQuery = response.applyListQuery !== false;
     // Templating opt-in (vedi mock-template.js). Deciso al load se il template referenzia il
     // body della richiesta: solo in quel caso il serving lo bufferizza.
     result.templated = response.templated === true;
@@ -417,6 +424,7 @@ async function loadSequenceSteps(endpoint, endpointFilePath, sequence, options) 
         payloadType: response.payloadType,
         body: response.body,
         templated: response.templated,
+        applyListQuery: response.applyListQuery,
         templateNeedsBody: response.templateNeedsBody,
         configFilePath: endpointFilePath,
         responseFilePath: response.responseFilePath,
@@ -532,6 +540,7 @@ async function scanEndpointRouteGroups(mocksDir) {
           payloadType: response.payloadType,
           body: response.body,
           templated: response.templated,
+          applyListQuery: response.applyListQuery,
           templateNeedsBody: response.templateNeedsBody,
           configFilePath: filePath,
           responseFilePath: response.responseFilePath,

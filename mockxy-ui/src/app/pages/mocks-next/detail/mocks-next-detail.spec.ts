@@ -117,6 +117,50 @@ describe('MocksNextDetail', () => {
     });
   });
 
+  // Una cattura nasce con filtri e paginazione automatici spenti: davanti a una lista, sapere se
+  // una query la taglierà cambia quello che ci si aspetta dalla risposta.
+  describe('stato «Filtri e pagine» nella testata del body', () => {
+    const config = { method: 'GET', path: '/api/operazioni', status: 200, disabled: false, headers: {}, delayMs: 0 };
+    function chip(fixture: ReturnType<typeof create>): HTMLElement | null {
+      return Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('span')).find(
+        (el) => /Filtri e pagine/i.test(el.textContent ?? '') && el.querySelector('ui-switch') != null,
+      ) as HTMLElement | undefined ?? null;
+    }
+    const checked = (fixture: ReturnType<typeof create>) => chip(fixture)!.querySelector('[role="switch"]')!.getAttribute('aria-checked');
+
+    it('compare sui body che sono una lista — array o oggetto con un solo array — e riflette il flag', () => {
+      const fixture = create();
+      store.selected.set(detail({ body: [{ id: 1 }] }));
+      fixture.detectChanges();
+      expect(checked(fixture)).toBe('true');
+
+      store.selected.set(detail({ body: { content: [{ id: 1 }], totalElements: 1 }, config: { ...config, applyListQuery: false } }));
+      fixture.detectChanges();
+      expect(checked(fixture)).toBe('false');
+    });
+
+    it('non compare dove l’automatismo non può agire', () => {
+      const fixture = create();
+      for (const body of [{ id: 1 }, { a: [1], b: [2] }, 'testo']) {
+        store.selected.set(detail({ body }));
+        fixture.detectChanges();
+        expect(chip(fixture)).toBeNull();
+      }
+      store.selected.set(detail({ type: 'handler', source: 'module.exports = {};' }));
+      fixture.detectChanges();
+      expect(chip(fixture)).toBeNull();
+    });
+
+    it('commutarlo manda una PUT parziale, senza toccare il resto della variante', () => {
+      const fixture = create();
+      store.selected.set(detail({ body: [{ id: 1 }] }));
+      fixture.detectChanges();
+      (fixture.componentInstance as unknown as { onListQueryChange(v: boolean): void }).onListQueryChange(false);
+
+      expect(store.saveResponse).toHaveBeenCalledWith({ type: 'mock', status: 200, applyListQuery: false });
+    });
+  });
+
   describe('stato Template nella testata del body', () => {
     function chip(fixture: ReturnType<typeof create>): HTMLElement | null {
       return Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('span')).find(
