@@ -6,6 +6,11 @@ const { setNoCacheHeaders } = require("../utils/cache");
 const { createDataFileReader } = require("../mocks/data-files");
 const { isValidHttpStatus } = require("../utils/http-body-utils");
 const { runWithTimeout } = require("../utils/run-with-timeout");
+const {
+  backendPathPrefix,
+  resolveBackendTarget,
+  stripBackendPathPrefix,
+} = require("./backend-target");
 
 const TECH_HEADER = "x-mock-source";
 
@@ -142,7 +147,11 @@ function sanitizeRequestHeaders(headers, host, preferIdentityEncoding = false) {
 // Quando il client ci raggiunge in https (dietro un reverse proxy, vedi resolvePublicOrigin)
 // Secure e SameSite=None restano: il browser li accetta, e lo staging si comporta come la
 // produzione. Domain va tolto comunque, perché nomina il backend e non l'host pubblico.
-function adaptProxyCookie(cookieValue, { keepSecure = false } = {}) {
+// Quando BACKEND_URL ha un percorso (pathPrefix), il Path del cookie è scritto per gli URL del
+// backend ("Path=/gateway/app", tipico del context path di un'applicazione Java): il browser,
+// che a Mockxy chiede "/users", non lo rimanderebbe mai. Il prefisso viene tolto dal Path; un
+// Path fuori dal prefisso resta com'è.
+function adaptProxyCookie(cookieValue, { keepSecure = false, pathPrefix = "" } = {}) {
   const [nameValue, ...attributes] = String(cookieValue).split(";");
   const keptAttributes = attributes.filter((attribute) => {
     // Tollerante su maiuscole e spazi attorno all'uguale ("Domain = x", "SameSite = None"):
@@ -153,7 +162,20 @@ function adaptProxyCookie(cookieValue, { keepSecure = false } = {}) {
     }
     return keepSecure || (normalized !== "secure" && !/^samesite\s*=\s*none$/.test(normalized));
   });
-  return [nameValue, ...keptAttributes].join(";");
+  const adaptedAttributes = pathPrefix === ""
+    ? keptAttributes
+    : keptAttributes.map((attribute) => adaptCookiePath(attribute, pathPrefix));
+  return [nameValue, ...adaptedAttributes].join(";");
+}
+
+// Toglie il prefisso del backend dall'attributo Path; ogni altro attributo passa intatto.
+function adaptCookiePath(attribute, pathPrefix) {
+  const match = /^(\s*path\s*=\s*)(.*?)\s*$/i.exec(attribute);
+  if (!match) {
+    return attribute;
+  }
+  const stripped = stripBackendPathPrefix(match[2], pathPrefix);
+  return stripped == null ? attribute : `${match[1]}${stripped}`;
 }
 
 // Hook su setHeader (stile dell'hook CORS su writeHead in app.js): intercetta i Set-Cookie in
@@ -180,18 +202,40 @@ function installProxyCookieAdapter(res, options) {
 // reverse proxy con trustProxy quelli pubblici, vedi resolvePublicOrigin), preservando path,
 // query e fragment. I Location relativi sono già corretti e passano intatti; quelli verso host
 // TERZI (SSO esterni, CDN) pure: riscriverli romperebbe flussi legittimi.
-function rewriteProxyLocation(locationValue, backendOrigin, publicOrigin) {
+// Quando BACKEND_URL ha un percorso (pathPrefix) i Location parlano dei percorsi del backend
+// ("/gateway/app/home") mentre a Mockxy il client chiede "/home": il prefisso viene tolto, sia
+// dai Location assoluti verso il backend sia da quelli relativi che partono dalla radice. Un
+// Location del backend fuori dal prefisso resta com'è: attraverso Mockxy non è raggiungibile.
+function rewriteProxyLocation(locationValue, backendOrigin, publicOrigin, pathPrefix = "") {
+  const value = String(locationValue);
   let target;
   try {
-    target = new URL(String(locationValue));
+    target = new URL(value);
   } catch {
-    // Relativo o malformato: intatto.
-    return locationValue;
+    // Relativo o malformato: intatto, salvo il prefisso del backend da togliere.
+    return pathPrefix === "" ? locationValue : stripLocationPathPrefix(value, pathPrefix);
   }
   if (target.origin !== backendOrigin) {
     return locationValue;
   }
-  return `${publicOrigin.protocol}://${publicOrigin.host}${target.pathname}${target.search}${target.hash}`;
+  const publicPath = stripBackendPathPrefix(target.pathname, pathPrefix);
+  if (publicPath == null) {
+    return locationValue;
+  }
+  return `${publicOrigin.protocol}://${publicOrigin.host}${publicPath}${target.search}${target.hash}`;
+}
+
+// Location relativo che parte dalla radice ("/gateway/app/home?a=1"): toglie il prefisso del
+// backend. Quelli relativi al percorso corrente ("home"), verso un altro host ("//cdn/x") o
+// fuori dal prefisso passano intatti.
+function stripLocationPathPrefix(value, pathPrefix) {
+  if (!value.startsWith("/") || value.startsWith("//")) {
+    return value;
+  }
+  const pathEnd = value.search(/[?#]/);
+  const pathname = pathEnd === -1 ? value : value.slice(0, pathEnd);
+  const stripped = stripBackendPathPrefix(pathname, pathPrefix);
+  return stripped == null ? value : `${stripped}${pathEnd === -1 ? "" : value.slice(pathEnd)}`;
 }
 
 // Hook su setHeader, come l'adattamento dei cookie: intercetta i Location in uscita qualunque
@@ -207,10 +251,15 @@ function installProxyRedirectRewriter(res, backendUrl, publicOrigin) {
   if (publicOrigin.host == null) {
     return;
   }
+  const pathPrefix = backendPathPrefix(backendUrl);
   const originalSetHeader = res.setHeader;
   res.setHeader = function rewritingSetHeader(name, value) {
     if (String(name).toLowerCase() === "location" && typeof value === "string") {
-      return originalSetHeader.call(this, name, rewriteProxyLocation(value, backendOrigin, publicOrigin));
+      return originalSetHeader.call(
+        this,
+        name,
+        rewriteProxyLocation(value, backendOrigin, publicOrigin, pathPrefix)
+      );
     }
     return originalSetHeader.call(this, name, value);
   };
@@ -774,12 +823,15 @@ function forwardToBackend(req, res, config, logger, proxyMiddlewareRegistry) {
   return new Promise((resolve) => {
     const publicOrigin = resolvePublicOrigin(req, config.trustProxy === true);
     if (config.adaptProxyCookies !== false) {
-      installProxyCookieAdapter(res, { keepSecure: publicOrigin.protocol === "https" });
+      installProxyCookieAdapter(res, {
+        keepSecure: publicOrigin.protocol === "https",
+        pathPrefix: backendPathPrefix(config.backendUrl),
+      });
     }
     if (config.rewriteProxyRedirects !== false) {
       installProxyRedirectRewriter(res, config.backendUrl, publicOrigin);
     }
-    const targetUrl = new URL(req.originalUrl || req.url, config.backendUrl);
+    const targetUrl = resolveBackendTarget(req.originalUrl || req.url, config.backendUrl);
     const client = targetUrl.protocol === "https:" ? https : http;
     const upstreamContext = getUpstreamContext(req, targetUrl, config);
     const middlewareDecision = proxyMiddlewareRegistry?.matchRequest(
