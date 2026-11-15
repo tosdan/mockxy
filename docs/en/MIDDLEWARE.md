@@ -88,5 +88,10 @@ response the backend has already produced.
 The `502` stays reserved for genuine communication problems with the backend (unreachable,
 error while reading the response).
 
+The script runs inside the server process, like handlers: synchronous code that never ends is
+interrupted too when the timeout expires (up to the first `await`), and an error thrown outside
+the request is logged without stopping the server. Details and limits are in
+[HANDLER.md](HANDLER.md#the-script-runs-inside-the-server-process).
+
 Middleware works on proxied requests, so the [global delay extended to the
 proxy](RITARDI.md) applies to it as well.

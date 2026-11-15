@@ -54,6 +54,24 @@
   nel log `errorType` vale `certificate_not_verified`. Dettagli in
   [PROXY.md](../it/PROXY.md#backend-in-https).
 
+### Script del workspace
+
+Handler e middleware girano nel processo del motore. Due loro errori non restavano confinati
+alla richiesta:
+
+- **Codice sincrono che non finisce.** Un `while (true)` in un handler bloccava il server
+  senza limite: il timeout della richiesta è un timer, e un timer non scatta finché il thread
+  è occupato. Ora lo script viene interrotto allo scadere di `requestTimeoutMs`: la risposta è
+  `504 Handler Timeout` con `details.code: HANDLER_BLOCKED` (per un middleware passa la
+  risposta del backend com'è) e il server torna a rispondere. Copre il codice fino al primo
+  `await`; un ciclo che parte dopo resta non interrompibile.
+- **Errori lanciati fuori dalla richiesta.** Un `throw` in un timer o in una promise non
+  attesa di uno script terminava il server headless. Ora viene scritto nel log con il file
+  dello script e l'endpoint, e il server continua; un errore che non viene da uno script resta
+  fatale. Nell'app desktop il dialogo e il log degli errori dicono quale script è stato.
+
+Dettagli e limiti in [HANDLER.md](../it/HANDLER.md#lo-script-gira-nel-processo-del-server).
+
 ### Cambiamenti dell'admin API
 
 - `applyListQuery` (booleano) è accettato in `POST /mocks` e `PUT /mocks/{id}` dentro `config`,

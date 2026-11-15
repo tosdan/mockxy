@@ -56,7 +56,15 @@ incriminato). Qui sotto, i sintomi ricorrenti per area.
   `data is not defined`, allo script manca `data` tra i campi destrutturati del contesto:
   la firma deve essere ad es. `resolveResponse({ params, data })`.
 - **`504 Handler Timeout`** — quasi sempre una promise che non risolve (una fetch senza
-  timeout); il file è indicato nel log.
+  timeout); il file è indicato nel log. Con `details.code: HANDLER_BLOCKED` è invece codice
+  sincrono che non finiva (un ciclo, una regex): lo script è stato interrotto.
+- **Il server non risponde più a nulla** dopo una richiesta a un handler o a un middleware —
+  un ciclo che non finisce *dopo* un `await`, l'unico caso che il motore non può interrompere
+  ([perché](HANDLER.md#lo-script-gira-nel-processo-del-server)): va riavviato, e il ciclo
+  corretto.
+- **Nel log: «A workspace script failed outside its request»** — uno script ha lanciato un
+  errore dentro un timer, un callback o una promise non attesa. Il server ha continuato; i
+  campi `script` ed `endpoint` dicono da dove viene.
 - **`413 Payload Too Large`** — il body della richiesta supera i 2 MB: l'handler non viene
   nemmeno eseguito.
 - **`409 Shared State Conflict`** — durante la richiesta la risorsa è stata azzerata, oppure un
