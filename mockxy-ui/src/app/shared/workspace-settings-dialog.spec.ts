@@ -23,6 +23,7 @@ const WORKSPACE: WorkspaceInfo = {
   corsEnabled: false,
   adaptProxyCookies: true,
   rewriteProxyRedirects: true,
+  verifyBackendCertificate: true,
   globalDelayMs: 0,
   delayAllRequests: false,
   requestTimeoutMs: 15000,
@@ -102,5 +103,20 @@ describe('WorkspaceSettingsDialog', () => {
     // Il salvataggio manda solo i campi cambiati: gli override non finiscono nelle impostazioni.
     await c.save();
     expect(updateWorkspace).toHaveBeenCalledWith('/w/shop', { name: 'Negozio', requestTimeoutMs: 20000 });
+  });
+
+  it('la verifica del certificato del backend parte accesa e, spenta, è il solo campo salvato', async () => {
+    const { fixture, c, root } = create();
+    const verifySwitch = root.querySelector('[aria-label="Verifica il certificato del backend"]')!;
+    expect(verifySwitch.getAttribute('aria-checked')).toBe('true');
+    expect(c.canSave()).toBe(false);
+
+    (verifySwitch as HTMLElement).click();
+    fixture.detectChanges();
+    expect(c.verifyBackendCertificate()).toBe(false);
+    expect(c.canSave()).toBe(true);
+
+    await c.save();
+    expect(updateWorkspace).toHaveBeenCalledWith('/w/shop', { verifyBackendCertificate: false });
   });
 });

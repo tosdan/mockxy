@@ -301,6 +301,8 @@
     "adaptCookiesHint": "Removes the Domain, Secure and SameSite=None attributes from Set-Cookie headers forwarded from the real backend, so session cookies bind to this server and survive over http. Turn it off to observe the backend's original Set-Cookie headers. Changing it restarts the workspace server.",
     "rewriteRedirects": "Rewrite proxied redirects",
     "rewriteRedirectsHint": "When a proxied redirect points at the backend's own address, rewrites the Location header to this server's address so the browser stays on Mockxy (login flows, trailing-slash redirects). Relative and third-party redirects pass untouched. Changing it restarts the workspace server.",
+    "verifyBackendCertificate": "Verify the backend certificate",
+    "verifyBackendCertificateHint": "With an https backend, the certificate is checked against the certificate authorities of Node and of the operating system. Turn it off only for a backend you trust anyway, such as a local one with a self-signed certificate: the proxy will accept any certificate. Changing it restarts the workspace server.",
     "globalDelay": "Global delay (ms)",
     "globalDelayHint": "Delay applied to every mock that has no delayMs of its own. 0 = no delay. Changing it restarts the workspace server.",
     "delayAll": "Delay proxied requests too",

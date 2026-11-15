@@ -206,6 +206,14 @@ export const WORKSPACE_SETTINGS_DIALOG_TITLE_ID = 'mx-workspace-settings-dialog-
         </div>
 
         <div class="flex flex-col gap-1.5">
+          <div class="flex items-center justify-between gap-3">
+            <label class="text-[12px] font-bold uppercase tracking-[0.14em] text-foreground/80">{{ 'workspaceSettings.verifyBackendCertificate' | transloco }}</label>
+            <ui-switch [checked]="verifyBackendCertificate()" (checkedChange)="verifyBackendCertificate.set($event)" size="sm" [ariaLabel]="'workspaceSettings.verifyBackendCertificate' | transloco" />
+          </div>
+          <span class="text-[11.5px] text-muted-foreground">{{ 'workspaceSettings.verifyBackendCertificateHint' | transloco }}</span>
+        </div>
+
+        <div class="flex flex-col gap-1.5">
           <label for="mx-ws-globalDelay" class="text-[12px] font-bold uppercase tracking-[0.14em] text-foreground/80">{{ 'workspaceSettings.globalDelay' | transloco }}</label>
           <input
             ui-input
@@ -376,6 +384,7 @@ export class WorkspaceSettingsDialog {
   protected readonly corsEnabled = signal(this.data.corsEnabled);
   protected readonly adaptProxyCookies = signal(this.data.adaptProxyCookies);
   protected readonly rewriteProxyRedirects = signal(this.data.rewriteProxyRedirects);
+  protected readonly verifyBackendCertificate = signal(this.data.verifyBackendCertificate);
   protected readonly globalDelayMs = signal(String(this.data.globalDelayMs));
   protected readonly globalDelayError = computed(() => validateInt(this.globalDelayMs(), 0));
   protected readonly delayAllRequests = signal(this.data.delayAllRequests);
@@ -408,6 +417,9 @@ export class WorkspaceSettingsDialog {
   );
   private readonly rewriteRedirectsChanged = computed(
     () => this.rewriteProxyRedirects() !== this.data.rewriteProxyRedirects,
+  );
+  private readonly verifyCertificateChanged = computed(
+    () => this.verifyBackendCertificate() !== this.data.verifyBackendCertificate,
   );
   private readonly globalDelayChanged = computed(() => Number(this.globalDelayMs()) !== this.data.globalDelayMs);
   private readonly delayAllChanged = computed(() => this.delayAllRequests() !== this.data.delayAllRequests);
@@ -449,6 +461,7 @@ export class WorkspaceSettingsDialog {
       this.corsChanged() ||
       this.adaptCookiesChanged() ||
       this.rewriteRedirectsChanged() ||
+      this.verifyCertificateChanged() ||
       this.globalDelayChanged() ||
       this.delayAllChanged() ||
       this.requestTimeoutChanged() ||
@@ -483,6 +496,7 @@ export class WorkspaceSettingsDialog {
     if (this.corsChanged()) patch.corsEnabled = this.corsEnabled();
     if (this.adaptCookiesChanged()) patch.adaptProxyCookies = this.adaptProxyCookies();
     if (this.rewriteRedirectsChanged()) patch.rewriteProxyRedirects = this.rewriteProxyRedirects();
+    if (this.verifyCertificateChanged()) patch.verifyBackendCertificate = this.verifyBackendCertificate();
     if (this.globalDelayChanged()) patch.globalDelayMs = Number(this.globalDelayMs());
     if (this.delayAllChanged()) patch.delayAllRequests = this.delayAllRequests();
     if (this.requestTimeoutChanged()) patch.requestTimeoutMs = Number(this.requestTimeoutMs());

@@ -137,6 +137,7 @@ function openWorkspace(root, { defaultPort } = {}) {
     corsEnabled: settings.corsEnabled,
     adaptProxyCookies: settings.adaptProxyCookies,
     rewriteProxyRedirects: settings.rewriteProxyRedirects,
+    verifyBackendCertificate: settings.verifyBackendCertificate,
     globalDelayMs: settings.globalDelayMs,
     delayAllRequests: settings.delayAllRequests,
     requestTimeoutMs: settings.requestTimeoutMs,
