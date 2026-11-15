@@ -232,7 +232,9 @@ The monitor and the history turn a captured response into a mock with the same r
 - **Route and method:** the route that served it (`matchedRoutePath`, when present and not `n/d`),
   otherwise the request path; the method in uppercase. No parametric route is inferred.
 - **Status and delay:** the captured status; `delayMs` 0.
-- **Body:** empty → `{}`; valid JSON → the value; other text → the string. A truncated body or a
+- **Body:** empty → `{}`; valid JSON → the value; other text → the string. From the Monitor, an
+  entry with a truncated preview and `responseBodyRetained` uses the whole response that was
+  kept, not the preview. A truncated body or a
   `[binary payload: …]`/`[compressed payload: …]` placeholder becomes `{}` and the draft is
   **incomplete**: a new endpoint gets the description `[da completare] …`, an added variant a
   title starting with `[da completare]`, and the item the warning `INCOMPLETE_CAPTURE` with

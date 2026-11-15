@@ -54,7 +54,10 @@ Maiusc+clic spunta l'intervallo, il pulsante **Seleziona** avvia la modalità se
 toglie le spunte; da tastiera le frecce si spostano e Spazio spunta. «Seleziona caricate» spunta tutte quelle lette
 fin lì. Da un file — intero, o da una selezione di voci — si **creano mock in blocco**, con le
 stesse regole di travaso della vista live ([monitor](MONITOR.md)): header mascherati e
-ricalcolabili esclusi, scheletri da completare per i body non ricostruibili. I file si
+ricalcolabili esclusi, scheletri da completare per i body non ricostruibili. Una differenza:
+gli archivi contengono solo l'**anteprima** dei body (156 KB), non la risposta completa che il
+Monitor conserva in memoria. Da una risposta più grande il mock completo si crea dal Monitor,
+finché la voce è lì; dallo Storico nasce uno scheletro da completare. I file si
 eliminano singolarmente dalla pagina.
 
 ## Privacy

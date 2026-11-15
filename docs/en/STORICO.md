@@ -52,7 +52,10 @@ Shift+click checks the range, the **Select** button starts selection mode and Es
 checks; from the keyboard the arrows move and Space checks. «Select loaded» checks every entry read
 so far. From a file — whole, or from a selection of entries — you **create mocks in bulk**, with
 the same carry-over rules as the live view ([monitor](MONITOR.md)): masked and recomputable
-headers excluded, skeletons to complete for bodies that can't be reconstructed. Files are
+headers excluded, skeletons to complete for bodies that can't be reconstructed. One difference:
+the archives hold only the body **preview** (156 KB), not the whole response the Monitor keeps
+in memory. From a larger response a complete mock is created from the Monitor, while the entry
+is there; from the History it comes out as a skeleton to complete. Files are
 deleted individually from the page.
 
 ## Privacy

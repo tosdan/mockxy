@@ -38,10 +38,19 @@ valore, il draft, il body della richiesta o lo stack.
   `X-Api-Key`, `X-Auth-Token` — vengono **mascherati** (`***`) già alla cattura: i segreti non
   entrano né nella vista né negli archivi su disco. Il resto del payload, però, può comunque
   contenere dati personali: è il motivo per cui gli archivi restano fuori da git.
-- I body vengono catturati fino a **156 KB** ciascuno: oltre, la preview è troncata (e la voce
-  lo dichiara, insieme al conteggio reale dei byte).
-- I payload **compressi** vengono decompressi per la preview; se la cattura è troncata la
-  decompressione non è possibile e resta un segnaposto con la dimensione. I payload **binari**
+- Di ogni body la voce porta un'**anteprima** fino a **156 KB** di contenuto leggibile: oltre,
+  la preview è troncata (e la voce lo dichiara, insieme al conteggio reale dei byte).
+  L'anteprima è ciò che arriva all'interfaccia e finisce negli archivi, per questo resta
+  piccola.
+- Quando l'anteprima di una **risposta** è troncata, il Monitor conserva a parte, in memoria,
+  la **risposta completa** fino a **5 MB** (`MONITOR_CAPTURE_MAX_BODY_BYTES`): serve a
+  [creare un mock](#da-traffico-a-mock) completo da quella voce, che lo dichiara accanto
+  alla dimensione. Le risposte conservate occupano in tutto al più 64 MB: superati, si
+  lasciano andare le più vecchie, e quelle voci tornano alla sola anteprima. Non si
+  conservano le risposte binarie, quelle oltre i 5 MB e i body delle richieste.
+- I payload **compressi** vengono decompressi, e contano per quanto sono grandi decompressi;
+  uno che si gonfierebbe oltre il limite di cattura non viene decompresso e resta un
+  segnaposto con la dimensione, come quando la cattura è troncata. I payload **binari**
   mostrano un segnaposto con il conteggio dei byte. Il JSON viene riformattato leggibile.
 
 ## Quando registra
@@ -96,8 +105,12 @@ Le regole di travaso:
 
 - gli header **mascherati** non finiscono nel mock (niente `***` fossilizzati), e nemmeno
   quelli che il server ricalcola da sé (`Content-Length` e simili);
-- un body **non ricostruibile** — binario, o troncato perché oltre la soglia di cattura —
-  produce comunque il mock, ma come **scheletro da completare**, marcato nella descrizione;
+- una risposta più grande dell'anteprima diventa un mock **completo** finché il Monitor ne
+  conserva il contenuto (fino a 5 MB, vedi sopra): il mock nasce dalla risposta intera, non da
+  quello che si vede nella preview;
+- un body **non ricostruibile** — binario, oltre il limite di cattura, o di una voce la cui
+  risposta non è più conservata — produce comunque il mock, ma come **scheletro da
+  completare**, marcato nella descrizione;
 - il mock nasce con **filtri e paginazione automatici spenti** (`applyListQuery: false`): la
   risposta catturata è già quella data a una query precisa, e il mock la restituisce com'è con
   qualunque query. Si riaccendono dall'interruttore «Filtri e pagine» della variante

@@ -236,7 +236,9 @@ Monitor e Storico trasformano una risposta catturata in un mock con le stesse re
 - **Rotta e metodo:** la rotta che l'ha servita (`matchedRoutePath`, se presente e diversa da
   `n/d`), altrimenti il path richiesto; metodo in maiuscolo. Nessuna rotta parametrica dedotta.
 - **Status e ritardo:** lo status catturato; `delayMs` 0.
-- **Body:** vuoto → `{}`; JSON valido → il valore; altro testo → la stringa. Un body troncato o un
+- **Body:** vuoto → `{}`; JSON valido → il valore; altro testo → la stringa. Dal Monitor, una
+  voce con l'anteprima troncata e `responseBodyRetained` usa la risposta completa conservata,
+  non l'anteprima. Un body troncato o un
   segnaposto `[binary payload: …]`/`[compressed payload: …]` diventa `{}` e la bozza è
   **incompleta**: un endpoint nuovo ha la descrizione `[da completare] …`, una variante aggiunta
   il titolo che inizia con `[da completare]`, e l'elemento l'avviso `INCOMPLETE_CAPTURE` con
