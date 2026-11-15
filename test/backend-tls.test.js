@@ -10,7 +10,7 @@ const {
   readBackendCertificateAuthorities,
 } = require("../src/proxy/backend-tls");
 const { createMemoryLogger, createTempDir, removeDir } = require("./helpers");
-const { writeTestCertificates } = require("./tls-test-certificates");
+const { createTestCertificates, writeTestCertificates } = require("./tls-test-certificates");
 
 const CHILD_SCRIPT = path.join(__dirname, "fixtures", "proxy-through-https-backend.js");
 
@@ -28,6 +28,22 @@ describe("backend https: fiducia nel certificato", () => {
 
   afterAll(async () => {
     await removeDir(certificatesDir);
+  });
+
+  // I certificati di prova si generano a ogni esecuzione, con un numero di serie casuale: un
+  // certificato su mille usciva malformato e faceva fallire a caso i test qui sotto.
+  test("i certificati di prova sono validi anche quando il numero di serie casuale inizia per zero", () => {
+    const crypto = require("crypto");
+    const randomBytes = jest.spyOn(crypto, "randomBytes").mockImplementation((size) => Buffer.alloc(size));
+    try {
+      const generated = createTestCertificates();
+
+      expect(() => new crypto.X509Certificate(generated.ca)).not.toThrow();
+      expect(() => new crypto.X509Certificate(generated.cert)).not.toThrow();
+      expect(new crypto.X509Certificate(generated.cert).checkIssued(new crypto.X509Certificate(generated.ca))).toBe(true);
+    } finally {
+      randomBytes.mockRestore();
+    }
   });
 
   describe("autorità di certificazione", () => {
