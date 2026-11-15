@@ -280,7 +280,7 @@
     "portInUse": "La porta {{port}} è già in uso. Scegline un'altra.",
     "portUnavailable": "Porta non disponibile",
     "backendUrl": "Backend URL",
-    "backendUrlHint": "URL del backend reale verso cui inoltrare le richieste senza mock. Vuoto = solo mock.",
+    "backendUrlHint": "URL del backend reale verso cui inoltrare le richieste senza mock. Un percorso nell'URL (es. /servizio/v1) precede quello di ogni richiesta inoltrata. Vuoto = solo mock.",
     "backendUrlInvalid": "URL non valido: usa un indirizzo assoluto, es. http://localhost:8080.",
     "exposeNetwork": "Accessibile da tutta la rete",
     "exposeNetworkWarning": "⚠ Attivo, l'app ascolta su 0.0.0.0 ed è raggiungibile da chiunque sulla rete. L'admin API crea handler ed esegue codice: chi arriva a questa porta può eseguire codice su questa macchina. Usalo solo su reti fidate, a tuo rischio.",

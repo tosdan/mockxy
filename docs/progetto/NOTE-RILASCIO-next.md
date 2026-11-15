@@ -18,6 +18,25 @@
 - **Interruttore «Filtri e pagine»:** nel form di modifica della variante e, quando il body è
   una lista, nella testata del body accanto a «Template».
 
+### Proxy verso il backend
+
+- **Una richiesta non sceglie più l'host.** Il request-target veniva risolto come riferimento
+  relativo su `BACKEND_URL`: `//altro-host/x`, `/\altro-host/x` e la forma assoluta
+  `GET http://altro-host/x` portavano la richiesta su un altro host, con i `Cookie` e
+  l'`Authorization` che la accompagnavano. Ora dalla richiesta si prendono solo percorso e
+  query; schema, host e porta sono sempre quelli di `BACKEND_URL`. Vale anche per gli upgrade
+  WebSocket inoltrati.
+- **Il percorso di `BACKEND_URL` non si perde più.** Con
+  `BACKEND_URL=https://gateway.example/servizio/v1` una richiesta a `/utenti` arrivava al
+  backend come `/utenti`; ora arriva come `/servizio/v1/utenti`. Sulla via del ritorno il
+  prefisso viene tolto dai `Location` (`REWRITE_PROXY_REDIRECTS`) e dal `Path` dei cookie
+  (`ADAPT_PROXY_COOKIES`), così redirect e sessione restano su Mockxy. Dettagli in
+  [PROXY.md](../it/PROXY.md#cosa-viene-inoltrato).
+- **Da controllare all'aggiornamento:** chi ha un percorso in `BACKEND_URL` e un client che
+  quel percorso lo scrive già nelle richieste (prima funzionava, perché il percorso di
+  `BACKEND_URL` veniva ignorato) lo vedrebbe ora raddoppiato: va tolto da `BACKEND_URL`. Con
+  `BACKEND_URL` senza percorso non cambia nulla.
+
 ### Cambiamenti dell'admin API
 
 - `applyListQuery` (booleano) è accettato in `POST /mocks` e `PUT /mocks/{id}` dentro `config`,

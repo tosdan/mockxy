@@ -36,6 +36,26 @@ The rewriting uses the request's `Host` header, so it produces the right address
 `localhost` and via LAN IP, with no configuration. If `BACKEND_URL` or the `Host` header
 cannot be parsed, the rewriting simply doesn't kick in and everything passes as it was.
 
+### When `BACKEND_URL` has a path
+
+With `BACKEND_URL=https://gateway.example/service/v1` the backend's `Location` values speak of
+*its* paths (`/service/v1/home`), while the client asks Mockxy for `/home`: followed as it is,
+the redirect would be forwarded to `/service/v1/service/v1/home`. The prefix is therefore
+removed, both from absolute `Location` values pointing at the backend and from relative ones
+that start at the root:
+
+```
+backend:        Location: https://gateway.example/service/v1/home?welcome=1
+to the client:  Location: http://192.168.1.10:3000/home?welcome=1
+
+backend:        Location: /service/v1/home
+to the client:  Location: /home
+```
+
+A `Location` pointing at the backend but **outside the prefix** (`/other-app/login`) passes
+through intact, absolute or relative: that path cannot be reached through Mockxy. `Location`
+values relative to the current path (`home`) are left intact too.
+
 When to turn it off: to observe the backend's original redirects through the proxy — for
 example when you are debugging the staging redirect chain itself.
 

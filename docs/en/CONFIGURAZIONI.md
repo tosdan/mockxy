@@ -31,7 +31,7 @@ can also be set per-workspace from the desktop app.
 |---|---|---|---|---|
 | `port` | `PORT` | `3000` | Port the engine listens on | ✅ |
 | `host` | `HOST` | `127.0.0.1` | Bind interface; `0.0.0.0` = all (the admin API writes files and executes code: exposing on the network is an explicit choice, at the user's own risk) | ✅ ("Reachable from the whole network" toggle: 127.0.0.1 ↔ 0.0.0.0) |
-| `backendUrl` | `BACKEND_URL` | — | URL of the real backend for the proxy; absent = mock-only | ✅ |
+| `backendUrl` | `BACKEND_URL` | — | URL of the real backend for the proxy; absent = mock-only. A path in the URL (`https://host/service/v1`) comes before the path of every forwarded request ([PROXY](PROXY.md#what-gets-forwarded)) | ✅ |
 | `proxyFallbackEnabled` | `PROXY_FALLBACK_ENABLED` | `true` | On an unmocked request: proxy to the backend (`true`) vs mock-only `404` (`false`) | ✅ |
 | `caseInsensitiveFilters` | `CASE_INSENSITIVE_FILTERS` | `true` | Automatic filters on lists (`?key=value`): value comparison without distinguishing upper and lower case | ✅ |
 | `corsEnabled` | `CORS_ENABLED` | `false` | The engine's CORS handling: answers preflights and sets the headers (origin reflected, credentials allowed) on every response served, overriding the policy of captured mocks and of the proxied backend. Only needed for direct cross-origin browser calls | ✅ |

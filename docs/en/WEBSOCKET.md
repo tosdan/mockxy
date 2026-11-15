@@ -21,7 +21,9 @@ Upgrade requests don't go through the HTTP pipeline: no mocks, handlers, middlew
 [topology adaptations](CORS.md) or monitor. The engine handles them on a dedicated track:
 
 1. **the handshake is forwarded to the backend** as-is (headers recreated correctly for the
-   new leg, `Host` rewritten), protected by the request timeout;
+   new leg, `Host` rewritten), protected by the request timeout. The destination follows the
+   same rules as HTTP requests: the `BACKEND_URL` host, its path as a prefix
+   ([PROXY.md](PROXY.md#what-gets-forwarded));
 2. if the backend accepts (`101 Switching Protocols`), the two sockets are **glued
    together**: bytes one way, bytes the other, with cross-closing — and **no inactivity
    timeout**, because a WebSocket can legitimately stay silent for a long time. The tunnel,

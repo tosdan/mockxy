@@ -36,6 +36,26 @@ La riscrittura usa l'header `Host` della richiesta, quindi produce l'indirizzo g
 `localhost` sia via IP di LAN, senza configurazione. Se `BACKEND_URL` o l'header `Host` non
 sono interpretabili, la riscrittura semplicemente non si attiva e tutto passa com'era.
 
+### Quando `BACKEND_URL` ha un percorso
+
+Con `BACKEND_URL=https://gateway.example/servizio/v1` i `Location` del backend parlano dei
+*suoi* percorsi (`/servizio/v1/home`), mentre a Mockxy il client chiede `/home`: seguito così
+com'è, il redirect verrebbe inoltrato a `/servizio/v1/servizio/v1/home`. Il prefisso viene
+quindi tolto, sia dai `Location` assoluti verso il backend sia da quelli relativi che partono
+dalla radice:
+
+```
+backend:    Location: https://gateway.example/servizio/v1/home?benvenuto=1
+al client:  Location: http://192.168.1.10:3000/home?benvenuto=1
+
+backend:    Location: /servizio/v1/home
+al client:  Location: /home
+```
+
+Un `Location` verso il backend ma **fuori dal prefisso** (`/altra-app/login`) passa intatto,
+assoluto o relativo che sia: attraverso Mockxy quel percorso non è raggiungibile. Intatti anche
+i `Location` relativi al percorso corrente (`home`).
+
 Quando spegnerla: per osservare i redirect originali del backend attraverso il proxy — per
 esempio quando si sta debuggando proprio la catena di redirect di staging.
 

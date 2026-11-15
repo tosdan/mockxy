@@ -31,7 +31,7 @@ impostabile per-workspace dall'app desktop.
 |---|---|---|---|---|
 | `port` | `PORT` | `3000` | Porta di ascolto del motore | ✅ |
 | `host` | `HOST` | `127.0.0.1` | Interfaccia di bind; `0.0.0.0` = tutte (l'admin API scrive file ed esegue codice: esporre in rete è una scelta esplicita, a rischio dell'utente) | ✅ (toggle «Accessibile da tutta la rete»: 127.0.0.1 ↔ 0.0.0.0) |
-| `backendUrl` | `BACKEND_URL` | — | URL del backend reale per il proxy; assente = solo mock | ✅ |
+| `backendUrl` | `BACKEND_URL` | — | URL del backend reale per il proxy; assente = solo mock. Un percorso nell'URL (`https://host/servizio/v1`) precede quello di ogni richiesta inoltrata ([PROXY](PROXY.md#cosa-viene-inoltrato)) | ✅ |
 | `proxyFallbackEnabled` | `PROXY_FALLBACK_ENABLED` | `true` | Su richiesta non mockata: proxy al backend (`true`) vs `404` mock-only (`false`) | ✅ |
 | `caseInsensitiveFilters` | `CASE_INSENSITIVE_FILTERS` | `true` | Filtri automatici sulle liste (`?chiave=valore`): confronto del valore senza distinguere maiuscole/minuscole | ✅ |
 | `corsEnabled` | `CORS_ENABLED` | `false` | Gestione CORS del motore: risponde ai preflight e imposta gli header (origin riflessa, credenziali ammesse) su ogni risposta servita, sovrascrivendo la policy dei mock catturati e del backend proxato. Serve solo per chiamate browser cross-origin dirette | ✅ |

@@ -21,7 +21,9 @@ Le richieste di upgrade non attraversano la pipeline HTTP: niente mock, handler,
 [adattamenti di topologia](CORS.md) né monitor. Il motore le gestisce su un binario dedicato:
 
 1. **l'handshake viene inoltrato al backend** così com'è (header ricreati correttamente per la
-   nuova tratta, `Host` riscritto), protetto dal timeout di richiesta;
+   nuova tratta, `Host` riscritto), protetto dal timeout di richiesta. La destinazione segue
+   le stesse regole delle richieste HTTP: host di `BACKEND_URL`, il suo percorso come prefisso
+   ([PROXY.md](PROXY.md#cosa-viene-inoltrato));
 2. se il backend accetta (`101 Switching Protocols`), i due socket vengono **incollati**: byte
    in una direzione, byte nell'altra, con chiusura incrociata — e **senza timeout di
    inattività**, perché una WebSocket può legittimamente tacere a lungo. Il tunnel, stabilito,

@@ -36,8 +36,28 @@ campo «Backend URL». Il censimento completo è in [CONFIGURAZIONI.md](CONFIGUR
 
 ## Cosa viene inoltrato
 
-L'URL verso il backend è la base configurata più percorso e query della richiesta, così come
-sono. Gli header della richiesta passano tutti tranne quelli *hop-by-hop* (`Connection`,
+L'URL verso il backend è la base configurata più percorso e query della richiesta. Dalla
+richiesta si prendono **solo percorso e query**: schema, host e porta sono sempre quelli di
+`BACKEND_URL`, comunque sia scritta la richiesta (`//altro-host/x`, `/\altro-host/x`,
+`GET http://altro-host/x` restano percorsi del backend). Una richiesta non può quindi portare
+altrove i cookie e l'`Authorization` che accompagna.
+
+Se `BACKEND_URL` ha un **percorso**, quel percorso precede quello richiesto, come `proxy_pass`
+di nginx con una URI:
+
+```
+BACKEND_URL=https://gateway.example/servizio/v1
+richiesta:    GET /utenti?page=2
+al backend:   GET https://gateway.example/servizio/v1/utenti?page=2
+```
+
+I mock restano sui percorsi che il client chiede a Mockxy (`/utenti`), e i segmenti `..` non
+risalgono sopra il percorso di `BACKEND_URL`. Sulla via del ritorno il prefisso viene tolto dai
+[redirect](REDIRECT.md#quando-backend_url-ha-un-percorso) e dal
+[`Path` dei cookie](COOKIE.md#cosa-viene-adattato). Lo stesso vale per gli
+[upgrade WebSocket](WEBSOCKET.md) inoltrati.
+
+Gli header della richiesta passano tutti tranne quelli *hop-by-hop* (`Connection`,
 `Transfer-Encoding` e simili, che appartengono alla singola tratta); `Host` viene riscritto a
 quello del backend. Il body viaggia **in streaming**, senza buffering: upload grandi non
 occupano memoria.

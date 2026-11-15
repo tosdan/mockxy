@@ -23,8 +23,15 @@ Da ogni `Set-Cookie` in transito dal backend vengono rimossi tre attributi:
 - **`SameSite=None`** — senza `Secure` è a sua volta rifiutato; rimosso, il cookie ricade sul
   default `Lax`, adeguato ai flussi same-site di sviluppo.
 
-**Nome e valore del cookie non vengono mai toccati**, e gli altri attributi (`Path`,
-`HttpOnly`, `Expires`, `Max-Age`, gli altri valori di `SameSite`) passano intatti. Il parsing è
+Quando `BACKEND_URL` ha un **percorso** (`https://gateway.example/servizio/v1`, o il context
+path di un'applicazione Java) si adatta anche **`Path`**: il backend scrive
+`Path=/servizio/v1`, ma a Mockxy il browser chiede `/utenti` e quel cookie non lo rimanderebbe
+mai. Il prefisso viene tolto (`Path=/servizio/v1` → `Path=/`, `Path=/servizio/v1/area` →
+`Path=/area`); un `Path` fuori dal prefisso resta com'è. Senza percorso in `BACKEND_URL` il
+`Path` non viene toccato.
+
+**Nome e valore del cookie non vengono mai toccati**, e gli altri attributi (`HttpOnly`,
+`Expires`, `Max-Age`, gli altri valori di `SameSite`) passano intatti. Il parsing è
 tollerante con i formati sciatti visti in natura (maiuscole, spazi attorno all'uguale). I mock
 non c'entrano: l'adattamento riguarda solo le risposte proxate.
 
