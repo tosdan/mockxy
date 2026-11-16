@@ -18,6 +18,15 @@ import { RuntimeSyncStore, affects } from './runtime-sync.store';
  * Si rilegge quando cambia la revisione `activation` di GET /info (per esempio perché un test le
  * ha cambiate via API), al focus e a ogni nuovo runtime, che riparte senza.
  */
+export interface ActivationEndpointRef {
+  method: string;
+  path: string;
+}
+
+export function activationKey(endpoint: ActivationEndpointRef): string {
+  return `${endpoint.method.toUpperCase()} ${endpoint.path}`;
+}
+
 @Injectable({ providedIn: 'root' })
 export class ActivationStore {
   private readonly api = inject(MockAdminApiService);
@@ -27,14 +36,12 @@ export class ActivationStore {
   private readonly _items = signal<readonly ActivationItem[]>([]);
   readonly items = this._items.asReadonly();
   readonly count = computed(() => this._items().length);
-  /** Per id di catalogo: gli endpoint senza voce sono serviti come salvati. */
-  readonly byId = computed(() => {
-    const map = new Map<string, ActivationItem>();
-    for (const item of this._items()) {
-      if (item.id != null) map.set(item.id, item);
-    }
-    return map;
-  });
+  /**
+   * Per metodo e percorso, la chiave che usa il motore. Non per id di catalogo: l'id è il
+   * percorso del file, e cambia se la cartella dell'endpoint viene spostata, senza che
+   * l'attivazione cambi né che la revisione `activation` si muova.
+   */
+  private readonly byEndpoint = computed(() => new Map(this._items().map((item) => [activationKey(item), item])));
   private readonly _busy = signal(false);
   readonly busy = this._busy.asReadonly();
 
@@ -51,6 +58,11 @@ export class ActivationStore {
         if (affects(event, 'activation')) this.load();
       });
     this.load();
+  }
+
+  /** Lo stato temporaneo di un endpoint; senza, l'endpoint è servito come salvato. */
+  of(endpoint: ActivationEndpointRef): ActivationItem | undefined {
+    return this.byEndpoint().get(activationKey(endpoint));
   }
 
   /** Rilegge le attivazioni; una richiesta alla volta, e una sola in coda se ne serve un'altra. */

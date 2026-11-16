@@ -1252,5 +1252,15 @@ describe('MocksNextCatalog', () => {
 
       expect(Object.fromEntries(badges(created.fixture))).toEqual({ 'e:uno': 'TEMP ON', 'e:due': 'TEMP OFF', 'e:tre': 'TEMP' });
     });
+
+    // Cartella spostata a mano: il catalogo ha già il nuovo id, le attivazioni lette prima no.
+    it("il segno resta sulla riga anche se l'id di catalogo dell'endpoint è cambiato", () => {
+      const created = create();
+      seed(created);
+      created.activation.items.set([{ id: 'vecchio-id', method: 'GET', path: '/uno', enabled: true }]);
+      created.fixture.detectChanges();
+
+      expect(Object.fromEntries(badges(created.fixture))).toEqual({ 'e:uno': 'TEMP ON', 'e:due': null, 'e:tre': null });
+    });
   });
 });

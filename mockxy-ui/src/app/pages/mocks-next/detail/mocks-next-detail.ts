@@ -814,7 +814,7 @@ export class MocksNextDetail {
   /** Stato temporaneo dell'endpoint aperto, o null se è servito come salvato. */
   protected readonly temporary = computed(() => {
     const detail = this.detail();
-    return detail == null ? null : (this.activation.byId().get(detail.id) ?? null);
+    return detail == null ? null : (this.activation.of(detail) ?? null);
   });
   /** Acceso o spento in questo momento: lo stato temporaneo, altrimenti quello salvato. */
   protected readonly effectiveEnabled = computed(() => this.temporary()?.enabled ?? this.detail()?.disabled !== true);

@@ -37,12 +37,24 @@ describe('ActivationStore', () => {
     return TestBed.inject(ActivationStore);
   }
 
-  it('legge le attivazioni alla partenza e le indicizza per id', () => {
+  it('legge le attivazioni alla partenza e le trova per metodo e percorso', () => {
     const store = create([ordini, utenti]);
 
     expect(store.count()).toBe(2);
-    expect(store.byId().get('utenti')).toEqual(utenti);
-    expect(store.byId().get('altro')).toBeUndefined();
+    expect(store.of({ method: 'get', path: '/utenti' })).toEqual(utenti);
+    expect(store.of({ method: 'POST', path: '/utenti' })).toBeUndefined();
+    expect(store.of({ method: 'GET', path: '/altro' })).toBeUndefined();
+  });
+
+  // L'id di catalogo è il percorso del file: spostando la cartella cambia, e il catalogo si
+  // rilegge, ma la revisione delle attivazioni non si muove. L'endpoint è sempre lo stesso.
+  it("ritrova l'attivazione anche se nel frattempo l'id di catalogo dell'endpoint è cambiato", () => {
+    const store = create([ordini]);
+
+    sync.revisions('catalog');
+
+    expect(api.getActivation).toHaveBeenCalledTimes(1);
+    expect(store.of({ method: 'GET', path: '/ordini' })).toEqual(ordini);
   });
 
   it('si rilegge quando la revisione delle attivazioni cambia, non per le altre', () => {

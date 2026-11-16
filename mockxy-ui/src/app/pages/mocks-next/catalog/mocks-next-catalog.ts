@@ -572,7 +572,7 @@ interface NavRow {
             }
             <!-- Servito in modo diverso da come è salvato, per questa sessione: lo switch della
                  riga continua a dire ciò che è nel file. -->
-            @if (activation.byId().get(ep.id); as temp) {
+            @if (activation.of(ep); as temp) {
             <span class="rounded bg-[color-mix(in_srgb,var(--status-3xx)_18%,transparent)] px-1 font-bold tracking-wide text-[color:var(--status-3xx)]" [uiTooltip]="'activation.badgeTip' | transloco" data-temporary>TEMP{{ temp.enabled === true ? ' ON' : temp.enabled === false ? ' OFF' : '' }}</span>
             }
           </div>

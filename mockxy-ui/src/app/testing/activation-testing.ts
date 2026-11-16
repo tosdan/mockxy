@@ -1,6 +1,6 @@
 import { computed, signal } from '@angular/core';
 import type { ActivationItem, ActivationPatchItem } from '../mock-admin-api.types';
-import { ActivationStore } from '../shared/activation.store';
+import { ActivationStore, activationKey, type ActivationEndpointRef } from '../shared/activation.store';
 
 /**
  * ActivationStore finto per i test dei componenti che mostrano le attivazioni temporanee: nessuna
@@ -12,7 +12,7 @@ export function fakeActivation(initial: readonly ActivationItem[] = []) {
   const store = {
     items: items.asReadonly(),
     count: computed(() => items().length),
-    byId: computed(() => new Map(items().filter((item) => item.id != null).map((item) => [item.id as string, item]))),
+    of: (endpoint: ActivationEndpointRef) => items().find((item) => activationKey(item) === activationKey(endpoint)),
     busy: signal(false).asReadonly(),
     load: () => {},
     set: (item: ActivationPatchItem) => calls.set.push(item),
