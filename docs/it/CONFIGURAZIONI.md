@@ -10,8 +10,9 @@ livelli distinti che convivono:
    cambio, il motore del workspace **riparte**.
 3. **Preferenze globali dell'app** (app desktop) — `mockxy-prefs.json` nella directory dati utente
    di Electron (accanto all'eseguibile solo nella build Windows portabile).
-4. **Runtime operativo** — interruttori e override della configurazione del motore, in memoria e non
-   persistiti (runtime-bar, barra di stato, admin API).
+4. **Runtime operativo** — interruttori, override della configurazione del motore e stato
+   temporaneo degli endpoint, in memoria e non persistiti (runtime-bar, barra di stato, catalogo,
+   admin API).
 5. **Per-mock** — proprietà del singolo endpoint/variante, nei file dei mock.
 6. **Docker / Compose** — variabili a livello di container e di orchestrazione.
 
@@ -134,6 +135,12 @@ Interruttori "da banco di lavoro" nella runtime-bar; si azzerano al riavvio. App
   né le impostazioni del workspace. «Configurazione» nella barra di stato, nel browser e nel
   desktop, mostra per ogni chiave il valore in uso, se è un override e il valore di avvio, e
   riporta una chiave o tutte al valore di avvio. Un riavvio del motore li elimina.
+- **Stato temporaneo degli endpoint** — per un singolo endpoint, acceso o spento e quale variante
+  serve, per l'esecuzione corrente: `PUT`/`PATCH`/`DELETE /_admin/api/activation` (stato in
+  `src/mocks/activation-overrides.js`, regole in [ADMIN-API](ADMIN-API.md#attivazioni-temporanee)),
+  dal pulsante con l'orologio nel dettaglio dell'endpoint o da un test. Non tocca i file dei mock
+  (livello 5), che restano la decisione salvata. «Azzera» nella barra di stato riporta tutti gli
+  endpoint a come sono salvati; un riavvio del motore fa lo stesso.
 
 > Attenzione a non confondere `proxyAll` (runtime, bypassa tutti i mock) e `serverEnabled` (runtime,
 > spegne il motore) con `proxyFallbackEnabled` (config di workspace, riguarda solo il comportamento sui
@@ -147,7 +154,9 @@ Proprietà del singolo endpoint/variante, editabili dall'editor dei mock (persis
 `/_admin/api/mocks`). Scope diverso da questo documento; in sintesi: `method`, `path`, `enabled`,
 `status`, `headers`, `delayMs`, `templated`, tipo di risposta (mock JSON/testo/file, handler,
 middleware, sequence, SSE, WebSocket), varianti selezionabili (anche per query string),
-`description`, abilitazione delle collezioni.
+`description`, abilitazione delle collezioni. `enabled` e la variante selezionata salvati qui
+sono la decisione condivisa in git; ciò che vale solo per una sessione è lo stato temporaneo del
+livello 4.
 
 ---
 
@@ -165,4 +174,4 @@ Il file `.env.example` documenta le variabili del motore per l'uso headless (`no
 
 ---
 
-_Ultimo aggiornamento: 16 luglio 2026._
+_Ultimo aggiornamento: 16 novembre 2026._

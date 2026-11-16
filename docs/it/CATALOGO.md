@@ -3,9 +3,14 @@
 Il catalogo è la vista di lavoro sul workspace: l'elenco di tutti gli endpoint, organizzabile e
 ricercabile, da cui si crea, si modifica e si accende ogni mock. Vale la regola fondante di
 Mockxy: **il catalogo e i file sono due viste equivalenti sugli stessi dati** — ogni azione
-dell'interfaccia scrive i [file endpoint](ENDPOINT.md) e [di risposta](RESPONSE.md) documentati
-nelle pagine dedicate, e ogni modifica fatta a mano sui file compare nel catalogo grazie alla
-ricarica a caldo.
+che cambia un mock scrive i [file endpoint](ENDPOINT.md) e [di risposta](RESPONSE.md)
+documentati nelle pagine dedicate, e ogni modifica fatta a mano sui file compare nel catalogo
+grazie alla ricarica a caldo.
+
+La regola riguarda **i dati del workspace**. Ne resta fuori, per scelta, ciò che è stato
+operativo di una sessione e non un dato: i [controlli globali](CONTROLLI.md), che valgono per
+tutto il motore, e lo [stato temporaneo](#stato-temporaneo) di un singolo endpoint. Non vengono
+scritti, non compaiono nei file e un riavvio li elimina.
 
 ## Collezioni
 
@@ -78,9 +83,12 @@ giusta. Ogni endpoint si può poi:
 ### Stato temporaneo
 
 Abilitare un endpoint o scegliere una variante **salva nei file** del workspace: è la decisione
-che va in git e che i colleghi ricevono. Quando serve solo per un momento — riprodurre un bug
-su un endpoint che il backend ha già, provare il caso d'errore — c'è lo **stato temporaneo**,
-dal pulsante con l'orologio accanto all'interruttore dell'endpoint:
+che va in git e che i colleghi ricevono, ed è ciò che serve quando un mock sostituisce un
+backend che [non c'è ancora](SCENARI.md#la-funzione-nuova-è-pronta-il-suo-backend-no). Lo stesso
+gesto però non va bene quando lo stato serve solo per un momento — riprodurre un bug su un
+endpoint che il backend ha già, provare il caso d'errore, preparare un test: il file resta
+modificato, e prima o poi finisce in un commit uno stato che nessuno ha scelto. Per questi casi
+c'è lo **stato temporaneo**, dal pulsante con l'orologio accanto all'interruttore dell'endpoint:
 
 - **accendi / spegni temporaneamente**, senza toccare l'interruttore che salva;
 - **servi temporaneamente** una variante diversa da quella selezionata;
@@ -94,7 +102,16 @@ come sono salvati. Compare anche quando lo scenario l'ha impostato un test via
 [API](ADMIN-API.md#attivazioni-temporanee).
 
 Un salvataggio normale sullo stesso endpoint vince: spegnerlo dall'interruttore, o selezionare
-una variante dalla tendina, fa decadere lo stato temporaneo di quel campo.
+una variante dalla tendina, fa decadere lo stato temporaneo di quel campo. Modificare i dati di
+una variante, o crearne una senza «Attiva subito», non lo tocca.
+
+Interruttore, tendina e righe del catalogo continuano a mostrare **ciò che è salvato**: un
+endpoint acceso temporaneamente ha l'interruttore su «Disattivo» e il segno `TEMP ON`. Sono
+entrambi veri — il primo dice cosa c'è nel file, il secondo cosa risponde adesso.
+
+Nell'app desktop, salvare le [impostazioni del workspace](DESKTOP.md) riavvia il motore e quindi
+elimina lo stato temporaneo; la dialog oggi non lo ricorda. Quale gesto usare, caso per caso, è
+in [SCENARI.md](SCENARI.md#salvare-o-stato-temporaneo).
 
 Il pulsante **Sequenza** crea una variante sequence oppure modifica quella selezionata. La dialog
 configura per ogni step il criterio per numero di richieste o durata, il comportamento finale e
@@ -103,8 +120,8 @@ il reset per inattività; in modifica mostra anche lo stato live e può azzerare
 ## Le varianti e l'editor
 
 Ogni endpoint elenca le proprie varianti di risposta: se ne aggiungono di nuove, si modificano,
-si eliminano, e si sceglie l'**attiva** — quella effettivamente servita. L'editor valida prima
-di scrivere:
+si eliminano, e si sceglie l'**attiva** — quella servita, finché uno [stato
+temporaneo](#stato-temporaneo) non ne fa servire un'altra. L'editor valida prima di scrivere:
 
 - lo **status** con un combobox che suggerisce i codici comuni ma accetta qualunque intero
   100–599;

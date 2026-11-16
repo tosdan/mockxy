@@ -125,7 +125,9 @@ Dettagli e limiti in [HANDLER.md](../it/HANDLER.md#lo-script-gira-nel-processo-d
   endpoint che non esistono più lo fanno decadere.
 
 Dettagli in [CATALOGO.md](../it/CATALOGO.md#stato-temporaneo) e
-[ADMIN-API.md](../it/ADMIN-API.md#attivazioni-temporanee).
+[ADMIN-API.md](../it/ADMIN-API.md#attivazioni-temporanee); i casi d'uso da cui nasce la scelta, e
+quando salvare o usare lo stato temporaneo, in
+[SCENARI.md](../it/SCENARI.md#salvare-o-stato-temporaneo).
 
 ### Cambiamenti dell'admin API
 

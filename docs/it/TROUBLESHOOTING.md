@@ -23,6 +23,15 @@ incriminato). Qui sotto, i sintomi ricorrenti per area.
 - **Era una collezione.** L'interruttore di collezione scrive `enabled` **in massa** sul
   sottoalbero: riaccenderla riaccende anche ciò che era spento singolarmente
   ([catalogo](CATALOGO.md)).
+- **Risponde il mock, ma nel file l'endpoint è spento** (o il contrario, o risponde una variante
+  che non è quella selezionata). È in [stato temporaneo](CATALOGO.md#stato-temporaneo): la riga
+  del catalogo porta il segno **TEMP** e la barra di stato conta gli endpoint coinvolti. L'ha
+  impostato qualcuno dal pulsante con l'orologio, oppure un test via API; **Azzera** riporta
+  tutto a come è salvato.
+- **Lo scenario del test è sparito a metà.** Lo stato temporaneo vive nella memoria del motore:
+  lo eliminano un riavvio (nell'app desktop anche il salvataggio delle impostazioni del
+  workspace), **Azzera**, e un'altra `PUT /activation` — per esempio un secondo test in
+  parallelo contro lo stesso motore, che dichiara il proprio scenario al posto del primo.
 
 ## Filtri e paginazione
 

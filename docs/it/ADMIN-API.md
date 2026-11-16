@@ -290,7 +290,8 @@ la forma della `201`, conteggi compresi.
 Per un endpoint, **acceso o spento** e **quale variante serve**, decisi per la sessione in corso.
 Vivono nella memoria del motore: i file del workspace non cambiano, e un riavvio le elimina. Ciò
 che è salvato (`enabled`, la variante selezionata) resta la decisione del team, quella che va in
-git; questo è lo scenario di un test, o lo stato di chi sta riproducendo un bug.
+git; questo è lo scenario di un test, o lo stato di chi sta riproducendo un bug. I casi d'uso da
+cui nasce la distinzione sono in [SCENARI.md](SCENARI.md#salvare-o-stato-temporaneo).
 
 | Metodo e percorso | Cosa fa |
 |---|---|
@@ -329,8 +330,12 @@ Le regole:
 - **Ciò che non esiste più decade.** Una variante eliminata, o sparita dopo un `git pull`, fa
   tornare l'endpoint a quella salvata; il log lo segnala.
 - **Il catalogo dice ciò che è salvato.** `GET /mocks` e il dettaglio continuano a riportare
-  `disabled` e la variante selezionata dei file: lo stato temporaneo si legge da
-  `GET /activation`, e `revisions.activation` di `GET /info` cresce quando cambia.
+  `disabled` e la variante selezionata dei file, e così `selected` e `active` di
+  `GET /mocks/:id/responses/:file`: lo stato temporaneo si legge da `GET /activation`, e
+  `revisions.activation` di `GET /info` cresce quando cambia. Per sapere che cosa risponde un
+  endpoint servono quindi entrambe le letture.
+- **Una modifica ai file fuori dall'API non lo tocca.** Un editor o un `git pull` cambiano ciò
+  che è salvato; l'attivazione temporanea resta e continua a vincere, salvo il caso sopra.
 
 Il motore è uno per workspace: test che cambiano scenario vanno eseguiti **uno alla volta**
 contro la stessa istanza.
@@ -340,7 +345,7 @@ contro la stessa istanza.
 | Metodo e percorso | Cosa fa |
 |---|---|
 | `GET /health` | se il workspace è caricato senza errori, per orchestratori e load balancer; [dettagli](#health) |
-| `GET /info` | chi risponde e su cosa: `version`, `runtimeId` e `startedAt` (nuovi a ogni avvio), `workspace` (`id`, `root`, `mocksDir`, `filesDir` canonici; `root` solo dall'app desktop), `listener` realmente in ascolto, `watcher` (`state` fra `disabled`, `starting`, `ready`, `error`) e `revisions` (`catalog`, `server`, `dump`, `diagnostics`, `config`). Le revisioni partono da 1 e crescono quando la risorsa cambia: servono a sapere cosa rileggere, non sono precondizioni di scrittura. Non scansiona il workspace |
+| `GET /info` | chi risponde e su cosa: `version`, `runtimeId` e `startedAt` (nuovi a ogni avvio), `workspace` (`id`, `root`, `mocksDir`, `filesDir` canonici; `root` solo dall'app desktop), `listener` realmente in ascolto, `watcher` (`state` fra `disabled`, `starting`, `ready`, `error`) e `revisions` (`catalog`, `server`, `dump`, `diagnostics`, `config`, `activation`). Le revisioni partono da 1 e crescono quando la risorsa cambia: servono a sapere cosa rileggere, non sono precondizioni di scrittura. Non scansiona il workspace |
 | `GET /config` | configurazione di avvio, effettiva e override: `{ runtimeId, startup, effective, overrides, persisted }`, con le sole nove chiavi modificabili a runtime (`backendUrl` è `null` senza backend). Nessun'altra variabile d'ambiente; `persisted` è sempre `false` e `runtimeId` cambia a ogni avvio |
 | `PATCH /config` | override effimeri delle nove chiavi — body `{ set?, unset? }`; [regole](#configurazione-effimera) |
 | `GET /runtime/status` | esito dell'ultimo caricamento del workspace, `200` anche se degradato o fallito: `lastAttempt` (`id`, istanti, `reasons` fra `startup`, `admin`, `watcher`, `status` `applied`, `degraded` o `failed`), `lastAppliedAttemptId`, `errors` per file (`endpointId`, `filePath`, `message`, `serving`: `retained` se resta servita la versione precedente, `missing` se nulla la serve), `warnings` (`code`, `endpointId`, `filePath`, `message`) e `fatalError`. Gli avvisi sono problemi che non impediscono il caricamento — un handler o middleware importato da un altro script, o un problema di `mocks/package.json` come una modifica che richiede il riavvio — e non cambiano `status`: un tentativo con soli avvisi resta `applied`. Solo l'ultimo tentativo, senza storico |
@@ -445,6 +450,20 @@ prudenziale: l'anteprima informa, non abilita né blocca il commit. La copia non
 Un test o un agente che deve provare una funzione prepara lo scenario in modo **esplicito**,
 qualunque stato abbia lasciato la sessione precedente: non esiste un «annulla», e non serve.
 
+Vale per entrambi i modi di attivare uno scenario, che si scelgono in base a **che cosa deve
+restare dopo**:
+
+- **salvato nei file**, quando lo scenario è il risultato del lavoro: i mock di una funzione che
+  il team deve ritrovare accesi, con quella variante. È ciò che fa un agente che prepara il
+  workspace per chi lo userà;
+- **[temporaneo](#attivazioni-temporanee)**, quando lo scenario dura quanto la prova: una suite
+  di test su un repository di mock in cui tutto è spento, un debug. `PUT /activation` non è un
+  «annulla»: è la stessa dichiarazione esplicita, che invece di essere scritta nei file resta
+  nella memoria del motore. Nessuno stato precedente viene ricordato né ripristinato; ciò che la
+  dichiarazione non nomina torna a come è salvato.
+
+Preparare i contenuti (creare o modificare varianti) è invece sempre un salvataggio.
+
 1. **Verificare l'istanza:** `GET /info` (il `workspace` giusto), `GET /openapi.yaml` (le rotte
    che si useranno) e `GET /config` (la configurazione effettiva da cui dipende il test; un
    valore diverso si imposta con [`PATCH /config`](#configurazione-effimera), che vale fino al
@@ -456,11 +475,11 @@ qualunque stato abbia lasciato la sessione precedente: non esiste un «annulla»
    step della sequence selezionata. Se l'esito di una creazione è incerto, rileggere prima di
    ritentare.
 3. **Attivare:** dopo la preparazione riuscita, `PATCH /server` con `serverEnabled: true` e
-   `proxyAll: false`, selezione delle varianti previste, abilitazione degli endpoint. Quando lo
-   scenario non deve restare nei file del workspace — un repository di mock per i test, dove
-   tutto è spento e ogni test accende i suoi — selezione e abilitazione si dichiarano con una
-   sola [`PUT /activation`](#attivazioni-temporanee): niente viene scritto, e il test successivo
-   dichiara il suo scenario senza ereditare nulla.
+   `proxyAll: false`. Poi, se lo scenario va **salvato**: selezione delle varianti previste e
+   abilitazione degli endpoint, con le rotte del catalogo. Se è **temporaneo**: una sola
+   [`PUT /activation`](#attivazioni-temporanee) con gli endpoint da accendere e la variante di
+   ciascuno. Niente viene scritto, il test successivo dichiara il suo scenario senza ereditare
+   nulla, e un'esecuzione interrotta non lascia file modificati.
 4. **Azzerare:** per una sequence, selezionarla e chiamare `POST /mocks/:id/sequence/reset`
    anche se era già selezionata; per lo stato condiviso, i reset delle sole risorse interessate.
 5. **Nessuna attesa a tempo:** una mutazione riuscita è già servita. Le letture di controllo via
@@ -469,7 +488,7 @@ qualunque stato abbia lasciato la sessione precedente: non esiste un «annulla»
    poi leggere le voci successive ([Monitor a pagine](#leggere-il-monitor-a-pagine)); con
    `gap: true` la verifica non può concludere.
 
-Il repository ne contiene un esempio completo, eseguito con la suite Playwright:
+Il repository ne contiene un esempio completo del modo salvato, eseguito con la suite Playwright:
 [`e2e/agent-setup.spec.js`](../../e2e/agent-setup.spec.js), con l'helper
 [`e2e/agent-setup/mockxy-admin.js`](../../e2e/agent-setup/mockxy-admin.js) e il workspace di
 fixture `workspace-agent-test/`. Lo stesso setup riporta allo stesso risultato partendo da una
@@ -483,8 +502,8 @@ Limiti da conoscere:
 - **Modifiche fuori dall'API:** un editor, il watcher o un altro processo non passano dalla coda
   delle mutazioni. Una mutazione alla volta e le precondizioni valgono per le chiamate API; una
   scrittura esterna fatta dopo il controllo resta fuori.
-- **Memoria del runtime:** cursori delle sequence, memoria degli handler, stato condiviso e
-  Monitor vivono in memoria e ripartono a ogni avvio. Il reset di una sequence azzera anche la
+- **Memoria del runtime:** cursori delle sequence, memoria degli handler, stato condiviso,
+  attivazioni temporanee e Monitor vivono in memoria e ripartono a ogni avvio. Il reset di una sequence azzera anche la
   memoria handler di quell'endpoint, ma richiede la sequence selezionata: non è un reset di
   qualunque handler. Un handler con memoria locale che nessun reset azzera va provato su un
   runtime di test nuovo, oppure con un reset specifico documentato nel workspace.

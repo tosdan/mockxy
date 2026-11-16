@@ -24,3 +24,7 @@ Backend Not Configured`; [upgrade connections](WEBSOCKET.md) are always forwarde
 The state is **deliberately not persisted**: on every restart the engine goes back to active
 mode. It's an operational switch, not workspace data — a forgotten «full proxy» doesn't
 survive the session. Via API: `GET`/`PATCH /_admin/api/server`.
+
+The same idea, one endpoint at a time, is the [temporary state](CATALOGO.md#temporary-state):
+turning on, turning off or serving another variant for the session, without writing to the
+files.

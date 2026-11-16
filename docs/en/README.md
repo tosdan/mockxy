@@ -79,7 +79,8 @@ relevant page in the same round as the code.
 
 - [The usage scenarios](SCENARI.md) — the step-by-step walkthroughs behind the proxy+capture
   design: staging reset, contract ahead of the backend, the mock/real boundary that moves, a
-  stateful frontend GET→POST→GET flow, and the hard-to-reproduce case.
+  stateful frontend GET→POST→GET flow, the feature whose backend comes later, the
+  hard-to-reproduce case, end-to-end tests, and when to save or use the temporary state.
 - [Wiring up the frontend](FRONTEND.md) — dev-server proxy or direct cross-origin calls:
   what each route requires and how to verify that everything goes through Mockxy.
 - [Mockxy in a shared staging](STAGING.md) — the profile with the proxy towards the real backend

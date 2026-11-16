@@ -61,6 +61,13 @@ workspace navigable.
 The content of the variants (status, headers, body or binary file, delay, mock/handler/
 middleware type) is documented in the page on the response format.
 
+`enabled` and `selectedResponseFile` are the **saved** state: what goes into git, what
+colleagues receive and what the engine serves at every start. A running engine can serve
+something different for the current session — an endpoint turned on to reproduce a bug, the
+scenario of a test — through the [temporary state](CATALOGO.md#temporary-state), which lives in
+its memory and **does not modify this file**. Whoever reads the file reads the team's decision,
+not necessarily what an engine is answering at that moment.
+
 ## The variant sequence
 
 A sequence is no longer a field of the endpoint file: it is a regular [`sequence` response
@@ -96,6 +103,11 @@ Any change to the file — switching the selected variant, disabling the endpoin
 entry to `responseFiles` after creating the variant's file — is picked up by the hot reload
 when the watch is active (`DEV_WATCH`, on by default in development). No restart is needed, nor
 going through the UI: files and UI are two equivalent views on the same data.
+
+A hand edit is a save like any other, but it does not go through the admin API: a temporary
+state already in place on that endpoint stays, and keeps winning until it is removed. It drops
+by itself only if the variant it was serving disappears from `responseFiles`, or if the endpoint
+no longer exists.
 
 For mocks written in the old v1 format there is the migration script
 `node scripts/migrate-mocks-v2.js <folder>`.

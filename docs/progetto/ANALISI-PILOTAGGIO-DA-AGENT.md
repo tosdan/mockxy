@@ -34,6 +34,9 @@ Decisioni approvate:
   runtime come latenza e backend.
 - **D04:** nessun undo o ripristino dedicato richiesto. Il client prepara lo scenario necessario;
   l'eventuale ripristino usa le normali API. Resta distinto il rollback di una mutazione fallita.
+  *(Novembre 2026: lo [stato temporaneo](../it/CATALOGO.md#stato-temporaneo) permette di
+  dichiarare lo scenario senza scriverlo nei file; il perché è nella nota a D04 del
+  [piano](PIANO-PILOTAGGIO-DA-AGENT.md).)*
 
 Nel perimetro dello scenario selezionato, una variante è **attiva** se è selezionata oppure se
 è referenziata da uno step della sequence selezionata. Il loader carica e valida tutti questi

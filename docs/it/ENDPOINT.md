@@ -62,6 +62,13 @@ workspace navigabile.
 Il contenuto delle varianti (status, header, body o file binario, ritardo, tipo mock/handler/
 middleware) è documentato nella pagina sul formato delle risposte.
 
+`enabled` e `selectedResponseFile` sono lo stato **salvato**: quello che va in git, che i
+colleghi ricevono e che il motore serve a ogni avvio. Un motore in esecuzione può servire
+qualcosa di diverso per la sessione in corso — un endpoint acceso per riprodurre un bug, lo
+scenario di un test — con lo [stato temporaneo](CATALOGO.md#stato-temporaneo), che vive nella
+sua memoria e **non modifica questo file**. Chi legge il file legge quindi la decisione del
+team, non necessariamente ciò che un motore sta rispondendo in quel momento.
+
 ## La sequenza di varianti
 
 La sequenza non è più un campo del file endpoint: è una normale [variante di risposta di tipo
@@ -97,6 +104,11 @@ Qualunque modifica al file — cambiare variante selezionata, spegnere l'endpoin
 voce a `responseFiles` dopo aver creato il file della variante — viene raccolta dalla ricarica a
 caldo quando il watch è attivo (`DEV_WATCH`, attivo di default in sviluppo). Non serve riavviare
 né passare dall'interfaccia: file e UI sono due viste equivalenti sugli stessi dati.
+
+Una modifica a mano è un salvataggio come gli altri, ma non passa dall'admin API: uno stato
+temporaneo già in corso su quell'endpoint resta, e continua a vincere finché non lo si toglie.
+Decade da solo soltanto se la variante che faceva servire sparisce da `responseFiles`, o se
+l'endpoint non esiste più.
 
 Per i mock scritti nel vecchio formato v1 esiste lo script di migrazione
 `node scripts/migrate-mocks-v2.js <cartella>`.
