@@ -3,6 +3,8 @@ import { inject, Injectable } from '@angular/core';
 import { map, Observable, of, retry, throwError } from 'rxjs';
 import { isReadInconsistentError } from './shared/read-error-message';
 import {
+  ActivationPatchItem,
+  ActivationState,
   AssignCollectionRequest,
   CollectionChildrenReorderRequest,
   CollectionCreateRequest,
@@ -502,6 +504,21 @@ export class MockAdminApiService {
   /** Imposta o toglie override effimeri; la risposta è quella di GET /config. */
   patchRuntimeConfig(patch: RuntimeConfigPatch): Observable<RuntimeConfigState> {
     return this.http.patch<RuntimeConfigState>(`${this.baseUrl}/config`, patch);
+  }
+
+  /** Attivazioni temporanee in corso: accensione e variante servita per la sessione, non salvate. */
+  getActivation(): Observable<ActivationState> {
+    return this.http.get<ActivationState>(`${this.baseUrl}/activation`);
+  }
+
+  /** Ritocca l'attivazione temporanea di singoli endpoint; la risposta è quella di GET /activation. */
+  patchActivation(items: readonly ActivationPatchItem[]): Observable<ActivationState> {
+    return this.http.patch<ActivationState>(`${this.baseUrl}/activation`, { items });
+  }
+
+  /** Azzera tutte le attivazioni temporanee: ogni endpoint torna a come è salvato. */
+  clearActivation(): Observable<ActivationState> {
+    return this.http.delete<ActivationState>(`${this.baseUrl}/activation`);
   }
 
   /** Esito dell'ultimo caricamento del workspace, con gli errori del registro installato. */

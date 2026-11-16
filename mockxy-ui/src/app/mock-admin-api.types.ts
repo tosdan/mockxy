@@ -757,6 +757,33 @@ export interface RuntimeRevisions {
   dump: number;
   diagnostics: number;
   config: number;
+  /** Cresce quando cambiano le attivazioni temporanee (GET /activation). */
+  activation: number;
+}
+
+/**
+ * Attivazione temporanea di un endpoint (GET /activation): acceso/spento e variante servita per
+ * la sessione in corso, in memoria. Sono presenti solo i campi decisi: gli altri seguono ciò che
+ * è salvato nei file.
+ */
+export interface ActivationItem {
+  id: string | null;
+  method: string;
+  path: string;
+  enabled?: boolean;
+  responseFile?: string;
+}
+
+export interface ActivationState {
+  revision: number;
+  items: ActivationItem[];
+}
+
+/** Un endpoint da ritoccare con PATCH /activation: `null` toglie quel campo. */
+export interface ActivationPatchItem {
+  id: string;
+  enabled?: boolean | null;
+  responseFile?: string | null;
 }
 
 /** Le nove chiavi della configurazione modificabili a runtime (§13 C8), nell'ordine del server. */

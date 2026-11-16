@@ -13,7 +13,7 @@ function info(overrides: Partial<RuntimeInfo> = {}, revisions: Partial<RuntimeIn
     workspace: { id: `workspace-v1:${'a'.repeat(64)}`, root: null, mocksDir: '/w/mocks', filesDir: null },
     listener: { host: '127.0.0.1', port: 3000 },
     watcher: { state: 'ready', polling: false, lastError: null },
-    revisions: { catalog: 1, server: 1, dump: 1, diagnostics: 1, config: 1, ...revisions },
+    revisions: { catalog: 1, server: 1, dump: 1, diagnostics: 1, config: 1, activation: 1, ...revisions },
     ...overrides,
   };
 }
