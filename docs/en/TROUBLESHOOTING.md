@@ -24,6 +24,15 @@ file). Below, the recurring symptoms by area.
 - **It was a collection.** The collection switch writes `enabled` **in bulk** on the
   subtree: turning it back on also turns back on what had been switched off individually
   ([catalog](CATALOGO.md)).
+- **The mock answers, but in the file the endpoint is off** (or the other way round, or a
+  variant other than the selected one answers). It is in a [temporary
+  state](CATALOGO.md#temporary-state): the catalog row carries the **TEMP** mark and the status
+  bar counts the endpoints involved. Someone set it from the clock button, or a test did through
+  the API; **Clear** brings everything back to what is saved.
+- **The test's scenario vanished halfway.** The temporary state lives in the engine's memory:
+  it is dropped by a restart (in the desktop app, also by saving the workspace settings), by
+  **Clear**, and by another `PUT /activation` — for example a second test running in parallel
+  against the same engine, which declares its own scenario in place of the first.
 
 ## Filters and pagination
 

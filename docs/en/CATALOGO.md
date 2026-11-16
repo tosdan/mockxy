@@ -3,9 +3,14 @@
 The catalog is the working view over the workspace: the list of all endpoints, organizable
 and searchable, from which every mock is created, edited and switched on. Mockxy's founding
 rule applies: **the catalog and the files are two equivalent views over the same data** —
-every UI action writes the [endpoint](ENDPOINT.md) and [response](RESPONSE.md) files
-documented in their dedicated pages, and every change made by hand on the files shows up in
-the catalog thanks to hot reload.
+every action that changes a mock writes the [endpoint](ENDPOINT.md) and [response](RESPONSE.md)
+files documented in their dedicated pages, and every change made by hand on the files shows up
+in the catalog thanks to hot reload.
+
+The rule is about **the workspace's data**. What is left out, on purpose, is the operational
+state of a session, which is not data: the [global controls](CONTROLLI.md), which apply to the
+whole engine, and the [temporary state](#temporary-state) of a single endpoint. They are not
+written, do not appear in the files, and a restart drops them.
 
 ## Collections
 
@@ -74,6 +79,39 @@ right shape. Each endpoint can then be:
 - **enabled/disabled**: when off, its requests follow the [fallback](PROXY.md);
 - **deleted**, along with its variants.
 
+### Temporary state
+
+Enabling an endpoint or choosing a variant **saves to the files** of the workspace: it is the
+decision that goes into git and that colleagues receive, and it is what you need when a mock
+stands in for a backend that [is not there yet](SCENARI.md#the-new-feature-is-ready-its-backend-is-not).
+The same gesture does not fit when the state is needed only for a moment — reproducing a bug on
+an endpoint the backend already has, trying the error case, preparing a test: the file stays
+modified, and sooner or later a state nobody chose ends up in a commit. For these cases there is
+the **temporary state**, from the clock button next to the endpoint's switch:
+
+- **turn on / turn off temporarily**, without touching the switch that saves;
+- **serve temporarily** a variant other than the selected one;
+- **back to what is saved**.
+
+The temporary state lives in the engine's memory: the files do not change, `git status` stays
+clean, and a restart drops it. It cannot go unnoticed: the catalog row carries the **TEMP**
+mark (`TEMP ON`, `TEMP OFF`), the button in the detail says what is different, and the status
+bar counts the endpoints in a temporary state with **Clear**, which brings them all back to
+what is saved. It shows up also when a test set the scenario through the
+[API](ADMIN-API.md#temporary-activation).
+
+A normal save on the same endpoint wins: turning it off from the switch, or selecting a variant
+from the dropdown, drops the temporary state of that field. Editing the data of a variant, or
+creating one without "Activate now", does not touch it.
+
+The switch, the dropdown and the catalog rows keep showing **what is saved**: an endpoint turned
+on temporarily has its switch on "Disabled" and the `TEMP ON` mark. Both are true — the first
+says what is in the file, the second what answers right now.
+
+In the desktop app, saving the [workspace settings](DESKTOP.md) restarts the engine and therefore
+drops the temporary state; the dialog does not mention it yet. Which gesture to use, case by
+case, is in [SCENARI.md](SCENARI.md#save-or-temporary-state).
+
 The **Sequence** button creates a sequence variant or edits the selected one. The dialog sets a
 request-count or duration criterion independently for each step, end behavior and inactivity
 reset; in edit mode it also shows live state and can reset the cursor immediately.
@@ -81,7 +119,8 @@ reset; in edit mode it also shows live state and can reset the cursor immediatel
 ## Variants and the editor
 
 Each endpoint lists its own response variants: you add new ones, edit them, delete them, and
-choose the **active** one — the one actually served. The editor validates before writing:
+choose the **active** one — the one served, until a [temporary state](#temporary-state) makes
+the engine serve another. The editor validates before writing:
 
 - the **status** with a combobox that suggests the common codes but accepts any integer
   100–599;

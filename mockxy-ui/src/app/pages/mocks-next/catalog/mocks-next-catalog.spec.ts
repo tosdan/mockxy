@@ -8,6 +8,7 @@ import { MockAdminApiService } from '../../../mock-admin-api.service';
 import { ViewStateService } from '../../../shared/view-state.service';
 import { ToastService } from '../../../ui/ui-toast/ui-toast';
 import { translocoTesting } from '../../../testing/transloco-testing';
+import { fakeActivation } from '../../../testing/activation-testing';
 
 describe('MocksNextCatalog', () => {
   /** `stored`: lo stato di vista già salvato, come lo troverebbe ViewStateService. */
@@ -20,6 +21,7 @@ describe('MocksNextCatalog', () => {
       read: vi.fn((key: string) => stored[key] ?? null),
       write: vi.fn(),
     };
+    const activation = fakeActivation();
     TestBed.configureTestingModule({
       imports: [MocksNextCatalog, translocoTesting()],
       providers: [
@@ -27,12 +29,13 @@ describe('MocksNextCatalog', () => {
         MocksStore,
         { provide: MockAdminApiService, useValue: api },
         { provide: ViewStateService, useValue: viewState },
+        activation.provider,
       ],
     });
     const fixture = TestBed.createComponent(MocksNextCatalog);
     const store = TestBed.inject(MocksStore);
     fixture.detectChanges();
-    return { fixture, store, viewState };
+    return { fixture, store, viewState, activation };
   }
 
   /** Voci del menu CDK aperto (vivono nell'overlay, fuori dal fixture). */
@@ -1212,4 +1215,52 @@ describe('MocksNextCatalog', () => {
     });
   });
 
+
+  // Un endpoint servito in modo diverso da come è salvato lo dichiara nella riga: lo switch
+  // continua a mostrare ciò che è nel file.
+  describe('stato temporaneo', () => {
+    function seed(created: ReturnType<typeof create>) {
+      created.store.mocks.set([
+        { id: 'uno', type: 'mock', method: 'GET', path: '/uno', status: 200, disabled: true, configFilePath: 'uno' },
+        { id: 'due', type: 'mock', method: 'GET', path: '/due', status: 200, disabled: false, configFilePath: 'due' },
+        { id: 'tre', type: 'mock', method: 'GET', path: '/tre', status: 200, disabled: false, configFilePath: 'tre' },
+      ] as never);
+      created.fixture.detectChanges();
+    }
+    const badges = (fixture: ReturnType<typeof create>['fixture']) =>
+      Array.from((fixture.nativeElement as HTMLElement).querySelectorAll<HTMLElement>('[data-row-key^="e:"]')).map((row) => [
+        row.dataset['rowKey'],
+        row.querySelector('[data-temporary]')?.textContent?.trim() ?? null,
+      ]);
+
+    it('senza attivazioni nessuna riga ha il segno', () => {
+      const created = create();
+      seed(created);
+
+      expect(badges(created.fixture).every(([, badge]) => badge === null)).toBe(true);
+    });
+
+    it('il segno dice se è acceso, spento o solo con una variante diversa', () => {
+      const created = create();
+      seed(created);
+      created.activation.items.set([
+        { id: 'uno', method: 'GET', path: '/uno', enabled: true },
+        { id: 'due', method: 'GET', path: '/due', enabled: false },
+        { id: 'tre', method: 'GET', path: '/tre', responseFile: '002.response.json' },
+      ]);
+      created.fixture.detectChanges();
+
+      expect(Object.fromEntries(badges(created.fixture))).toEqual({ 'e:uno': 'TEMP ON', 'e:due': 'TEMP OFF', 'e:tre': 'TEMP' });
+    });
+
+    // Cartella spostata a mano: il catalogo ha già il nuovo id, le attivazioni lette prima no.
+    it("il segno resta sulla riga anche se l'id di catalogo dell'endpoint è cambiato", () => {
+      const created = create();
+      seed(created);
+      created.activation.items.set([{ id: 'vecchio-id', method: 'GET', path: '/uno', enabled: true }]);
+      created.fixture.detectChanges();
+
+      expect(Object.fromEntries(badges(created.fixture))).toEqual({ 'e:uno': 'TEMP ON', 'e:due': null, 'e:tre': null });
+    });
+  });
 });

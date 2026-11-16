@@ -52,6 +52,11 @@ details are in the [handlers page](HANDLER.md#helpers-shared-across-mocks).
 middleware read at runtime through the `data()` accessor. The folder is flat (no
 subfolders) and file names are normalized to lowercase.
 
+In each endpoint's file, `enabled` and the selected variant are **shared decisions**: they go
+into git, and they are what colleagues and a staging serve. The working state of a moment — a
+mock turned on to reproduce a bug, the scenario of a test — is not to be written there: it is
+the [temporary state](CATALOGO.md#temporary-state), which lives in the engine's memory.
+
 Handler [shared runtime state](HANDLER.md) is **not another workspace file**: it lives only in
 the engine's memory. A data file may initialize it, but mutations are neither written to disk
 nor shared through git. Hot reload preserves state; restart, crash or closing that workspace's

@@ -46,6 +46,7 @@ import { UiMenu, UiMenuItem, UiMenuItemCheckbox } from '../../../ui/ui-menu/ui-m
 import { UiSwitch } from '../../../ui/ui-switch/ui-switch';
 import { ToastService } from '../../../ui/ui-toast/ui-toast';
 import { UiTooltip } from '../../../ui/ui-tooltip/ui-tooltip';
+import { ActivationStore } from '../../../shared/activation.store';
 import {
   MocksStore,
   type CatalogCollectionVM,
@@ -569,6 +570,11 @@ interface NavRow {
             @if (ep.sequenceActive) {
             <span class="rounded px-1 font-bold tracking-wide" [class]="ep.enabled ? 'bg-[color-mix(in_srgb,var(--sequence)_16%,transparent)] text-sequence' : 'bg-white/[0.06]'" [uiTooltip]="'catalog.sequenceBadgeTip' | transloco">SEQ</span>
             }
+            <!-- Servito in modo diverso da come è salvato, per questa sessione: lo switch della
+                 riga continua a dire ciò che è nel file. -->
+            @if (activation.of(ep); as temp) {
+            <span class="rounded bg-[color-mix(in_srgb,var(--status-3xx)_18%,transparent)] px-1 font-bold tracking-wide text-[color:var(--status-3xx)]" [uiTooltip]="'activation.badgeTip' | transloco" data-temporary>TEMP{{ temp.enabled === true ? ' ON' : temp.enabled === false ? ' OFF' : '' }}</span>
+            }
           </div>
         </div>
         <!-- Il menu non tiene posto nella riga: si appoggia allo switch, a sinistra, sopra lo spazio
@@ -760,6 +766,7 @@ export class MocksNextCatalog {
   readonly importOpenapi = output<void>();
 
   protected readonly store = inject(MocksStore);
+  protected readonly activation = inject(ActivationStore);
   private readonly transloco = inject(TranslocoService);
   private readonly viewState = inject(ViewStateService);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);

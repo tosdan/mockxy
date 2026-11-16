@@ -499,6 +499,21 @@ function normalizeCollectionEnabledPayload(payload) {
   return payload.enabled;
 }
 
+// Gli endpoint di una collection e delle sue discendenti, come { method, path }: chi sta per
+// accenderli o spegnerli in blocco deve sapere quali sono prima di scrivere. Una collection
+// inesistente dà un elenco vuoto: l'errore lo riporta la mutazione.
+async function listCollectionEndpoints(mocksDir, collectionId) {
+  const targetCollectionId = normalizeRequestedCollectionId(collectionId);
+  const collectionState = await readCollectionsState(mocksDir);
+  if (targetCollectionId == null || !collectionState.collections.some((collection) => collection.id === targetCollectionId)) {
+    return [];
+  }
+  const subtreeIds = readCollectionSubtreeIds(collectionState.collections, targetCollectionId);
+  return (await listAdminMocks(mocksDir))
+    .filter((item) => item.collectionId != null && subtreeIds.has(item.collectionId))
+    .map((item) => ({ method: item.method, path: item.path }));
+}
+
 async function updateAdminCollectionEnabled(mocksDir, collectionId, payload, reloadRuntime) {
   const targetCollectionId = normalizeRequestedCollectionId(collectionId);
   if (targetCollectionId == null || targetCollectionId === UNSORTED_COLLECTION_ID) {
@@ -542,5 +557,6 @@ module.exports = {
   assignAdminCollection,
   reorderAdminCollectionItems,
   reorderAdminCollectionChildren,
+  listCollectionEndpoints,
   updateAdminCollectionEnabled,
 };

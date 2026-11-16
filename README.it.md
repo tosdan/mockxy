@@ -205,6 +205,7 @@ L'elenco di tutti gli endpoint, organizzabile in **collezioni** (anche annidate,
 - creare **più varianti di risposta** e scegliere quella attiva: status, header (con preset per i casi comuni), body JSON/testo con editor e validazione, oppure un file binario;
 - impostare un **ritardo in millisecondi** per simulare latenza;
 - abilitare/disabilitare il singolo endpoint o un'intera collezione;
+- accendere un endpoint o far servire un'altra variante **solo per la sessione**, senza toccare i file (stato temporaneo), per un debug o per lo scenario di un test;
 - duplicare un endpoint su un nuovo metodo/percorso.
 
 Semantiche delle collezioni, validazioni dell'editor e upload di file binari sono in [docs/it/CATALOGO.md](docs/it/CATALOGO.md).
@@ -223,7 +224,7 @@ Dalla barra superiore puoi sospendere temporaneamente i mock (**proxy totale** v
 
 ## I mock sono file
 
-Tutto ciò che fai dall'interfaccia finisce in normali file JSON dentro la cartella dei mock — e vale anche il contrario: puoi creare e modificare i mock a mano con il tuo editor, e Mockxy li ricarica a caldo. Questo significa che l'intero set di mock è **versionabile in git e condivisibile con il team**. La struttura completa della cartella (cosa si condivide e cosa resta locale) è documentata in [docs/it/WORKSPACE.md](docs/it/WORKSPACE.md).
+Tutto ciò che fai dall'interfaccia finisce in normali file JSON dentro la cartella dei mock — e vale anche il contrario: puoi creare e modificare i mock a mano con il tuo editor, e Mockxy li ricarica a caldo. Questo significa che l'intero set di mock è **versionabile in git e condivisibile con il team**: anche quali endpoint sono accesi e con quale variante, perché è il team a doverli ritrovare così. Fa eccezione, per scelta, lo [stato temporaneo](docs/it/CATALOGO.md#stato-temporaneo): un mock acceso per riprodurre un bug o lo scenario di un test vivono nella memoria del motore e non arrivano nei file. La struttura completa della cartella (cosa si condivide e cosa resta locale) è documentata in [docs/it/WORKSPACE.md](docs/it/WORKSPACE.md).
 
 La struttura è una cartella per endpoint, che rispecchia il percorso dell'API:
 

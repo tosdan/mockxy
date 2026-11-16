@@ -181,7 +181,9 @@ The browser can tell who answered too: every response carries the
 Staging serves everyone the same behavior. A few rules for the mocks that reach it:
 
 - **The selected variant is everyone's.** In git, select the normal case. Errors, empty lists and
-  edge cases are tried locally with the desktop app.
+  edge cases are tried locally with the desktop app, in a [temporary
+  state](CATALOGO.md#temporary-state): that way the trial does not change the selection in the
+  files, and does not reach staging with the next commit.
 - **Sequences with `resetAfterMs`, or none.** The cursor of a [sequence](RESPONSE.md#sequence-response)
   is one per endpoint: requests from different people consume it for each other. With
   `resetAfterMs` it starts over after a pause; otherwise a plain variant is better.
@@ -209,3 +211,7 @@ Choices made to keep staging simple, to be revisited on a concrete need: a read-
 (catalog, Monitor and History without actions), scenarios or variants per person, automatic
 fallback to the mock when the backend does not implement an endpoint, several backends per
 instance, headers added by the engine towards the backend, and mTLS.
+
+The [temporary state](CATALOGO.md#temporary-state) is not the answer to "scenarios per person":
+it applies to the whole engine, that is to everyone using it, and it goes through the admin API,
+which is off in this profile. Staging serves only what is saved in git.

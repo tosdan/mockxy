@@ -8,6 +8,7 @@ import { MocksNextDetail } from './mocks-next-detail';
 import { TranslocoService } from '@jsverse/transloco';
 import { endpointTypeIcon } from '../../../shared/response-source';
 import { translocoTesting } from '../../../testing/transloco-testing';
+import { fakeActivation } from '../../../testing/activation-testing';
 import { MockAdminApiService } from '../../../mock-admin-api.service';
 import { MocksStore } from '../mocks-next.store';
 import type { DraftSave } from '../mocks-next.store';
@@ -59,8 +60,10 @@ describe('MocksNextDetail', () => {
     syncTick: ReturnType<typeof signal<number>>;
   };
   let api: { getMock: ReturnType<typeof vi.fn>; getResponse: ReturnType<typeof vi.fn> };
+  let activation: ReturnType<typeof fakeActivation>;
 
   function create() {
+    activation = fakeActivation();
     store = {
       selected: signal<MockDetail | undefined>(detail()),
       detailUnavailable: signal<string | undefined>(undefined),
@@ -87,6 +90,7 @@ describe('MocksNextDetail', () => {
         provideNoopAnimations(),
         { provide: MocksStore, useValue: store },
         { provide: MockAdminApiService, useValue: api },
+        activation.provider,
       ],
     });
     const fixture = TestBed.createComponent(MocksNextDetail);
@@ -850,6 +854,72 @@ describe('MocksNextDetail', () => {
       show(fixture, detail({ type: 'handler', status: null, responses: [{ fileName: '001.response.json', type: 'handler', title: 'Echo', selected: true }] }));
       expect(text(fixture)).not.toMatch(/delay/i);
       expect(host(fixture).querySelector('span[aria-hidden="true"].absolute.w-px')).toBeNull();
+    });
+  });
+
+  // Stato temporaneo: acceso/spento e variante servita per la sessione, senza toccare i file.
+  // Lo switch dell'endpoint resta quello che salva.
+  describe('stato temporaneo', () => {
+    const twoVariants = () =>
+      detail({
+        disabled: true,
+        responses: [
+          { fileName: '001.response.json', type: 'mock', title: 'Ok', selected: true },
+          { fileName: '002.response.json', type: 'mock', title: 'Errore', selected: false },
+        ],
+      });
+    const trigger = (fixture: ReturnType<typeof create>) =>
+      (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>('[data-temporary-menu]')!;
+    const menu = () => Array.from(document.querySelectorAll<HTMLButtonElement>('.cdk-overlay-container [ui-menu] button'));
+    const open = (fixture: ReturnType<typeof create>) => {
+      trigger(fixture).click();
+      fixture.detectChanges();
+    };
+
+    it('senza stato temporaneo il pulsante non dice nulla; con, dice che cosa è diverso', () => {
+      const fixture = create();
+      expect(trigger(fixture).querySelector('[data-temporary-state]')).toBeNull();
+
+      activation.items.set([{ id: 'e1', method: 'GET', path: '/api/operazioni', enabled: true, responseFile: '002.response.json' }]);
+      fixture.detectChanges();
+
+      expect(trigger(fixture).querySelector('[data-temporary-state]')?.textContent).toBe('acceso · 002.response.json');
+    });
+
+    it('un endpoint spento nei file si accende per la sessione, senza passare dallo switch che salva', () => {
+      const fixture = create();
+      store.selected.set(twoVariants());
+      fixture.detectChanges();
+      open(fixture);
+
+      menu().find((item) => item.textContent?.includes('Accendi temporaneamente'))!.click();
+
+      expect(activation.calls.set).toEqual([{ id: 'e1', enabled: true }]);
+    });
+
+    it('acceso in via temporanea, il menu offre di spegnerlo e di tornare a come è salvato', () => {
+      const fixture = create();
+      store.selected.set(twoVariants());
+      activation.items.set([{ id: 'e1', method: 'GET', path: '/api/operazioni', enabled: true }]);
+      fixture.detectChanges();
+      open(fixture);
+
+      const labels = menu().map((item) => item.textContent?.trim());
+      expect(labels).toContain('Spegni temporaneamente');
+      menu().find((item) => item.textContent?.includes('Torna a come è salvato'))!.click();
+
+      expect(activation.calls.remove).toEqual(['e1']);
+    });
+
+    it('si può servire temporaneamente una variante diversa da quella selezionata', () => {
+      const fixture = create();
+      store.selected.set(twoVariants());
+      fixture.detectChanges();
+      open(fixture);
+
+      menu().find((item) => item.textContent?.includes('Errore'))!.click();
+
+      expect(activation.calls.set).toEqual([{ id: 'e1', responseFile: '002.response.json' }]);
     });
   });
 });

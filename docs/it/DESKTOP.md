@@ -95,6 +95,13 @@ memoria locale degli handler. Salvare le impostazioni durante uno scenario equiv
 ripartire dai seed; un semplice cambio di scheda verso un altro workspace, senza spegnere il
 motore, conserva invece ciascuno store separatamente.
 
+Lo stesso vale per lo [stato temporaneo](CATALOGO.md#stato-temporaneo) degli endpoint: il
+riavvio lo elimina, e ogni endpoint torna a come è salvato. La dialog avvisa prima di perdere gli
+override di configurazione, ma **non ancora** per lo stato temporaneo: se un test o un debug sono
+in corso, la barra di stato dice quanti endpoint lo perderebbero. Ogni workspace aperto ha il
+proprio: lo scenario di un repository di test in una scheda non tocca il workspace di sviluppo
+nell'altra.
+
 ## Il log degli errori (`logs/`)
 
 Gli errori finiscono anche su file, in una sottocartella **`logs/`**. Per la portable Windows e

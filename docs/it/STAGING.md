@@ -180,7 +180,9 @@ Anche dal browser si capisce chi ha risposto: ogni risposta porta l'header
 Lo staging serve a tutti lo stesso comportamento. Qualche regola per i mock che ci arrivano:
 
 - **La variante selezionata è quella di tutti.** In git va selezionato il caso normale. Errori,
-  liste vuote e casi limite si provano in locale con l'app desktop.
+  liste vuote e casi limite si provano in locale con l'app desktop, in [stato
+  temporaneo](CATALOGO.md#stato-temporaneo): così la prova non cambia la selezione nei file, e
+  non arriva allo staging con il commit successivo.
 - **Sequenze con `resetAfterMs`, o niente.** Il cursore di una [sequenza](RESPONSE.md#risposta-sequence)
   è unico per endpoint: le richieste di persone diverse lo consumano a vicenda. Con
   `resetAfterMs` riparte dopo una pausa; altrimenti meglio una variante semplice.
@@ -208,3 +210,7 @@ Scelte fatte per tenere lo staging semplice, da riprendere su una domanda concre
 di sola consultazione (catalogo, Monitor e Storico senza azioni), scenari o varianti per singola
 persona, il ritorno automatico al mock quando il backend non implementa un endpoint, più backend
 per istanza, header aggiunti dal motore verso il backend e mTLS.
+
+Lo [stato temporaneo](CATALOGO.md#stato-temporaneo) non è la risposta agli «scenari per singola
+persona»: vale per l'intero motore, cioè per tutti quelli che lo usano, e passa dall'admin API,
+che in questo profilo è spenta. Lo staging serve soltanto ciò che è salvato in git.

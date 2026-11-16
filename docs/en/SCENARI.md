@@ -67,9 +67,79 @@ the process. Multiple browsers share the same resource. When its shape changes, 
 use the Monitor to find any handler still declaring the previous signature, and reset explicitly.
 A restart or actual engine replacement clears everything anyway.
 
+## "The new feature is ready, its backend is not"
+
+A frontend feature needs new endpoints, and whoever works on the backend cannot deliver them
+at the same moment: coordinating that tightly on one feature is rare. The mocks become part of
+the feature, until the backend arrives:
+
+1. you create the mocks of the new endpoints and leave them **on**: you work against them until
+   the feature is done, then commit them that way;
+2. the feature goes into the frontend's development branch. From then on the frontend
+   **depends** on those endpoints: whoever starts it needs them to answer, and whether the mock
+   or the backend does makes little difference. Git is what hands everyone the mocks already
+   on, with the right variant;
+3. when the backend confirms it implements them, the mocks are turned **off**: another save and
+   another commit, and from there everyone's requests go to the backend.
+
+This is why turning on, turning off and choosing the variant **save to the files**: here the
+state of an endpoint is a team decision, and it has to reach colleagues the way code does. The
+two scenarios that follow are the other case — a state that lasts as long as a debugging
+session or a test, and that must not reach git.
+
 ## "I can't reproduce this case"
 
 A 500, a timeout, an empty list, a pathological dataset: you pin the response of **that
 single endpoint** — a dedicated [variant](RESPONSE.md), or a [delay](RITARDI.md) for the
 timeout — and let everything else pass through. The variants stay in the workspace: the hard
-case can be summoned back with a switch, whenever it's needed again.
+case can be summoned back whenever it's needed again.
+
+Often the endpoint already exists in the backend, and the mock is only there to return the data
+that triggers a bug: once the bug is fixed — usually within the day — the backend has to answer
+again. Turn it on in a [temporary state](CATALOGO.md#temporary-state):
+
+1. if the case that triggers the bug does not exist yet, create a variant for it, without
+   "Activate now", or adjust the data of an existing one. This is content, and it is saved to
+   the files as always: once the bug is fixed you decide whether to keep it, to summon the case
+   back, or to discard it with git;
+2. from the clock button, turn the endpoint on **temporarily** and, if needed, serve that
+   variant temporarily;
+3. once the bug is fixed, **Back to what is saved**: requests go to the backend again. Even if
+   you forget, the file still says `"enabled": false`: it does not end up enabled in a commit by
+   mistake, and a restart turns it off anyway.
+
+## "Each end-to-end test needs a world of its own"
+
+A repository of mocks dedicated to the tests, in which **everything is off**: each test
+declares the scenario it needs — which endpoints answer, and with which variant — and the next
+one declares its own, possibly with another variant of the same endpoints.
+
+1. the test, in its setup, calls [`PUT /activation`](ADMIN-API.md#temporary-activation) once,
+   with the list of endpoints to turn on and the variant of each;
+2. the declaration **replaces** the previous one: whatever the test does not name goes back to
+   off, so no teardown is needed, and an interrupted test leaves nothing to the next;
+3. nothing is written to the files: the repository stays as it is in git, whatever happens
+   during the run.
+
+Before the temporary state the same test turned the endpoints on by saving them and turned them
+off again at the end: an interrupted run left the files modified, and the next test started
+from a scenario that was not its own.
+
+In the desktop app the test repository opens in a tab of its own, next to the workspace you
+develop on: each workspace has its own engine, on its own port, and its own temporary state.
+The scenario of a test does not touch the other workspace.
+
+There is one engine per workspace: tests that change the scenario run one at a time against the
+same instance.
+
+## Save, or temporary state?
+
+| Situation | Gesture | Where it lives | Who receives it |
+|---|---|---|---|
+| The mocks of a feature whose backend is not there yet | switch and variant dropdown | in the files, in git | the whole team, and [staging](STAGING.md) |
+| The backend has delivered: go real | switch (off) | in the files, in git | the whole team |
+| A mock turned on to reproduce a bug | clock button | in the engine's memory | only who uses that engine, until the restart |
+| The scenario of a test | `PUT /activation` | in the engine's memory | only that test |
+
+One question decides: **do colleagues have to find it this way?** If yes, save. If it is
+needed only now, it is temporary state.

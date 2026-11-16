@@ -24,3 +24,6 @@ Backend Not Configured`; le [connessioni di upgrade](WEBSOCKET.md) vengono sempr
 Lo stato è **volutamente non persistito**: a ogni riavvio il motore torna in modalità attiva.
 È un interruttore operativo, non un dato del workspace — un «proxy totale» dimenticato non
 sopravvive alla sessione. Via API: `GET`/`PATCH /_admin/api/server`.
+
+La stessa idea, per un endpoint alla volta, è lo [stato temporaneo](CATALOGO.md#stato-temporaneo):
+accendere, spegnere o far servire un'altra variante per la sessione, senza scrivere nei file.

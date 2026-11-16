@@ -10,8 +10,8 @@ levels that coexist:
    change, the workspace's engine **restarts**.
 3. **Global app preferences** (desktop app) — `mockxy-prefs.json` in Electron's user data directory
    (next to the executable only in the Windows portable build).
-4. **Operational runtime** — switches and overrides of the engine configuration, in memory and
-   not persisted (runtime-bar, status bar, admin API).
+4. **Operational runtime** — switches, overrides of the engine configuration and the temporary
+   state of endpoints, in memory and not persisted (runtime-bar, status bar, catalog, admin API).
 5. **Per-mock** — properties of the single endpoint/variant, in the mock files.
 6. **Docker / Compose** — container-level and orchestration-level variables.
 
@@ -134,6 +134,12 @@ preferences. Not per-workspace.
   `.env` nor the workspace settings. «Configuration» in the status bar, in the browser and on the
   desktop, shows for every key the value in use, whether it is an override and the startup value,
   and brings one key or all of them back to the startup value. A restart of the engine drops them.
+- **Temporary state of endpoints** — for a single endpoint, on or off and which variant it serves,
+  for the current run: `PUT`/`PATCH`/`DELETE /_admin/api/activation` (state in
+  `src/mocks/activation-overrides.js`, rules in [ADMIN-API](ADMIN-API.md#temporary-activation)),
+  from the clock button in the endpoint detail or from a test. It does not touch the mock files
+  (level 5), which stay the saved decision. «Clear» in the status bar brings every endpoint back
+  to what is saved; a restart of the engine does the same.
 
 > Be careful not to confuse `proxyAll` (runtime, bypasses all mocks) and `serverEnabled` (runtime,
 > switches the engine off) with `proxyFallbackEnabled` (workspace config, which only concerns the
@@ -147,7 +153,8 @@ Properties of the single endpoint/variant, editable from the mock editor (persis
 `/_admin/api/mocks`). Different scope from this document; in short: `method`, `path`, `enabled`,
 `status`, `headers`, `delayMs`, `templated`, response type (JSON/text/file mock, handler,
 middleware, sequence, SSE, WebSocket), selectable variants (also per query string),
-`description`, collection enabling.
+`description`, collection enabling. The `enabled` flag and the selected variant saved here are
+the decision shared in git; what holds only for a session is the temporary state of level 4.
 
 ---
 
@@ -165,4 +172,4 @@ The `.env.example` file documents the engine variables for headless use (`node i
 
 ---
 
-_Last updated: July 16, 2026._
+_Last updated: November 16, 2026._

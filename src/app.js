@@ -1035,6 +1035,8 @@ function createApp({
   proxyHandler = forwardToBackend,
   proxyMiddlewareRegistry,
   reloadRuntime,
+  // Attivazioni temporanee del runtime; senza, l'admin API risponde che non ce ne sono.
+  activationOverrides,
   requestMonitor,
   serverState = new ServerStateStore(),
   monitorDump,
@@ -1061,7 +1063,7 @@ function createApp({
   // L'health precede admin e guardia: risponde anche ad admin spenta e senza Host di loopback.
   app.use("/_admin/api", createHealthRouter({ runtimeStatus, config }));
   if (config?.adminApiEnabled !== false) {
-    app.use("/_admin/api", createAdminHostGuard(config), createAdminApiRouter({ config, runtimeConfig, runtimeIdentity, runtimeStatus, catalogRevision, watcherStatus, listener, registry, proxyMiddlewareRegistry, reloadRuntime, requestMonitor, serverState, monitorDump, sequenceStates, handlerStates, sharedStates, sseConnections, wsConnections }));
+    app.use("/_admin/api", createAdminHostGuard(config), createAdminApiRouter({ config, runtimeConfig, runtimeIdentity, runtimeStatus, catalogRevision, watcherStatus, listener, registry, proxyMiddlewareRegistry, reloadRuntime, activationOverrides, requestMonitor, serverState, monitorDump, sequenceStates, handlerStates, sharedStates, sseConnections, wsConnections }));
   } else {
     app.use("/_admin/api", sendAdminApiDisabled);
   }

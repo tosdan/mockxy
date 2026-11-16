@@ -67,9 +67,78 @@ solo nel processo. Più browser condividono la stessa risorsa. Se la forma cambi
 la `seedKey`, si trova dal Monitor qualunque handler rimasto alla firma precedente e si esegue
 un reset esplicito. Riavvio o cambio effettivo del motore azzerano comunque tutto.
 
+## «La funzione nuova è pronta, il suo backend no»
+
+Una funzione del frontend ha bisogno di endpoint nuovi, e chi lavora al backend non riesce a
+consegnarli nello stesso momento: coordinarsi così puntualmente sulla stessa funzione è raro. I
+mock diventano parte della funzione, finché il backend non arriva:
+
+1. si creano i mock degli endpoint nuovi e li si lascia **accesi**: si lavora contro di loro
+   fino a funzione finita, poi li si committa così;
+2. la funzione entra nel ramo di sviluppo del frontend. Da quel momento il frontend **dipende**
+   da quegli endpoint: chiunque lo avvii ha bisogno che rispondano, e che lo faccia il mock o il
+   backend poco cambia. È git a consegnare a tutti i mock già accesi, con la variante giusta;
+3. quando il backend conferma di averli implementati, i mock si **spengono**: un altro
+   salvataggio e un altro commit, e da lì le richieste di tutti passano al backend.
+
+È il motivo per cui accendere, spegnere e scegliere la variante **salvano nei file**: qui lo
+stato di un endpoint è una decisione del team, e deve arrivare ai colleghi come ci arriva il
+codice. I due scenari che seguono sono l'altro caso — uno stato che dura quanto un debug o un
+test, e che in git non deve arrivare.
+
 ## «Questo caso non riesco a riprodurlo»
 
 Un 500, un timeout, una lista vuota, un dataset patologico: si fissa la risposta di **quel
 singolo endpoint** — una [variante](RESPONSE.md) dedicata, o un [ritardo](RITARDI.md) per il
 timeout — e si lascia passare tutto il resto. Le varianti restano nel workspace: il caso
-difficile si rievoca con un interruttore, quando serve di nuovo.
+difficile si rievoca quando serve di nuovo.
+
+Spesso l'endpoint esiste già nel backend, e il mock serve solo a farsi restituire i dati che
+innescano un bug: risolto il bug — di solito in giornata — deve tornare a rispondere il
+backend. Lo si accende in [stato temporaneo](CATALOGO.md#stato-temporaneo):
+
+1. se il caso che innesca il bug non c'è ancora, si crea una variante apposta, senza «Attiva
+   subito», o si ritoccano i dati di una esistente. Questo è contenuto, e si salva nei file
+   come sempre: a bug risolto si decide se tenerlo, per rievocare il caso, o scartarlo con git;
+2. dal pulsante con l'orologio si accende l'endpoint **temporaneamente** e, se serve, si fa
+   servire temporaneamente quella variante;
+3. a bug risolto, **Torna a come è salvato**: le richieste tornano al backend. Anche
+   dimenticandolo, il file dice ancora `"enabled": false`: non finisce acceso in un commit per
+   distrazione, e un riavvio lo spegne comunque.
+
+## «I test end-to-end hanno bisogno ognuno del suo mondo»
+
+Un repository di mock dedicato ai test, in cui **tutto è spento**: ogni test dichiara lo
+scenario che gli serve — quali endpoint rispondono, e con quale variante — e il successivo
+dichiara il suo, magari con un'altra variante degli stessi endpoint.
+
+1. il test, nella sua preparazione, chiama una sola volta
+   [`PUT /activation`](ADMIN-API.md#attivazioni-temporanee) con l'elenco degli endpoint da
+   accendere e la variante di ciascuno;
+2. la dichiarazione **sostituisce** quella precedente: ciò che il test non nomina torna spento,
+   quindi non serve una chiusura, e un test interrotto non lascia nulla al successivo;
+3. niente viene scritto nei file: il repository resta com'è in git, qualunque cosa succeda
+   durante l'esecuzione.
+
+Prima dello stato temporaneo lo stesso test accendeva gli endpoint salvandoli e li rispegneva
+alla fine: un'esecuzione interrotta lasciava i file modificati, e il test dopo partiva da uno
+scenario che non era il suo.
+
+Nell'app desktop il repository dei test si apre in una scheda sua, accanto al workspace su cui
+si sviluppa: ogni workspace ha il proprio motore, sulla propria porta, e il proprio stato
+temporaneo. Lo scenario di un test non tocca l'altro workspace.
+
+Il motore è uno per workspace: i test che cambiano scenario girano uno alla volta contro la
+stessa istanza.
+
+## Salvare, o stato temporaneo?
+
+| Situazione | Gesto | Dove vive | Chi lo riceve |
+|---|---|---|---|
+| I mock di una funzione il cui backend non c'è ancora | interruttore e tendina delle varianti | nei file, in git | tutto il team, e lo [staging](STAGING.md) |
+| Il backend ha consegnato: si passa al reale | interruttore (spento) | nei file, in git | tutto il team |
+| Un mock acceso per riprodurre un bug | pulsante con l'orologio | nella memoria del motore | solo chi usa quel motore, fino al riavvio |
+| Lo scenario di un test | `PUT /activation` | nella memoria del motore | solo quel test |
+
+La domanda che decide è una: **i colleghi devono ritrovarselo così?** Se sì, si salva. Se
+serve soltanto adesso, è stato temporaneo.

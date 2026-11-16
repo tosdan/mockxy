@@ -207,6 +207,7 @@ The list of all endpoints, organized in **collections** (nested too, reorderable
 - create **multiple response variants** and pick the active one: status, headers (with presets for the common cases), JSON/text body with editor and validation, or a binary file;
 - set a **delay in milliseconds** to simulate latency;
 - enable/disable the single endpoint or a whole collection;
+- turn an endpoint on or serve another variant **for the session only**, without touching the files (temporary state), for debugging or for the scenario of a test;
 - duplicate an endpoint onto a new method/path.
 
 Collection semantics, editor validations and binary file upload are in [docs/en/CATALOGO.md](docs/en/CATALOGO.md).
@@ -225,7 +226,7 @@ From the top bar you can temporarily suspend mocks (**full proxy** to the backen
 
 ## Mocks are files
 
-Everything you do from the UI ends up in plain JSON files inside the mocks folder — and the reverse holds too: you can create and edit mocks by hand with your editor, and Mockxy hot-reloads them. This means the whole mock set is **versionable in git and shareable with your team**. The full folder structure (what you share and what stays local) is documented in [docs/en/WORKSPACE.md](docs/en/WORKSPACE.md).
+Everything you do from the UI ends up in plain JSON files inside the mocks folder — and the reverse holds too: you can create and edit mocks by hand with your editor, and Mockxy hot-reloads them. This means the whole mock set is **versionable in git and shareable with your team**: including which endpoints are on and with which variant, because the team has to find them that way. The exception, on purpose, is the [temporary state](docs/en/CATALOGO.md#temporary-state): a mock turned on to reproduce a bug, or the scenario of a test, live in the engine's memory and never reach the files. The full folder structure (what you share and what stays local) is documented in [docs/en/WORKSPACE.md](docs/en/WORKSPACE.md).
 
 The layout is one folder per endpoint, mirroring the API path:
 

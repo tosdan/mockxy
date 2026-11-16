@@ -5,6 +5,7 @@ import { StatusBar } from './status-bar';
 import { WorkspaceSummaryStore } from './workspace-summary.store';
 import { translocoTesting } from '../testing/transloco-testing';
 import { fakeRuntimeSync } from '../testing/runtime-sync-testing';
+import { fakeActivation } from '../testing/activation-testing';
 import { MockAdminApiService } from '../mock-admin-api.service';
 import type { RuntimeStatusReport } from '../mock-admin-api.types';
 import { runtimeConfigState } from '../testing/runtime-config-testing';
@@ -14,16 +15,19 @@ import { vi } from 'vitest';
 describe('StatusBar', () => {
   let summary: WorkspaceSummaryStore;
   let sync: ReturnType<typeof fakeRuntimeSync>;
+  let activation: ReturnType<typeof fakeActivation>;
   let runtimeReport: RuntimeStatusReport;
 
   beforeEach(async () => {
     sync = fakeRuntimeSync();
+    activation = fakeActivation();
     runtimeReport = { runtimeId: 'r1', lastAttempt: null, lastAppliedAttemptId: 1, errors: [], fatalError: null };
     await TestBed.configureTestingModule({
       imports: [StatusBar, translocoTesting()],
       providers: [
         provideNoopAnimations(),
         sync.provider,
+        activation.provider,
         { provide: MockAdminApiService, useValue: { getRuntimeStatus: () => of(runtimeReport), getRuntimeConfig: () => of(runtimeConfigState({ corsEnabled: true })) } },
       ],
     }).compileComponents();
@@ -224,6 +228,28 @@ describe('StatusBar', () => {
     it('senza problemi del runtime non mostra niente', () => {
       const fixture = create();
       expect(text(fixture)).not.toContain('Runtime');
+    });
+  });
+
+  // Lo stato temporaneo non deve poter passare inosservato: può averlo impostato un test via
+  // API, mentre l'interfaccia era aperta su tutt'altro.
+  describe('attivazioni temporanee', () => {
+    it('senza attivazioni non mostra niente', () => {
+      const fixture = create();
+
+      expect(fixture.nativeElement.querySelector('[data-activation-indicator]')).toBeNull();
+    });
+
+    it('dice quanti endpoint sono in stato temporaneo e li riporta tutti a come sono salvati', () => {
+      activation.items.set([
+        { id: 'a', method: 'GET', path: '/a', enabled: true },
+        { id: 'b', method: 'GET', path: '/b', responseFile: '002.response.json' },
+      ]);
+      const fixture = create();
+
+      expect(text(fixture)).toContain('2 endpoint in stato temporaneo');
+      buttonWith(fixture, 'Azzera')!.click();
+      expect(activation.calls.clear).toBe(1);
     });
   });
 });

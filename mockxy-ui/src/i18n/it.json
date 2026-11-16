@@ -10,6 +10,22 @@
     "noResponseBody": "Nessun corpo nella response.",
     "sequenceStepTip": "Step della sequenza che ha servito questa richiesta"
   },
+  "activation": {
+      "failed": "Stato temporaneo non applicato",
+      "countOne": "{{count}} endpoint in stato temporaneo",
+      "count": "{{count}} endpoint in stato temporaneo",
+      "clear": "Azzera",
+      "indicatorTip": "Endpoint serviti in modo diverso da come sono salvati, solo per questa sessione: i file non cambiano e un riavvio li riporta allo stato salvato. Li può aver impostati anche un test via API.",
+      "badgeTip": "Stato temporaneo, non salvato: per questa sessione l'endpoint è servito in modo diverso da come è nel file. Si toglie dal dettaglio o con «Azzera» nella barra di stato.",
+      "menuTip": "Stato temporaneo: accendi, spegni o servi un'altra variante per questa sessione, senza toccare i file",
+      "menuTitle": "Per questa sessione (non salvato)",
+      "turnOn": "Accendi temporaneamente",
+      "turnOff": "Spegni temporaneamente",
+      "serveVariant": "Servi temporaneamente",
+      "backToSaved": "Torna a come è salvato",
+      "on": "acceso",
+      "off": "spento"
+  },
   "common": {
     "resizeHint": "Trascina per ridimensionare · doppio click per reimpostare",
     "selectionModeLabel": "Seleziona",

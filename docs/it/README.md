@@ -80,7 +80,8 @@ la pagina pertinente nello stesso giro del codice.
 
 - [Gli scenari d'uso](SCENARI.md) — i percorsi passo-passo dietro al design proxy+cattura:
   staging resettato, contratto avanti al backend, confine mock/reale che si sposta, flusso
-  frontend GET→POST→GET stateful e il caso difficile da riprodurre.
+  frontend GET→POST→GET stateful, la funzione il cui backend arriva dopo, il caso difficile da
+  riprodurre, i test end-to-end, e quando salvare o usare lo stato temporaneo.
 - [Collegare il frontend](FRONTEND.md) — proxy del dev server o chiamata diretta cross-origin:
   cosa serve per ciascuna strada e come verificare che tutto passi da Mockxy.
 - [Mockxy in uno staging condiviso](STAGING.md) — il profilo con il proxy verso il backend vero e

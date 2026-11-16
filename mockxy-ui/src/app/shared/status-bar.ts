@@ -9,6 +9,7 @@ import { WorkspaceSummaryStore } from './workspace-summary.store';
 import { RuntimeSyncStore } from './runtime-sync.store';
 import { RuntimeDiagnosticsStore } from './runtime-diagnostics.store';
 import { RuntimeConfigIndicator } from './runtime-config-indicator';
+import { ActivationIndicator } from './activation-indicator';
 
 /**
  * Striscia di stato in fondo alla shell: quanti endpoint, collection e attivi ha il workspace, e
@@ -25,7 +26,7 @@ import { RuntimeConfigIndicator } from './runtime-config-indicator';
  */
 @Component({
   selector: 'app-status-bar',
-  imports: [CdkConnectedOverlay, CdkOverlayOrigin, NgIcon, RuntimeConfigIndicator, TranslocoPipe, UiKbd, UiTooltip],
+  imports: [ActivationIndicator, CdkConnectedOverlay, CdkOverlayOrigin, NgIcon, RuntimeConfigIndicator, TranslocoPipe, UiKbd, UiTooltip],
   providers: [provideIcons({ lucideServerCrash, lucideTriangleAlert, lucideUnplug, lucideX })],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -228,6 +229,7 @@ import { RuntimeConfigIndicator } from './runtime-config-indicator';
       <!-- Configurazione runtime e suggerimento stanno a destra, fuori dal blocco del riepilogo: ci
            sono anche quando il catalogo non e' ancora stato aperto. -->
       <span class="ml-auto"></span>
+      <app-activation-indicator />
       <app-runtime-config-indicator />
       <span class="h-3 w-px bg-border"></span>
       <span class="inline-flex items-center gap-1.5">

@@ -4,7 +4,7 @@ import { CdkCopyToClipboard } from '@angular/cdk/clipboard';
 import { NgIcon, provideIcons } from '@ng-icons/core';
 import { map } from 'rxjs';
 import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
-import { lucideCheck, lucideCopy, lucideEllipsisVertical, lucideFile, lucideFolder, lucideMessageSquare, lucidePencil, lucidePlus, lucideTrash2, lucideTriangleAlert, lucideX } from '@ng-icons/lucide';
+import { lucideCheck, lucideClock, lucideCopy, lucideEllipsisVertical, lucideFile, lucideFolder, lucideMessageSquare, lucidePencil, lucidePlus, lucideTrash2, lucideTriangleAlert, lucideX } from '@ng-icons/lucide';
 import { RESPONSE_SOURCE_ICONS, endpointTypeIcon } from '../../../shared/response-source';
 import { UiBadge, type BadgeTone } from '../../../ui/ui-badge/ui-badge';
 import { UiButton } from '../../../ui/ui-button/ui-button';
@@ -22,6 +22,8 @@ import { UiTooltip } from '../../../ui/ui-tooltip/ui-tooltip';
 import { UiDialog } from '../../../ui/ui-dialog/ui-dialog';
 import { MockAdminApiService } from '../../../mock-admin-api.service';
 import { MocksStore } from '../mocks-next.store';
+import { ActivationStore } from '../../../shared/activation.store';
+import type { ActivationItem } from '../../../mock-admin-api.types';
 import { StatusCombobox, isValidStatus } from '../status-combobox/status-combobox';
 import { COPY_DIALOG_TITLE_ID, MocksNextCopyDialog, type CopyDialogData } from '../copy/mocks-next-copy-dialog';
 import { MocksNextSequenceDialog, SEQUENCE_DIALOG_TITLE_ID, type SequenceDialogData } from '../sequence/mocks-next-sequence-dialog';
@@ -48,7 +50,7 @@ const METHOD_TONES: ReadonlySet<string> = new Set(['get', 'post', 'put', 'delete
 @Component({
   selector: 'mocks-next-detail',
   imports: [CdkMenuTrigger, CdkCopyToClipboard, NgIcon, StatusCombobox, TranslocoPipe, UiBadge, UiButton, UiCheckbox, UiChip, UiCode, UiCollapsible, UiInput, UiMenu, UiMenuItem, UiSelect, UiSkeleton, UiSwitch, UiTable, UiTooltip, MocksNextDraftConflict, MocksNextResponseForm, MocksNextSequenceSummary, MocksNextSseConsole, MocksNextWsConsole],
-  providers: [provideIcons({ lucideCheck, lucideCopy, lucideEllipsisVertical, lucideFile, lucideFolder, lucideMessageSquare, lucidePencil, lucidePlus, lucideTrash2, lucideTriangleAlert, lucideX, ...RESPONSE_SOURCE_ICONS })],
+  providers: [provideIcons({ lucideCheck, lucideClock, lucideCopy, lucideEllipsisVertical, lucideFile, lucideFolder, lucideMessageSquare, lucidePencil, lucidePlus, lucideTrash2, lucideTriangleAlert, lucideX, ...RESPONSE_SOURCE_ICONS })],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { class: 'relative flex min-w-0 flex-1 flex-col overflow-hidden bg-muted' },
   template: `
@@ -153,6 +155,25 @@ const METHOD_TONES: ReadonlySet<string> = new Set(['get', 'post', 'put', 'delete
             <ui-switch [checked]="!d.disabled" [disabled]="busy()" size="sm" (checkedChange)="store.toggleEnabled(d.id, $event)" [ariaLabel]="'detail.endpointActive' | transloco" />
             {{ (d.disabled ? 'detail.inactive' : 'detail.active') | transloco }}
           </span>
+          <!-- Stato temporaneo: acceso/spento e variante servita per la sessione, senza toccare i
+               file. Lo switch qui accanto resta quello che salva. -->
+          <button
+            ui-button
+            variant="outline"
+            size="sm"
+            class="shrink-0"
+            [class.text-[color:var(--status-3xx)]]="temporary() != null"
+            [cdkMenuTriggerFor]="temporaryMenu"
+            [disabled]="activation.busy()"
+            [uiTooltip]="'activation.menuTip' | transloco"
+            [attr.aria-label]="'activation.menuTip' | transloco"
+            data-temporary-menu
+          >
+            <ng-icon name="lucideClock" size="0.85rem" />
+            @if (temporary(); as temp) {
+            <span data-temporary-state>{{ temporaryLabel(temp) }}</span>
+            }
+          </button>
           <!-- La conferma prende il posto delle azioni finché non si decide. -->
           @if (d.editable && confirmingDeleteEndpoint()) {
           <span class="inline-flex items-center gap-2 rounded-lg border border-destructive/40 bg-destructive/10 px-2.5 py-1 text-[12.5px]">
@@ -287,6 +308,30 @@ const METHOD_TONES: ReadonlySet<string> = new Set(['get', 'post', 'put', 'delete
         </div>
 
         <!-- azioni sulla variante scelta: al posto della matita e del cestino sciolti in barra -->
+        <ng-template #temporaryMenu>
+          <div ui-menu class="min-w-[17rem]">
+            <div class="px-2 pb-1 pt-0.5 text-[10px] font-bold uppercase tracking-[0.14em] text-muted-foreground">{{ 'activation.menuTitle' | transloco }}</div>
+            <button ui-menu-item (click)="setTemporaryEnabled(!effectiveEnabled())">
+              <span class="flex-1">{{ (effectiveEnabled() ? 'activation.turnOff' : 'activation.turnOn') | transloco }}</span>
+            </button>
+            <div class="px-2 pb-1 pt-2 text-[10px] font-bold uppercase tracking-[0.14em] text-muted-foreground">{{ 'activation.serveVariant' | transloco }}</div>
+            @for (option of responseOptions(); track option.value) {
+            <button ui-menu-item [disabled]="option.disabled === true" (click)="serveTemporarily(option.value)">
+              <span class="flex-1 truncate">{{ option.label }}</span>
+              @if (temporary()?.responseFile === option.value) {
+              <ng-icon name="lucideCheck" size="0.85rem" class="text-brand" />
+              }
+            </button>
+            }
+            @if (temporary() != null) {
+            <button ui-menu-item (click)="removeTemporary()">
+              <ng-icon name="lucideX" size="0.85rem" class="text-muted-foreground" />
+              <span class="flex-1">{{ 'activation.backToSaved' | transloco }}</span>
+            </button>
+            }
+          </div>
+        </ng-template>
+
         <ng-template #responseMenu>
           <div ui-menu class="min-w-[15rem]">
             @if (detail()?.type === 'sequence') {
@@ -486,6 +531,7 @@ const METHOD_TONES: ReadonlySet<string> = new Set(['get', 'post', 'put', 'delete
 })
 export class MocksNextDetail {
   protected readonly store = inject(MocksStore);
+  protected readonly activation = inject(ActivationStore);
   private readonly api = inject(MockAdminApiService);
   private readonly dialog = inject(UiDialog);
   private readonly vcr = inject(ViewContainerRef);
@@ -764,6 +810,37 @@ export class MocksNextDetail {
     const headers = this.detail()?.config?.headers ?? {};
     return Object.entries(headers).map(([key, value]) => [key, formatHeaderValue(value)]);
   });
+
+  /** Stato temporaneo dell'endpoint aperto, o null se è servito come salvato. */
+  protected readonly temporary = computed(() => {
+    const detail = this.detail();
+    return detail == null ? null : (this.activation.of(detail) ?? null);
+  });
+  /** Acceso o spento in questo momento: lo stato temporaneo, altrimenti quello salvato. */
+  protected readonly effectiveEnabled = computed(() => this.temporary()?.enabled ?? this.detail()?.disabled !== true);
+
+  /** Cosa c'è di temporaneo, in breve: «acceso», «spento», e la variante servita. */
+  protected temporaryLabel(item: ActivationItem): string {
+    const parts: string[] = [];
+    if (item.enabled !== undefined) parts.push(this.transloco.translate(item.enabled ? 'activation.on' : 'activation.off'));
+    if (item.responseFile !== undefined) parts.push(item.responseFile);
+    return parts.join(' · ');
+  }
+
+  protected setTemporaryEnabled(enabled: boolean): void {
+    const detail = this.detail();
+    if (detail != null) this.activation.set({ id: detail.id, enabled });
+  }
+
+  protected serveTemporarily(responseFile: string): void {
+    const detail = this.detail();
+    if (detail != null) this.activation.set({ id: detail.id, responseFile });
+  }
+
+  protected removeTemporary(): void {
+    const detail = this.detail();
+    if (detail != null) this.activation.remove(detail.id);
+  }
 
   protected readonly responseOptions = computed<readonly UiSelectOption<string>[]>(() =>
     (this.detail()?.responses ?? []).map((r) => {

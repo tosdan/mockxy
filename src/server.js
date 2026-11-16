@@ -20,6 +20,7 @@ const { ServerStateStore } = require("./server-state");
 const { MonitorDumpWriter } = require("./monitoring/monitor-dump");
 const { createUpgradeHandler } = require("./proxy/upgrade-proxy");
 const { describeCurrentScriptFault } = require("./script-fault-guard");
+const { ActivationOverrideStore } = require("./mocks/activation-overrides");
 const { createRuntimeIdentity } = require("./runtime-identity");
 const { RuntimeConfigStore } = require("./runtime-config");
 const { RELOAD_REASONS, RuntimeStatusStore } = require("./runtime-status");
@@ -80,7 +81,7 @@ function logCreatedScriptPackage(logger, packagePath) {
   }
 }
 
-function createReloadHandler({ mocksDir, registry, proxyMiddlewareRegistry, logger, handlerStates, sseConnections, wsConnections, runtimeStatus, catalogRevision }) {
+function createReloadHandler({ mocksDir, registry, proxyMiddlewareRegistry, logger, handlerStates, sseConnections, wsConnections, runtimeStatus, catalogRevision, activationOverrides }) {
   let drainPromise = null;
   let queuedWaiters = [];
 
@@ -107,9 +108,12 @@ function createReloadHandler({ mocksDir, registry, proxyMiddlewareRegistry, logg
 
   const loadAndInstall = async () => {
     try {
-      const { mockRouteGroups, handlerRouteGroups, proxyMiddlewareRouteGroups, sequenceRouteGroups, sseRouteGroups, wsRouteGroups, loadErrors, loadWarnings = [], createdScriptPackagePath } =
-        await loadEndpointRouteGroups(mocksDir);
+      const { mockRouteGroups, handlerRouteGroups, proxyMiddlewareRouteGroups, sequenceRouteGroups, sseRouteGroups, wsRouteGroups, loadErrors, loadWarnings = [], droppedActivations = [], forcedServing, createdScriptPackagePath } =
+        await loadEndpointRouteGroups(mocksDir, { activation: activationOverrides });
       logCreatedScriptPackage(logger, createdScriptPackagePath);
+      for (const dropped of droppedActivations) {
+        logger.warn("Temporary activation dropped: the endpoint is back to its saved state.", dropped);
+      }
       let routeGroups = mergeLocalRouteGroups({
         mockRouteGroups,
         handlerRouteGroups,
@@ -162,6 +166,8 @@ function createReloadHandler({ mocksDir, registry, proxyMiddlewareRegistry, logg
         fatalError: null,
         installedConfigFilePaths: new Set(installedDefinitions.keys()),
         installedDefinitions,
+        // Endpoint serviti (o no) per un'attivazione temporanea, non per ciò che dice il file.
+        forcedServing,
       };
     } catch (error) {
       logger.error("Runtime reload failed. Keeping previous configuration.", {
@@ -199,6 +205,9 @@ function createReloadHandler({ mocksDir, registry, proxyMiddlewareRegistry, logg
   // di scrivere, per verificare che un eventuale ripristino riporti le stesse versioni.
   reload.installedDefinitions = () =>
     collectInstalledDefinitions([...registry.routeGroups, ...proxyMiddlewareRegistry.routeGroups]);
+  // Lo scenario temporaneo: un reload può farne decadere una parte (una variante cancellata), e
+  // una mutazione poi rifiutata deve poterlo rimettere com'era insieme ai file.
+  reload.activationOverrides = activationOverrides ?? null;
   return reload;
 }
 
@@ -371,6 +380,9 @@ async function createServerRuntime({ configOverrides = {}, logger: extLogger } =
     maxTotalBytes: config.monitorDumpMaxTotalBytes,
     logger,
   });
+  // Attivazioni temporanee (acceso/spento e variante servita, senza toccare i file): vivono
+  // quanto il runtime, come gli override della configurazione.
+  const activationOverrides = new ActivationOverrideStore();
   const reloadRuntime = createReloadHandler({
     mocksDir: config.mocksDir,
     registry,
@@ -381,6 +393,7 @@ async function createServerRuntime({ configOverrides = {}, logger: extLogger } =
     wsConnections,
     runtimeStatus,
     catalogRevision,
+    activationOverrides,
   });
   // Override effimeri della configurazione (§13 C8): vivono quanto il runtime.
   const runtimeConfig = new RuntimeConfigStore(config);
@@ -396,6 +409,7 @@ async function createServerRuntime({ configOverrides = {}, logger: extLogger } =
     listener,
     proxyMiddlewareRegistry,
     reloadRuntime,
+    activationOverrides,
     requestMonitor,
     serverState,
     monitorDump,
@@ -430,6 +444,7 @@ async function createServerRuntime({ configOverrides = {}, logger: extLogger } =
     sseConnections,
     wsConnections,
     reloadRuntime,
+    activationOverrides,
     watcher,
     runtimeIdentity,
     runtimeStatus,

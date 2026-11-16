@@ -37,6 +37,7 @@ const {
   reorderAdminCollectionChildren,
   reorderAdminCollectionItems,
   reparentAdminCollection,
+  listCollectionEndpoints,
   updateAdminCollectionEnabled,
 } = require("./collection-operations");
 const { createMocksFromDump } = require("./dump-to-mock");
@@ -56,7 +57,8 @@ const { ENGINE_VERSION, ObservedRevision, describeWorkspace } = require("../runt
 const { canonicalPath } = require("../utils/canonical-path");
 const { validateWorkspaceScripts } = require("../mocks/workspace-validation");
 const { trackWrites } = require("../utils/write-tracking");
-const { getEndpointResponsesDir } = require("./endpoint-files");
+const { getEndpointResponsesDir, readEndpointConfig } = require("./endpoint-files");
+const { createActivationApi } = require("./activation-api");
 const { resolveAdminFilePath } = require("./mock-ids");
 const { runWithWorkspaceId } = require("./revision-tokens");
 const {
@@ -205,11 +207,37 @@ function sendJson(res, status, payload) {
   res.status(status).json(payload);
 }
 
-function createAdminApiRouter({ config, runtimeConfig = new RuntimeConfigStore(config), runtimeIdentity, runtimeStatus, catalogRevision, watcherStatus, listener, registry, proxyMiddlewareRegistry, reloadRuntime, requestMonitor, serverState, monitorDump, sequenceStates, handlerStates, sharedStates, sseConnections, wsConnections }) {
+function createAdminApiRouter({ config, runtimeConfig = new RuntimeConfigStore(config), runtimeIdentity, runtimeStatus, catalogRevision, watcherStatus, listener, registry, proxyMiddlewareRegistry, reloadRuntime, activationOverrides, requestMonitor, serverState, monitorDump, sequenceStates, handlerStates, sharedStates, sseConnections, wsConnections }) {
   const router = express.Router();
   // Store dello scenario runtime, passati alle mutazioni che possono invalidarlo: il reload da
   // solo non basta, perche' aggrega piu' scritture in un giro unico (vedi invalidateScenario).
   const scenarioStates = { sequenceStates, handlerStates };
+  // Attivazioni temporanee: lo scenario della sessione, che non tocca i file (activation-api.js).
+  const activation = createActivationApi({ mocksDir: config?.mocksDir, store: activationOverrides, reloadRuntime, scenarioStates });
+  // Un salvataggio esplicito di accensione o variante vince sull'attivazione temporanea dello
+  // stesso campo: decade PRIMA della scrittura, così la verifica della mutazione confronta i file
+  // con ciò che il runtime serve davvero. Se la mutazione fallisce, l'attivazione torna com'era.
+  const endpointRef = async (id) => {
+    try {
+      const endpoint = await readEndpointConfig(resolveAdminFilePath(config.mocksDir, id));
+      return [{ method: endpoint.method, path: endpoint.path }];
+    } catch {
+      return [];
+    }
+  };
+  const savingExplicitly = async (refs, fields, task) => {
+    const previous = activationOverrides?.snapshot();
+    const decayed = activation.forget(refs, fields);
+    try {
+      return await task();
+    } catch (error) {
+      if (decayed) {
+        activationOverrides.replaceAll(previous);
+        await reloadRuntime();
+      }
+      throw error;
+    }
+  };
   // Registri del runtime installato: il bersaglio delle console SSE/WS si risolve da qui.
   const installed = { registry, proxyMiddlewareRegistry };
   const workspaceKey = canonicalWorkspaceKey(config?.mocksDir);
@@ -288,6 +316,7 @@ function createAdminApiRouter({ config, runtimeConfig = new RuntimeConfigStore(c
         dump: dumpRevision.observe(),
         diagnostics: runtimeStatus?.revision ?? 1,
         config: runtimeConfig.revision,
+        activation: activation.revision(),
       },
     });
   });
@@ -572,6 +601,22 @@ function createAdminApiRouter({ config, runtimeConfig = new RuntimeConfigStore(c
     })
   );
 
+  // Attivazioni temporanee: accensione e variante servita per la sessione in corso, in memoria.
+  // PUT dichiara l'intero scenario (ciò che non è nominato torna a come è salvato), PATCH
+  // ritocca singoli endpoint, DELETE azzera. Nessun file viene scritto.
+  router.get("/activation", async (_req, res) => {
+    sendJson(res, 200, await activation.describe());
+  });
+  router.put("/activation", mutation(async (req, res) => {
+    sendJson(res, 200, await activation.replace(req.body));
+  }));
+  router.patch("/activation", mutation(async (req, res) => {
+    sendJson(res, 200, await activation.patch(req.body));
+  }));
+  router.delete("/activation", mutation(async (_req, res) => {
+    sendJson(res, 200, await activation.clear());
+  }));
+
   router.get("/mocks", async (_req, res) => {
     // Gli endpoint illeggibili non spengono il catalogo: vengono saltati e segnalati qui.
     const loadErrors = [];
@@ -629,12 +674,13 @@ function createAdminApiRouter({ config, runtimeConfig = new RuntimeConfigStore(c
   }));
 
   router.patch("/mocks/collections/:id/enabled", mutation(async (req, res) => {
-    const items = await updateAdminCollectionEnabled(
+    const refs = await listCollectionEndpoints(config.mocksDir, req.params.id);
+    const items = await savingExplicitly(refs, ["enabled"], () => updateAdminCollectionEnabled(
       config.mocksDir,
       req.params.id,
       req.body,
       reloadRuntime
-    );
+    ));
     const collections = await listAdminCollections(config.mocksDir, items);
     const childOrder = await listAdminChildOrder(config.mocksDir, items);
     sendJson(res, 200, { items, collections, childOrder });
@@ -656,7 +702,12 @@ function createAdminApiRouter({ config, runtimeConfig = new RuntimeConfigStore(c
 
   // Registrata prima di /mocks/:id: "enabled" non è l'id di una definizione.
   router.patch("/mocks/enabled", mutation(async (req, res) => {
-    const items = await updateAdminEndpointsEnabled(config.mocksDir, req.body, reloadRuntime);
+    const refs = [];
+    for (const id of Array.isArray(req.body?.ids) ? req.body.ids.filter((value) => typeof value === "string") : []) {
+      refs.push(...await endpointRef(id));
+    }
+    const items = await savingExplicitly(refs, ["enabled"], () =>
+      updateAdminEndpointsEnabled(config.mocksDir, req.body, reloadRuntime));
     const collections = await listAdminCollections(config.mocksDir, items);
     const childOrder = await listAdminChildOrder(config.mocksDir, items);
     sendJson(res, 200, { items, collections, childOrder });
@@ -778,22 +829,21 @@ function createAdminApiRouter({ config, runtimeConfig = new RuntimeConfigStore(c
   }));
 
   router.put("/mocks/:id/endpoint", mutation(async (req, res) => {
-    const detail = await updateAdminEndpoint(
-      config.mocksDir,
-      req.params.id,
-      req.body,
-      reloadRuntime
+    const savesEnabled = Object.prototype.hasOwnProperty.call(req.body || {}, "enabled");
+    const detail = await savingExplicitly(
+      savesEnabled ? await endpointRef(req.params.id) : [],
+      ["enabled"],
+      () => updateAdminEndpoint(config.mocksDir, req.params.id, req.body, reloadRuntime)
     );
     sendJson(res, 200, detail);
   }));
 
   router.post("/mocks/:id/responses", mutation(async (req, res) => {
-    const detail = await createAdminResponse(
-      config.mocksDir,
-      req.params.id,
-      req.body,
-      reloadRuntime,
-      scenarioStates
+    // La variante nuova viene selezionata, salvo `select: false`: è un salvataggio della selezione.
+    const detail = await savingExplicitly(
+      req.body?.select === false ? [] : await endpointRef(req.params.id),
+      ["responseFile"],
+      () => createAdminResponse(config.mocksDir, req.params.id, req.body, reloadRuntime, scenarioStates)
     );
     sendJson(res, 201, detail);
   }));
@@ -853,12 +903,17 @@ function createAdminApiRouter({ config, runtimeConfig = new RuntimeConfigStore(c
   }));
 
   router.put("/mocks/:id", mutation(async (req, res) => {
-    const detail = await updateAdminMock(
-      config.mocksDir,
-      req.params.id,
-      req.body,
-      reloadRuntime,
-      scenarioStates
+    // `disabled` arriva in `config` per un mock e in `definition` per handler e middleware.
+    const savesDisabled = ["config", "definition"].some((form) =>
+      Object.prototype.hasOwnProperty.call(req.body?.[form] || {}, "disabled"));
+    const fields = [
+      ...(Object.prototype.hasOwnProperty.call(req.body || {}, "selectedResponseFile") ? ["responseFile"] : []),
+      ...(savesDisabled ? ["enabled"] : []),
+    ];
+    const detail = await savingExplicitly(
+      fields.length > 0 ? await endpointRef(req.params.id) : [],
+      fields,
+      () => updateAdminMock(config.mocksDir, req.params.id, req.body, reloadRuntime, scenarioStates)
     );
     sendJson(res, 200, detail);
   }));

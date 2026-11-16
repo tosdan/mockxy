@@ -10,6 +10,22 @@
     "noResponseBody": "No body in the response.",
     "sequenceStepTip": "Sequence step that served this request"
   },
+  "activation": {
+      "failed": "Temporary state not applied",
+      "countOne": "{{count}} endpoint in a temporary state",
+      "count": "{{count}} endpoints in a temporary state",
+      "clear": "Clear",
+      "indicatorTip": "Endpoints served differently from how they are saved, for this session only: the files do not change and a restart brings them back to the saved state. A test may have set them through the API.",
+      "badgeTip": "Temporary state, not saved: for this session the endpoint is served differently from what the file says. Remove it from the detail or with «Clear» in the status bar.",
+      "menuTip": "Temporary state: turn on, turn off or serve another variant for this session, without touching the files",
+      "menuTitle": "For this session (not saved)",
+      "turnOn": "Turn on temporarily",
+      "turnOff": "Turn off temporarily",
+      "serveVariant": "Serve temporarily",
+      "backToSaved": "Back to what is saved",
+      "on": "on",
+      "off": "off"
+  },
   "common": {
     "resizeHint": "Drag to resize · double-click to reset",
     "selectionModeLabel": "Select",
