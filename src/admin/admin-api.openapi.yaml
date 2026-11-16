@@ -136,6 +136,12 @@ tags:
     description: Runtime switches that decide whether mocks are used at all.
   - name: Shared runtime state
     description: Metadata and reset actions for named JSON resources shared by local handlers. Values are never exposed.
+  - name: Temporary activation
+    description: |
+      Which endpoints are served, and with which variant, **for the running session only**: kept in
+      the engine's memory, never written to the workspace files, gone at restart. The saved
+      `enabled` flag and selected variant stay the team's decision; this is the scenario of a test
+      or of a debugging session.
   - name: Runtime
     description: The running engine itself — its identity, its effective configuration, the outcome of its loads and the contract of the version that answers.
 
@@ -2170,6 +2176,91 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/RuntimeInfo" }
 
+  /activation:
+    get:
+      tags: [Temporary activation]
+      operationId: getActivation
+      summary: The temporary activations in place
+      description: |
+        The endpoints whose serving state or served variant is decided for this session instead of
+        by the workspace files. An endpoint that is not listed is served as saved. `revision`
+        grows at every change and is also in `GET /info` (`revisions.activation`).
+      responses:
+        "200":
+          description: The activations in place
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ActivationState" }
+    put:
+      tags: [Temporary activation]
+      operationId: replaceActivation
+      summary: Declare the whole scenario
+      description: |
+        Replaces every temporary activation with the given list: **an endpoint that is not named
+        goes back to what is saved**. This is the call a test makes during its setup — it starts
+        from a known state whatever a previous test left behind, so no teardown is needed.
+
+        Nothing is written to the workspace. Each item names an endpoint by `id`, or by `method`
+        and `path`, and sets `enabled`, `responseFile`, or both; a field that is left out follows
+        what is saved.
+
+        All or nothing: if the scenario cannot be installed (a variant that fails to load) the
+        previous one stays in place and the answer is `400 ACTIVATION_REJECTED`. An endpoint whose
+        variant or serving state changes restarts its sequence cursor and handler memory.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ActivationRequest" }
+            example:
+              items:
+                - { method: GET, path: /api/orders, enabled: true, responseFile: 002.response.json }
+                - { method: POST, path: /api/orders, enabled: true }
+      responses:
+        "200":
+          description: The activations now in place
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ActivationState" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/MockNotFound" }
+    patch:
+      tags: [Temporary activation]
+      operationId: updateActivation
+      summary: Change single endpoints, leaving the rest of the scenario
+      description: |
+        Adds or changes the temporary activation of the listed endpoints only. A field set to
+        `null` drops that field, so the endpoint follows what is saved for it again; an endpoint
+        left with no field is no longer listed. Same validation and all-or-nothing behaviour as
+        `PUT /activation`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ActivationRequest" }
+            example:
+              items:
+                - { id: YXBpL29yZGVycy9HRVQuZW5kcG9pbnQuanNvbg, enabled: true }
+      responses:
+        "200":
+          description: The activations now in place
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ActivationState" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/MockNotFound" }
+    delete:
+      tags: [Temporary activation]
+      operationId: clearActivation
+      summary: Drop every temporary activation
+      description: Every endpoint goes back to what is saved in the workspace files.
+      responses:
+        "200":
+          description: The (empty) activations now in place
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ActivationState" }
+
   /config:
     get:
       tags: [Runtime]
@@ -2761,13 +2852,14 @@ components:
             lastError: { type: [string, "null"] }
         revisions:
           type: object
-          required: [catalog, server, dump, diagnostics, config]
+          required: [catalog, server, dump, diagnostics, config, activation]
           properties:
             catalog: { type: integer, minimum: 1 }
             server: { type: integer, minimum: 1 }
             dump: { type: integer, minimum: 1 }
             diagnostics: { type: integer, minimum: 1 }
             config: { type: integer, minimum: 1 }
+            activation: { type: integer, minimum: 1, description: "Grows when the temporary activations change (`GET /activation`)." }
       example:
         version: 1.4.0
         runtimeId: 7d9f1c4e-2b0a-4c7e-9f3a-5e8d2c1b4a60
@@ -2779,7 +2871,7 @@ components:
           filesDir: /home/me/workspaces/shop/files
         listener: { host: 127.0.0.1, port: 3000 }
         watcher: { state: ready, polling: false, lastError: null }
-        revisions: { catalog: 7, server: 1, dump: 2, diagnostics: 3, config: 1 }
+        revisions: { catalog: 7, server: 1, dump: 2, diagnostics: 3, config: 1, activation: 1 }
     RuntimeAttempt:
       type: object
       required: [id, startedAt, completedAt, reasons, status]
@@ -3053,6 +3145,57 @@ components:
         overrides: {}
         persisted: false
 
+    ActivationItem:
+      type: object
+      description: |
+        The temporary activation of one endpoint. Only the fields that were decided are present:
+        a missing `enabled` means the saved flag applies, a missing `responseFile` the saved
+        selection.
+      required: [id, method, path]
+      properties:
+        id:
+          type: [string, "null"]
+          description: The endpoint id in the catalog.
+        method: { $ref: "#/components/schemas/HttpMethod" }
+        path: { $ref: "#/components/schemas/RoutePath" }
+        enabled:
+          type: boolean
+          description: Served (`true`) or not (`false`) for this session, whatever the file says.
+        responseFile:
+          type: string
+          description: The variant served for this session instead of the saved selection.
+    ActivationState:
+      type: object
+      required: [revision, items]
+      properties:
+        revision: { type: integer, minimum: 1 }
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/ActivationItem" }
+      example:
+        revision: 4
+        items:
+          - { id: YXBpL29yZGVycy9HRVQuZW5kcG9pbnQuanNvbg, method: GET, path: /api/orders, enabled: true, responseFile: 002.response.json }
+    ActivationRequest:
+      type: object
+      required: [items]
+      additionalProperties: false
+      properties:
+        items:
+          type: array
+          maxItems: 1000
+          items:
+            type: object
+            additionalProperties: false
+            description: |
+              One endpoint, named by `id` or by `method` and `path`, with `enabled`, `responseFile`
+              or both. In `PATCH /activation` a field may be `null` to drop it.
+            properties:
+              id: { type: string }
+              method: { type: string }
+              path: { type: string }
+              enabled: { type: [boolean, "null"] }
+              responseFile: { type: [string, "null"] }
     HttpMethod:
       type: string
       enum: [GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS]
