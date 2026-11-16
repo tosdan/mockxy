@@ -4,7 +4,7 @@ const net = require("net");
 const path = require("path");
 const { spawn } = require("child_process");
 const { findBundledUi, resolveBundledUi } = require("../src/bundled-ui");
-const { createTempDir, removeDir, waitFor } = require("./helpers");
+const { createTempDir, waitFor } = require("./helpers");
 
 const REPO_ROOT = path.join(__dirname, "..");
 const BUILD_LOCATION = path.join("mockxy-ui", "dist", "mockxy-ui", "browser");
@@ -31,7 +31,9 @@ describe("interfaccia compilata accanto al motore", () => {
   });
 
   afterEach(async () => {
-    await removeDir(root);
+    // Su Windows una cartella appena lasciata da un processo può restare occupata per un
+    // attimo: qualche tentativo, invece di un fallimento della pulizia.
+    await fs.promises.rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
   });
 
   describe("ricerca della build", () => {
@@ -119,11 +121,23 @@ describe("interfaccia compilata accanto al motore", () => {
   describe("node index.js", () => {
     let engine;
 
-    afterEach(() => {
-      if (engine && engine.exitCode === undefined) {
-        engine.child.kill("SIGKILL");
+    // Il figlio va atteso fino all'uscita, non solo ucciso: ha la radice di prova come
+    // directory di lavoro, e su Windows una cartella in uso non si cancella (EBUSY).
+    afterEach(async () => {
+      if (engine) {
+        if (engine.exitCode === undefined) {
+          engine.child.kill("SIGKILL");
+        }
+        await engine.exited;
       }
       engine = null;
+      // Il collegamento a `src` si toglie per primo e da solo: la pulizia della cartella non
+      // deve mai avere l'occasione di scendere nel sorgente del repository.
+      try {
+        fs.rmSync(path.join(root, "src"), { force: true });
+      } catch {
+        // La pulizia della cartella toglie comunque il collegamento, senza seguirlo.
+      }
     });
 
     function prepareEngineRoot() {
@@ -144,7 +158,7 @@ describe("interfaccia compilata accanto al motore", () => {
 
     async function startEngine(extraEnv = {}) {
       const port = await freePort();
-      const state = { output: "", exitCode: undefined, child: null, port };
+      const state = { output: "", exitCode: undefined, child: null, exited: null, port };
       engine = state;
       const env = {
         ...process.env,
@@ -169,8 +183,11 @@ describe("interfaccia compilata accanto al motore", () => {
       state.child.stderr.on("data", (chunk) => {
         state.output += chunk;
       });
-      state.child.on("exit", (code, signal) => {
-        state.exitCode = signal || code;
+      state.exited = new Promise((resolve) => {
+        state.child.on("exit", (code, signal) => {
+          state.exitCode = signal || code;
+          resolve();
+        });
       });
       await waitFor(() => state.output.includes("Mockxy started."), 15000, 50);
       return state;
