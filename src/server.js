@@ -205,6 +205,9 @@ function createReloadHandler({ mocksDir, registry, proxyMiddlewareRegistry, logg
   // di scrivere, per verificare che un eventuale ripristino riporti le stesse versioni.
   reload.installedDefinitions = () =>
     collectInstalledDefinitions([...registry.routeGroups, ...proxyMiddlewareRegistry.routeGroups]);
+  // Lo scenario temporaneo: un reload può farne decadere una parte (una variante cancellata), e
+  // una mutazione poi rifiutata deve poterlo rimettere com'era insieme ai file.
+  reload.activationOverrides = activationOverrides ?? null;
   return reload;
 }
 

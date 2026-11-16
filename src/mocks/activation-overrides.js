@@ -9,7 +9,8 @@
  * motore: vince su quello salvato finché c'è, e sparisce al riavvio.
  *
  * Lo store non legge né scrive file. Il caricamento degli endpoint (endpoint-loader.js) gli
- * chiede, per ogni definizione, lo stato da servire.
+ * chiede, per ogni definizione, lo stato da servire, e gli dice quali file ha trovato ma non è
+ * riuscito a leggere: un endpoint in quello stato non è stato eliminato.
  */
 
 const endpointKey = (method, routePath) => `${String(method).toUpperCase()} ${routePath}`;
@@ -18,6 +19,9 @@ class ActivationOverrideStore {
   constructor() {
     // "METHOD /path" -> { method, path, enabled?, responseFile? }: presente solo il campo deciso.
     this.overrides = new Map();
+    // "METHOD /path" -> file endpoint in cui l'endpoint è stato letto l'ultima volta. Serve a
+    // prune() per distinguere un endpoint eliminato da uno il cui file, per ora, non si legge.
+    this.files = new Map();
     // Cresce a ogni cambiamento: chi osserva (GET /info) capisce che lo scenario è cambiato.
     this.revision = 1;
   }
@@ -42,6 +46,16 @@ class ActivationOverrideStore {
   // rimettono quello di prima.
   snapshot() {
     return this.list();
+  }
+
+  // Rimette lo scenario fotografato da snapshot(), se nel frattempo è cambiato: una mutazione
+  // rifiutata deve lasciare com'erano i file e anche questo. Restituisce true se ha cambiato.
+  restore(snapshot) {
+    if (JSON.stringify(this.list()) === JSON.stringify(snapshot)) {
+      return false;
+    }
+    this.replaceAll(snapshot);
+    return true;
   }
 
   // Sostituisce l'intero scenario: ciò che non è nominato torna a come è salvato.
@@ -109,12 +123,16 @@ class ActivationOverrideStore {
    * `enabled` e `selectedResponseFile` effettivi. Una variante che non esiste più (cancellata a
    * mano, o dopo un pull) fa decadere quel campo: si torna a ciò che è salvato, e `dropped`
    * riceve il motivo. Il caricamento non si blocca mai per un'attivazione rimasta indietro.
+   * `filePath` è il file endpoint della definizione, ricordato per prune().
    */
-  applyTo(endpoint, dropped = []) {
+  applyTo(endpoint, dropped = [], filePath = null) {
     const key = endpointKey(endpoint.method, endpoint.path);
     const override = this.overrides.get(key);
     if (override == null) {
       return endpoint;
+    }
+    if (filePath != null) {
+      this.files.set(key, filePath);
     }
     let responseFile = override.responseFile;
     if (responseFile !== undefined && !endpoint.responseFiles.includes(responseFile)) {
@@ -129,13 +147,24 @@ class ActivationOverrideStore {
     };
   }
 
-  // Dopo un caricamento completo: le attivazioni di endpoint che non esistono più decadono.
-  prune(seenEndpointKeys, dropped = []) {
+  /**
+   * Dopo un caricamento completo: le attivazioni di endpoint che non esistono più decadono.
+   * `unreadableFiles` sono i file endpoint presenti ma non letti in questo giro (JSON a metà di
+   * una modifica a mano, un campo non valido): il runtime continua a servire la loro versione
+   * di prima, e l'attivazione resta finché il file non torna leggibile o sparisce davvero.
+   */
+  prune(seenEndpointKeys, dropped = [], unreadableFiles = new Set()) {
     for (const [key, override] of this.overrides) {
-      if (!seenEndpointKeys.has(key)) {
-        this.overrides.delete(key);
-        this.revision += 1;
-        dropped.push({ method: override.method, path: override.path, reason: "endpoint_missing" });
+      if (seenEndpointKeys.has(key) || unreadableFiles.has(this.files.get(key))) {
+        continue;
+      }
+      this.overrides.delete(key);
+      this.revision += 1;
+      dropped.push({ method: override.method, path: override.path, reason: "endpoint_missing" });
+    }
+    for (const key of [...this.files.keys()]) {
+      if (!this.overrides.has(key)) {
+        this.files.delete(key);
       }
     }
   }

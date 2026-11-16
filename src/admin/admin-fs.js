@@ -337,9 +337,14 @@ function findUnrestoredDefinition({ reloadResult, involved, definitionsBefore, b
 // Ripristina i backup e ricarica: il recupero riesce solo se entrambi i passi riescono e le
 // risorse coinvolte tornano servite come prima. Errori preesistenti su altri endpoint non lo
 // invalidano: si torna allo stato di prima, com'era.
-async function recoverFromFailedMutation({ backups, reloadRuntime, involved, definitionsBefore, baseDir }) {
+async function recoverFromFailedMutation({ backups, reloadRuntime, involved, definitionsBefore, activationBefore, baseDir }) {
   try {
     await restoreBackup(backups);
+    // Anche lo scenario temporaneo torna quello di prima: il reload della mutazione rifiutata
+    // può averne fatto decadere una parte (la variante che si stava cancellando).
+    if (activationBefore != null) {
+      reloadRuntime.activationOverrides.restore(activationBefore);
+    }
     const reloadResult = await runReload(reloadRuntime);
     if (reloadResult?.applied === false) {
       return { ok: false, error: createRuntimeApplyError(reloadResult) };
@@ -411,6 +416,8 @@ async function commitWithRollback({
   const definitionsBefore = typeof reloadRuntime?.installedDefinitions === "function"
     ? reloadRuntime.installedDefinitions()
     : null;
+  // Lo scenario temporaneo di prima, per lo stesso motivo. Assente fuori dal runtime reale.
+  const activationBefore = reloadRuntime?.activationOverrides?.snapshot() ?? null;
   // La fase in cui avviene l'errore ne decide la classificazione: scrittura (I/O), reload del
   // runtime (fallimento globale) o verifica del suo esito (rifiuto sulle risorse coinvolte).
   let phase = "commit";
@@ -429,7 +436,7 @@ async function commitWithRollback({
     }
     return reloadResult;
   } catch (error) {
-    const recovery = await recoverFromFailedMutation({ backups, reloadRuntime, involved, definitionsBefore, baseDir });
+    const recovery = await recoverFromFailedMutation({ backups, reloadRuntime, involved, definitionsBefore, activationBefore, baseDir });
     throw classifyMutationFailure({ error, phase, recovery, rejectionLabel });
   }
 }

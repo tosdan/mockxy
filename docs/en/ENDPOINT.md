@@ -107,7 +107,8 @@ going through the UI: files and UI are two equivalent views on the same data.
 A hand edit is a save like any other, but it does not go through the admin API: a temporary
 state already in place on that endpoint stays, and keeps winning until it is removed. It drops
 by itself only if the variant it was serving disappears from `responseFiles`, or if the endpoint
-no longer exists.
+no longer exists. A file saved halfway, which for a moment is not valid JSON, does not count as
+deleted: the engine keeps the previous version and the temporary state stays.
 
 For mocks written in the old v1 format there is the migration script
 `node scripts/migrate-mocks-v2.js <folder>`.

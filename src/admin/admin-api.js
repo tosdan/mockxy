@@ -903,9 +903,12 @@ function createAdminApiRouter({ config, runtimeConfig = new RuntimeConfigStore(c
   }));
 
   router.put("/mocks/:id", mutation(async (req, res) => {
+    // `disabled` arriva in `config` per un mock e in `definition` per handler e middleware.
+    const savesDisabled = ["config", "definition"].some((form) =>
+      Object.prototype.hasOwnProperty.call(req.body?.[form] || {}, "disabled"));
     const fields = [
       ...(Object.prototype.hasOwnProperty.call(req.body || {}, "selectedResponseFile") ? ["responseFile"] : []),
-      ...(Object.prototype.hasOwnProperty.call(req.body?.config || {}, "disabled") ? ["enabled"] : []),
+      ...(savesDisabled ? ["enabled"] : []),
     ];
     const detail = await savingExplicitly(
       fields.length > 0 ? await endpointRef(req.params.id) : [],

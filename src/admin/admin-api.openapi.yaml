@@ -3155,7 +3155,10 @@ components:
       properties:
         id:
           type: [string, "null"]
-          description: The endpoint id in the catalog.
+          description: |
+            The endpoint id in the catalog. It follows the endpoint file: it changes if the
+            endpoint folder is moved, so match an activation to an endpoint by `method` and
+            `path`. `null` while the endpoint file is present but cannot be read.
         method: { $ref: "#/components/schemas/HttpMethod" }
         path: { $ref: "#/components/schemas/RoutePath" }
         enabled:

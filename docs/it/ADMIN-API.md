@@ -326,9 +326,15 @@ Le regole:
   normale (interfaccia, `PUT /mocks/:id/endpoint`, `PATCH /mocks/enabled`, le collezioni,
   `PUT /mocks/:id`, una variante creata e selezionata) scrive nei file e fa decadere
   l'attivazione temporanea **di quel campo** su quell'endpoint. Modificare i dati di una variante
-  o crearne una con `select: false` non tocca lo scenario.
+  o crearne una con `select: false` non tocca lo scenario. Una mutazione rifiutata non lo
+  cambia: il ripristino (`details.rollback: "restored"`) riporta com'erano i file e anche le
+  attivazioni temporanee.
 - **Ciò che non esiste più decade.** Una variante eliminata, o sparita dopo un `git pull`, fa
-  tornare l'endpoint a quella salvata; il log lo segnala.
+  tornare l'endpoint a quella salvata; il log lo segnala. Un file endpoint che c'è ma non si
+  legge (un JSON salvato a metà) non è un endpoint eliminato: l'attivazione resta, con
+  `id: null` finché il file non torna leggibile.
+- **L'endpoint si riconosce da metodo e percorso.** L'`id` segue il file: cambia se la cartella
+  dell'endpoint viene spostata, mentre l'attivazione resta sullo stesso `method` e `path`.
 - **Il catalogo dice ciò che è salvato.** `GET /mocks` e il dettaglio continuano a riportare
   `disabled` e la variante selezionata dei file, e così `selected` e `active` di
   `GET /mocks/:id/responses/:file`: lo stato temporaneo si legge da `GET /activation`, e

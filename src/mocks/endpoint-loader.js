@@ -502,15 +502,20 @@ async function scanEndpointRouteGroups(mocksDir, activation) {
   const droppedActivations = [];
   // File endpoint il cui «servito o no» è deciso da un'attivazione temporanea: percorso → stato.
   const forcedServing = new Map();
+  // File endpoint presenti ma non letti fino a sapere quale endpoint definiscono: per le
+  // attivazioni temporanee non sono endpoint eliminati.
+  const unreadableEndpointFiles = new Set();
 
   for (const filePath of endpointFiles) {
     const scriptWarnings = [];
     const loadOptions = { mocksDir, warnings: scriptWarnings };
+    let identified = false;
     try {
       const rawEndpoint = await readJsonFile(filePath);
       const savedEndpoint = validateEndpointConfig(rawEndpoint, filePath);
+      identified = true;
       // Da qui in poi vale lo stato da servire: quello salvato, salvo un'attivazione temporanea.
-      const endpoint = activation ? activation.applyTo(savedEndpoint, droppedActivations) : savedEndpoint;
+      const endpoint = activation ? activation.applyTo(savedEndpoint, droppedActivations, filePath) : savedEndpoint;
       if (endpoint.enabled !== savedEndpoint.enabled) {
         // Servito, o no, per un'attivazione temporanea e non per ciò che dice il file: chi
         // verifica l'effetto di una scrittura deve saperlo (admin-fs.js).
@@ -625,6 +630,9 @@ async function scanEndpointRouteGroups(mocksDir, activation) {
       });
     } catch (error) {
       loadErrors.push({ filePath, message: error.message });
+      if (!identified) {
+        unreadableEndpointFiles.add(filePath);
+      }
     } finally {
       // Riferiti al file endpoint, come gli errori: è l'unità che l'interfaccia sa mostrare.
       for (const warning of scriptWarnings) {
@@ -634,7 +642,7 @@ async function scanEndpointRouteGroups(mocksDir, activation) {
   }
 
   // Le attivazioni temporanee di endpoint che non esistono più decadono.
-  activation?.prune(new Set(seenEndpointKeys.keys()), droppedActivations);
+  activation?.prune(new Set(seenEndpointKeys.keys()), droppedActivations, unreadableEndpointFiles);
 
   // Dopo le compilazioni: solo ora si sa se il package degli script è stato creato o se non
   // era creabile (lo prepara il loader, al primo script del workspace nel processo).

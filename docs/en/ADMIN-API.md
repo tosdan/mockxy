@@ -320,9 +320,15 @@ The rules:
   interface, `PUT /mocks/:id/endpoint`, `PATCH /mocks/enabled`, collections, `PUT /mocks/:id`, a
   variant created and selected) writes to the files and drops the temporary activation **of
   that field** on that endpoint. Editing the data of a variant, or creating one with
-  `select: false`, does not touch the scenario.
+  `select: false`, does not touch the scenario. A rejected mutation does not change it: the
+  restore (`details.rollback: "restored"`) puts back the files and the temporary activations
+  too.
 - **What no longer exists drops out.** A variant that was deleted, or that vanished after a
-  `git pull`, sends the endpoint back to the saved one; the log reports it.
+  `git pull`, sends the endpoint back to the saved one; the log reports it. An endpoint file
+  that is there but cannot be read (a JSON saved halfway) is not a deleted endpoint: the
+  activation stays, with `id: null` until the file is readable again.
+- **The endpoint is known by method and path.** The `id` follows the file: it changes if the
+  endpoint folder is moved, while the activation stays on the same `method` and `path`.
 - **The catalog says what is saved.** `GET /mocks` and the detail keep reporting the files'
   `disabled` and selected variant, and so do `selected` and `active` in
   `GET /mocks/:id/responses/:file`: the temporary state is read from `GET /activation`, and

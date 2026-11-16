@@ -108,7 +108,8 @@ né passare dall'interfaccia: file e UI sono due viste equivalenti sugli stessi 
 Una modifica a mano è un salvataggio come gli altri, ma non passa dall'admin API: uno stato
 temporaneo già in corso su quell'endpoint resta, e continua a vincere finché non lo si toglie.
 Decade da solo soltanto se la variante che faceva servire sparisce da `responseFiles`, o se
-l'endpoint non esiste più.
+l'endpoint non esiste più. Un file salvato a metà, che per un momento non è JSON valido, non
+conta come eliminato: il motore tiene la versione di prima e lo stato temporaneo resta.
 
 Per i mock scritti nel vecchio formato v1 esiste lo script di migrazione
 `node scripts/migrate-mocks-v2.js <cartella>`.

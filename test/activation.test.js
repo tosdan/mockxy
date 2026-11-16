@@ -3,7 +3,7 @@ const path = require("path");
 const request = require("supertest");
 const { createServerRuntime } = require("../src/server");
 const { ActivationOverrideStore } = require("../src/mocks/activation-overrides");
-const { createMemoryLogger, createTempDir, removeDir, writeHandler, writeMock } = require("./helpers");
+const { createMemoryLogger, createTempDir, removeDir, writeHandler, writeMock, writeProxyMiddleware } = require("./helpers");
 
 const A = "/_admin/api";
 
@@ -60,6 +60,37 @@ describe("attivazioni temporanee", () => {
 
       expect(store.list().map((override) => override.path)).toEqual(["/ordini"]);
       expect(dropped).toEqual([{ method: "GET", path: "/sparito", reason: "endpoint_missing" }]);
+    });
+
+    test("un endpoint il cui file c'è ma non si legge non è sparito: l'attivazione resta", () => {
+      const store = new ActivationOverrideStore();
+      store.replaceAll([
+        { method: "GET", path: "/ordini", enabled: true },
+        { method: "GET", path: "/sparito", enabled: true },
+      ]);
+      store.applyTo(endpoint(), [], "/ws/ordini/GET.endpoint.json");
+      store.applyTo(endpoint({ path: "/sparito" }), [], "/ws/sparito/GET.endpoint.json");
+      const dropped = [];
+
+      // /ordini non è fra gli endpoint letti perché il suo file è rotto; /sparito non c'è più.
+      store.prune(new Set(), dropped, new Set(["/ws/ordini/GET.endpoint.json"]));
+
+      expect(store.list().map((override) => override.path)).toEqual(["/ordini"]);
+      expect(dropped).toEqual([{ method: "GET", path: "/sparito", reason: "endpoint_missing" }]);
+    });
+
+    test("restore rimette lo scenario fotografato, e non muove la revisione se è già quello", () => {
+      const store = new ActivationOverrideStore();
+      store.replaceAll([{ method: "GET", path: "/ordini", enabled: true, responseFile: "002.response.json" }]);
+      const before = store.snapshot();
+      const revision = store.revision;
+
+      expect(store.restore(before)).toBe(false);
+      expect(store.revision).toBe(revision);
+
+      store.remove("GET", "/ordini", ["responseFile"]);
+      expect(store.restore(before)).toBe(true);
+      expect(store.list()).toEqual(before);
     });
 
     test("togliere un campo lascia l'altro; senza campi l'attivazione sparisce; la revisione cresce solo se cambia qualcosa", () => {
@@ -342,6 +373,42 @@ describe("attivazioni temporanee", () => {
         await api.delete(`${A}/mocks/${ordini}`);
         expect(await activation()).toEqual([]);
       });
+
+      test("una cancellazione rifiutata lascia lo scenario com'era, variante temporanea compresa", async () => {
+        // La variante salvata non si carica più (manca il sorgente dell'handler): finché si serve
+        // la 002 non si vede, ma senza la 002 l'endpoint non avrebbe nulla da servire.
+        fs.writeFileSync(
+          path.join(mocksDir, "ordini", "GET.responses", "001.response.json"),
+          JSON.stringify({ type: "handler", title: "Rotto", sourceFile: "001.handler.js" })
+        );
+        await runtime.reloadRuntime();
+
+        const res = await api.delete(`${A}/mocks/${ordini}/responses/002.response.json`);
+
+        expect(res.status).toBe(400);
+        expect(res.body.details.rollback).toBe("restored");
+        expect(fs.existsSync(path.join(mocksDir, "ordini", "GET.responses", "002.response.json"))).toBe(true);
+        expect(await activation()).toEqual([{ id: ordini, method: "GET", path: "/ordini", enabled: true, responseFile: "002.response.json" }]);
+        expect(await api.get("/ordini")).toMatchObject({ status: 500, body: { errore: true } });
+      });
+
+      test.each([
+        ["handler", writeHandler, "resolveResponse() {\n    return { status: 200, jsonBody: { ok: true } };\n  }"],
+        ["middleware", writeProxyMiddleware, "transformResponse({ response }) {\n    return response;\n  }"],
+      ])("spegnere un %s salvandolo con definition.disabled vince sull'accensione temporanea", async (type, write, method) => {
+        await write({ mocksDir, folder: "script", method: "GET", source: `module.exports = {\n  path: "/script",\n  disabled: true,\n  ${method},\n};` });
+        await runtime.reloadRuntime();
+        const script = await idOf("/script");
+        await api.patch(`${A}/activation`).send({ items: [{ id: script, enabled: true }] });
+        const { source } = (await api.get(`${A}/mocks/${script}`)).body;
+
+        const res = await api.put(`${A}/mocks/${script}`).send({ type, definition: { path: "/script", disabled: true }, source });
+
+        expect(res.status).toBe(200);
+        expect(res.body.disabled).toBe(true);
+        expect((await activation()).map((item) => item.path)).toEqual(["/ordini"]);
+        expect((await api.get("/script")).status).toBe(404);
+      });
     });
 
     test("un ricaricamento a caldo conserva lo scenario", async () => {
@@ -351,6 +418,35 @@ describe("attivazioni temporanee", () => {
 
       expect(await api.get("/ordini")).toMatchObject({ status: 500 });
       expect((await activation()).length).toBe(1);
+    });
+
+    test("un file endpoint momentaneamente illeggibile non fa decadere lo scenario", async () => {
+      await api.put(`${A}/activation`).send({ items: [{ id: ordini, enabled: true }] });
+      const endpointFile = path.join(mocksDir, "ordini", "GET.endpoint.json");
+      const saved = fs.readFileSync(endpointFile, "utf8");
+
+      // Un salvataggio a metà di una modifica a mano: il runtime tiene la versione di prima.
+      fs.writeFileSync(endpointFile, "{ a metà");
+      await runtime.reloadRuntime();
+
+      expect((await activation()).map((item) => item.path)).toEqual(["/ordini"]);
+      expect((await api.get("/ordini")).status).toBe(200);
+
+      fs.writeFileSync(endpointFile, saved);
+      await runtime.reloadRuntime();
+
+      expect(await activation()).toEqual([{ id: ordini, method: "GET", path: "/ordini", enabled: true }]);
+      expect((await api.get("/ordini")).status).toBe(200);
+    });
+
+    test("un endpoint eliminato a mano fa decadere la sua attivazione", async () => {
+      await api.put(`${A}/activation`).send({ items: [{ id: ordini, enabled: true }, { id: utenti, enabled: true }] });
+
+      fs.rmSync(path.join(mocksDir, "ordini"), { recursive: true });
+      await runtime.reloadRuntime();
+
+      expect((await activation()).map((item) => item.path)).toEqual(["/utenti"]);
+      expect((await api.get("/ordini")).status).toBe(404);
     });
 
     test("un runtime nuovo riparte da ciò che è salvato", async () => {
