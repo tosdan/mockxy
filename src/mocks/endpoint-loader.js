@@ -468,19 +468,21 @@ function createRouteGroup(routeGroups, endpoint, filePath) {
   return existingGroup;
 }
 
-async function loadEndpointRouteGroups(mocksDir) {
+// `activation` (facoltativo) è lo store delle attivazioni temporanee del runtime: decide, per
+// ogni definizione, se servirla e con quale variante, al posto di ciò che è salvato nel file.
+async function loadEndpointRouteGroups(mocksDir, { activation } = {}) {
   // Ogni scansione riparte dal disco: svuota i moduli locali del workspace e ricompila gli
   // script selezionati. Lo svuotamento avviene una volta, all'inizio: gli handler dello stesso
   // giro condividono gli helper già caricati.
   const endScan = beginScan(mocksDir);
   try {
-    return await scanEndpointRouteGroups(mocksDir);
+    return await scanEndpointRouteGroups(mocksDir, activation);
   } finally {
     endScan();
   }
 }
 
-async function scanEndpointRouteGroups(mocksDir) {
+async function scanEndpointRouteGroups(mocksDir, activation) {
   const endpointFiles = await listEndpointFiles(mocksDir);
   const seenEndpointKeys = new Map();
   const mockRouteGroups = new Map();
@@ -496,13 +498,24 @@ async function scanEndpointRouteGroups(mocksDir) {
   // Violazioni del contratto degli script e problemi del package che non impediscono il
   // caricamento: finiscono nello stato del runtime come avvisi, senza cambiare l'esito.
   const loadWarnings = [];
+  // Attivazioni temporanee decadute in questo giro (variante o endpoint non più presenti).
+  const droppedActivations = [];
+  // File endpoint il cui «servito o no» è deciso da un'attivazione temporanea: percorso → stato.
+  const forcedServing = new Map();
 
   for (const filePath of endpointFiles) {
     const scriptWarnings = [];
     const loadOptions = { mocksDir, warnings: scriptWarnings };
     try {
       const rawEndpoint = await readJsonFile(filePath);
-      const endpoint = validateEndpointConfig(rawEndpoint, filePath);
+      const savedEndpoint = validateEndpointConfig(rawEndpoint, filePath);
+      // Da qui in poi vale lo stato da servire: quello salvato, salvo un'attivazione temporanea.
+      const endpoint = activation ? activation.applyTo(savedEndpoint, droppedActivations) : savedEndpoint;
+      if (endpoint.enabled !== savedEndpoint.enabled) {
+        // Servito, o no, per un'attivazione temporanea e non per ciò che dice il file: chi
+        // verifica l'effetto di una scrittura deve saperlo (admin-fs.js).
+        forcedServing.set(path.resolve(filePath), endpoint.enabled);
+      }
       const endpointKey = `${endpoint.method} ${endpoint.path}`;
       const previousEndpointFile = seenEndpointKeys.get(endpointKey);
       if (previousEndpointFile != null) {
@@ -620,6 +633,9 @@ async function scanEndpointRouteGroups(mocksDir) {
     }
   }
 
+  // Le attivazioni temporanee di endpoint che non esistono più decadono.
+  activation?.prune(new Set(seenEndpointKeys.keys()), droppedActivations);
+
   // Dopo le compilazioni: solo ora si sa se il package degli script è stato creato o se non
   // era creabile (lo prepara il loader, al primo script del workspace nel processo).
   const scriptPackage = inspectScriptPackage(mocksDir);
@@ -634,6 +650,8 @@ async function scanEndpointRouteGroups(mocksDir) {
     wsRouteGroups: sortRouteGroups(Array.from(wsRouteGroups.values())),
     loadErrors,
     loadWarnings,
+    droppedActivations,
+    forcedServing,
     createdScriptPackagePath: consumeCreatedNotice(mocksDir),
   };
 }

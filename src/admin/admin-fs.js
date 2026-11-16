@@ -157,6 +157,10 @@ function relativeLoadErrorPath(filePath, baseDir) {
  * `checked`: nessun errore di caricamento ammesso; `installed`: devono essere servite; `absent`:
  * non devono esserlo più (eliminazione, disabilitazione). Gli errori di endpoint estranei non
  * contano. Un esito senza `installedConfigFilePaths` (runtime di test) verifica solo gli errori.
+ *
+ * Un endpoint acceso o spento da un'attivazione temporanea (`forcedServing`) è servito, o no, per
+ * quella e non per ciò che dice il file: l'attesa sul suo stato di servizio non si applica. Gli
+ * errori di caricamento contano comunque.
  */
 function validateReloadedEndpoints(reloadResult, { checked = [], installed = [], absent = [], baseDir } = {}) {
   if (reloadResult == null) {
@@ -176,7 +180,11 @@ function validateReloadedEndpoints(reloadResult, { checked = [], installed = [],
   if (installedPaths == null) {
     return;
   }
+  const forcedServing = reloadResult.forcedServing;
   for (const filePath of installed) {
+    if (forcedServing?.get(path.resolve(filePath)) === false) {
+      continue;
+    }
     if (!installedPaths.has(path.resolve(filePath))) {
       throw createReloadRejection(
         `${relativeLoadErrorPath(filePath, baseDir)} is not served after the reload.`
@@ -184,6 +192,9 @@ function validateReloadedEndpoints(reloadResult, { checked = [], installed = [],
     }
   }
   for (const filePath of absent) {
+    if (forcedServing?.get(path.resolve(filePath)) === true) {
+      continue;
+    }
     if (installedPaths.has(path.resolve(filePath))) {
       throw createReloadRejection(
         `${relativeLoadErrorPath(filePath, baseDir)} is still served after the reload.`
