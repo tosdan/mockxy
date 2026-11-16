@@ -105,7 +105,32 @@ Dettagli e limiti in [HANDLER.md](../it/HANDLER.md#lo-script-gira-nel-processo-d
   `mockxy-ui/dist` (per esempio dopo i test e2e) e l'admin accesa si ritrova l'interfaccia
   servita sotto `/_admin/ui/`; le richieste `GET` a quel percorso non arrivano più al backend.
 
+### Stato temporaneo: accendere e scegliere una variante senza toccare i file
+
+- **Due intenzioni, due gesti.** Accendere un endpoint o selezionare una variante salva nei
+  file del workspace, ed è giusto così: è la decisione che va in git. Ma chi accende un mock
+  per riprodurre un bug, o prepara lo scenario di un test, non sta prendendo quella decisione,
+  e prima aveva solo lo stesso gesto: il file restava modificato, pronto a finire in un commit.
+  Ora c'è lo **stato temporaneo**: vive nella memoria del motore, non scrive nulla e sparisce
+  al riavvio.
+- **Dall'interfaccia:** il pulsante con l'orologio nel dettaglio dell'endpoint (accendi, spegni
+  o servi temporaneamente una variante; torna a come è salvato), il segno **TEMP** sulla riga
+  del catalogo e, nella barra di stato, il conteggio con **Azzera**.
+- **Dall'API, per i test:** `PUT /activation` dichiara l'intero scenario in una chiamata, e ciò
+  che non è nominato torna a come è salvato; un test non eredita nulla dal precedente e non ha
+  bisogno di una chiusura. Su un workspace di prova di 200 endpoint, accenderne 5 nel modo
+  normale richiedeva circa 130 ms e modificava 5 file; uno scenario temporaneo si installa in
+  una decina di millisecondi senza toccare file.
+- **Un salvataggio normale vince** sullo stato temporaneo dello stesso campo; una variante o un
+  endpoint che non esistono più lo fanno decadere.
+
+Dettagli in [CATALOGO.md](../it/CATALOGO.md#stato-temporaneo) e
+[ADMIN-API.md](../it/ADMIN-API.md#attivazioni-temporanee).
+
 ### Cambiamenti dell'admin API
+
+- Rotte nuove `GET`/`PUT`/`PATCH`/`DELETE /activation`, e `revisions.activation` in
+  `GET /info`. Il catalogo e il dettaglio continuano a riportare lo stato salvato.
 
 - Le voci del Monitor hanno `responseBodyRetained`: l'anteprima è troncata ma la risposta
   completa è conservata, e `POST /monitoring/requests/create-mocks` usa quella. Assente nei

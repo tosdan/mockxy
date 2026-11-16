@@ -52,6 +52,11 @@ nella pagina [degli handler](HANDLER.md#helper-condivisi-tra-più-mock).
 middleware leggono a runtime tramite l'accessor `data()`. La cartella è piatta (nessuna
 sottocartella) e i nomi dei file sono normalizzati a lowercase.
 
+Nel file di ogni endpoint, `enabled` e la variante selezionata sono **decisioni condivise**:
+vanno in git, e sono ciò che i colleghi e uno staging servono. Lo stato di lavoro di un momento
+— un mock acceso per riprodurre un bug, lo scenario di un test — non va scritto lì: è lo
+[stato temporaneo](CATALOGO.md#stato-temporaneo), che vive nella memoria del motore.
+
 Lo [stato runtime condiviso](HANDLER.md) degli handler **non è un altro file del workspace**:
 vive soltanto nella memoria del motore. Un file dati può inizializzarlo, ma le mutazioni non
 vengono scritte su disco né condivise in git. Reload a caldo conserva lo stato; riavvio, crash o

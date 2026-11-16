@@ -75,6 +75,27 @@ giusta. Ogni endpoint si può poi:
 - **abilitare/disabilitare**: da spento, le sue richieste seguono il [fallback](PROXY.md);
 - **eliminare**, insieme alle sue varianti.
 
+### Stato temporaneo
+
+Abilitare un endpoint o scegliere una variante **salva nei file** del workspace: è la decisione
+che va in git e che i colleghi ricevono. Quando serve solo per un momento — riprodurre un bug
+su un endpoint che il backend ha già, provare il caso d'errore — c'è lo **stato temporaneo**,
+dal pulsante con l'orologio accanto all'interruttore dell'endpoint:
+
+- **accendi / spegni temporaneamente**, senza toccare l'interruttore che salva;
+- **servi temporaneamente** una variante diversa da quella selezionata;
+- **torna a come è salvato**.
+
+Lo stato temporaneo vive nella memoria del motore: i file non cambiano, `git status` resta
+pulito, e un riavvio lo elimina. Non può passare inosservato: la riga del catalogo porta il
+segno **TEMP** (`TEMP ON`, `TEMP OFF`), il pulsante nel dettaglio dice cosa c'è di diverso, e la
+barra di stato conta gli endpoint in stato temporaneo con **Azzera**, che li riporta tutti a
+come sono salvati. Compare anche quando lo scenario l'ha impostato un test via
+[API](ADMIN-API.md#attivazioni-temporanee).
+
+Un salvataggio normale sullo stesso endpoint vince: spegnerlo dall'interruttore, o selezionare
+una variante dalla tendina, fa decadere lo stato temporaneo di quel campo.
+
 Il pulsante **Sequenza** crea una variante sequence oppure modifica quella selezionata. La dialog
 configura per ogni step il criterio per numero di richieste o durata, il comportamento finale e
 il reset per inattività; in modifica mostra anche lo stato live e può azzerare il cursore.

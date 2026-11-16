@@ -280,6 +280,55 @@ batch that fails after writing (`BATCH_RUNTIME_FAILED`, `ROLLBACK_FAILED`) repor
 | `GET /server` | `{ serverEnabled, proxyAll }` — [the three modes](CONTROLLI.md) |
 | `PATCH /server` | partial update of the two booleans |
 
+## Temporary activation
+
+For an endpoint, **on or off** and **which variant it serves**, decided for the running session.
+They live in the engine's memory: the workspace files do not change, and a restart drops them.
+What is saved (`enabled`, the selected variant) stays the team's decision, the one that goes
+into git; this is the scenario of a test, or the state of someone reproducing a bug.
+
+| Method and path | What it does |
+|---|---|
+| `GET /activation` | `{ revision, items }`: the endpoints served differently from how they are saved |
+| `PUT /activation` | **declares the whole scenario**: whatever is not named goes back to what is saved |
+| `PATCH /activation` | changes the listed endpoints only; a field set to `null` drops it |
+| `DELETE /activation` | clears everything |
+
+Each element of `items` names an endpoint by `id`, or by `method` and `path`, and sets
+`enabled`, `responseFile` or both; a field left out follows what is saved.
+
+```bash
+# the scenario of a test: two endpoints on, one with the error case
+curl -X PUT http://localhost:3000/_admin/api/activation -H 'content-type: application/json' -d '{
+  "items": [
+    { "method": "GET",  "path": "/api/orders", "enabled": true, "responseFile": "002.response.json" },
+    { "method": "POST", "path": "/api/orders", "enabled": true }
+  ]
+}'
+```
+
+The rules:
+
+- **All or nothing.** If the scenario cannot be installed (a variant that fails to load) the
+  previous one stays in place and the answer is `400` with `details.code: ACTIVATION_REJECTED`.
+  An unknown endpoint is `404 ACTIVATION_ENDPOINT_NOT_FOUND`, a variant that does not belong to
+  that endpoint `400 ACTIVATION_VARIANT_NOT_FOUND`.
+- **A fresh start.** An endpoint named in a request restarts with its sequence cursor and
+  handler memory cleared: declaring the same scenario again is how you restart it.
+- **An explicit save wins.** Turning on, turning off or selecting a variant the normal way (the
+  interface, `PUT /mocks/:id/endpoint`, `PATCH /mocks/enabled`, collections, `PUT /mocks/:id`, a
+  variant created and selected) writes to the files and drops the temporary activation **of
+  that field** on that endpoint. Editing the data of a variant, or creating one with
+  `select: false`, does not touch the scenario.
+- **What no longer exists drops out.** A variant that was deleted, or that vanished after a
+  `git pull`, sends the endpoint back to the saved one; the log reports it.
+- **The catalog says what is saved.** `GET /mocks` and the detail keep reporting the files'
+  `disabled` and selected variant: the temporary state is read from `GET /activation`, and
+  `revisions.activation` in `GET /info` grows when it changes.
+
+There is one engine per workspace: tests that change the scenario have to run **one at a time**
+against the same instance.
+
 ## Runtime
 
 | Method and path | What it does |
@@ -401,7 +450,11 @@ state the previous session left: there is no "undo", and none is needed.
    selected may be a step of the selected sequence. If the outcome of a create is uncertain, read
    again before retrying.
 3. **Activate:** once preparing succeeded, `PATCH /server` with `serverEnabled: true` and
-   `proxyAll: false`, select the intended variants, enable the endpoints.
+   `proxyAll: false`, select the intended variants, enable the endpoints. When the scenario
+   must not stay in the workspace files — a repository of mocks for tests, where everything is
+   off and each test turns on its own — selection and enabling are declared with a single
+   [`PUT /activation`](#temporary-activation): nothing is written, and the next test declares
+   its scenario without inheriting anything.
 4. **Reset:** for a sequence, select it and call `POST /mocks/:id/sequence/reset` even if it was
    already selected; for shared state, reset only the resources involved.
 5. **No timed waits:** a successful mutation is already served. Checking reads through the admin

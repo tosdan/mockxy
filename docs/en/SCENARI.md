@@ -73,3 +73,23 @@ A 500, a timeout, an empty list, a pathological dataset: you pin the response of
 single endpoint** — a dedicated [variant](RESPONSE.md), or a [delay](RITARDI.md) for the
 timeout — and let everything else pass through. The variants stay in the workspace: the hard
 case can be summoned back with a switch, whenever it's needed again.
+
+If the endpoint already exists in the backend and the mock is needed only while debugging, turn
+it on in a [temporary state](CATALOGO.md#temporary-state): the mock answers for as long as it
+is needed, and in the files it stays off, so it does not end up enabled in a commit by mistake.
+
+## "Each end-to-end test needs a world of its own"
+
+A repository of mocks dedicated to the tests, in which **everything is off**: each test
+declares the scenario it needs — which endpoints answer, and with which variant — and the next
+one declares its own.
+
+1. the test, in its setup, calls [`PUT /activation`](ADMIN-API.md#temporary-activation) once,
+   with the list of endpoints to turn on and the variant of each;
+2. the declaration **replaces** the previous one: whatever the test does not name goes back to
+   off, so no teardown is needed, and an interrupted test leaves nothing to the next;
+3. nothing is written to the files: the repository stays as it is in git, whatever happens
+   during the run.
+
+There is one engine per workspace: tests that change the scenario run one at a time against the
+same instance.

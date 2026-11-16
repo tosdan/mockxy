@@ -285,6 +285,56 @@ la forma della `201`, conteggi compresi.
 | `GET /server` | `{ serverEnabled, proxyAll }` — [le tre modalità](CONTROLLI.md) |
 | `PATCH /server` | aggiornamento parziale dei due booleani |
 
+## Attivazioni temporanee
+
+Per un endpoint, **acceso o spento** e **quale variante serve**, decisi per la sessione in corso.
+Vivono nella memoria del motore: i file del workspace non cambiano, e un riavvio le elimina. Ciò
+che è salvato (`enabled`, la variante selezionata) resta la decisione del team, quella che va in
+git; questo è lo scenario di un test, o lo stato di chi sta riproducendo un bug.
+
+| Metodo e percorso | Cosa fa |
+|---|---|
+| `GET /activation` | `{ revision, items }`: gli endpoint serviti in modo diverso da come sono salvati |
+| `PUT /activation` | **dichiara l'intero scenario**: ciò che non è nominato torna a come è salvato |
+| `PATCH /activation` | ritocca i soli endpoint elencati; un campo a `null` lo toglie |
+| `DELETE /activation` | azzera tutto |
+
+Ogni elemento di `items` nomina un endpoint con `id`, oppure con `method` e `path`, e imposta
+`enabled`, `responseFile` o entrambi; un campo omesso segue ciò che è salvato.
+
+```bash
+# lo scenario di un test: due endpoint accesi, uno con il caso d'errore
+curl -X PUT http://localhost:3000/_admin/api/activation -H 'content-type: application/json' -d '{
+  "items": [
+    { "method": "GET",  "path": "/api/ordini", "enabled": true, "responseFile": "002.response.json" },
+    { "method": "POST", "path": "/api/ordini", "enabled": true }
+  ]
+}'
+```
+
+Le regole:
+
+- **Tutto o niente.** Se lo scenario non si lascia installare (una variante che non si carica)
+  resta quello di prima e la risposta è `400` con `details.code: ACTIVATION_REJECTED`. Un
+  endpoint sconosciuto è `404 ACTIVATION_ENDPOINT_NOT_FOUND`, una variante che non è di
+  quell'endpoint `400 ACTIVATION_VARIANT_NOT_FOUND`.
+- **Si riparte da capo.** Un endpoint nominato in una richiesta riparte con il cursore della
+  sequenza e la memoria dell'handler azzerati: dichiarare di nuovo lo stesso scenario è il modo
+  per farlo ripartire.
+- **Il salvataggio esplicito vince.** Accendere, spegnere o selezionare una variante nel modo
+  normale (interfaccia, `PUT /mocks/:id/endpoint`, `PATCH /mocks/enabled`, le collezioni,
+  `PUT /mocks/:id`, una variante creata e selezionata) scrive nei file e fa decadere
+  l'attivazione temporanea **di quel campo** su quell'endpoint. Modificare i dati di una variante
+  o crearne una con `select: false` non tocca lo scenario.
+- **Ciò che non esiste più decade.** Una variante eliminata, o sparita dopo un `git pull`, fa
+  tornare l'endpoint a quella salvata; il log lo segnala.
+- **Il catalogo dice ciò che è salvato.** `GET /mocks` e il dettaglio continuano a riportare
+  `disabled` e la variante selezionata dei file: lo stato temporaneo si legge da
+  `GET /activation`, e `revisions.activation` di `GET /info` cresce quando cambia.
+
+Il motore è uno per workspace: test che cambiano scenario vanno eseguiti **uno alla volta**
+contro la stessa istanza.
+
 ## Runtime
 
 | Metodo e percorso | Cosa fa |
@@ -406,7 +456,11 @@ qualunque stato abbia lasciato la sessione precedente: non esiste un «annulla»
    step della sequence selezionata. Se l'esito di una creazione è incerto, rileggere prima di
    ritentare.
 3. **Attivare:** dopo la preparazione riuscita, `PATCH /server` con `serverEnabled: true` e
-   `proxyAll: false`, selezione delle varianti previste, abilitazione degli endpoint.
+   `proxyAll: false`, selezione delle varianti previste, abilitazione degli endpoint. Quando lo
+   scenario non deve restare nei file del workspace — un repository di mock per i test, dove
+   tutto è spento e ogni test accende i suoi — selezione e abilitazione si dichiarano con una
+   sola [`PUT /activation`](#attivazioni-temporanee): niente viene scritto, e il test successivo
+   dichiara il suo scenario senza ereditare nulla.
 4. **Azzerare:** per una sequence, selezionarla e chiamare `POST /mocks/:id/sequence/reset`
    anche se era già selezionata; per lo stato condiviso, i reset delle sole risorse interessate.
 5. **Nessuna attesa a tempo:** una mutazione riuscita è già servita. Le letture di controllo via

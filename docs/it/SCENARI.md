@@ -73,3 +73,24 @@ Un 500, un timeout, una lista vuota, un dataset patologico: si fissa la risposta
 singolo endpoint** — una [variante](RESPONSE.md) dedicata, o un [ritardo](RITARDI.md) per il
 timeout — e si lascia passare tutto il resto. Le varianti restano nel workspace: il caso
 difficile si rievoca con un interruttore, quando serve di nuovo.
+
+Se l'endpoint esiste già nel backend e il mock serve solo per la durata del debug, lo si accende
+in [stato temporaneo](CATALOGO.md#stato-temporaneo): risponde il mock finché serve, e nei file
+resta spento, così non finisce acceso in un commit per distrazione.
+
+## «I test end-to-end hanno bisogno ognuno del suo mondo»
+
+Un repository di mock dedicato ai test, in cui **tutto è spento**: ogni test dichiara lo
+scenario che gli serve — quali endpoint rispondono, e con quale variante — e il successivo
+dichiara il suo.
+
+1. il test, nella sua preparazione, chiama una sola volta
+   [`PUT /activation`](ADMIN-API.md#attivazioni-temporanee) con l'elenco degli endpoint da
+   accendere e la variante di ciascuno;
+2. la dichiarazione **sostituisce** quella precedente: ciò che il test non nomina torna spento,
+   quindi non serve una chiusura, e un test interrotto non lascia nulla al successivo;
+3. niente viene scritto nei file: il repository resta com'è in git, qualunque cosa succeda
+   durante l'esecuzione.
+
+Il motore è uno per workspace: i test che cambiano scenario girano uno alla volta contro la
+stessa istanza.

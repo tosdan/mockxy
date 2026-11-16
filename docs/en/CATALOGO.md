@@ -74,6 +74,27 @@ right shape. Each endpoint can then be:
 - **enabled/disabled**: when off, its requests follow the [fallback](PROXY.md);
 - **deleted**, along with its variants.
 
+### Temporary state
+
+Enabling an endpoint or choosing a variant **saves to the files** of the workspace: it is the
+decision that goes into git and that colleagues receive. When it is needed only for a moment —
+reproducing a bug on an endpoint the backend already has, trying the error case — there is the
+**temporary state**, from the clock button next to the endpoint's switch:
+
+- **turn on / turn off temporarily**, without touching the switch that saves;
+- **serve temporarily** a variant other than the selected one;
+- **back to what is saved**.
+
+The temporary state lives in the engine's memory: the files do not change, `git status` stays
+clean, and a restart drops it. It cannot go unnoticed: the catalog row carries the **TEMP**
+mark (`TEMP ON`, `TEMP OFF`), the button in the detail says what is different, and the status
+bar counts the endpoints in a temporary state with **Clear**, which brings them all back to
+what is saved. It shows up also when a test set the scenario through the
+[API](ADMIN-API.md#temporary-activation).
+
+A normal save on the same endpoint wins: turning it off from the switch, or selecting a variant
+from the dropdown, drops the temporary state of that field.
+
 The **Sequence** button creates a sequence variant or edits the selected one. The dialog sets a
 request-count or duration criterion independently for each step, end behavior and inactivity
 reset; in edit mode it also shows live state and can reset the cursor immediately.
