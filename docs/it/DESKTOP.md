@@ -96,11 +96,11 @@ ripartire dai seed; un semplice cambio di scheda verso un altro workspace, senza
 motore, conserva invece ciascuno store separatamente.
 
 Lo stesso vale per lo [stato temporaneo](CATALOGO.md#stato-temporaneo) degli endpoint: il
-riavvio lo elimina, e ogni endpoint torna a come è salvato. La dialog avvisa prima di perdere gli
-override di configurazione, ma **non ancora** per lo stato temporaneo: se un test o un debug sono
-in corso, la barra di stato dice quanti endpoint lo perderebbero. Ogni workspace aperto ha il
-proprio: lo scenario di un repository di test in una scheda non tocca il workspace di sviluppo
-nell'altra.
+riavvio lo elimina, e ogni endpoint torna a come è salvato. Prima di un salvataggio che riavvia
+il motore la dialog avvisa di entrambe le perdite: gli override di configurazione, e quanti
+endpoint in stato temporaneo tornano a come sono salvati. Cambiare il solo titolo non riavvia
+nulla, e non avvisa. Ogni workspace aperto ha il proprio stato temporaneo: lo scenario di un
+repository di test in una scheda non tocca il workspace di sviluppo nell'altra.
 
 ## Il log degli errori (`logs/`)
 

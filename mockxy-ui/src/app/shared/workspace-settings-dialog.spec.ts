@@ -5,6 +5,8 @@ import { DIALOG_DATA, DialogRef } from '@angular/cdk/dialog';
 import { of } from 'rxjs';
 import { MockAdminApiService } from '../mock-admin-api.service';
 import type { RuntimeConfigState } from '../mock-admin-api.types';
+import type { ActivationItem } from '../mock-admin-api.types';
+import { fakeActivation } from '../testing/activation-testing';
 import { fakeRuntimeSync } from '../testing/runtime-sync-testing';
 import { runtimeConfigState } from '../testing/runtime-config-testing';
 import { translocoTesting } from '../testing/transloco-testing';
@@ -36,10 +38,12 @@ const WORKSPACE: WorkspaceInfo = {
 // Impostazioni di avvio del desktop accanto agli override temporanei (piano agent/API, §13 C8).
 describe('WorkspaceSettingsDialog', () => {
   let state: RuntimeConfigState;
+  let activation: ReturnType<typeof fakeActivation>;
   const updateWorkspace = vi.fn();
 
   beforeEach(async () => {
     state = runtimeConfigState();
+    activation = fakeActivation();
     updateWorkspace.mockReset();
     updateWorkspace.mockResolvedValue({ ok: true, name: 'shop', port: 3000 });
     await TestBed.configureTestingModule({
@@ -47,6 +51,7 @@ describe('WorkspaceSettingsDialog', () => {
       providers: [
         provideNoopAnimations(),
         fakeRuntimeSync().provider,
+        activation.provider,
         { provide: MockAdminApiService, useValue: { getRuntimeConfig: () => of(state) } },
         { provide: DesktopService, useValue: { updateWorkspace } },
         { provide: DialogRef, useValue: { close: vi.fn() } },
@@ -103,6 +108,36 @@ describe('WorkspaceSettingsDialog', () => {
     // Il salvataggio manda solo i campi cambiati: gli override non finiscono nelle impostazioni.
     await c.save();
     expect(updateWorkspace).toHaveBeenCalledWith('/w/shop', { name: 'Negozio', requestTimeoutMs: 20000 });
+  });
+
+  it('un salvataggio che riavvia il motore avvisa che lo stato temporaneo degli endpoint si perde; il solo titolo no', () => {
+    const acceso: ActivationItem = { id: 'a', method: 'GET', path: '/ordini', enabled: true };
+    activation.items.set([acceso]);
+    const { fixture, c, root } = create();
+    const warning = () => root.querySelector('[data-restart-drops="activation"]');
+
+    c.title.set('Negozio');
+    fixture.detectChanges();
+    expect(warning()).toBeNull();
+
+    c.requestTimeoutMs.set('20000');
+    fixture.detectChanges();
+    expect(warning()!.getAttribute('role')).toBe('status');
+    expect(text(warning()!)).toBe('Salvando, il motore riparte: l\'endpoint in stato temporaneo torna a come è salvato.');
+
+    activation.items.set([acceso, { id: 'b', method: 'POST', path: '/ordini', responseFile: '002.response.json' }]);
+    fixture.detectChanges();
+    expect(text(warning()!)).toBe('Salvando, il motore riparte: i 2 endpoint in stato temporaneo tornano a come sono salvati.');
+  });
+
+  it('con override e stato temporaneo insieme, i due avvisi restano distinti', () => {
+    state = runtimeConfigState({ corsEnabled: true });
+    activation.items.set([{ id: 'a', method: 'GET', path: '/ordini', enabled: true }]);
+    const { fixture, c, root } = create();
+
+    c.requestTimeoutMs.set('20000');
+    fixture.detectChanges();
+    expect(Array.from(root.querySelectorAll('[role="status"]')).map((element) => element.getAttribute('data-restart-drops'))).toEqual(['overrides', 'activation']);
   });
 
   it('la verifica del certificato del backend parte accesa e, spenta, è il solo campo salvato', async () => {

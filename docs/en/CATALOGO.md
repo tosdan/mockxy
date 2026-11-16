@@ -109,7 +109,7 @@ on temporarily has its switch on "Disabled" and the `TEMP ON` mark. Both are tru
 says what is in the file, the second what answers right now.
 
 In the desktop app, saving the [workspace settings](DESKTOP.md) restarts the engine and therefore
-drops the temporary state; the dialog does not mention it yet. Which gesture to use, case by
+drops the temporary state; the dialog says so before saving. Which gesture to use, case by
 case, is in [SCENARI.md](SCENARI.md#save-or-temporary-state).
 
 The **Sequence** button creates a sequence variant or edits the selected one. The dialog sets a

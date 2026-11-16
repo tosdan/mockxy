@@ -282,6 +282,8 @@
     "inUseOverride": "In uso ora: {{value}} (override temporaneo, non salvato)",
     "restartDropsOverridesOne": "Salvando, il motore riparte: l'override temporaneo attivo viene eliminato, anche se riguarda un campo che non hai cambiato, e non viene riapplicato.",
     "restartDropsOverrides": "Salvando, il motore riparte: i {{count}} override temporanei attivi vengono eliminati, anche quelli dei campi che non hai cambiato, e non vengono riapplicati.",
+    "restartDropsActivationOne": "Salvando, il motore riparte: l'endpoint in stato temporaneo torna a come è salvato.",
+    "restartDropsActivation": "Salvando, il motore riparte: i {{count}} endpoint in stato temporaneo tornano a come sono salvati.",
     "portRequired": "Inserisci una porta.",
     "portInteger": "La porta deve essere un numero intero.",
     "portRange": "Usa una porta tra 1024 e 65535.",

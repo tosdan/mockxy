@@ -123,6 +123,8 @@ Dettagli e limiti in [HANDLER.md](../it/HANDLER.md#lo-script-gira-nel-processo-d
   una decina di millisecondi senza toccare file.
 - **Un salvataggio normale vince** sullo stato temporaneo dello stesso campo; una variante o un
   endpoint che non esistono più lo fanno decadere.
+- **Nell'app desktop**, salvare le impostazioni del workspace riavvia il motore e quindi elimina
+  lo stato temporaneo: la dialog lo dice prima di salvare, con il numero di endpoint coinvolti.
 
 Dettagli in [CATALOGO.md](../it/CATALOGO.md#stato-temporaneo) e
 [ADMIN-API.md](../it/ADMIN-API.md#attivazioni-temporanee); i casi d'uso da cui nasce la scelta, e
