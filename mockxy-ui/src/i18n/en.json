@@ -282,6 +282,8 @@
     "inUseOverride": "In use now: {{value}} (temporary override, not saved)",
     "restartDropsOverridesOne": "Saving restarts the engine: the active temporary override is dropped, even if it concerns a field you did not change, and it is not applied again.",
     "restartDropsOverrides": "Saving restarts the engine: the {{count}} active temporary overrides are dropped, including those of fields you did not change, and they are not applied again.",
+    "restartDropsActivationOne": "Saving restarts the engine: the endpoint in a temporary state goes back to what is saved.",
+    "restartDropsActivation": "Saving restarts the engine: the {{count}} endpoints in a temporary state go back to what is saved.",
     "portRequired": "Enter a port.",
     "portInteger": "The port must be an integer.",
     "portRange": "Use a port between 1024 and 65535.",

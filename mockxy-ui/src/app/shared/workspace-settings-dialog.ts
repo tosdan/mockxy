@@ -9,6 +9,7 @@ import { UiSwitch } from '../ui/ui-switch/ui-switch';
 import { DesktopService, type WorkspaceInfo, type WorkspacePatch } from './desktop.service';
 import { ToastService } from '../ui/ui-toast/ui-toast';
 import type { RuntimeConfigKey } from '../mock-admin-api.types';
+import { ActivationStore } from './activation.store';
 import { RuntimeConfigStore } from './runtime-config.store';
 import { describeRuntimeConfigValue, type RuntimeConfigValueLabel } from './runtime-config-indicator';
 
@@ -55,7 +56,8 @@ function validateInt(value: string, min: 0 | 1): string | null {
  * Sono impostazioni di avvio (piano agent/API §13 C8): il dialog mostra e salva i valori salvati,
  * mai quelli in uso. Accanto a un campo con un override temporaneo dice il valore in uso; se il
  * salvataggio riavvia il motore, avvisa che gli override si perdono tutti. Non li copia nelle
- * impostazioni e non li riapplica al nuovo runtime.
+ * impostazioni e non li riapplica al nuovo runtime. Lo stesso riavvio elimina lo stato temporaneo
+ * degli endpoint (ActivationStore), e un secondo avviso lo dice.
  */
 /** Id del titolo della finestra: chi la apre lo passa ad `ariaLabelledBy`, cosi' il dialog si chiama come il titolo. */
 export const WORKSPACE_SETTINGS_DIALOG_TITLE_ID = 'mx-workspace-settings-dialog-title';
@@ -341,10 +343,19 @@ export const WORKSPACE_SETTINGS_DIALOG_TITLE_ID = 'mx-workspace-settings-dialog-
         </div>
       </div>
 
-      @if (restartDropsOverrides()) {
-      <p class="border-t border-border px-5 pt-3 text-[12px] font-semibold text-[color:var(--status-4xx)]" role="status">
-        {{ (runtimeConfig.overrideCount() === 1 ? 'workspaceSettings.restartDropsOverridesOne' : 'workspaceSettings.restartDropsOverrides') | transloco: { count: runtimeConfig.overrideCount() } }}
-      </p>
+      @if (restartDropsOverrides() || restartDropsActivation()) {
+      <div class="flex flex-col gap-1.5 border-t border-border px-5 pt-3 text-[12px] font-semibold text-[color:var(--status-4xx)]">
+        @if (restartDropsOverrides()) {
+        <p role="status" data-restart-drops="overrides">
+          {{ (runtimeConfig.overrideCount() === 1 ? 'workspaceSettings.restartDropsOverridesOne' : 'workspaceSettings.restartDropsOverrides') | transloco: { count: runtimeConfig.overrideCount() } }}
+        </p>
+        }
+        @if (restartDropsActivation()) {
+        <p role="status" data-restart-drops="activation">
+          {{ (activation.count() === 1 ? 'workspaceSettings.restartDropsActivationOne' : 'workspaceSettings.restartDropsActivation') | transloco: { count: activation.count() } }}
+        </p>
+        }
+      </div>
       }
       <div class="flex items-center justify-end gap-2 border-t border-border px-5 py-3">
         <button ui-button variant="outline" (click)="close()">{{ 'workspaceSettings.cancel' | transloco }}</button>
@@ -360,6 +371,7 @@ export class WorkspaceSettingsDialog {
   private readonly toast = inject(ToastService);
   private readonly transloco = inject(TranslocoService);
   protected readonly runtimeConfig = inject(RuntimeConfigStore);
+  protected readonly activation = inject(ActivationStore);
 
   protected readonly saving = signal(false);
   protected readonly saveError = signal<string | null>(null);
@@ -476,6 +488,8 @@ export class WorkspaceSettingsDialog {
   );
   /** Il salvataggio riavvia il motore e ci sono override temporanei: si perdono tutti. */
   protected readonly restartDropsOverrides = computed(() => this.engineSettingsChanged() && this.runtimeConfig.overrideCount() > 0);
+  /** Lo stesso riavvio riporta a come sono salvati gli endpoint in stato temporaneo. */
+  protected readonly restartDropsActivation = computed(() => this.engineSettingsChanged() && this.activation.count() > 0);
 
   /** Il valore in uso di una chiave con un override temporaneo; null senza override. */
   protected inUse(key: RuntimeConfigKey): RuntimeConfigValueLabel | null {

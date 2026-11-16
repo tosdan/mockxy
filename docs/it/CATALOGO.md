@@ -110,7 +110,7 @@ endpoint acceso temporaneamente ha l'interruttore su «Disattivo» e il segno `T
 entrambi veri — il primo dice cosa c'è nel file, il secondo cosa risponde adesso.
 
 Nell'app desktop, salvare le [impostazioni del workspace](DESKTOP.md) riavvia il motore e quindi
-elimina lo stato temporaneo; la dialog oggi non lo ricorda. Quale gesto usare, caso per caso, è
+elimina lo stato temporaneo; la dialog lo dice prima di salvare. Quale gesto usare, caso per caso, è
 in [SCENARI.md](SCENARI.md#salvare-o-stato-temporaneo).
 
 Il pulsante **Sequenza** crea una variante sequence oppure modifica quella selezionata. La dialog

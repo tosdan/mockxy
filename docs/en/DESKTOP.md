@@ -94,11 +94,11 @@ handler memory. Saving settings during a scenario therefore starts again from th
 switching to another workspace tab, without stopping the engine, keeps each store separately.
 
 The same goes for the [temporary state](CATALOGO.md#temporary-state) of endpoints: the restart
-drops it, and every endpoint goes back to what is saved. The dialog warns before configuration
-overrides are lost, but **not yet** for the temporary state: if a test or a debugging session is
-running, the status bar says how many endpoints would lose it. Each open workspace has its own:
-the scenario of a test repository in one tab does not touch the development workspace in the
-other.
+drops it, and every endpoint goes back to what is saved. Before a save that restarts the engine
+the dialog warns about both losses: the configuration overrides, and how many endpoints in a
+temporary state go back to what is saved. Changing the title alone restarts nothing, and gives no
+warning. Each open workspace has its own temporary state: the scenario of a test repository in
+one tab does not touch the development workspace in the other.
 
 ## The error log (`logs/`)
 
