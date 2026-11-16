@@ -77,13 +77,22 @@ function pem(label, content) {
   return `-----BEGIN ${label}-----\n${body}\n-----END ${label}-----\n`;
 }
 
+// Numero di serie casuale, positivo e in forma DER minima: il primo byte non può essere zero
+// (uno zero davanti a un byte sotto 0x80 è un riempimento che OpenSSL rifiuta, e capitava a un
+// certificato su mille) né avere il bit alto (sarebbe negativo).
+function randomSerialNumber() {
+  const serial = crypto.randomBytes(8);
+  serial[0] = (serial[0] & 0x7f) || 1;
+  return serial;
+}
+
 // Certificato X.509 v3: `subjectKey` è la chiave pubblica certificata, `issuerKey` firma.
 function buildCertificate({ subject, issuer, subjectKey, issuerKey, extensions }) {
   const now = Date.now();
   const day = 24 * 60 * 60 * 1000;
   const tbsCertificate = sequence(
     der(0xa0, integer(Buffer.from([2]))),
-    integer(crypto.randomBytes(8)),
+    integer(randomSerialNumber()),
     ECDSA_WITH_SHA256,
     commonName(issuer),
     sequence(time(new Date(now - day)), time(new Date(now + 30 * day))),

@@ -8,7 +8,7 @@ work in mock-only mode.
 ## The decision, request by request
 
 The engine reserves for itself, case-insensitively, `/_admin/api` with every method and, when it
-serves the UI (desktop app), `/_admin/ui` with `GET` and `HEAD`: there the engine itself answers.
+serves the UI (desktop app, or headless with a build next to the engine), `/_admin/ui` with `GET` and `HEAD`: there the engine itself answers.
 Every other request, including the other paths under `/_admin` and the other methods on
 `/_admin/ui`, goes through these steps (for WebSocket upgrades see [WEBSOCKET.md](WEBSOCKET.md)):
 

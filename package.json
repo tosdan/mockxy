@@ -22,6 +22,7 @@
     "dev:electron": "npm run build:frontend:desktop && npm --prefix electron start",
     "build:frontend": "npm --prefix mockxy-ui run build",
     "build:frontend:desktop": "npm --prefix mockxy-ui run build -- --base-href=/_admin/ui/",
+    "build:ui": "npm run build:frontend:desktop",
     "dist:electron": "npm run build:frontend:desktop && npm --prefix electron run dist",
     "dist:electron:win": "npm run build:frontend:desktop && npm --prefix electron run dist -- --win portable --x64 --publish never",
     "dist:electron:linux": "npm run build:frontend:desktop && npm --prefix electron run dist -- --linux AppImage --x64 --publish never",

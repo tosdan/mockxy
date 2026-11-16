@@ -54,7 +54,7 @@ impostabile per-workspace dall'app desktop.
 | `mocksDir` | `MOCKS_DIR` | `mocks` | Cartella delle definizioni dei mock | ❌ (derivato dal workspace) |
 | `filesDir` | `FILES_DIR` | `files` | Cartella dei file dati JSON per `data()` (pagina Dati) | ❌ (derivato dal workspace) |
 | `monitorDumpDir` | `MONITOR_DUMP_DIR` | `monitor-dump` | Cartella dei dump del monitor | ❌ (derivato: `<workspace>/.mockxy/monitor-dump`) |
-| `uiDistDir` | `UI_DIST_DIR` | — | Cartella dell'interfaccia compilata da servire sotto `/_admin/ui` | ❌ (impostata dall'app desktop) |
+| `uiDistDir` | `UI_DIST_DIR` | — | Cartella dell'interfaccia compilata da servire sotto `/_admin/ui`. Se non è impostata e l'admin API è accesa, `node index.js` serve la build che trova accanto al motore: `ui/` (immagine `Dockerfile.app`) o `mockxy-ui/dist/mockxy-ui/browser` (dopo `npm run build:ui`) — vedi [DEPLOYMENT](DEPLOYMENT.md#linterfaccia) | ❌ (impostata dall'app desktop) |
 | `devWatch` / `watchEnabled` | `DEV_WATCH` | `true` (non in produzione) | Ricarica automatica dei mock in sviluppo | ❌ |
 | `watchUsePolling` | `CHOKIDAR_USEPOLLING` | `false` | Polling del watcher (per Docker/cartelle di rete) | ❌ |
 | `nodeEnv` | `NODE_ENV` | `development` | Ambiente; `production` disabilita watch e (di default) admin API | ❌ |
