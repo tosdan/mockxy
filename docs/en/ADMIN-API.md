@@ -332,8 +332,11 @@ The rules:
 - **The catalog says what is saved.** `GET /mocks` and the detail keep reporting the files'
   `disabled` and selected variant, and so do `selected` and `active` in
   `GET /mocks/:id/responses/:file`: the temporary state is read from `GET /activation`, and
-  `revisions.activation` in `GET /info` grows when it changes. To know what an endpoint answers
-  you therefore need both reads.
+  `revisions.activation` in `GET /info` grows when it changes. For an endpoint in a temporary
+  state `GET /activation` is enough on its own: next to what is temporary it reports `saved`
+  (the file's `enabled`, `responseFile`, `responseTitle`, `responseStatus`) and, with a
+  temporary variant, its `responseTitle` and `responseStatus`. `saved` is missing while the
+  endpoint file cannot be read; title and status are missing if the variant cannot be read.
 - **A change to the files outside the API does not touch it.** An editor or a `git pull` change
   what is saved; the temporary activation stays and keeps winning, except for the case above.
 

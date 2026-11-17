@@ -20,9 +20,15 @@ const INFO: RuntimeInfo = {
 export function fakeRuntimeSync() {
   const events = new Subject<RuntimeSyncEvent>();
   const connected = signal(true);
+  let checks = 0;
+  const check = () => {
+    checks += 1;
+  };
   return {
-    provider: { provide: RuntimeSyncStore, useValue: { events$: events.asObservable(), connected, info: signal(INFO) } },
+    provider: { provide: RuntimeSyncStore, useValue: { events$: events.asObservable(), connected, info: signal(INFO), check } },
     connected,
+    /** Quante volte è stata chiesta una rilettura immediata di GET /info. */
+    checks: () => checks,
     revisions: (...keys: RevisionKey[]) => events.next({ kind: 'revisions', info: INFO, changed: new Set(keys) }),
     resync: () => events.next({ kind: 'resync', info: INFO }),
     runtime: (workspaceChanged = false) =>

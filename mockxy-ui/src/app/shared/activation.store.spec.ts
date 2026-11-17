@@ -19,6 +19,8 @@ describe('ActivationStore', () => {
     getActivation: ReturnType<typeof vi.fn>;
     patchActivation: ReturnType<typeof vi.fn>;
     clearActivation: ReturnType<typeof vi.fn>;
+    updateEndpoint: ReturnType<typeof vi.fn>;
+    selectResponse: ReturnType<typeof vi.fn>;
   };
   let toast: { show: ReturnType<typeof vi.fn> };
 
@@ -28,6 +30,8 @@ describe('ActivationStore', () => {
       getActivation: vi.fn(() => of({ revision: 1, items })),
       patchActivation: vi.fn(() => of({ revision: 2, items: [ordini] })),
       clearActivation: vi.fn(() => of({ revision: 3, items: [] })),
+      updateEndpoint: vi.fn(() => of({})),
+      selectResponse: vi.fn(() => of({})),
     };
     toast = { show: vi.fn() };
     TestBed.configureTestingModule({
@@ -113,6 +117,49 @@ describe('ActivationStore', () => {
 
     expect(store.items()).toEqual([ordini]);
     expect(toast.show).toHaveBeenCalledWith(expect.objectContaining({ title: 'Stato temporaneo non applicato', tone: 'error' }));
+    expect(store.busy()).toBe(false);
+  });
+
+  // «Salva così»: ciò che è temporaneo diventa la decisione scritta nei file. Sono i salvataggi
+  // di sempre (interruttore e tendina), e il motore fa decadere da solo lo stato temporaneo.
+  it('salvare così scrive nei file ciò che è temporaneo, un campo alla volta, e poi rilegge', () => {
+    const entrambi: ActivationItem = { id: 'ordini', method: 'GET', path: '/ordini', enabled: true, responseFile: '002.response.json' };
+    const store = create([entrambi, utenti]);
+    api.getActivation.mockReturnValue(of({ revision: 4, items: [] }));
+    const order: string[] = [];
+    api.updateEndpoint.mockImplementation((id: string) => (order.push(`endpoint ${id}`), of({})));
+    api.selectResponse.mockImplementation((id: string) => (order.push(`variante ${id}`), of({})));
+
+    store.save([entrambi, utenti]);
+
+    expect(api.updateEndpoint).toHaveBeenCalledWith('ordini', { enabled: true });
+    expect(api.selectResponse).toHaveBeenCalledWith('ordini', { selectedResponseFile: '002.response.json' });
+    expect(api.selectResponse).toHaveBeenCalledWith('utenti', { selectedResponseFile: '002.response.json' });
+    expect(order).toEqual(['endpoint ordini', 'variante ordini', 'variante utenti']);
+    expect(store.count()).toBe(0);
+    expect(store.busy()).toBe(false);
+    // Catalogo e dettaglio aperto si aggiornano senza aspettare il prossimo giro di polling.
+    expect(sync.checks()).toBe(1);
+  });
+
+  it('un endpoint il cui file non si legge non ha nulla da salvare', () => {
+    const store = create();
+
+    store.save([{ id: null, method: 'GET', path: '/rotto', enabled: true }]);
+
+    expect(api.updateEndpoint).not.toHaveBeenCalled();
+    expect(store.busy()).toBe(false);
+  });
+
+  it('se un salvataggio fallisce si ferma lì, lo dice e rilegge ciò che resta temporaneo', () => {
+    const store = create([ordini, utenti]);
+    api.updateEndpoint.mockReturnValue(throwError(() => ({ error: { message: 'file non scrivibile' } })));
+
+    store.save([ordini, utenti]);
+
+    expect(api.selectResponse).not.toHaveBeenCalled();
+    expect(toast.show).toHaveBeenCalledWith(expect.objectContaining({ title: 'Stato temporaneo non salvato', description: 'file non scrivibile', tone: 'error' }));
+    expect(api.getActivation).toHaveBeenCalledTimes(2);
     expect(store.busy()).toBe(false);
   });
 });

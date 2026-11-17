@@ -12,7 +12,7 @@ import { fakeActivation } from '../../../testing/activation-testing';
 import { MockAdminApiService } from '../../../mock-admin-api.service';
 import { MocksStore } from '../mocks-next.store';
 import type { DraftSave } from '../mocks-next.store';
-import type { MockDetail, ResponseVariantRead, RevisionConflict } from '../../../mock-admin-api.types';
+import type { ActivationItem, MockDetail, ResponseVariantRead, RevisionConflict } from '../../../mock-admin-api.types';
 
 function detail(overrides: Partial<MockDetail> = {}): MockDetail {
   return {
@@ -884,6 +884,12 @@ describe('MocksNextDetail', () => {
       fixture.detectChanges();
 
       expect(trigger(fixture).querySelector('[data-temporary-state]')?.textContent).toBe('acceso · 002.response.json');
+
+      // Con il titolo della variante, il pulsante dice quello: il nome del file non dice cosa risponde.
+      activation.items.set([{ id: 'e1', method: 'GET', path: '/api/operazioni', responseFile: '002.response.json', responseTitle: 'Errore', responseStatus: 500 }]);
+      fixture.detectChanges();
+
+      expect(trigger(fixture).querySelector('[data-temporary-state]')?.textContent).toBe('Errore');
     });
 
     it('un endpoint spento nei file si accende per la sessione, senza passare dallo switch che salva', () => {
@@ -920,6 +926,90 @@ describe('MocksNextDetail', () => {
       menu().find((item) => item.textContent?.includes('Errore'))!.click();
 
       expect(activation.calls.set).toEqual([{ id: 'e1', responseFile: '002.response.json' }]);
+    });
+
+    // Interruttore e tendina mostrano ciò che è salvato: la fascia dice cosa risponde adesso.
+    describe('fascia', () => {
+      const servito: ActivationItem = {
+        id: 'e1',
+        method: 'GET',
+        path: '/api/operazioni',
+        enabled: true,
+        responseFile: '002.response.json',
+        responseTitle: 'Errore',
+        responseStatus: 500,
+        saved: { enabled: false, responseFile: '001.response.json', responseTitle: 'Ok', responseStatus: 200 },
+      };
+      const banner = (fixture: ReturnType<typeof create>) => (fixture.nativeElement as HTMLElement).querySelector<HTMLElement>('[data-temporary-banner]');
+      const text = (element: Element | null | undefined) => element?.textContent?.replace(/\s+/g, ' ').trim();
+      const bannerButton = (fixture: ReturnType<typeof create>, label: string) =>
+        Array.from(banner(fixture)!.querySelectorAll('button')).find((button) => text(button) === label)!;
+
+      function withTemporary(item: ActivationItem = servito) {
+        const fixture = create();
+        store.selected.set({ ...twoVariants(), selectedResponseFile: '001.response.json' });
+        activation.items.set([item]);
+        fixture.detectChanges();
+        return fixture;
+      }
+
+      it('senza stato temporaneo non c\'è', () => {
+        expect(banner(create())).toBeNull();
+      });
+
+      it('dice cosa risponde ora e cosa dice il file, per i soli campi temporanei', () => {
+        const fixture = withTemporary();
+
+        expect(text(banner(fixture)!.querySelector('[data-temporary-now]'))).toBe('Solo per questa sessione, ora: acceso · Errore 500.');
+        expect(text(banner(fixture)!.querySelector('[data-temporary-saved]'))).toBe('Nel file: spento · Ok 200.');
+
+        activation.items.set([{ id: 'e1', method: 'GET', path: '/api/operazioni', enabled: true, saved: servito.saved }]);
+        fixture.detectChanges();
+
+        expect(text(banner(fixture)!.querySelector('[data-temporary-now]'))).toBe('Solo per questa sessione, ora: acceso.');
+        expect(text(banner(fixture)!.querySelector('[data-temporary-saved]'))).toBe('Nel file: spento.');
+        // Senza variante temporanea non c'è una variante servita diversa da guardare.
+        expect(banner(fixture)!.querySelector('[data-temporary-peek-toggle]')).toBeNull();
+      });
+
+      it('«Salva così» scrive lo stato nel file, «Torna a come è salvato» lo toglie', () => {
+        const fixture = withTemporary();
+
+        bannerButton(fixture, 'Salva così').click();
+        expect(activation.calls.save).toEqual([[servito]]);
+
+        bannerButton(fixture, 'Torna a come è salvato').click();
+        expect(activation.calls.remove).toEqual(['e1']);
+      });
+
+      it('«Vedi cosa risponde» legge la variante servita e la mostra in sola lettura, senza cambiare il dettaglio', () => {
+        const fixture = withTemporary();
+        api.getResponse.mockReturnValue(of({ source: null, response: { type: 'mock', title: 'Errore', status: 500, body: { errore: true } } }));
+        expect(api.getResponse).not.toHaveBeenCalled();
+
+        bannerButton(fixture, 'Vedi cosa risponde').click();
+        fixture.detectChanges();
+
+        expect(api.getResponse).toHaveBeenCalledWith('e1', '002.response.json');
+        const peek = banner(fixture)!.querySelector('[data-temporary-peek]')!;
+        expect(text(peek)).toContain('002.response.json');
+        expect(text(peek)).toContain('"errore": true');
+
+        bannerButton(fixture, 'Nascondi').click();
+        fixture.detectChanges();
+        expect(banner(fixture)!.querySelector('[data-temporary-peek]')).toBeNull();
+      });
+
+      it('la tendina, che salva, marca la variante servita ora e quella del file', () => {
+        const fixture = withTemporary();
+        const hints = () => (fixture.componentInstance as any).responseOptions().map((option: { hint: string }) => option.hint);
+
+        expect(hints()).toEqual(['mock · nel file', 'mock · servita ora']);
+
+        activation.items.set([]);
+        fixture.detectChanges();
+        expect(hints()).toEqual(['mock', 'mock']);
+      });
     });
   });
 });

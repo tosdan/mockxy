@@ -123,6 +123,11 @@ Dettagli e limiti in [HANDLER.md](../it/HANDLER.md#lo-script-gira-nel-processo-d
   una decina di millisecondi senza toccare file.
 - **Un salvataggio normale vince** sullo stato temporaneo dello stesso campo; una variante o un
   endpoint che non esistono più lo fanno decadere.
+- **Cosa risponde adesso, in chiaro:** nel dettaglio una fascia mette ciò che risponde ora
+  accanto a ciò che dice il file, e fa vedere in sola lettura la variante servita; il conteggio
+  nella barra di stato apre l'elenco di tutti gli endpoint in stato temporaneo, da qualunque
+  pagina. Da entrambi, **Salva così** scrive lo stato temporaneo nel file. `GET /activation`
+  riporta anche ciò che è salvato (`saved`) e titolo e status della variante servita.
 - **Nell'app desktop**, salvare le impostazioni del workspace riavvia il motore e quindi elimina
   lo stato temporaneo: la dialog lo dice prima di salvare, con il numero di endpoint coinvolti.
 

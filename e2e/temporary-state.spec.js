@@ -1,7 +1,7 @@
 const fs = require("fs");
 const path = require("path");
 const { test, expect } = require("@playwright/test");
-const { gotoMocks, mockIdByPath, reloadStable, E2E_BACKEND } = require("./helpers");
+const { gotoMocks, mockIdByPath, reloadStable, setEndpointEnabled, E2E_BACKEND } = require("./helpers");
 
 // Stato temporaneo: dal pulsante con l'orologio un endpoint si accende, si spegne o serve
 // un'altra variante per la sessione in corso. Il motore risponde subito in modo diverso, ma i
@@ -39,6 +39,10 @@ test.describe("stato temporaneo", () => {
 
   async function restore(request) {
     await request.delete(ACTIVATION);
+    // «Salva così» scrive nei file: /api/legacy torna spento, come nelle fixture.
+    if (savedEndpoint("legacy").enabled !== false) {
+      await setEndpointEnabled(request, "/api/legacy", false);
+    }
     const id = await mockIdByPath(request, "/api/status");
     if (id) {
       await request.put(`${E2E_BACKEND}/_admin/api/mocks/${id}`, { data: { selectedResponseFile: "001.response.json" } });
@@ -86,7 +90,7 @@ test.describe("stato temporaneo", () => {
 
     // Nessun ON/OFF: l'accensione è quella salvata, di temporaneo c'è solo la variante.
     await expect(badge("/api/status")).toHaveText("TEMP");
-    await expect(detail.locator("[data-temporary-state]")).toHaveText("002.response.json");
+    await expect(detail.locator("[data-temporary-state]")).toHaveText("Non trovato");
     await expect.poll(() => statusOf(request, "/api/status")).toBe(404);
     expect(savedEndpoint("status").selectedResponseFile).toBe("001.response.json");
 
@@ -137,6 +141,63 @@ test.describe("stato temporaneo", () => {
     await expect(badge("/api/status")).toHaveCount(0);
     await expect(indicator()).toHaveCount(0);
     await expect.poll(() => savedEndpoint("status").selectedResponseFile).toBe("002.response.json");
+    expect(await statusOf(request, "/api/status")).toBe(404);
+  });
+
+  test("il pannello della barra di stato elenca lo scenario, e «Salva così» lo scrive nel file", async ({ page, request }) => {
+    await request.put(ACTIVATION, {
+      data: {
+        items: [
+          { method: "GET", path: "/api/legacy", enabled: true },
+          { method: "GET", path: "/api/status", responseFile: "002.response.json" },
+        ],
+      },
+    });
+    await indicator().locator("[data-activation-open]").click();
+    const panel = page.getByRole("dialog", { name: "Stato temporaneo", exact: true });
+    const item = (key) => panel.locator(`[data-activation-item="${key}"]`);
+
+    // Per ogni endpoint, cosa risponde ora accanto a cosa dice il file.
+    await expect(item("GET /api/legacy").locator("[data-activation-now]")).toHaveText("ora acceso");
+    await expect(item("GET /api/legacy").locator("[data-activation-saved]")).toHaveText("Nel file: spento");
+    await expect(item("GET /api/status").locator("[data-activation-now]")).toHaveText("ora Non trovato 404");
+    await expect(item("GET /api/status").locator("[data-activation-saved]")).toHaveText("Nel file: OK 200");
+
+    await item("GET /api/legacy").getByRole("button", { name: "Salva così" }).click();
+
+    // Da temporaneo a salvato: il file cambia, l'endpoint esce dall'elenco, l'altro resta.
+    await expect(item("GET /api/legacy")).toHaveCount(0);
+    await expect(item("GET /api/status")).toHaveCount(1);
+    expect(savedEndpoint("legacy").enabled).toBe(true);
+    await expect(indicator()).toContainText("1 endpoint in stato temporaneo");
+    // Il catalogo si aggiorna senza ricaricare: niente più segno, e l'interruttore è acceso.
+    await page.keyboard.press("Escape");
+    await expect(badge("/api/legacy")).toHaveCount(0);
+    await expect(row("/api/legacy").getByRole("switch")).toBeChecked();
+    expect(await statusOf(request, "/api/legacy")).toBe(410);
+  });
+
+  test("la fascia del dettaglio dice cosa risponde ora, la fa vedere e la salva", async ({ page, request }) => {
+    await openEndpoint("/api/status");
+    const banner = detail.locator("[data-temporary-banner]");
+    await expect(banner).toHaveCount(0);
+
+    await pickFromTemporaryMenu(page, /Non trovato/);
+
+    await expect(banner.locator("[data-temporary-now]")).toHaveText("Solo per questa sessione, ora: Non trovato 404.");
+    await expect(banner.locator("[data-temporary-saved]")).toHaveText("Nel file: OK 200.");
+    // Il dettaglio continua a mostrare la variante salvata; quella servita si guarda da qui.
+    await expect(detail.locator("mocks-next-status-combobox input")).toHaveValue(/200/);
+    await banner.getByRole("button", { name: "Vedi cosa risponde" }).click();
+    await expect(banner.locator("[data-temporary-peek]")).toContainText("not found");
+
+    await banner.getByRole("button", { name: "Salva così" }).click();
+
+    await expect(banner).toHaveCount(0);
+    await expect(indicator()).toHaveCount(0);
+    await expect.poll(() => savedEndpoint("status").selectedResponseFile).toBe("002.response.json");
+    // Senza ricaricare, il dettaglio passa alla variante ora salvata.
+    await expect(detail.locator("mocks-next-status-combobox input")).toHaveValue(/404/);
     expect(await statusOf(request, "/api/status")).toBe(404);
   });
 
