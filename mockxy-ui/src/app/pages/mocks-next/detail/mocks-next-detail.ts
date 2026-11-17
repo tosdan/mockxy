@@ -4,7 +4,7 @@ import { CdkCopyToClipboard } from '@angular/cdk/clipboard';
 import { NgIcon, provideIcons } from '@ng-icons/core';
 import { map } from 'rxjs';
 import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
-import { lucideCheck, lucideClock, lucideCopy, lucideEllipsisVertical, lucideFile, lucideFolder, lucideMessageSquare, lucidePencil, lucidePlus, lucideTrash2, lucideTriangleAlert, lucideX } from '@ng-icons/lucide';
+import { lucideCheck, lucideClock, lucideCopy, lucideEllipsisVertical, lucideFile, lucideFolder, lucideMessageSquare, lucidePencil, lucidePlus, lucideSave, lucideTrash2, lucideTriangleAlert, lucideX } from '@ng-icons/lucide';
 import { RESPONSE_SOURCE_ICONS, endpointTypeIcon } from '../../../shared/response-source';
 import { UiBadge, type BadgeTone } from '../../../ui/ui-badge/ui-badge';
 import { UiButton } from '../../../ui/ui-button/ui-button';
@@ -23,6 +23,7 @@ import { UiDialog } from '../../../ui/ui-dialog/ui-dialog';
 import { MockAdminApiService } from '../../../mock-admin-api.service';
 import { MocksStore } from '../mocks-next.store';
 import { ActivationStore } from '../../../shared/activation.store';
+import { activationSides } from '../../../shared/activation-labels';
 import type { ActivationItem } from '../../../mock-admin-api.types';
 import { StatusCombobox, isValidStatus } from '../status-combobox/status-combobox';
 import { COPY_DIALOG_TITLE_ID, MocksNextCopyDialog, type CopyDialogData } from '../copy/mocks-next-copy-dialog';
@@ -50,7 +51,7 @@ const METHOD_TONES: ReadonlySet<string> = new Set(['get', 'post', 'put', 'delete
 @Component({
   selector: 'mocks-next-detail',
   imports: [CdkMenuTrigger, CdkCopyToClipboard, NgIcon, StatusCombobox, TranslocoPipe, UiBadge, UiButton, UiCheckbox, UiChip, UiCode, UiCollapsible, UiInput, UiMenu, UiMenuItem, UiSelect, UiSkeleton, UiSwitch, UiTable, UiTooltip, MocksNextDraftConflict, MocksNextResponseForm, MocksNextSequenceSummary, MocksNextSseConsole, MocksNextWsConsole],
-  providers: [provideIcons({ lucideCheck, lucideClock, lucideCopy, lucideEllipsisVertical, lucideFile, lucideFolder, lucideMessageSquare, lucidePencil, lucidePlus, lucideTrash2, lucideTriangleAlert, lucideX, ...RESPONSE_SOURCE_ICONS })],
+  providers: [provideIcons({ lucideCheck, lucideClock, lucideCopy, lucideEllipsisVertical, lucideFile, lucideFolder, lucideMessageSquare, lucidePencil, lucidePlus, lucideSave, lucideTrash2, lucideTriangleAlert, lucideX, ...RESPONSE_SOURCE_ICONS })],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { class: 'relative flex min-w-0 flex-1 flex-col overflow-hidden bg-muted' },
   template: `
@@ -194,6 +195,48 @@ const METHOD_TONES: ReadonlySet<string> = new Set(['get', 'post', 'put', 'delete
         </div>
       </div>
     </div>
+
+    <!-- STATO TEMPORANEO: interruttore e tendina qui sopra e qui sotto mostrano ciò che è salvato.
+         Questa fascia dice cosa risponde adesso, accanto a ciò che dice il file, con le due
+         uscite: scriverlo nel file o tornare a come è salvato. -->
+    @if (temporary(); as temp) {
+    @let sides = temporarySides(temp);
+    <div class="relative z-10 shrink-0 border-b border-border bg-[color-mix(in_srgb,var(--status-3xx)_10%,transparent)] px-6 py-2" data-temporary-banner>
+      <div class="flex flex-wrap items-center gap-x-3 gap-y-2 text-[12.5px]">
+        <ng-icon name="lucideClock" size="0.9rem" class="shrink-0 text-[color:var(--status-3xx)]" />
+        <span class="min-w-[16rem] flex-1">
+          <span class="font-semibold text-[color:var(--status-3xx)]" data-temporary-now>{{ 'activation.banner' | transloco: { now: sides.now } }}</span>
+          @if (sides.saved != null) {
+          <span class="text-muted-foreground" data-temporary-saved> {{ 'activation.inFile' | transloco: { value: sides.saved } }}.</span>
+          }
+        </span>
+        @if (temp.responseFile != null) {
+        <button ui-button variant="outline" size="sm" [attr.aria-expanded]="peekOpen()" (click)="peekOpen.set(!peekOpen())" data-temporary-peek-toggle>{{ (peekOpen() ? 'activation.peekHide' : 'activation.peekShow') | transloco }}</button>
+        }
+        <button ui-button variant="outline" size="sm" [disabled]="activation.busy()" [uiTooltip]="'activation.saveTip' | transloco" (click)="saveTemporary()">
+          <ng-icon name="lucideSave" size="0.8rem" /> {{ 'activation.save' | transloco }}
+        </button>
+        <button ui-button variant="outline" size="sm" [disabled]="activation.busy()" (click)="removeTemporary()">
+          <ng-icon name="lucideX" size="0.8rem" /> {{ 'activation.backToSaved' | transloco }}
+        </button>
+      </div>
+      @if (peekOpen() && temp.responseFile != null) {
+      <div class="mt-2" data-temporary-peek>
+        <div class="mb-1 flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.14em] text-muted-foreground">
+          {{ 'activation.peekTitle' | transloco }}
+          <span class="font-mono font-normal normal-case tracking-normal">{{ temp.responseFile }}</span>
+        </div>
+        @if (peek(); as served) {
+        @if (served.text != null) {
+        <div class="max-h-64 overflow-auto rounded-lg mx-scroll"><ui-code [code]="served.text" [language]="served.language" /></div>
+        } @else {
+        <p class="text-[12px] text-muted-foreground">{{ 'activation.peekFailed' | transloco }}</p>
+        }
+        }
+      </div>
+      }
+    </div>
+    }
 
     <!-- REGIONE RESPONSE -->
     <div class="relative z-10 flex min-h-0 flex-1 flex-col overflow-hidden">
@@ -823,9 +866,44 @@ export class MocksNextDetail {
   protected temporaryLabel(item: ActivationItem): string {
     const parts: string[] = [];
     if (item.enabled !== undefined) parts.push(this.transloco.translate(item.enabled ? 'activation.on' : 'activation.off'));
-    if (item.responseFile !== undefined) parts.push(item.responseFile);
+    if (item.responseFile !== undefined) parts.push(item.responseTitle || item.responseFile);
     return parts.join(' · ');
   }
+
+  /** I due lati dello stato temporaneo, per la fascia: cosa risponde ora e cosa dice il file. */
+  protected temporarySides(item: ActivationItem): { now: string; saved: string | null } {
+    return activationSides(item, (enabled) => this.transloco.translate(enabled ? 'activation.on' : 'activation.off'));
+  }
+
+  /** «Salva così»: lo stato temporaneo diventa quello scritto nel file dell'endpoint. */
+  protected saveTemporary(): void {
+    const temp = this.temporary();
+    if (temp != null) this.activation.save([temp]);
+  }
+
+  /** «Vedi cosa risponde»: la variante servita ora, in sola lettura, sotto la fascia. */
+  protected readonly peekOpen = signal(false);
+  protected readonly peek = signal<{ text: string | null; language: 'json' | 'javascript' } | null>(null);
+  private readonly peekTarget = computed(() => {
+    const detail = this.detail();
+    const responseFile = this.temporary()?.responseFile;
+    return this.peekOpen() && detail != null && responseFile != null ? { id: detail.id, responseFile } : null;
+  }, { equal: (a, b) => a?.id === b?.id && a?.responseFile === b?.responseFile });
+  private readonly peekLoader = effect((onCleanup) => {
+    const target = this.peekTarget();
+    this.peek.set(null);
+    if (target == null) {
+      // Senza più una variante temporanea non c'è nulla da guardare: alla prossima riparte chiuso.
+      if (this.temporary()?.responseFile == null) this.peekOpen.set(false);
+      return;
+    }
+    const subscription = this.api.getResponse(target.id, target.responseFile).subscribe({
+      next: (variant) =>
+        this.peek.set(variant.source != null ? { text: variant.source, language: 'javascript' } : { text: JSON.stringify(variant.response, null, 2), language: 'json' }),
+      error: () => this.peek.set({ text: null, language: 'json' }),
+    });
+    onCleanup(() => subscription.unsubscribe());
+  });
 
   protected setTemporaryEnabled(enabled: boolean): void {
     const detail = this.detail();
@@ -842,8 +920,17 @@ export class MocksNextDetail {
     if (detail != null) this.activation.remove(detail.id);
   }
 
-  protected readonly responseOptions = computed<readonly UiSelectOption<string>[]>(() =>
-    (this.detail()?.responses ?? []).map((r) => {
+  protected readonly responseOptions = computed<readonly UiSelectOption<string>[]>(() => {
+    // Con una variante servita temporaneamente la tendina, che mostra e salva la selezione del
+    // file, dice quale delle due è quale.
+    const served = this.temporary()?.responseFile;
+    const savedFile = this.detail()?.selectedResponseFile;
+    const mark = (fileName: string): string => {
+      if (served == null) return '';
+      if (fileName === served) return ` · ${this.transloco.translate('activation.servedNow')}`;
+      return fileName === savedFile ? ` · ${this.transloco.translate('activation.savedInFile')}` : '';
+    };
+    return (this.detail()?.responses ?? []).map((r) => {
       // Una variante illeggibile è elencata (esiste su disco e il file endpoint la dichiara) ma
       // non selezionabile: attivarla fallirebbe, e spacciarla per un mock sarebbe una bugia.
       if (r.invalid) {
@@ -862,10 +949,10 @@ export class MocksNextDetail {
         label: r.title || r.fileName,
         icon: endpointTypeIcon(type),
         accent: type === 'sequence' ? 'var(--sequence)' : `var(--type-${type}, var(--brand))`,
-        hint: r.status != null ? `${type} · ${r.status}` : type,
+        hint: `${r.status != null ? `${type} · ${r.status}` : type}${mark(r.fileName)}`,
       };
-    }),
-  );
+    });
+  });
 
   /** Il gruppo accanto alla tendina ha qualcosa da mostrare: il chip della sequenza, lo status o il delay. */
   protected readonly hasVariantAttributes = computed(() => {
