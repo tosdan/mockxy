@@ -108,6 +108,18 @@ The switch, the dropdown and the catalog rows keep showing **what is saved**: an
 on temporarily has its switch on "Disabled" and the `TEMP ON` mark. Both are true — the first
 says what is in the file, the second what answers right now.
 
+In the detail, a **banner** under the header puts them side by side: "now: Not found 404. In
+the file: OK 200". **See what it answers** shows the variant being served, read-only, without
+changing the one the detail is showing; in the variant dropdown, the one served now and the one
+in the file are marked. There are two ways out of the banner: **Back to what is saved** removes
+the temporary state, **Save this** writes it to the endpoint file — from then on it is the saved
+decision, the one that goes to git.
+
+The counter in the status bar opens the **list** of the endpoints in a temporary state, from any
+page: for each one what answers now and what the file says, **Save this**, the X that puts it
+back to what is saved, and the path, which opens the endpoint in the catalog. At the bottom,
+**Save all to the files** and **Clear**.
+
 In the desktop app, saving the [workspace settings](DESKTOP.md) restarts the engine and therefore
 drops the temporary state; the dialog says so before saving. Which gesture to use, case by
 case, is in [SCENARI.md](SCENARI.md#save-or-temporary-state).

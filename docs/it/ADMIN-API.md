@@ -338,8 +338,11 @@ Le regole:
 - **Il catalogo dice ciò che è salvato.** `GET /mocks` e il dettaglio continuano a riportare
   `disabled` e la variante selezionata dei file, e così `selected` e `active` di
   `GET /mocks/:id/responses/:file`: lo stato temporaneo si legge da `GET /activation`, e
-  `revisions.activation` di `GET /info` cresce quando cambia. Per sapere che cosa risponde un
-  endpoint servono quindi entrambe le letture.
+  `revisions.activation` di `GET /info` cresce quando cambia. Per un endpoint in stato
+  temporaneo `GET /activation` basta da sola: accanto a ciò che è temporaneo riporta `saved`
+  (`enabled`, `responseFile`, `responseTitle`, `responseStatus` del file) e, con una variante
+  temporanea, il suo `responseTitle` e `responseStatus`. `saved` manca finché il file endpoint
+  non si legge; titolo e status mancano se non si legge la variante.
 - **Una modifica ai file fuori dall'API non lo tocca.** Un editor o un `git pull` cambiano ciò
   che è salvato; l'attivazione temporanea resta e continua a vincere, salvo il caso sopra.
 

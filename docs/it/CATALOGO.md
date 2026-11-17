@@ -109,6 +109,18 @@ Interruttore, tendina e righe del catalogo continuano a mostrare **ciò che è s
 endpoint acceso temporaneamente ha l'interruttore su «Disattivo» e il segno `TEMP ON`. Sono
 entrambi veri — il primo dice cosa c'è nel file, il secondo cosa risponde adesso.
 
+Nel dettaglio, una **fascia** sotto la testata li mette uno accanto all'altro: «ora: Non trovato
+404. Nel file: OK 200». **Vedi cosa risponde** mostra in sola lettura la variante servita, senza
+cambiare quella che il dettaglio sta mostrando; nella tendina delle varianti, quella servita ora
+e quella del file sono marcate. Dalla fascia si esce in due modi: **Torna a come è salvato**
+toglie lo stato temporaneo, **Salva così** lo scrive nel file dell'endpoint — da quel momento è
+la decisione salvata, quella che va in git.
+
+Il conteggio nella barra di stato apre l'**elenco** degli endpoint in stato temporaneo, da
+qualunque pagina: per ognuno cosa risponde ora e cosa dice il file, **Salva così**, la X che lo
+riporta a come è salvato, e il percorso, che apre l'endpoint nel catalogo. In fondo, **Salva
+tutto nei file** e **Azzera**.
+
 Nell'app desktop, salvare le [impostazioni del workspace](DESKTOP.md) riavvia il motore e quindi
 elimina lo stato temporaneo; la dialog lo dice prima di salvare. Quale gesto usare, caso per caso, è
 in [SCENARI.md](SCENARI.md#salvare-o-stato-temporaneo).
