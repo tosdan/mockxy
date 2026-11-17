@@ -1,6 +1,6 @@
 const { createAdminError } = require("./admin-errors");
 const { listAdminMocks } = require("./mock-catalog");
-const { readEndpointConfig } = require("./endpoint-files");
+const { readEndpointConfig, readEndpointResponseByName } = require("./endpoint-files");
 const { resolveAdminFilePath } = require("./mock-ids");
 
 /**
@@ -29,7 +29,20 @@ function createActivationApi({ mocksDir, store, reloadRuntime, scenarioStates })
     return { byId, byKey };
   }
 
-  // Lo scenario com'è ora, con l'id di catalogo di ogni endpoint.
+  // Titolo e status della variante servita temporaneamente. Una variante che non si legge non
+  // toglie l'attivazione dall'elenco: mancano solo questi due campi.
+  async function describeVariant(item, responseFile) {
+    try {
+      const { response } = await readEndpointResponseByName(resolveAdminFilePath(mocksDir, item.id), responseFile);
+      return { responseTitle: response.title || "", responseStatus: response.type === "mock" ? response.status : null };
+    } catch {
+      return {};
+    }
+  }
+
+  // Lo scenario com'è ora, con l'id di catalogo di ogni endpoint. Accanto a ciò che è temporaneo
+  // c'è ciò che è salvato (`saved`): chi mostra lo scenario li confronta senza leggere altro.
+  // Con il file endpoint illeggibile l'id è null e `saved` manca: non c'è nulla da confrontare.
   async function describe() {
     if (!available) {
       return { revision: 1, items: [] };
@@ -37,9 +50,22 @@ function createActivationApi({ mocksDir, store, reloadRuntime, scenarioStates })
     const { byKey } = await readCatalog();
     return {
       revision: store.revision,
-      items: store.list().map((override) => ({
-        id: byKey.get(`${override.method} ${override.path}`)?.id ?? null,
-        ...override,
+      items: await Promise.all(store.list().map(async (override) => {
+        const item = byKey.get(`${override.method} ${override.path}`);
+        if (item == null) {
+          return { id: null, ...override };
+        }
+        return {
+          id: item.id,
+          ...override,
+          ...(override.responseFile === undefined ? {} : await describeVariant(item, override.responseFile)),
+          saved: {
+            enabled: item.disabled !== true,
+            responseFile: item.selectedResponseFile ?? null,
+            responseTitle: item.responseTitle ?? "",
+            responseStatus: item.status ?? null,
+          },
+        };
       })),
     };
   }

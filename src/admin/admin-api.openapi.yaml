@@ -3167,6 +3167,29 @@ components:
         responseFile:
           type: string
           description: The variant served for this session instead of the saved selection.
+        responseTitle:
+          type: string
+          description: |
+            Title of the variant in `responseFile`. Present with `responseFile`, unless the
+            variant file cannot be read.
+        responseStatus:
+          type: [integer, "null"]
+          description: |
+            Status of the variant in `responseFile`; `null` for a variant that is not a static
+            mock. Present with `responseFile`, unless the variant file cannot be read.
+        saved:
+          type: object
+          description: |
+            What the endpoint file says, to compare with the temporary state without reading
+            the catalog. Missing while the endpoint file cannot be read (`id` is `null`).
+          required: [enabled, responseFile, responseTitle, responseStatus]
+          properties:
+            enabled: { type: boolean, description: The saved `enabled` flag. }
+            responseFile: { type: [string, "null"], description: The saved selection. }
+            responseTitle: { type: string, description: Title of the saved selection. }
+            responseStatus:
+              type: [integer, "null"]
+              description: Status of the saved selection; `null` when it is not a static mock.
     ActivationState:
       type: object
       required: [revision, items]
@@ -3178,7 +3201,14 @@ components:
       example:
         revision: 4
         items:
-          - { id: YXBpL29yZGVycy9HRVQuZW5kcG9pbnQuanNvbg, method: GET, path: /api/orders, enabled: true, responseFile: 002.response.json }
+          - id: YXBpL29yZGVycy9HRVQuZW5kcG9pbnQuanNvbg
+            method: GET
+            path: /api/orders
+            enabled: true
+            responseFile: 002.response.json
+            responseTitle: Out of stock
+            responseStatus: 409
+            saved: { enabled: false, responseFile: 001.response.json, responseTitle: OK, responseStatus: 200 }
     ActivationRequest:
       type: object
       required: [items]

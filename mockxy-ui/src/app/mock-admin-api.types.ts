@@ -772,6 +772,18 @@ export interface ActivationItem {
   path: string;
   enabled?: boolean;
   responseFile?: string;
+  /** Titolo e status della variante in `responseFile`; assenti se il suo file non si legge. */
+  responseTitle?: string;
+  responseStatus?: number | null;
+  /** Ciò che dice il file endpoint; assente finché il file non si legge (`id` null). */
+  saved?: ActivationSavedState;
+}
+
+export interface ActivationSavedState {
+  enabled: boolean;
+  responseFile: string | null;
+  responseTitle: string;
+  responseStatus: number | null;
 }
 
 export interface ActivationState {

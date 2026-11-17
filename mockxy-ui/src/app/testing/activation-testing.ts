@@ -8,7 +8,7 @@ import { ActivationStore, activationKey, type ActivationEndpointRef } from '../s
  */
 export function fakeActivation(initial: readonly ActivationItem[] = []) {
   const items = signal<readonly ActivationItem[]>(initial);
-  const calls: { set: ActivationPatchItem[]; remove: string[]; clear: number } = { set: [], remove: [], clear: 0 };
+  const calls: { set: ActivationPatchItem[]; remove: string[]; clear: number; save: ActivationItem[][] } = { set: [], remove: [], clear: 0, save: [] };
   const store = {
     items: items.asReadonly(),
     count: computed(() => items().length),
@@ -20,6 +20,7 @@ export function fakeActivation(initial: readonly ActivationItem[] = []) {
     clear: () => {
       calls.clear += 1;
     },
+    save: (saved: readonly ActivationItem[]) => calls.save.push([...saved]),
   };
   return { provider: { provide: ActivationStore, useValue: store }, items, calls };
 }

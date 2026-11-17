@@ -1,7 +1,7 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { TranslocoService } from '@jsverse/transloco';
-import { finalize } from 'rxjs';
+import { concat, defer, finalize, type Observable } from 'rxjs';
 import { MockAdminApiService } from '../mock-admin-api.service';
 import type { ActivationItem, ActivationPatchItem, ActivationState } from '../mock-admin-api.types';
 import { ToastService } from '../ui/ui-toast/ui-toast';
@@ -30,6 +30,7 @@ export function activationKey(endpoint: ActivationEndpointRef): string {
 @Injectable({ providedIn: 'root' })
 export class ActivationStore {
   private readonly api = inject(MockAdminApiService);
+  private readonly sync = inject(RuntimeSyncStore);
   private readonly toast = inject(ToastService);
   private readonly transloco = inject(TranslocoService);
 
@@ -52,8 +53,8 @@ export class ActivationStore {
   private readonly retry = new ReadRetry(() => this.load());
 
   constructor() {
-    inject(RuntimeSyncStore)
-      .events$.pipe(takeUntilDestroyed())
+    this.sync.events$
+      .pipe(takeUntilDestroyed())
       .subscribe((event) => {
         if (affects(event, 'activation')) this.load();
       });
@@ -107,6 +108,43 @@ export class ActivationStore {
   /** Azzera tutte le attivazioni temporanee. */
   clear(): void {
     this.mutate(this.api.clearActivation());
+  }
+
+  /**
+   * «Salva così»: scrive nei file lo stato temporaneo di questi endpoint, con i salvataggi di
+   * sempre (accensione, poi variante). Il salvataggio esplicito vince: è il motore a far decadere
+   * lo stato temporaneo del campo salvato. Uno alla volta; al primo rifiuto si ferma, e ciò che
+   * non è stato salvato resta temporaneo. Un endpoint il cui file non si legge (`id` null) non
+   * ha un file in cui scrivere.
+   */
+  save(items: readonly ActivationItem[]): void {
+    const requests: Observable<unknown>[] = [];
+    for (const item of items) {
+      const { id, enabled, responseFile } = item;
+      if (id == null) continue;
+      if (enabled !== undefined) requests.push(defer(() => this.api.updateEndpoint(id, { enabled })));
+      if (responseFile !== undefined) requests.push(defer(() => this.api.selectResponse(id, { selectedResponseFile: responseFile })));
+    }
+    if (requests.length === 0 || this._busy()) return;
+    this._busy.set(true);
+    concat(...requests)
+      .pipe(
+        finalize(() => {
+          this._busy.set(false);
+          this.generation += 1;
+          this.load();
+          // I file sono cambiati: catalogo e dettaglio aperto si rileggono subito.
+          this.sync.check(false);
+        }),
+      )
+      .subscribe({
+        error: (error: unknown) =>
+          this.toast.show({
+            title: this.transloco.translate('activation.saveFailed'),
+            description: readErrorMessage(error) ?? this.transloco.translate('common.operationFailed'),
+            tone: 'error',
+          }),
+      });
   }
 
   private mutate(request: ReturnType<MockAdminApiService['getActivation']>): void {

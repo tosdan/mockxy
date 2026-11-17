@@ -151,7 +151,11 @@ describe("attivazioni temporanee", () => {
 
     const idOf = async (routePath) =>
       (await api.get(`${A}/mocks`)).body.items.find((item) => item.path === routePath).id;
-    const activation = async () => (await api.get(`${A}/activation`)).body.items;
+    // Solo ciò che è temporaneo: `saved` e titolo/status della variante servita descrivono, non
+    // decidono, e hanno il loro test.
+    const temporaryOnly = ({ saved, responseTitle, responseStatus, ...temporary }) => temporary;
+    const described = async () => (await api.get(`${A}/activation`)).body.items;
+    const activation = async () => (await described()).map(temporaryOnly);
 
     beforeEach(async () => {
       workspaceDir = await createTempDir("activation-");
@@ -184,10 +188,11 @@ describe("attivazioni temporanee", () => {
       });
 
       expect(res.status).toBe(200);
-      expect(res.body.items).toEqual([
+      expect(res.body.items).toMatchObject([
         { id: ordini, method: "GET", path: "/ordini", enabled: true, responseFile: "002.response.json" },
         { id: utenti, method: "GET", path: "/utenti", enabled: true },
       ]);
+      expect(res.body.items[1]).not.toHaveProperty("responseFile");
       expect(await api.get("/ordini")).toMatchObject({ status: 500, body: { errore: true } });
       expect(await api.get("/utenti")).toMatchObject({ status: 200, body: ["anna"] });
       expect(snapshotFiles()).toEqual(before);
@@ -197,12 +202,32 @@ describe("attivazioni temporanee", () => {
       expect((await api.get(`${A}/info`)).body.revisions.activation).toBeGreaterThan(revisionBefore);
     });
 
+    test("ogni attivazione dice anche cosa è salvato e quale variante è servita, senza altre letture", async () => {
+      const titles = (await api.get(`${A}/mocks/${ordini}`)).body.responses.map((response) => response.title);
+
+      await api.put(`${A}/activation`).send({ items: [{ id: ordini, enabled: true, responseFile: "002.response.json" }, { id: attivo, enabled: false }] });
+
+      expect(await described()).toEqual([
+        // Senza variante temporanea non c'è titolo né status della variante servita: è quella salvata.
+        {
+          id: attivo, method: "GET", path: "/attivo", enabled: false,
+          saved: { enabled: true, responseFile: "001.response.json", responseTitle: expect.any(String), responseStatus: 200 },
+        },
+        {
+          id: ordini, method: "GET", path: "/ordini", enabled: true,
+          responseFile: "002.response.json", responseTitle: "Errore", responseStatus: 500,
+          saved: { enabled: false, responseFile: "001.response.json", responseTitle: titles[0], responseStatus: 200 },
+        },
+      ]);
+    });
+
     test("il test successivo dichiara il suo scenario: ciò che non nomina torna a come è salvato", async () => {
       await api.put(`${A}/activation`).send({ items: [{ id: ordini, enabled: true, responseFile: "002.response.json" }, { id: utenti, enabled: true }] });
 
       const res = await api.put(`${A}/activation`).send({ items: [{ id: ordini, enabled: true }] });
 
-      expect(res.body.items).toEqual([{ id: ordini, method: "GET", path: "/ordini", enabled: true }]);
+      expect(res.body.items).toMatchObject([{ id: ordini, method: "GET", path: "/ordini", enabled: true }]);
+      expect(res.body.items[0]).not.toHaveProperty("responseFile");
       expect(await api.get("/ordini")).toMatchObject({ status: 200, body: { stato: "ok" } });
       expect((await api.get("/utenti")).status).toBe(404);
     });
